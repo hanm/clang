@@ -41,6 +41,9 @@ def CXXVirtualMethod : SubsetSubject<CXXRecord, "virtual member function",
 def NonBitField : SubsetSubject<Field, "non-bit field",
                                 [{!S->isBitField()}]>;
 
+def FunctionSub : SubsetSubject<Function, "function", [{S->is}]>;
+
+
 // A single argument to an attribute
 class Argument<string name> {
   string Name = name;
@@ -578,6 +581,13 @@ def ReqdWorkGroupSize : InheritableAttr {
               UnsignedArgument<"ZDim">];
 }
 
+def WorkGroupSizeHint :  InheritableAttr {
+  let Spellings = [GNU<"work_group_size_hint">];
+  let Args = [UnsignedArgument<"XDim">, 
+              UnsignedArgument<"YDim">,
+              UnsignedArgument<"ZDim">];
+}
+
 def InitPriority : InheritableAttr {
   let Spellings = [GNU<"init_priority">];
   let Args = [UnsignedArgument<"Priority">];
@@ -860,3 +870,70 @@ def MultipleInheritance : InheritableAttr {
 def VirtualInheritance : InheritableAttr {
   let Spellings = [Declspec<"__virtual_inheritance">];
 }
+
+
+/////////////////////////////////////////////
+///  Annotations for Safe Parallelism
+
+def Region : InheritableAttr {
+  let Spellings = ["region"];
+  let Args = [StringArgument<"region_name">];
+  let Namespaces = ["", "std"];
+}
+
+def InRegion : InheritableAttr {
+  let Spellings = ["in_region"];
+  let Subjects = [Var];
+  let Args = [StringArgument<"region_name">];
+  let Namespaces = ["", "std"];
+}
+
+def ParamRegion : InheritableAttr {
+  let Spellings = ["param_region"];
+  let Subjects = [Record, ParmVar];
+  let Args = [StringArgument<"param_name">];
+  let Namespaces = ["", "std"];
+}  
+
+def ArgRegion : InheritableAttr {
+  let Spellings = ["arg_region"];
+  let Subjects = [Var];
+  let Args = [StringArgument<"rpl">];
+  let Namespaces = ["", "std"];
+}  
+
+/// Effects
+def PureEffect : InheritableAttr {
+  let Spellings = ["pure_effect"];
+  let Subjects = [Function];
+  let Namespaces = ["", "std"];
+}  
+
+def ReadsRegion : InheritableAttr {
+  let Spellings = ["reads_region"];
+  let Subjects = [Function];
+  let Args = [StringArgument<"rpl">];
+  let Namespaces = ["", "std"];
+}  
+
+def AtomicReadsRegion : InheritableAttr {
+  let Spellings = ["atomic_reads_region"];
+  let Subjects = [Function];
+  let Args = [StringArgument<"rpl">];
+  let Namespaces = ["", "std"];
+}  
+
+def WritesRegion : InheritableAttr {
+  let Spellings = ["writes_region"];
+  let Subjects = [Function];
+  let Args = [StringArgument<"rpl">];
+  let Namespaces = ["", "std"];
+}  
+
+def AtomicWritesRegion : InheritableAttr {
+  let Spellings = ["atomic_writes_region"];
+  let Subjects = [Function];
+  let Args = [StringArgument<"rpl">];
+  let Namespaces = ["", "std"];
+}  
+
