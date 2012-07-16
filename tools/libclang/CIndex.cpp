@@ -2464,7 +2464,8 @@ CXTranslationUnit clang_createTranslationUnit(CXIndex CIdx,
                                   CXXIdx->getOnlyLocalDecls(),
                                   0, 0,
                                   /*CaptureDiagnostics=*/true,
-                                  /*AllowPCHWithCompilerErrors=*/true);
+                                  /*AllowPCHWithCompilerErrors=*/true,
+                                  /*UserFilesAreVolatile=*/true);
   return MakeCXTranslationUnit(CXXIdx, TU);
 }
 
@@ -2523,6 +2524,8 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
     = (options & CXTranslationUnit_Incomplete)? TU_Prefix : TU_Complete;
   bool CacheCodeCompetionResults
     = options & CXTranslationUnit_CacheCompletionResults;
+  bool IncludeBriefCommentsInCodeCompletion
+    = options & CXTranslationUnit_IncludeBriefCommentsInCodeCompletion;
   bool SkipFunctionBodies = options & CXTranslationUnit_SkipFunctionBodies;
 
   // Configure the diagnostics.
@@ -2607,8 +2610,10 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
                                  PrecompilePreamble,
                                  TUKind,
                                  CacheCodeCompetionResults,
+                                 IncludeBriefCommentsInCodeCompletion,
                                  /*AllowPCHWithCompilerErrors=*/true,
                                  SkipFunctionBodies,
+                                 /*UserFilesAreVolatile=*/true,
                                  &ErrUnit));
 
   if (NumErrors != Diags->getClient()->getNumErrors()) {
@@ -5707,6 +5712,24 @@ CXString clang_Cursor_getRawCommentText(CXCursor C) {
 
 } // end: extern "C"
 
+CXString clang_Cursor_getBriefCommentText(CXCursor C) {
+  if (!clang_isDeclaration(C.kind))
+    return createCXString((const char *) NULL);
+
+  const Decl *D = getCursorDecl(C);
+  const ASTContext &Context = getCursorContext(C);
+  const RawComment *RC = Context.getRawCommentForDecl(D);
+
+  if (RC) {
+    StringRef BriefText = RC->getBriefText(Context);
+
+    // Don't duplicate the string because RawComment ensures that this memory
+    // will not go away.
+    return createCXString(BriefText, false);
+  }
+
+  return createCXString((const char *) NULL);
+}
 
 //===----------------------------------------------------------------------===//
 // C++ AST instrospection.

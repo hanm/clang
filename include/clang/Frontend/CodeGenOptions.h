@@ -44,6 +44,13 @@ public:
     FullDebugInfo         // Generate complete debug info.
   };
 
+  enum TLSModel {
+    GeneralDynamicTLSModel,
+    LocalDynamicTLSModel,
+    InitialExecTLSModel,
+    LocalExecTLSModel
+  };
+
   unsigned AsmVerbose        : 1; ///< -dA, -fverbose-asm.
   unsigned ObjCAutoRefCountExceptions : 1; ///< Whether ARC should be EH-safe.
   unsigned CUDAIsDevice      : 1; ///< Set when compiling for CUDA device.
@@ -64,6 +71,7 @@ public:
                                   ///< subroutine.
   unsigned EmitGcovArcs      : 1; ///< Emit coverage data files, aka. GCDA.
   unsigned EmitGcovNotes     : 1; ///< Emit coverage "notes" files, aka GCNO.
+  unsigned EmitOpenCLArgMetadata : 1; /// Emit OpenCL kernel arg metadata.
   unsigned ForbidGuardVariables : 1; ///< Issue errors if C++ guard variables
                                      ///< are required
   unsigned FunctionSections  : 1; ///< Set when -ffunction-sections is enabled
@@ -175,6 +183,9 @@ public:
   /// The run-time penalty for bounds checking, or 0 to disable.
   unsigned char BoundsChecking;
 
+  /// The default TLS model to use.
+  TLSModel DefaultTLSModel;
+
 public:
   CodeGenOptions() {
     AsmVerbose = 0;
@@ -189,6 +200,7 @@ public:
     EmitDeclMetadata = 0;
     EmitGcovArcs = 0;
     EmitGcovNotes = 0;
+    EmitOpenCLArgMetadata = 0;
     ForbidGuardVariables = 0;
     FunctionSections = 0;
     HiddenWeakTemplateVTables = 0;
@@ -231,6 +243,7 @@ public:
     DebugInfo = NoDebugInfo;
     Inlining = NoInlining;
     RelocationModel = "pic";
+    DefaultTLSModel = GeneralDynamicTLSModel;
   }
 
   ObjCDispatchMethodKind getObjCDispatchMethod() const {

@@ -57,7 +57,9 @@ def DeprecatedImplementations :DiagGroup<"deprecated-implementations">;
 def : DiagGroup<"disabled-optimization">;
 def : DiagGroup<"discard-qual">;
 def : DiagGroup<"div-by-zero">;
-def Doxygen : DiagGroup<"doxygen">;
+def DocumentationHTML : DiagGroup<"documentation-html">;
+def DocumentationPedantic : DiagGroup<"documentation-pedantic">;
+def Documentation : DiagGroup<"documentation", [DocumentationHTML]>;
 def EmptyBody : DiagGroup<"empty-body">;
 def ExtraTokens : DiagGroup<"extra-tokens">;
 
@@ -145,6 +147,9 @@ def : DiagGroup<"old-style-cast">;
 def : DiagGroup<"old-style-definition">;
 def OutOfLineDeclaration : DiagGroup<"out-of-line-declaration">;
 def : DiagGroup<"overflow">;
+def ForwardClassReceiver : DiagGroup<"receiver-forward-class">;
+def MethodAccess : DiagGroup<"objc-method-access">;
+def ObjCReceiver : DiagGroup<"receiver-expr">;
 def OverlengthStrings : DiagGroup<"overlength-strings">;
 def OverloadedVirtual : DiagGroup<"overloaded-virtual">;
 def ObjCPropertyImpl : DiagGroup<"objc-property-implementation">;
@@ -166,7 +171,8 @@ def ReturnTypeCLinkage : DiagGroup<"return-type-c-linkage">;
 def ReturnType : DiagGroup<"return-type", [ReturnTypeCLinkage]>;
 def BindToTemporaryCopy : DiagGroup<"bind-to-temporary-copy",
                                     [CXX98CompatBindToTemporaryCopy]>;
-def SelfAssignment : DiagGroup<"self-assign">;
+def SelfAssignmentField : DiagGroup<"self-assign-field">;
+def SelfAssignment : DiagGroup<"self-assign", [SelfAssignmentField]>;
 def SemiBeforeMethodBody : DiagGroup<"semicolon-before-method-body">;
 def Sentinel : DiagGroup<"sentinel">;
 def MissingMethodReturnType : DiagGroup<"missing-method-return-type">;
@@ -214,6 +220,7 @@ def ImplicitFallthroughPerFunction :
   DiagGroup<"implicit-fallthrough-per-function">;
 def ImplicitFallthrough  : DiagGroup<"implicit-fallthrough",
                                      [ImplicitFallthroughPerFunction]>;
+def InvalidPPToken : DiagGroup<"invalid-pp-token">;
 def Trigraphs      : DiagGroup<"trigraphs">;
 
 def : DiagGroup<"type-limits">;
@@ -260,7 +267,6 @@ def AutomaticReferenceCounting : DiagGroup<"arc",
                                             ARCRetainCycles,
                                             ARCNonPodMemAccess]>;
 def Selector : DiagGroup<"selector">;
-def NonfragileAbi2 : DiagGroup<"nonfragile-abi2">;
 def Protocol : DiagGroup<"protocol">;
 def SuperSubClassMismatch : DiagGroup<"super-class-method-mismatch">;
 def OverridingMethodMismatch : DiagGroup<"overriding-method-mismatch">;
@@ -374,6 +380,9 @@ def ThreadSafety : DiagGroup<"thread-safety",
 // warning should be active _only_ when -Wall is passed in, mark it as
 // DefaultIgnore in addition to putting it here.
 def : DiagGroup<"all", [Most, Parentheses, Switch]>;
+
+// Warnings enabled by -pedantic.  This is magically filled in by TableGen.
+def Pedantic : DiagGroup<"pedantic">;
 
 // Aliases.
 def : DiagGroup<"", [Extra]>;                   // -W = -Wextra

@@ -151,7 +151,8 @@ void ASTDeclWriter::VisitDecl(Decl *D) {
   Record.push_back(D->isInvalidDecl());
   Record.push_back(D->hasAttrs());
   if (D->hasAttrs())
-    Writer.WriteAttributes(D->getAttrs(), Record);
+    Writer.WriteAttributes(ArrayRef<const Attr*>(D->getAttrs().begin(),
+                                                 D->getAttrs().size()), Record);
   Record.push_back(D->isImplicit());
   Record.push_back(D->isUsed(false));
   Record.push_back(D->isReferenced());
@@ -1221,6 +1222,7 @@ void ASTDeclWriter::VisitTypeAliasTemplateDecl(TypeAliasTemplateDecl *D) {
 void ASTDeclWriter::VisitStaticAssertDecl(StaticAssertDecl *D) {
   VisitDecl(D);
   Writer.AddStmt(D->getAssertExpr());
+  Record.push_back(D->isFailed());
   Writer.AddStmt(D->getMessage());
   Writer.AddSourceLocation(D->getRParenLoc(), Record);
   Code = serialization::DECL_STATIC_ASSERT;

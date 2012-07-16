@@ -363,10 +363,6 @@ namespace {
     /// NextCallIndex - The next call index to assign.
     unsigned NextCallIndex;
 
-    // Note that we intentionally use std::map here so that references
-    // to values are stable.
-    typedef std::map<const OpaqueValueExpr*, APValue> MapTy;
-
     /// BottomFrame - The frame in which evaluation started. This must be
     /// initialized after CurrentCall and CallStackDepth.
     CallStackFrame BottomFrame;
@@ -2327,6 +2323,9 @@ public:
     { return Visit(E->getLHS()) || Visit(E->getRHS()); }
   bool VisitChooseExpr(const ChooseExpr *E)
     { return Visit(E->getChosenSubExpr(Ctx)); }
+  bool VisitAbstractConditionalOperator(const AbstractConditionalOperator *E)
+    { return Visit(E->getCond()) || Visit(E->getTrueExpr())
+      || Visit(E->getFalseExpr()); }
   bool VisitCastExpr(const CastExpr *E) { return Visit(E->getSubExpr()); }
   bool VisitBinAssign(const BinaryOperator *E) { return true; }
   bool VisitCompoundAssignOperator(const BinaryOperator *E) { return true; }
@@ -3871,8 +3870,24 @@ bool ArrayExprEvaluator::VisitInitListExpr(const InitListExpr *E) {
 
   bool Success = true;
 
+  assert((!Result.isArray() || Result.getArrayInitializedElts() == 0) &&
+         "zero-initialized array shouldn't have any initialized elts");
+  APValue Filler;
+  if (Result.isArray() && Result.hasArrayFiller())
+    Filler = Result.getArrayFiller();
+
   Result = APValue(APValue::UninitArray(), E->getNumInits(),
                    CAT->getSize().getZExtValue());
+
+  // If the array was previously zero-initialized, preserve the
+  // zero-initialized values.
+  if (!Filler.isUninit()) {
+    for (unsigned I = 0, E = Result.getArrayInitializedElts(); I != E; ++I)
+      Result.getArrayInitializedElt(I) = Filler;
+    if (Result.hasArrayFiller())
+      Result.getArrayFiller() = Filler;
+  }
+
   LValue Subobject = This;
   Subobject.addArray(Info, E, CAT);
   unsigned Index = 0;
@@ -3899,15 +3914,29 @@ bool ArrayExprEvaluator::VisitInitListExpr(const InitListExpr *E) {
 }
 
 bool ArrayExprEvaluator::VisitCXXConstructExpr(const CXXConstructExpr *E) {
-  const ConstantArrayType *CAT = Info.Ctx.getAsConstantArrayType(E->getType());
-  if (!CAT)
-    return Error(E);
+  // FIXME: The Subobject here isn't necessarily right. This rarely matters,
+  // but sometimes does:
+  //   struct S { constexpr S() : p(&p) {} void *p; };
+  //   S s[10];
+  LValue Subobject = This;
 
-  bool HadZeroInit = !Result.isUninit();
-  if (!HadZeroInit)
-    Result = APValue(APValue::UninitArray(), 0, CAT->getSize().getZExtValue());
-  if (!Result.hasArrayFiller())
-    return true;
+  APValue *Value = &Result;
+  bool HadZeroInit = true;
+  QualType ElemTy = E->getType();
+  while (const ConstantArrayType *CAT =
+           Info.Ctx.getAsConstantArrayType(ElemTy)) {
+    Subobject.addArray(Info, E, CAT);
+    HadZeroInit &= !Value->isUninit();
+    if (!HadZeroInit)
+      *Value = APValue(APValue::UninitArray(), 0, CAT->getSize().getZExtValue());
+    if (!Value->hasArrayFiller())
+      return true;
+    Value = &Value->getArrayFiller();
+    ElemTy = CAT->getElementType();
+  }
+
+  if (!ElemTy->isRecordType())
+    return Error(E);
 
   const CXXConstructorDecl *FD = E->getConstructor();
 
@@ -3917,17 +3946,15 @@ bool ArrayExprEvaluator::VisitCXXConstructExpr(const CXXConstructExpr *E) {
       return true;
 
     if (ZeroInit) {
-      LValue Subobject = This;
-      Subobject.addArray(Info, E, CAT);
-      ImplicitValueInitExpr VIE(CAT->getElementType());
-      return EvaluateInPlace(Result.getArrayFiller(), Info, Subobject, &VIE);
+      ImplicitValueInitExpr VIE(ElemTy);
+      return EvaluateInPlace(*Value, Info, Subobject, &VIE);
     }
 
     const CXXRecordDecl *RD = FD->getParent();
     if (RD->isUnion())
-      Result.getArrayFiller() = APValue((FieldDecl*)0);
+      *Value = APValue((FieldDecl*)0);
     else
-      Result.getArrayFiller() =
+      *Value =
           APValue(APValue::UninitStruct(), RD->getNumBases(),
                   std::distance(RD->field_begin(), RD->field_end()));
     return true;
@@ -3939,23 +3966,16 @@ bool ArrayExprEvaluator::VisitCXXConstructExpr(const CXXConstructExpr *E) {
   if (!CheckConstexprFunction(Info, E->getExprLoc(), FD, Definition))
     return false;
 
-  // FIXME: The Subobject here isn't necessarily right. This rarely matters,
-  // but sometimes does:
-  //   struct S { constexpr S() : p(&p) {} void *p; };
-  //   S s[10];
-  LValue Subobject = This;
-  Subobject.addArray(Info, E, CAT);
-
   if (ZeroInit && !HadZeroInit) {
-    ImplicitValueInitExpr VIE(CAT->getElementType());
-    if (!EvaluateInPlace(Result.getArrayFiller(), Info, Subobject, &VIE))
+    ImplicitValueInitExpr VIE(ElemTy);
+    if (!EvaluateInPlace(*Value, Info, Subobject, &VIE))
       return false;
   }
 
   llvm::ArrayRef<const Expr*> Args(E->getArgs(), E->getNumArgs());
   return HandleConstructorCall(E->getExprLoc(), Subobject, Args,
                                cast<CXXConstructorDecl>(Definition),
-                               Info, Result.getArrayFiller());
+                               Info, *Value);
 }
 
 //===----------------------------------------------------------------------===//

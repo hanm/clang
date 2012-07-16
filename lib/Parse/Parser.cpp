@@ -23,6 +23,7 @@
 #include "clang/AST/ASTConsumer.h"
 using namespace clang;
 
+namespace {
 /// \brief A comment handler that passes comments found by the preprocessor
 /// to the parser action.
 class ActionCommentHandler : public CommentHandler {
@@ -36,6 +37,7 @@ public:
     return false;
   }
 };
+} // end anonymous namespace
 
 IdentifierInfo *Parser::getSEHExceptKeyword() {
   // __except is accepted as a (contextual) keyword 
@@ -49,7 +51,7 @@ Parser::Parser(Preprocessor &pp, Sema &actions, bool SkipFunctionBodies)
   : PP(pp), Actions(actions), Diags(PP.getDiagnostics()),
     GreaterThanIsOperator(true), ColonIsSacred(false), 
     InMessageExpression(false), TemplateParameterDepth(0),
-    SkipFunctionBodies(SkipFunctionBodies) {
+    ParsingInObjCContainer(false), SkipFunctionBodies(SkipFunctionBodies) {
   Tok.setKind(tok::eof);
   Actions.CurScope = 0;
   NumCachedScopes = 0;
@@ -766,7 +768,7 @@ bool Parser::isDeclarationAfterDeclarator() {
     if (KW.is(tok::kw_default) || KW.is(tok::kw_delete))
       return false;
   }
-
+  
   return Tok.is(tok::equal) ||      // int X()=  -> not a function def
     Tok.is(tok::comma) ||           // int X(),  -> not a function def
     Tok.is(tok::semi)  ||           // int X();  -> not a function def
@@ -795,6 +797,27 @@ bool Parser::isStartOfFunctionDefinition(const ParsingDeclarator &Declarator) {
   
   return Tok.is(tok::colon) ||         // X() : Base() {} (used for ctors)
          Tok.is(tok::kw_try);          // X() try { ... }
+}
+
+/// \brief Determine whether the current token, if it occurs after a
+/// a function declarator, indicates the start of a function definition
+/// inside an objective-C class implementation and thus can be delay parsed. 
+bool Parser::isStartOfDelayParsedFunctionDefinition(
+                                       const ParsingDeclarator &Declarator) {
+  if (!CurParsedObjCImpl ||
+      !Declarator.isFunctionDeclarator())
+    return false;
+  if (Tok.is(tok::l_brace))   // int X() {}
+    return true;
+
+  // Handle K&R C argument lists: int X(f) int f; {}
+  if (!getLangOpts().CPlusPlus &&
+      Declarator.getFunctionTypeInfo().isKNRPrototype()) 
+    return isDeclarationSpecifier();
+  
+  return getLangOpts().CPlusPlus &&
+           (Tok.is(tok::colon) ||         // X() : Base() {} (used for ctors)
+            Tok.is(tok::kw_try));          // X() try { ... }
 }
 
 /// ParseDeclarationOrFunctionDefinition - Parse either a function-definition or
@@ -959,6 +982,7 @@ Decl *Parser::ParseFunctionDefinition(ParsingDeclarator &D,
   // In delayed template parsing mode, for function template we consume the
   // tokens and store them for late parsing at the end of the translation unit.
   if (getLangOpts().DelayedTemplateParsing &&
+      Tok.isNot(tok::equal) &&
       TemplateInfo.Kind == ParsedTemplateInfo::Template) {
     MultiTemplateParamsArg TemplateParameterLists(Actions,
                                          TemplateInfo.TemplateParams->data(),

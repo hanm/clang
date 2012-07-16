@@ -9,7 +9,7 @@ void f2(const char* a, char* b) {}
 void f3(int a, const char* b, const char* c) {}
 // CHECK: "\01?f3@@YAXHPBD0@Z"
 
-const char *f4(const char* a, const char* b) {}
+const char *f4(const char* a, const char* b) { return 0; }
 // CHECK: "\01?f4@@YAPBDPBD0@Z"
 
 void f5(char const* a, unsigned int b, char c, void const* d, char const* e, unsigned int f) {}
@@ -46,7 +46,7 @@ void g4(const char* a, struct S* b, const char* c, struct S* d) {
 // built-ins.
 typedef unsigned int uintptr_t;
 typedef unsigned int size_t;
-void *h(size_t a, uintptr_t b) {}
+void *h(size_t a, uintptr_t b) { return 0; }
 // CHECK: "\01?h@@YAPAXII@Z"
 
 // Function pointers might be mangled in a complex way.

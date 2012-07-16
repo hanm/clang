@@ -60,6 +60,14 @@ CXXRecordDecl::DefinitionData::DefinitionData(CXXRecordDecl *D)
     NumVBases(0), Bases(), VBases(), Definition(D), FirstFriend(0) {
 }
 
+CXXBaseSpecifier *CXXRecordDecl::DefinitionData::getBasesSlowCase() const {
+  return Bases.get(Definition->getASTContext().getExternalSource());
+}
+
+CXXBaseSpecifier *CXXRecordDecl::DefinitionData::getVBasesSlowCase() const {
+  return VBases.get(Definition->getASTContext().getExternalSource());
+}
+
 CXXRecordDecl::CXXRecordDecl(Kind K, TagKind TK, DeclContext *DC,
                              SourceLocation StartLoc, SourceLocation IdLoc,
                              IdentifierInfo *Id, CXXRecordDecl *PrevDecl)
@@ -1269,6 +1277,55 @@ bool CXXRecordDecl::mayBeAbstract() const {
 
 void CXXMethodDecl::anchor() { }
 
+static bool recursivelyOverrides(const CXXMethodDecl *DerivedMD,
+                                 const CXXMethodDecl *BaseMD) {
+  for (CXXMethodDecl::method_iterator I = DerivedMD->begin_overridden_methods(),
+         E = DerivedMD->end_overridden_methods(); I != E; ++I) {
+    const CXXMethodDecl *MD = *I;
+    if (MD->getCanonicalDecl() == BaseMD->getCanonicalDecl())
+      return true;
+    if (recursivelyOverrides(MD, BaseMD))
+      return true;
+  }
+  return false;
+}
+
+CXXMethodDecl *
+CXXMethodDecl::getCorrespondingMethodInClass(const CXXRecordDecl *RD) {
+  if (this->getParent()->getCanonicalDecl() == RD->getCanonicalDecl())
+    return this;
+
+  // Lookup doesn't work for destructors, so handle them separately.
+  if (isa<CXXDestructorDecl>(this)) {
+    CXXMethodDecl *MD = RD->getDestructor();
+    if (MD && recursivelyOverrides(MD, this))
+      return MD;
+    return NULL;
+  }
+
+  lookup_const_result Candidates = RD->lookup(getDeclName());
+  for (NamedDecl * const * I = Candidates.first; I != Candidates.second; ++I) {
+    CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(*I);
+    if (!MD)
+      continue;
+    if (recursivelyOverrides(MD, this))
+      return MD;
+  }
+
+  for (CXXRecordDecl::base_class_const_iterator I = RD->bases_begin(),
+         E = RD->bases_end(); I != E; ++I) {
+    const RecordType *RT = I->getType()->getAs<RecordType>();
+    if (!RT)
+      continue;
+    const CXXRecordDecl *Base = cast<CXXRecordDecl>(RT->getDecl());
+    CXXMethodDecl *T = this->getCorrespondingMethodInClass(Base);
+    if (T)
+      return T;
+  }
+
+  return NULL;
+}
+
 CXXMethodDecl *
 CXXMethodDecl::Create(ASTContext &C, CXXRecordDecl *RD,
                       SourceLocation StartLoc,
@@ -1948,15 +2005,17 @@ StaticAssertDecl *StaticAssertDecl::Create(ASTContext &C, DeclContext *DC,
                                            SourceLocation StaticAssertLoc,
                                            Expr *AssertExpr,
                                            StringLiteral *Message,
-                                           SourceLocation RParenLoc) {
+                                           SourceLocation RParenLoc,
+                                           bool Failed) {
   return new (C) StaticAssertDecl(DC, StaticAssertLoc, AssertExpr, Message,
-                                  RParenLoc);
+                                  RParenLoc, Failed);
 }
 
 StaticAssertDecl *StaticAssertDecl::CreateDeserialized(ASTContext &C, 
                                                        unsigned ID) {
   void *Mem = AllocateDeserializedDecl(C, ID, sizeof(StaticAssertDecl));
-  return new (Mem) StaticAssertDecl(0, SourceLocation(), 0, 0,SourceLocation());
+  return new (Mem) StaticAssertDecl(0, SourceLocation(), 0, 0,
+                                    SourceLocation(), false);
 }
 
 static const char *getAccessName(AccessSpecifier AS) {

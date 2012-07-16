@@ -552,12 +552,11 @@ Decl *TemplateDeclInstantiator::VisitStaticAssertDecl(StaticAssertDecl *D) {
   if (InstantiatedAssertExpr.isInvalid())
     return 0;
 
-  ExprResult Message(D->getMessage());
-  D->getMessage();
-  return SemaRef.ActOnStaticAssertDeclaration(D->getLocation(),
+  return SemaRef.BuildStaticAssertDeclaration(D->getLocation(),
                                               InstantiatedAssertExpr.get(),
-                                              Message.get(),
-                                              D->getRParenLoc());
+                                              D->getMessage(),
+                                              D->getRParenLoc(),
+                                              D->isFailed());
 }
 
 Decl *TemplateDeclInstantiator::VisitEnumDecl(EnumDecl *D) {
@@ -2424,7 +2423,7 @@ void Sema::InstantiateExceptionSpec(SourceLocation PointOfInstantiation,
 bool
 TemplateDeclInstantiator::InitFunctionInstantiation(FunctionDecl *New,
                                                     FunctionDecl *Tmpl) {
-  if (Tmpl->isDeletedAsWritten())
+  if (Tmpl->isDeleted())
     New->setDeletedAsWritten();
 
   // If we are performing substituting explicitly-specified template arguments
@@ -2446,7 +2445,6 @@ TemplateDeclInstantiator::InitFunctionInstantiation(FunctionDecl *New,
       (void) FunTmpl;
       ActiveInst.Kind = ActiveInstType::TemplateInstantiation;
       ActiveInst.Entity = reinterpret_cast<uintptr_t>(New);
-      --SemaRef.NonInstantiationEntries;
     }
   }
 

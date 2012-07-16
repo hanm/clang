@@ -1050,7 +1050,8 @@ public:
   ///
   /// By default, performs semantic analysis to build the new statement.
   /// Subclasses may override this routine to provide different behavior.
-  StmtResult RebuildAttributedStmt(SourceLocation AttrLoc, const AttrVec &Attrs,
+  StmtResult RebuildAttributedStmt(SourceLocation AttrLoc,
+                                   ArrayRef<const Attr*> Attrs,
                                    Stmt *SubStmt) {
     return SemaRef.ActOnAttributedStmt(AttrLoc, Attrs, SubStmt);
   }
@@ -1267,16 +1268,6 @@ public:
     return getSema().ActOnObjCAutoreleasePoolStmt(AtLoc, Body);
   }
 
-  /// \brief Build the collection operand to a new Objective-C fast
-  /// enumeration statement.
-  ///
-  /// By default, performs semantic analysis to build the new statement.
-  /// Subclasses may override this routine to provide different behavior.
-  ExprResult RebuildObjCForCollectionOperand(SourceLocation forLoc,
-                                             Expr *collection) {
-    return getSema().ActOnObjCForCollectionOperand(forLoc, collection);
-  }
-
   /// \brief Build a new Objective-C fast enumeration statement.
   ///
   /// By default, performs semantic analysis to build the new statement.
@@ -1287,11 +1278,14 @@ public:
                                           Expr *Collection,
                                           SourceLocation RParenLoc,
                                           Stmt *Body) {
-    return getSema().ActOnObjCForCollectionStmt(ForLoc, LParenLoc,
-                                                Element, 
+    StmtResult ForEachStmt = getSema().ActOnObjCForCollectionStmt(ForLoc, LParenLoc,
+                                                Element,
                                                 Collection,
-                                                RParenLoc,
-                                                Body);
+                                                RParenLoc);
+    if (ForEachStmt.isInvalid())
+      return StmtError();
+
+    return getSema().FinishObjCForCollectionStmt(ForEachStmt.take(), Body);
   }
   
   /// \brief Build a new C++ exception declaration.
@@ -5789,10 +5783,6 @@ TreeTransform<Derived>::TransformObjCForCollectionStmt(
   
   // Transform the collection expression.
   ExprResult Collection = getDerived().TransformExpr(S->getCollection());
-  if (Collection.isInvalid())
-    return StmtError();
-  Collection = getDerived().RebuildObjCForCollectionOperand(S->getForLoc(),
-                                                            Collection.take());
   if (Collection.isInvalid())
     return StmtError();
   

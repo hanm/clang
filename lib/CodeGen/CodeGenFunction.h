@@ -1197,6 +1197,16 @@ private:
   llvm::BasicBlock *TerminateHandler;
   llvm::BasicBlock *TrapBB;
 
+  /// Add a kernel metadata node to the named metadata node 'opencl.kernels'.
+  /// In the kernel metadata node, reference the kernel function and metadata 
+  /// nodes for its optional attribute qualifiers (OpenCL 1.1 6.7.2):
+  /// - A node for the work_group_size_hint(X,Y,Z) qualifier contains string 
+  ///   "work_group_size_hint", and three 32-bit integers X, Y and Z.
+  /// - A node for the reqd_work_group_size(X,Y,Z) qualifier contains string 
+  ///   "reqd_work_group_size", and three 32-bit integers X, Y and Z.
+  void EmitOpenCLKernelMetadata(const FunctionDecl *FD, 
+                                llvm::Function *Fn);
+
 public:
   CodeGenFunction(CodeGenModule &cgm, bool suppressNewContext=false);
   ~CodeGenFunction();
@@ -1566,6 +1576,7 @@ public:
     return LValue::MakeAddr(V, T, Alignment, getContext(),
                             CGM.getTBAAInfo(T));
   }
+
   LValue MakeNaturalAlignAddrLValue(llvm::Value *V, QualType T) {
     CharUnits Alignment;
     if (!T->isIncompleteType())
@@ -1622,8 +1633,8 @@ public:
   ///
   /// \param IgnoreResult - True if the resulting value isn't used.
   RValue EmitAnyExpr(const Expr *E,
-                     AggValueSlot AggSlot = AggValueSlot::ignored(),
-                     bool IgnoreResult = false);
+                     AggValueSlot aggSlot = AggValueSlot::ignored(),
+                     bool ignoreResult = false);
 
   // EmitVAListRef - Emit a "reference" to a va_list; this is either the address
   // or the value of the expression, depending on how va_list is defined.
@@ -1649,7 +1660,7 @@ public:
   /// volatile.
   void EmitAggregateCopy(llvm::Value *DestPtr, llvm::Value *SrcPtr,
                          QualType EltTy, bool isVolatile=false,
-                         unsigned Alignment = 0);
+                         CharUnits Alignment = CharUnits::Zero());
 
   /// StartBlock - Start new block named N. If insert block is a dummy block
   /// then reuse it.
@@ -2166,9 +2177,6 @@ public:
                            llvm::Value* Base, const ObjCIvarDecl *Ivar,
                            unsigned CVRQualifiers);
 
-  LValue EmitLValueForBitfield(llvm::Value* Base, const FieldDecl* Field,
-                                unsigned CVRQualifiers);
-
   LValue EmitCXXConstructLValue(const CXXConstructExpr *E);
   LValue EmitCXXBindTemporaryLValue(const CXXBindTemporaryExpr *E);
   LValue EmitLambdaLValue(const LambdaExpr *E);
@@ -2267,8 +2275,8 @@ public:
 
   llvm::Value *BuildVector(ArrayRef<llvm::Value*> Ops);
   llvm::Value *EmitX86BuiltinExpr(unsigned BuiltinID, const CallExpr *E);
-  llvm::Value *EmitHexagonBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
   llvm::Value *EmitPPCBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
+  llvm::Value *EmitMipsBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
 
   llvm::Value *EmitObjCProtocolExpr(const ObjCProtocolExpr *E);
   llvm::Value *EmitObjCStringLiteral(const ObjCStringLiteral *E);
@@ -2367,7 +2375,7 @@ public:
   /// EmitAggExpr - Emit the computation of the specified expression
   /// of aggregate type.  The result is computed into the given slot,
   /// which may be null to indicate that the value is not needed.
-  void EmitAggExpr(const Expr *E, AggValueSlot AS, bool IgnoreResult = false);
+  void EmitAggExpr(const Expr *E, AggValueSlot AS);
 
   /// EmitAggExprToLValue - Emit the computation of the specified expression of
   /// aggregate type into a temporary LValue.

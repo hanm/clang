@@ -149,6 +149,7 @@ Decl *Sema::ActOnProperty(Scope *S, SourceLocation AtLoc,
         if (getLangOpts().ObjCAutoRefCount)
           checkARCPropertyDecl(*this, cast<ObjCPropertyDecl>(Res));
       }
+      ActOnDocumentableDecl(Res);
       return Res;
     }
   
@@ -169,6 +170,7 @@ Decl *Sema::ActOnProperty(Scope *S, SourceLocation AtLoc,
   if (getLangOpts().ObjCAutoRefCount)
     checkARCPropertyDecl(*this, Res);
 
+  ActOnDocumentableDecl(Res);
   return Res;
 }
 
@@ -829,8 +831,8 @@ Decl *Sema::ActOnPropertyImplDecl(Scope *S,
       if (originalIvar) {
         Diag(PropertyDiagLoc, 
              diag::warn_autosynthesis_property_ivar_match)
-        << property->getName() << (Ivar == 0) << PropertyIvar->getName() 
-        << originalIvar->getName();
+        << PropertyId << (Ivar == 0) << PropertyIvar 
+        << originalIvar->getIdentifier();
         Diag(property->getLocation(), diag::note_property_declare);
         Diag(originalIvar->getLocation(), diag::note_ivar_decl);
       }
@@ -2143,8 +2145,7 @@ void Sema::CheckObjCPropertyAttributes(Decl *PDecl,
       && getLangOpts().getGC() == LangOptions::GCOnly
       && PropertyTy->isBlockPointerType())
     Diag(Loc, diag::warn_objc_property_copy_missing_on_block);
-  else if (getLangOpts().ObjCAutoRefCount &&
-           (Attributes & ObjCDeclSpec::DQ_PR_retain) &&
+  else if ((Attributes & ObjCDeclSpec::DQ_PR_retain) &&
            !(Attributes & ObjCDeclSpec::DQ_PR_readonly) &&
            !(Attributes & ObjCDeclSpec::DQ_PR_strong) &&
            PropertyTy->isBlockPointerType())

@@ -464,12 +464,19 @@ template<typename Derived>
 bool RecursiveASTVisitor<Derived>::dataTraverseNode(Stmt *S,
                                                     bool &EnqueueChildren) {
 
+// The cast for DISPATCH_WALK is needed for older versions of g++, but causes
+// problems for MSVC.  So we'll skip the cast entirely for MSVC.
+#if defined(_MSC_VER)
+  #define GCC_CAST(CLASS)
+#else
+  #define GCC_CAST(CLASS) (bool (RecursiveASTVisitor::*)(CLASS*))
+#endif
+
   // Dispatch to the corresponding WalkUpFrom* function only if the derived
   // class didn't override Traverse* (and thus the traversal is trivial).
-  // The cast here is necessary to work around a bug in old versions of g++.
 #define DISPATCH_WALK(NAME, CLASS, VAR) \
   if (&RecursiveASTVisitor::Traverse##NAME == \
-      (bool (RecursiveASTVisitor::*)(CLASS*))&Derived::Traverse##NAME) \
+      GCC_CAST(CLASS)&Derived::Traverse##NAME) \
     return getDerived().WalkUpFrom##NAME(static_cast<CLASS*>(VAR)); \
   EnqueueChildren = false; \
   return getDerived().Traverse##NAME(static_cast<CLASS*>(VAR));
@@ -509,6 +516,7 @@ bool RecursiveASTVisitor<Derived>::dataTraverseNode(Stmt *S,
   }
 
 #undef DISPATCH_WALK
+#undef GCC_CAST
 
   return true;
 }
@@ -1762,7 +1770,7 @@ bool RecursiveASTVisitor<Derived>::TraverseVarHelper(VarDecl *D) {
   TRY_TO(TraverseDeclaratorHelper(D));
   // Default params are taken care of when we traverse the ParmVarDecl.
   if (!isa<ParmVarDecl>(D) &&
-      (!D->isCXXForRangeDecl() || shouldVisitImplicitCode()))
+      (!D->isCXXForRangeDecl() || getDerived().shouldVisitImplicitCode()))
     TRY_TO(TraverseStmt(D->getInit()));
   return true;
 }
@@ -1881,7 +1889,7 @@ DEF_TRAVERSE_STMT(ObjCAtTryStmt, { })
 DEF_TRAVERSE_STMT(ObjCForCollectionStmt, { })
 DEF_TRAVERSE_STMT(ObjCAutoreleasePoolStmt, { })
 DEF_TRAVERSE_STMT(CXXForRangeStmt, {
-  if (!shouldVisitImplicitCode()) {
+  if (!getDerived().shouldVisitImplicitCode()) {
     TRY_TO(TraverseStmt(S->getLoopVarStmt()));
     TRY_TO(TraverseStmt(S->getRangeInit()));
     TRY_TO(TraverseStmt(S->getBody()));

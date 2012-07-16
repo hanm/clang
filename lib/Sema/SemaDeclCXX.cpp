@@ -1119,6 +1119,8 @@ Sema::ActOnBaseSpecifier(Decl *classdecl, SourceRange SpecifierRange,
                                                       Virtual, Access, TInfo,
                                                       EllipsisLoc))
     return BaseSpec;
+  else
+    Class->setInvalidDecl();
 
   return true;
 }
@@ -4698,6 +4700,14 @@ void Sema::ActOnFinishCXXMemberSpecification(Scope* S, SourceLocation RLoc,
 
   AdjustDeclIfTemplate(TagDecl);
 
+  for (const AttributeList* l = AttrList; l; l = l->getNext()) {
+    if (l->getKind() != AttributeList::AT_Visibility)
+      continue;
+    l->setInvalid();
+    Diag(l->getLoc(), diag::warn_attribute_after_definition_ignored) <<
+      l->getName();
+  }
+
   ActOnFields(S, RLoc, TagDecl, llvm::makeArrayRef(
               // strict aliasing violation!
               reinterpret_cast<Decl**>(FieldCollector->getCurFields()),
@@ -5419,6 +5429,8 @@ Decl *Sema::ActOnStartNamespaceDef(Scope *NamespcScope,
       CurContext->addDecl(UD);
     }
   }
+
+  ActOnDocumentableDecl(Namespc);
 
   // Although we could have an invalid decl (i.e. the namespace name is a
   // redefinition), push it as current DeclContext and try to continue parsing.
@@ -6799,7 +6811,7 @@ void Sema::DefineImplicitDefaultConstructor(SourceLocation CurrentLocation,
   }
 
   SourceLocation Loc = Constructor->getLocation();
-  Constructor->setBody(new (Context) CompoundStmt(Context, 0, 0, Loc, Loc));
+  Constructor->setBody(new (Context) CompoundStmt(Loc));
 
   Constructor->setUsed();
   MarkVTableUsed(CurrentLocation, ClassDecl);
@@ -7160,7 +7172,7 @@ void Sema::DefineImplicitDestructor(SourceLocation CurrentLocation,
   }
 
   SourceLocation Loc = Destructor->getLocation();
-  Destructor->setBody(new (Context) CompoundStmt(Context, 0, 0, Loc, Loc));
+  Destructor->setBody(new (Context) CompoundStmt(Loc));
   Destructor->setImplicitlyDefined(true);
   Destructor->setUsed();
   MarkVTableUsed(CurrentLocation, ClassDecl);
@@ -8903,8 +8915,7 @@ void Sema::DefineImplicitLambdaToFunctionPointerConversion(
   // will fill in the actual details.
   Invoke->setUsed();
   Invoke->setReferenced();
-  Invoke->setBody(new (Context) CompoundStmt(Context, 0, 0, Conv->getLocation(),
-                                             Conv->getLocation()));
+  Invoke->setBody(new (Context) CompoundStmt(Conv->getLocation()));
   
   if (ASTMutationListener *L = getASTMutationListener()) {
     L->CompletedImplicitDefinition(Conv);
@@ -9733,37 +9744,49 @@ Decl *Sema::ActOnExceptionDeclarator(Scope *S, Declarator &D) {
 
 Decl *Sema::ActOnStaticAssertDeclaration(SourceLocation StaticAssertLoc,
                                          Expr *AssertExpr,
-                                         Expr *AssertMessageExpr_,
+                                         Expr *AssertMessageExpr,
                                          SourceLocation RParenLoc) {
-  StringLiteral *AssertMessage = cast<StringLiteral>(AssertMessageExpr_);
+  StringLiteral *AssertMessage = cast<StringLiteral>(AssertMessageExpr);
 
-  if (!AssertExpr->isTypeDependent() && !AssertExpr->isValueDependent()) {
+  if (DiagnoseUnexpandedParameterPack(AssertExpr, UPPC_StaticAssertExpression))
+    return 0;
+
+  return BuildStaticAssertDeclaration(StaticAssertLoc, AssertExpr,
+                                      AssertMessage, RParenLoc, false);
+}
+
+Decl *Sema::BuildStaticAssertDeclaration(SourceLocation StaticAssertLoc,
+                                         Expr *AssertExpr,
+                                         StringLiteral *AssertMessage,
+                                         SourceLocation RParenLoc,
+                                         bool Failed) {
+  if (!AssertExpr->isTypeDependent() && !AssertExpr->isValueDependent() &&
+      !Failed) {
     // In a static_assert-declaration, the constant-expression shall be a
     // constant expression that can be contextually converted to bool.
     ExprResult Converted = PerformContextuallyConvertToBool(AssertExpr);
     if (Converted.isInvalid())
-      return 0;
+      Failed = true;
 
     llvm::APSInt Cond;
-    if (VerifyIntegerConstantExpression(Converted.get(), &Cond,
+    if (!Failed && VerifyIntegerConstantExpression(Converted.get(), &Cond,
           diag::err_static_assert_expression_is_not_constant,
           /*AllowFold=*/false).isInvalid())
-      return 0;
+      Failed = true;
 
-    if (!Cond) {
+    if (!Failed && !Cond) {
       llvm::SmallString<256> MsgBuffer;
       llvm::raw_svector_ostream Msg(MsgBuffer);
       AssertMessage->printPretty(Msg, Context, 0, getPrintingPolicy());
       Diag(StaticAssertLoc, diag::err_static_assert_failed)
         << Msg.str() << AssertExpr->getSourceRange();
+      Failed = true;
     }
   }
 
-  if (DiagnoseUnexpandedParameterPack(AssertExpr, UPPC_StaticAssertExpression))
-    return 0;
-
   Decl *Decl = StaticAssertDecl::Create(Context, CurContext, StaticAssertLoc,
-                                        AssertExpr, AssertMessage, RParenLoc);
+                                        AssertExpr, AssertMessage, RParenLoc,
+                                        Failed);
 
   CurContext->addDecl(Decl);
   return Decl;
@@ -10318,8 +10341,8 @@ void Sema::SetDeclDeleted(Decl *Dcl, SourceLocation DelLoc) {
   if (const FunctionDecl *Prev = Fn->getPreviousDecl()) {
     // Don't consider the implicit declaration we generate for explicit
     // specializations. FIXME: Do not generate these implicit declarations.
-    if (Prev->getTemplateSpecializationKind() != TSK_ExplicitSpecialization
-        || Prev->getPreviousDecl()) {
+    if ((Prev->getTemplateSpecializationKind() != TSK_ExplicitSpecialization
+        || Prev->getPreviousDecl()) && !Prev->isDefined()) {
       Diag(DelLoc, diag::err_deleted_decl_not_first);
       Diag(Prev->getLocation(), diag::note_previous_declaration);
     }
@@ -10794,14 +10817,23 @@ bool Sema::DefineUsedVTables() {
 
 void Sema::MarkVirtualMembersReferenced(SourceLocation Loc,
                                         const CXXRecordDecl *RD) {
-  for (CXXRecordDecl::method_iterator i = RD->method_begin(), 
-       e = RD->method_end(); i != e; ++i) {
-    CXXMethodDecl *MD = *i;
+  // Mark all functions which will appear in RD's vtable as used.
+  CXXFinalOverriderMap FinalOverriders;
+  RD->getFinalOverriders(FinalOverriders);
+  for (CXXFinalOverriderMap::const_iterator I = FinalOverriders.begin(),
+                                            E = FinalOverriders.end();
+       I != E; ++I) {
+    for (OverridingMethods::const_iterator OI = I->second.begin(),
+                                           OE = I->second.end();
+         OI != OE; ++OI) {
+      assert(OI->second.size() > 0 && "no final overrider");
+      CXXMethodDecl *Overrider = OI->second.front().Method;
 
-    // C++ [basic.def.odr]p2:
-    //   [...] A virtual member function is used if it is not pure. [...]
-    if (MD->isVirtual() && !MD->isPure())
-      MarkFunctionReferenced(Loc, MD);
+      // C++ [basic.def.odr]p2:
+      //   [...] A virtual member function is used if it is not pure. [...]
+      if (!Overrider->isPure())
+        MarkFunctionReferenced(Loc, Overrider);
+    }
   }
 
   // Only classes that have virtual bases need a VTT.
