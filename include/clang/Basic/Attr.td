@@ -873,67 +873,63 @@ def VirtualInheritance : InheritableAttr {
 
 
 /////////////////////////////////////////////
-///  Annotations for Safe Parallelism
+///  Annotations for Safe Parallelism (ASP)
+class ASP<string name> : Spelling<name, "ASP">;
+
+/// REGIONS
 
 def Region : InheritableAttr {
-  let Spellings = ["region"];
+  let Spellings = [ASP<"region">];
   let Args = [StringArgument<"region_name">];
-  let Namespaces = ["", "std"];
 }
 
 def InRegion : InheritableAttr {
-  let Spellings = ["in_region"];
+  let Spellings = [ASP<"in_region">];
   let Subjects = [Var];
-  let Args = [StringArgument<"region_name">];
-  let Namespaces = ["", "std"];
+  let Args = [StringArgument<"rpl">];
 }
 
-def ParamRegion : InheritableAttr {
-  let Spellings = ["param_region"];
+def RegionParam : InheritableAttr {
+  let Spellings = [ASP<"region_param">];
   let Subjects = [Record, ParmVar];
   let Args = [StringArgument<"param_name">];
-  let Namespaces = ["", "std"];
 }  
 
-def ArgRegion : InheritableAttr {
-  let Spellings = ["arg_region"];
+def RegionArg : InheritableAttr {
+  let Spellings = [ASP<"region_arg">];
   let Subjects = [Var];
   let Args = [StringArgument<"rpl">];
-  let Namespaces = ["", "std"];
 }  
 
-/// Effects
+
+/// EFFECTS
+
 def PureEffect : InheritableAttr {
-  let Spellings = ["pure_effect"];
+  let Spellings = [ASP<"pure_effect">];
   let Subjects = [Function];
-  let Namespaces = ["", "std"];
 }  
 
-def ReadsRegion : InheritableAttr {
-  let Spellings = ["reads_region"];
+def ReadsEffect : InheritableAttr {
+  let Spellings = [ASP<"reads_effect">];
   let Subjects = [Function];
   let Args = [StringArgument<"rpl">];
-  let Namespaces = ["", "std"];
 }  
 
-def AtomicReadsRegion : InheritableAttr {
-  let Spellings = ["atomic_reads_region"];
+def AtomicReadsEffect : InheritableAttr {
+  let Spellings = [ASP<"atomic_reads_effect">];
   let Subjects = [Function];
   let Args = [StringArgument<"rpl">];
-  let Namespaces = ["", "std"];
 }  
 
-def WritesRegion : InheritableAttr {
-  let Spellings = ["writes_region"];
+def WritesEffect : InheritableAttr {
+  let Spellings = [ASP<"writes_effect">];
   let Subjects = [Function];
   let Args = [StringArgument<"rpl">];
-  let Namespaces = ["", "std"];
 }  
 
-def AtomicWritesRegion : InheritableAttr {
-  let Spellings = ["atomic_writes_region"];
+def AtomicWritesEffect : InheritableAttr {
+  let Spellings = [ASP<"atomic_writes_effect">];
   let Subjects = [Function];
   let Args = [StringArgument<"rpl">];
-  let Namespaces = ["", "std"];
 }  
 
