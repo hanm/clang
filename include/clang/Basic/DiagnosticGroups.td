@@ -370,6 +370,10 @@ def Most : DiagGroup<"most", [
     OverloadedVirtual
  ]>;
 
+// Safe Parallelism Warnings
+def SafeParallelismAttributes : DiagGroup<"safe-parallelism-attributes">;
+def SafeParallelism : DiagGroup<"safe-parallelism", [SafeParallelismAttributes]>;
+
 // Thread Safety warnings 
 def ThreadSafetyAttributes : DiagGroup<"thread-safety-attributes">;
 def ThreadSafetyAnalysis : DiagGroup<"thread-safety-analysis">;

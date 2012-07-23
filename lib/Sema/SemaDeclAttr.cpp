@@ -3964,18 +3964,16 @@ static void handleForceInlineAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 }
 
 //===----------------------------------------------------------------------===//
-// ASP specific attribute handlers. (Annotations for Safe Parallelism)
+// Safe Parallelism specific attribute handlers. 
 //===----------------------------------------------------------------------===//
 
-//TODO define our own diagnostic warning messages
-/*
-enum ASPAttributeDeclKind {
-  ASPExpectedClassOrFunctionOrGlobalOrBlock, 	// region (region_name)
-  ASPExpectedClassOrFunction, 					// region_param(region_name)
-  ASPExpectedField, 							// in_region(RPL)
-  ASPExpectedFieldOrParamOrVariable,				// region_arg(RPL)
-  ASPExpectedFunction 							// Effects
-};*/
+enum SafeParallelismAttributeDeclKind {
+  SafeParExpectedClassOrFunction,				 	// region (region_name)
+  SafeParExpectedClassOrFunction, 					// region_param(region_name)
+  SafeParExpectedField, 							// in_region(RPL)
+  SafeParExpectedFieldOrParamOrVariable,			// region_arg(RPL)
+  SafeParExpectedFunction 							// Effects
+};
 
 
 /// Generic ASP attibute handler. Does nothing except check that the attribute
@@ -3987,16 +3985,14 @@ enum ASPAttributeDeclKind {
 
 }*/
 
-static void handleASPRegionAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleSafeParRegionAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   assert(!Attr.isInvalid());
   if (!checkAttributeNumArgs(S, Attr, 1))
     return;
-  // TODO region name declarations should be allowed also at function scope,
-  // at global scope, and possibly at block scope.
+  // TODO region name declarations should be allowed at global scope, and possibly at block scope.
   if (!isa<RecordDecl>(D) && !isa<FunctionDecl>(D) && !isa<FunctionTemplateDecl>(D)) {
-	  // TODO Fix diagnostic
-    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type)
-    	      << Attr.getName() << ExpectedClass << ExpectedFunctionOrMethod;
+    S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
+    	      << Attr.getName() << SafeParExpectedClassOrFunction;
     return;
   }
 
@@ -4008,15 +4004,14 @@ static void handleASPRegionAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 		  	  	  	  	  	  	  	  	  	   	  	  	   Str->getString()));
 }
 
-static void handleASPRegionParamAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleSafeParRegionParamAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   assert(!Attr.isInvalid());
   if (!checkAttributeNumArgs(S, Attr, 1))
     return;
 
   if (!isa<RecordDecl>(D) && !isa<FunctionDecl>(D) && !isa<FunctionTemplateDecl>(D)) {
-	// TODO Fix diagnostic
-    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type)
-    	      << Attr.getName() << ExpectedClass << ExpectedFunctionOrMethod;
+    S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
+    	      << Attr.getName() << SafeParExpectedClassOrFunction;
     return;
   }
 
@@ -4028,15 +4023,14 @@ static void handleASPRegionParamAttr(Sema &S, Decl *D, const AttributeList &Attr
 		  	  	  	  	  	  	  	  	  	   	  	  	   Str->getString()));
 }
 
-static void handleASPInRegionAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleSafeParInRegionAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   assert(!Attr.isInvalid());
   if (!checkAttributeNumArgs(S, Attr, 1))
     return;
 
   if (!isa<FieldDecl>(D)) {
-	// TODO Fix diagnostic
-    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type)
-    	      << Attr.getName() << ExpectedFieldOrGlobalVar;
+    S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
+    	      << Attr.getName() << SafeParExpectedField;
     return;
   }
 
@@ -4048,17 +4042,20 @@ static void handleASPInRegionAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 		  	  	  	  	  	  	  	  	  	   	  	  	   Str->getString()));
 }
 
-static void handleASPRegionArgAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleSafeParRegionArgAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   assert(!Attr.isInvalid());
+  // FIXME: the number of arguments should be equal to the number of region parameters
+  // of the annotated type
   if (!checkAttributeNumArgs(S, Attr, 1))
     return;
 
   if (!isa<FieldDecl>(D) && !isa<VarDecl>(D) && !isa<FunctionDecl>(D) && !isa<ParmVarDecl>(D)) {
-	// TODO Fix diagnostic
-    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type)
-      << Attr.getName() << ExpectedVariable << ExpectedParameter;
+    S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
+      << Attr.getName() << SafeParExpectedFieldOrParamOrVariable;
     return;
   }
+
+  // TODO: check that we are not using arg on a type that is not a pointer or a reference
 
   Expr *Arg = Attr.getArg(0);
   Arg = Arg->IgnoreParenCasts();
@@ -4071,14 +4068,14 @@ static void handleASPRegionArgAttr(Sema &S, Decl *D, const AttributeList &Attr) 
 
 /// EFFECTS
 
-static void handleASPPureEffectAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleSafeParPureEffectAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   assert(!Attr.isInvalid());
   if (!checkAttributeNumArgs(S, Attr, 0))
     return;
 
   if (!isa<FunctionDecl>(D) && !isa<FunctionTemplateDecl>(D)) {
-    S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
-      << Attr.getName() << ExpectedFunctionOrMethod;
+    S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
+      << Attr.getName() << SafeParExpectedFunction;
     return;
   }
 
@@ -4087,14 +4084,14 @@ static void handleASPPureEffectAttr(Sema &S, Decl *D, const AttributeList &Attr)
 }
 
 template<typename AttrType>
-static void handleASPEffectAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleSafeParEffectAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   assert(!Attr.isInvalid());
   if (!checkAttributeNumArgs(S, Attr, 1))
 	  return;
 
   if (!isa<FunctionDecl>(D) && !isa<FunctionTemplateDecl>(D)) {
-    S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
-      << Attr.getName() << ExpectedFunctionOrMethod;
+    S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
+      << Attr.getName() << SafeParExpectedFunction;
     return;
   }
 
@@ -4368,19 +4365,19 @@ static void ProcessInheritableDeclAttr(Sema &S, Scope *scope, Decl *D,
 
   // Annotations for Safe Parallelism (ASP)
   // 1. Region Name&Parameter Declarations
-  case AttributeList::AT_Region: handleASPRegionAttr(S, D, Attr); break;
-  case AttributeList::AT_RegionParam: handleASPRegionParamAttr(S, D, Attr); break;
+  case AttributeList::AT_Region: handleSafeParRegionAttr(S, D, Attr); break;
+  case AttributeList::AT_RegionParam: handleSafeParRegionParamAttr(S, D, Attr); break;
 
   // 2. Assignment of Variables to RPLs
-  case AttributeList::AT_InRegion: handleASPInRegionAttr(S, D, Attr); break;
-  case AttributeList::AT_RegionArg: handleASPRegionArgAttr(S, D, Attr); break;
+  case AttributeList::AT_InRegion: handleSafeParInRegionAttr(S, D, Attr); break;
+  case AttributeList::AT_RegionArg: handleSafeParRegionArgAttr(S, D, Attr); break;
 
   // 3. Effect Declarations
-  case AttributeList::AT_PureEffect: handleASPPureEffectAttr(S, D, Attr); break;
-  case AttributeList::AT_ReadsEffect: handleASPEffectAttr<ReadsEffectAttr>(S, D, Attr); break;
-  case AttributeList::AT_AtomicReadsEffect: handleASPEffectAttr<AtomicReadsEffectAttr>(S, D, Attr); break;
-  case AttributeList::AT_WritesEffect: handleASPEffectAttr<WritesEffectAttr>(S, D, Attr); break;
-  case AttributeList::AT_AtomicWritesEffect: handleASPEffectAttr<AtomicWritesEffectAttr>(S, D, Attr); break;
+  case AttributeList::AT_PureEffect: handleSafeParPureEffectAttr(S, D, Attr); break;
+  case AttributeList::AT_ReadsEffect: handleSafeParEffectAttr<ReadsEffectAttr>(S, D, Attr); break;
+  case AttributeList::AT_AtomicReadsEffect: handleSafeParEffectAttr<AtomicReadsEffectAttr>(S, D, Attr); break;
+  case AttributeList::AT_WritesEffect: handleSafeParEffectAttr<WritesEffectAttr>(S, D, Attr); break;
+  case AttributeList::AT_AtomicWritesEffect: handleSafeParEffectAttr<AtomicWritesEffectAttr>(S, D, Attr); break;
 
   default:
     // Ask target about the attribute.

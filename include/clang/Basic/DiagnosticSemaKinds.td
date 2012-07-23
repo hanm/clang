@@ -1754,6 +1754,17 @@ def warn_availability_version_ordering : Warning<
 def warn_mismatched_availability: Warning<
   "availability does not match previous declaration">, InGroup<Availability>;
 
+// Safe Parallelism Attributes
+def warn_safepar_attribute_wrong_decl_type : Warning<
+  "%0 attribute only applies to %select{"
+  "classes and structs and functions and globals|"
+  "classes and structs and functions|"
+  "fields|"
+  "fields or function parameters or variables|"
+  "functions}1">,
+  InGroup<SafeParallelismAttributes>;
+
+
 // Thread Safety Attributes
 def warn_thread_attribute_ignored : Warning<
   "ignoring %0 attribute because its argument is invalid">,
