@@ -501,3 +501,14 @@ def ExprInspectionChecker : Checker<"ExprInspection">,
 
 } // end "debug"
 
+
+//===----------------------------------------------------------------------===//
+// Experimental checkers.
+//===----------------------------------------------------------------------===//
+let ParentPackage = Experimental in {
+
+def StaticVariableAccessChecker : Checker<"StaticVariableAccessChecker">,
+  HelpText<"Check access of static variables.">,
+  DescFile<"StaticVariableAccessChecker.cpp">;
+
+} // end "experimental"
