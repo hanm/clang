@@ -1,4 +1,3 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=core,experimental.core,debug.ExprInspection -analyzer-store=region -analyzer-constraints=basic -verify -Wno-null-dereference %s
 // RUN: %clang_cc1 -analyze -analyzer-checker=core,experimental.core,debug.ExprInspection -analyzer-store=region -analyzer-constraints=range -verify -Wno-null-dereference %s
 
 void clang_analyzer_eval(bool);
@@ -119,9 +118,6 @@ void testReferenceAddress(int &x) {
 
   extern S *getS();
   clang_analyzer_eval(&getS()->x != 0); // expected-warning{{TRUE}}
-
-  // This actually takes a different path, because it's not a BinaryOperator.
-  clang_analyzer_eval(&getS()->x); // expected-warning{{TRUE}}
 }
 
 
