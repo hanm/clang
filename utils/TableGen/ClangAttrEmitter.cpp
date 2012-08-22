@@ -18,7 +18,6 @@
 #include "llvm/TableGen/TableGenBackend.h"
 #include <algorithm>
 #include <cctype>
-#include <set>
 
 using namespace llvm;
 
@@ -350,7 +349,9 @@ namespace {
          << "Type(), Record);\n";
     }
     void writeValue(raw_ostream &OS) const {
-      OS << "\" << get" << getUpperName() << "(Ctx) << \"";
+      OS << "\";\n"
+         << "  " << getLowerName() << "Expr->printPretty(OS, 0, Policy);\n"
+         << "  OS << \"";
     }
   };
 
@@ -729,7 +730,8 @@ void EmitClangAttrClass(RecordKeeper &Records, raw_ostream &OS) {
     OS << "  }\n\n";
 
     OS << "  virtual " << R.getName() << "Attr *clone (ASTContext &C) const;\n";
-    OS << "  virtual void printPretty(llvm::raw_ostream &OS, ASTContext &Ctx) const;\n";
+    OS << "  virtual void printPretty(llvm::raw_ostream &OS,"
+       << "                           const PrintingPolicy &Policy) const;\n";
 
     for (ai = Args.begin(); ai != ae; ++ai) {
       (*ai)->writeAccessors(OS);
@@ -787,7 +789,7 @@ void EmitClangAttrImpl(RecordKeeper &Records, raw_ostream &OS) {
     OS << ");\n}\n\n";
 
     OS << "void " << R.getName() << "Attr::printPretty("
-       << "llvm::raw_ostream &OS, ASTContext &Ctx) const {\n";
+       << "llvm::raw_ostream &OS, const PrintingPolicy &Policy) const {\n";
     if (Spellings.begin() != Spellings.end()) {
       std::string Spelling = (*Spellings.begin())->getValueAsString("Name");
       OS << "  OS << \" __attribute__((" << Spelling;

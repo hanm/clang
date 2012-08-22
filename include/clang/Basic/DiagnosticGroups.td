@@ -33,6 +33,7 @@ def StringConversion : DiagGroup<"string-conversion">;
 def SignConversion : DiagGroup<"sign-conversion">;
 def BoolConversion : DiagGroup<"bool-conversion">;
 def IntConversion : DiagGroup<"int-conversion">;
+def NonLiteralNullConversion : DiagGroup<"non-literal-null-conversion">;
 def NullConversion : DiagGroup<"null-conversion">;
 def BuiltinRequiresHeader : DiagGroup<"builtin-requires-header">;
 def CXXCompat: DiagGroup<"c++-compat">;
@@ -62,6 +63,8 @@ def DocumentationPedantic : DiagGroup<"documentation-pedantic">;
 def Documentation : DiagGroup<"documentation", [DocumentationHTML]>;
 def EmptyBody : DiagGroup<"empty-body">;
 def ExtraTokens : DiagGroup<"extra-tokens">;
+def CXX11ExtraSemi : DiagGroup<"c++11-extra-semi">;
+def ExtraSemi : DiagGroup<"extra-semi", [CXX11ExtraSemi]>;
 
 def FormatExtraArgs : DiagGroup<"format-extra-args">;
 def FormatZeroLength : DiagGroup<"format-zero-length">;
@@ -152,6 +155,9 @@ def MethodAccess : DiagGroup<"objc-method-access">;
 def ObjCReceiver : DiagGroup<"receiver-expr">;
 def OverlengthStrings : DiagGroup<"overlength-strings">;
 def OverloadedVirtual : DiagGroup<"overloaded-virtual">;
+def PrivateExtern : DiagGroup<"private-extern">;
+def SelTypeCast : DiagGroup<"cast-of-sel-type">;
+def BadFunctionCast : DiagGroup<"bad-function-cast">;
 def ObjCPropertyImpl : DiagGroup<"objc-property-implementation">;
 def ObjCPropertyNoAttribute : DiagGroup<"objc-property-no-attribute">;
 def ObjCMissingSuperCalls : DiagGroup<"objc-missing-super-calls">;
@@ -312,7 +318,8 @@ def Conversion : DiagGroup<"conversion",
                             StringConversion,
                             SignConversion,
                             BoolConversion,
-                            NullConversion,
+                            NullConversion, // NULL->non-pointer
+                            NonLiteralNullConversion, // (1-1)->pointer (etc)
                             IntConversion]>,
                  DiagCategory<"Value Conversion Issue">;
 
@@ -336,6 +343,8 @@ def Format : DiagGroup<"format",
 def FormatNonLiteral : DiagGroup<"format-nonliteral", [FormatSecurity]>;
 def Format2 : DiagGroup<"format=2",
                         [FormatNonLiteral, FormatSecurity, FormatY2K]>;
+
+def TypeSafety : DiagGroup<"type-safety">;
 
 def Extra : DiagGroup<"extra", [
     MissingFieldInitializers,
@@ -367,7 +376,9 @@ def Most : DiagGroup<"most", [
     Unused,
     VolatileRegisterVar,
     ObjCMissingSuperCalls,
-    OverloadedVirtual
+    OverloadedVirtual,
+    PrivateExtern,
+    SelTypeCast
  ]>;
 
 // Safe Parallelism Warnings
@@ -408,7 +419,7 @@ def NonGCC : DiagGroup<"non-gcc",
 
 // A warning group for warnings about using C++11 features as extensions in
 // earlier C++ versions.
-def CXX11 : DiagGroup<"c++11-extensions">;
+def CXX11 : DiagGroup<"c++11-extensions", [CXX11ExtraSemi]>;
 def : DiagGroup<"c++0x-extensions", [CXX11]>;
 def DelegatingCtorCycles :
   DiagGroup<"delegating-ctor-cycles">;
@@ -439,4 +450,9 @@ def ObjCRedundantAPIUse : DiagGroup<"objc-redundant-api-use", [
 
 def ObjCCocoaAPI : DiagGroup<"objc-cocoa-api", [
     ObjCRedundantAPIUse
+  ]>;
+
+def ObjCStringComparison : DiagGroup<"objc-string-compare">;
+def ObjCLiteralComparison : DiagGroup<"objc-literal-compare", [
+    ObjCStringComparison
   ]>;

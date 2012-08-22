@@ -485,3 +485,26 @@ int returns_twice() {
   }
   return a;
 }
+
+int compound_assign(int *arr, int n) {
+  int sum; // expected-note {{initialize}}
+  for (int i = 0; i < n; ++i)
+    sum += arr[i]; // expected-warning {{variable 'sum' is uninitialized}}
+  return sum / n;
+}
+
+int compound_assign_2() {
+  int x; // expected-note {{initialize}}
+  return x += 1; // expected-warning {{variable 'x' is uninitialized}}
+}
+
+int compound_assign_3() {
+  int x; // expected-note {{initialize}}
+  x *= 0; // expected-warning {{variable 'x' is uninitialized}}
+  return x;
+}
+
+int self_init_in_cond(int *p) {
+  int n = ((p && (0 || 1)) && (n = *p)) ? n : -1; // ok
+  return n;
+}

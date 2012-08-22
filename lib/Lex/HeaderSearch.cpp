@@ -84,7 +84,7 @@ void HeaderSearch::PrintStats() {
 }
 
 /// CreateHeaderMap - This method returns a HeaderMap for the specified
-/// FileEntry, uniquing them through the the 'HeaderMaps' datastructure.
+/// FileEntry, uniquing them through the 'HeaderMaps' datastructure.
 const HeaderMap *HeaderSearch::CreateHeaderMap(const FileEntry *FE) {
   // We expect the number of headermaps to be small, and almost always empty.
   // If it ever grows, use of a linear search should be re-evaluated.
@@ -442,11 +442,19 @@ const FileEntry *HeaderSearch::LookupFile(
       // Leave CurDir unset.
       // This file is a system header or C++ unfriendly if the old file is.
       //
-      // Note that the temporary 'DirInfo' is required here, as either call to
-      // getFileInfo could resize the vector and we don't want to rely on order
-      // of evaluation.
-      unsigned DirInfo = getFileInfo(CurFileEnt).DirInfo;
-      getFileInfo(FE).DirInfo = DirInfo;
+      // Note that we only use one of FromHFI/ToHFI at once, due to potential
+      // reallocation of the underlying vector potentially making the first
+      // reference binding dangling.
+      HeaderFileInfo &FromHFI = getFileInfo(CurFileEnt);
+      unsigned DirInfo = FromHFI.DirInfo;
+      bool IndexHeaderMapHeader = FromHFI.IndexHeaderMapHeader;
+      StringRef Framework = FromHFI.Framework;
+
+      HeaderFileInfo &ToHFI = getFileInfo(FE);
+      ToHFI.DirInfo = DirInfo;
+      ToHFI.IndexHeaderMapHeader = IndexHeaderMapHeader;
+      ToHFI.Framework = Framework;
+
       if (SearchPath != NULL) {
         StringRef SearchPathRef(CurFileEnt->getDir()->getName());
         SearchPath->clear();

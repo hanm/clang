@@ -344,8 +344,8 @@ GetBestOverloadCandidateSimple(
     if (Cands[Best].second.compatiblyIncludes(Cands[I].second))
       Best = I;
   
-  for (unsigned I = 1; I != N; ++I)
-    if (Cands[Best].second.compatiblyIncludes(Cands[I].second))
+  for (unsigned I = 0; I != N; ++I)
+    if (I != Best && Cands[Best].second.compatiblyIncludes(Cands[I].second))
       return 0;
   
   return Cands[Best].first;
@@ -765,7 +765,7 @@ NotASpecialMember:;
     // that does not explicitly have no lifetime makes the class a non-POD.
     // However, we delay setting PlainOldData to false in this case so that
     // Sema has a chance to diagnostic causes where the same class will be
-    // non-POD with Automatic Reference Counting but a POD without Instant Objects.
+    // non-POD with Automatic Reference Counting but a POD without ARC.
     // In this case, the class will become a non-POD class when we complete
     // the definition.
     ASTContext &Context = getASTContext();
@@ -1208,13 +1208,16 @@ void CXXRecordDecl::completeDefinition(CXXFinalOverriderMap *FinalOverriders) {
     // Objective-C Automatic Reference Counting:
     //   If a class has a non-static data member of Objective-C pointer
     //   type (or array thereof), it is a non-POD type and its
-    //   default constructor (if any), copy constructor, copy assignment
-    //   operator, and destructor are non-trivial.
+    //   default constructor (if any), copy constructor, move constructor,
+    //   copy assignment operator, move assignment operator, and destructor are
+    //   non-trivial.
     struct DefinitionData &Data = data();
     Data.PlainOldData = false;
     Data.HasTrivialDefaultConstructor = false;
     Data.HasTrivialCopyConstructor = false;
+    Data.HasTrivialMoveConstructor = false;
     Data.HasTrivialCopyAssignment = false;
+    Data.HasTrivialMoveAssignment = false;
     Data.HasTrivialDestructor = false;
     Data.HasIrrelevantDestructor = false;
   }
@@ -1291,15 +1294,20 @@ static bool recursivelyOverrides(const CXXMethodDecl *DerivedMD,
 }
 
 CXXMethodDecl *
-CXXMethodDecl::getCorrespondingMethodInClass(const CXXRecordDecl *RD) {
+CXXMethodDecl::getCorrespondingMethodInClass(const CXXRecordDecl *RD,
+                                             bool MayBeBase) {
   if (this->getParent()->getCanonicalDecl() == RD->getCanonicalDecl())
     return this;
 
   // Lookup doesn't work for destructors, so handle them separately.
   if (isa<CXXDestructorDecl>(this)) {
     CXXMethodDecl *MD = RD->getDestructor();
-    if (MD && recursivelyOverrides(MD, this))
-      return MD;
+    if (MD) {
+      if (recursivelyOverrides(MD, this))
+        return MD;
+      if (MayBeBase && recursivelyOverrides(this, MD))
+        return MD;
+    }
     return NULL;
   }
 
@@ -1309,6 +1317,8 @@ CXXMethodDecl::getCorrespondingMethodInClass(const CXXRecordDecl *RD) {
     if (!MD)
       continue;
     if (recursivelyOverrides(MD, this))
+      return MD;
+    if (MayBeBase && recursivelyOverrides(this, MD))
       return MD;
   }
 

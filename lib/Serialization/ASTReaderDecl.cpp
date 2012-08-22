@@ -803,7 +803,6 @@ void ASTDeclReader::VisitObjCCategoryDecl(ObjCCategoryDecl *CD) {
     ProtoLocs.push_back(ReadSourceLocation(Record, Idx));
   CD->setProtocolList(ProtoRefs.data(), NumProtoRefs, ProtoLocs.data(),
                       Reader.getContext());
-  CD->setHasSynthBitfield(Record[Idx++]);
 }
 
 void ASTDeclReader::VisitObjCCompatibleAliasDecl(ObjCCompatibleAliasDecl *CAD) {
@@ -849,7 +848,6 @@ void ASTDeclReader::VisitObjCImplementationDecl(ObjCImplementationDecl *D) {
   D->setIvarRBraceLoc(ReadSourceLocation(Record, Idx));
   llvm::tie(D->IvarInitializers, D->NumIvarInitializers)
       = Reader.ReadCXXCtorInitializers(F, Record, Idx);
-  D->setHasSynthBitfield(Record[Idx++]);
 }
 
 
@@ -2209,10 +2207,8 @@ namespace {
       if (!D)
         return;
       
-      if (Deserialized.count(D)) {
-        Deserialized.erase(D);
+      if (Deserialized.erase(D))
         Chain.push_back(D);
-      }
     }
     
     void searchForID(ModuleFile &M, GlobalDeclID GlobalID) {
@@ -2333,9 +2329,8 @@ namespace {
     
     void add(ObjCCategoryDecl *Cat) {
       // Only process each category once.
-      if (!Deserialized.count(Cat))
+      if (!Deserialized.erase(Cat))
         return;
-      Deserialized.erase(Cat);
       
       // Check for duplicate categories.
       if (Cat->getDeclName()) {

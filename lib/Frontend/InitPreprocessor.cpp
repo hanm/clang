@@ -247,7 +247,7 @@ static void AddObjCXXARCLibstdcxxDefines(const LangOptions &LangOpts,
         << "};\n"
         << "\n";
       
-    if (LangOpts.ObjCRuntimeHasWeak) {
+    if (LangOpts.ObjCARCWeak) {
       Out << "template<typename _Tp>\n"
           << "struct __is_scalar<__attribute__((objc_ownership(weak))) _Tp> {\n"
           << "  enum { __value = 0 };\n"
@@ -445,6 +445,26 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
 
   // Initialize target-specific preprocessor defines.
 
+  // __BYTE_ORDER__ was added in GCC 4.6. It's analogous
+  // to the macro __BYTE_ORDER (no trailing underscores)
+  // from glibc's <endian.h> header.
+  // We don't support the PDP-11 as a target, but include
+  // the define so it can still be compared against.
+  Builder.defineMacro("__ORDER_LITTLE_ENDIAN__", "1234");
+  Builder.defineMacro("__ORDER_BIG_ENDIAN__",    "4321");
+  Builder.defineMacro("__ORDER_PDP_ENDIAN__",    "3412");
+  if (TI.isBigEndian())
+    Builder.defineMacro("__BYTE_ORDER__", "__ORDER_BIG_ENDIAN__");
+  else
+    Builder.defineMacro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
+
+
+  if (TI.getPointerWidth(0) == 64 && TI.getLongWidth() == 64
+      && TI.getIntWidth() == 32) {
+    Builder.defineMacro("_LP64");
+    Builder.defineMacro("__LP64__");
+  }
+
   // Define type sizing macros based on the target properties.
   assert(TI.getCharWidth() == 8 && "Only support 8-bit char so far");
   Builder.defineMacro("__CHAR_BIT__", "8");
@@ -527,9 +547,10 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   if (const char *Prefix = TI.getUserLabelPrefix())
     Builder.defineMacro("__USER_LABEL_PREFIX__", Prefix);
 
-  // Build configuration options.  FIXME: these should be controlled by
-  // command line options or something.
-  Builder.defineMacro("__FINITE_MATH_ONLY__", "0");
+  if (LangOpts.FastMath || LangOpts.FiniteMathOnly)
+    Builder.defineMacro("__FINITE_MATH_ONLY__", "1");
+  else
+    Builder.defineMacro("__FINITE_MATH_ONLY__", "0");
 
   if (LangOpts.GNUInline)
     Builder.defineMacro("__GNUC_GNU_INLINE__");

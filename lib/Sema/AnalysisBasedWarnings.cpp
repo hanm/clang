@@ -182,13 +182,6 @@ static ControlFlowKind CheckFallThrough(AnalysisDeclContext &AC) {
       HasFakeEdge = true;
       continue;
     }
-    if (const AsmStmt *AS = dyn_cast<AsmStmt>(S)) {
-      if (AS->isMSAsm()) {
-        HasFakeEdge = true;
-        HasLiveReturn = true;
-        continue;
-      }
-    }
     if (isa<MSAsmStmt>(S)) {
       // TODO: Verify this is correct.
       HasFakeEdge = true;
@@ -1220,6 +1213,7 @@ AnalysisBasedWarnings::IssueWarnings(sema::AnalysisBasedWarnings::Policy P,
   else {
     AC.getCFGBuildOptions()
       .setAlwaysAdd(Stmt::BinaryOperatorClass)
+      .setAlwaysAdd(Stmt::CompoundAssignOperatorClass)
       .setAlwaysAdd(Stmt::BlockExprClass)
       .setAlwaysAdd(Stmt::CStyleCastExprClass)
       .setAlwaysAdd(Stmt::DeclRefExprClass)

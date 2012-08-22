@@ -1051,12 +1051,10 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
   // Lookup the entry, lazily creating it if necessary.
   llvm::GlobalValue *Entry = GetGlobalValue(MangledName);
   if (Entry) {
-    if (WeakRefReferences.count(Entry)) {
+    if (WeakRefReferences.erase(Entry)) {
       const FunctionDecl *FD = cast_or_null<FunctionDecl>(D.getDecl());
       if (FD && !FD->hasAttr<WeakAttr>())
         Entry->setLinkage(llvm::Function::ExternalLinkage);
-
-      WeakRefReferences.erase(Entry);
     }
 
     if (Entry->getType()->getElementType() == Ty)
@@ -1197,11 +1195,9 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
   // Lookup the entry, lazily creating it if necessary.
   llvm::GlobalValue *Entry = GetGlobalValue(MangledName);
   if (Entry) {
-    if (WeakRefReferences.count(Entry)) {
+    if (WeakRefReferences.erase(Entry)) {
       if (D && !D->hasAttr<WeakAttr>())
         Entry->setLinkage(llvm::Function::ExternalLinkage);
-
-      WeakRefReferences.erase(Entry);
     }
 
     if (UnnamedAddr)
@@ -1681,6 +1677,18 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
   // Emit the initializer function if necessary.
   if (NeedsGlobalCtor || NeedsGlobalDtor)
     EmitCXXGlobalVarDeclInitFunc(D, GV, NeedsGlobalCtor);
+
+  // If we are compiling with ASan, add metadata indicating dynamically
+  // initialized globals.
+  if (LangOpts.AddressSanitizer && NeedsGlobalCtor) {
+    llvm::Module &M = getModule();
+
+    llvm::NamedMDNode *DynamicInitializers =
+        M.getOrInsertNamedMetadata("llvm.asan.dynamically_initialized_globals");
+    llvm::Value *GlobalToAdd[] = { GV };
+    llvm::MDNode *ThisGlobal = llvm::MDNode::get(VMContext, GlobalToAdd);
+    DynamicInitializers->addOperand(ThisGlobal);
+  }
 
   // Emit global variable debug information.
   if (CGDebugInfo *DI = getModuleDebugInfo())
@@ -2586,14 +2594,8 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
 
   // Forward declarations, no (immediate) code generation.
   case Decl::ObjCInterface:
+  case Decl::ObjCCategory:
     break;
-  
-  case Decl::ObjCCategory: {
-    ObjCCategoryDecl *CD = cast<ObjCCategoryDecl>(D);
-    if (CD->IsClassExtension() && CD->hasSynthBitfield())
-      Context.ResetObjCLayout(CD->getClassInterface());
-    break;
-  }
 
   case Decl::ObjCProtocol: {
     ObjCProtocolDecl *Proto = cast<ObjCProtocolDecl>(D);
@@ -2610,8 +2612,6 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
 
   case Decl::ObjCImplementation: {
     ObjCImplementationDecl *OMD = cast<ObjCImplementationDecl>(D);
-    if (LangOpts.ObjCRuntime.isNonFragile() && OMD->hasSynthBitfield())
-      Context.ResetObjCLayout(OMD->getClassInterface());
     EmitObjCPropertyImplementations(OMD);
     EmitObjCIvarInitializations(OMD);
     ObjCRuntime->GenerateClass(OMD);
@@ -2644,7 +2644,7 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
     const std::string &S = getModule().getModuleInlineAsm();
     if (S.empty())
       getModule().setModuleInlineAsm(AsmString);
-    else if (*--S.end() == '\n')
+    else if (S.end()[-1] == '\n')
       getModule().setModuleInlineAsm(S + AsmString.str());
     else
       getModule().setModuleInlineAsm(S + '\n' + AsmString.str());

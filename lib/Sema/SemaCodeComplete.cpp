@@ -2369,11 +2369,11 @@ AddFunctionTypeQualsToCompletionString(CodeCompletionBuilder &Result,
 
   // Handle multiple qualifiers.
   std::string QualsStr;
-  if (Proto->getTypeQuals() & Qualifiers::Const)
+  if (Proto->isConst())
     QualsStr += " const";
-  if (Proto->getTypeQuals() & Qualifiers::Volatile)
+  if (Proto->isVolatile())
     QualsStr += " volatile";
-  if (Proto->getTypeQuals() & Qualifiers::Restrict)
+  if (Proto->isRestrict())
     QualsStr += " restrict";
   Result.AddInformativeChunk(Result.getAllocator().CopyString(QualsStr));
 }
@@ -2543,7 +2543,7 @@ CodeCompletionResult::CreateCodeCompletionString(ASTContext &Ctx,
 
   if (IncludeBriefComments) {
     // Add documentation comment, if it exists.
-    if (const RawComment *RC = Ctx.getRawCommentForDecl(ND)) {
+    if (const RawComment *RC = Ctx.getRawCommentForAnyRedecl(ND)) {
       Result.addBriefComment(RC->getBriefText(Ctx));
     }
   }
@@ -4465,34 +4465,27 @@ static void AddObjCExpressionResults(ResultBuilder &Results, bool NeedAt) {
   Builder.AddTextChunk("\"");
   Results.AddResult(Result(Builder.TakeString()));
 
-  // @[ objects, ... ]
+  // @[objects, ...]
   Builder.AddResultTypeChunk("NSArray *");
   Builder.AddTypedTextChunk(OBJC_AT_KEYWORD_NAME(NeedAt,"["));
-  Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
   Builder.AddPlaceholderChunk("objects, ...");
-  Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
   Builder.AddChunk(CodeCompletionString::CK_RightBracket);
   Results.AddResult(Result(Builder.TakeString()));
 
-  // @{ key : object, ... }
+  // @{key : object, ...}
   Builder.AddResultTypeChunk("NSDictionary *");
   Builder.AddTypedTextChunk(OBJC_AT_KEYWORD_NAME(NeedAt,"{"));
-  Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
   Builder.AddPlaceholderChunk("key");
-  Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
   Builder.AddChunk(CodeCompletionString::CK_Colon);
   Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
   Builder.AddPlaceholderChunk("object, ...");
-  Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
   Builder.AddChunk(CodeCompletionString::CK_RightBrace);
   Results.AddResult(Result(Builder.TakeString()));
 
-  // @( expression )
+  // @(expression)
   Builder.AddResultTypeChunk("id");
   Builder.AddTypedTextChunk(OBJC_AT_KEYWORD_NAME(NeedAt, "("));
-  Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
   Builder.AddPlaceholderChunk("expression");
-  Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
   Builder.AddChunk(CodeCompletionString::CK_RightParen);
   Results.AddResult(Result(Builder.TakeString()));
 }
@@ -4602,26 +4595,23 @@ static bool ObjCPropertyFlagConflicts(unsigned Attributes, unsigned NewFlag) {
   
   // Check for collisions with "readonly".
   if ((Attributes & ObjCDeclSpec::DQ_PR_readonly) &&
-      (Attributes & (ObjCDeclSpec::DQ_PR_readwrite |
-                     ObjCDeclSpec::DQ_PR_assign |
-                     ObjCDeclSpec::DQ_PR_unsafe_unretained |
-                     ObjCDeclSpec::DQ_PR_copy |
-                     ObjCDeclSpec::DQ_PR_retain |
-                     ObjCDeclSpec::DQ_PR_strong)))
+      (Attributes & ObjCDeclSpec::DQ_PR_readwrite))
     return true;
   
-  // Check for more than one of { assign, copy, retain, strong }.
+  // Check for more than one of { assign, copy, retain, strong, weak }.
   unsigned AssignCopyRetMask = Attributes & (ObjCDeclSpec::DQ_PR_assign |
                                          ObjCDeclSpec::DQ_PR_unsafe_unretained |
                                              ObjCDeclSpec::DQ_PR_copy |
-                                             ObjCDeclSpec::DQ_PR_retain|
-                                             ObjCDeclSpec::DQ_PR_strong);
+                                             ObjCDeclSpec::DQ_PR_retain |
+                                             ObjCDeclSpec::DQ_PR_strong |
+                                             ObjCDeclSpec::DQ_PR_weak);
   if (AssignCopyRetMask &&
       AssignCopyRetMask != ObjCDeclSpec::DQ_PR_assign &&
       AssignCopyRetMask != ObjCDeclSpec::DQ_PR_unsafe_unretained &&
       AssignCopyRetMask != ObjCDeclSpec::DQ_PR_copy &&
       AssignCopyRetMask != ObjCDeclSpec::DQ_PR_retain &&
-      AssignCopyRetMask != ObjCDeclSpec::DQ_PR_strong)
+      AssignCopyRetMask != ObjCDeclSpec::DQ_PR_strong &&
+      AssignCopyRetMask != ObjCDeclSpec::DQ_PR_weak)
     return true;
   
   return false;
@@ -4657,6 +4647,12 @@ void Sema::CodeCompleteObjCPropertyFlags(Scope *S, ObjCDeclSpec &ODS) {
     Results.AddResult(CodeCompletionResult("nonatomic"));
   if (!ObjCPropertyFlagConflicts(Attributes, ObjCDeclSpec::DQ_PR_atomic))
     Results.AddResult(CodeCompletionResult("atomic"));
+
+  // Only suggest "weak" if we're compiling for ARC-with-weak-references or GC.
+  if (getLangOpts().ObjCARCWeak || getLangOpts().getGC() != LangOptions::NonGC)
+    if (!ObjCPropertyFlagConflicts(Attributes, ObjCDeclSpec::DQ_PR_weak))
+      Results.AddResult(CodeCompletionResult("weak"));
+
   if (!ObjCPropertyFlagConflicts(Attributes, ObjCDeclSpec::DQ_PR_setter)) {
     CodeCompletionBuilder Setter(Results.getAllocator(),
                                  Results.getCodeCompletionTUInfo());

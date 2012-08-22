@@ -34,6 +34,13 @@ void test_complex(__complex__ double cd) {
   complex_callee(cd);
 }
 
+// Long double is the same as double on AAPCS, it should be homogeneous.
+extern void complex_long_callee(__complex__ long double);
+// CHECK: define arm_aapcs_vfpcc void @test_complex_long(double %{{.*}}, double %{{.*}})
+void test_complex_long(__complex__ long double cd) {
+  complex_callee(cd);
+}
+
 // Structs with more than 4 elements of the base type are not treated
 // as homogeneous aggregates.  Test that.
 
@@ -81,3 +88,7 @@ extern void neon_callee(struct neon_struct);
 void test_neon(struct neon_struct arg) {
   neon_callee(arg);
 }
+
+// CHECK: define arm_aapcs_vfpcc void @f33(%struct.s33* byval %s)
+struct s33 { char buf[32*32]; };
+void f33(struct s33 s) { }
