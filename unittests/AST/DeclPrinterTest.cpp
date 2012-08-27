@@ -22,6 +22,7 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Tooling/Tooling.h"
+#include "llvm/ADT/SmallString.h"
 #include "gtest/gtest.h"
 
 using namespace clang;
@@ -120,7 +121,7 @@ bool runToolOnCode(clang::FrontendAction *ToolAction, const Twine &Code,
                                               StringRef ExpectedPrinted) {
   return PrintedDeclMatches(Code,
                             ArrayRef<const char *>(),
-                            nameableDeclaration(hasName(DeclName)).bind("id"),
+                            namedDecl(hasName(DeclName)).bind("id"),
                             ExpectedPrinted);
 }
 
@@ -139,7 +140,7 @@ bool runToolOnCode(clang::FrontendAction *ToolAction, const Twine &Code,
                                                    StringRef ExpectedPrinted) {
   return PrintedDeclMatches(Code,
                             ArrayRef<const char *>("-std=c++11"),
-                            nameableDeclaration(hasName(DeclName)).bind("id"),
+                            namedDecl(hasName(DeclName)).bind("id"),
                             ExpectedPrinted);
 }
 
@@ -399,7 +400,7 @@ TEST(DeclPrinter, TestFunctionDecl14) {
     "void A(T t) { }"
     "template<>"
     "void A(int N) { }",
-    function(hasName("A"), isExplicitTemplateSpecialization()).bind("id"),
+    functionDecl(hasName("A"), isExplicitTemplateSpecialization()).bind("id"),
     "void A(int N)"));
     // WRONG; Should be: "template <> void A(int N);"));
 }
@@ -410,7 +411,7 @@ TEST(DeclPrinter, TestCXXConstructorDecl1) {
     "struct A {"
     "  A();"
     "};",
-    constructor(ofClass(hasName("A"))).bind("id"),
+    constructorDecl(ofClass(hasName("A"))).bind("id"),
     ""));
     // WRONG; Should be: "A();"
 }
@@ -420,7 +421,7 @@ TEST(DeclPrinter, TestCXXConstructorDecl2) {
     "struct A {"
     "  A(int a);"
     "};",
-    constructor(ofClass(hasName("A"))).bind("id"),
+    constructorDecl(ofClass(hasName("A"))).bind("id"),
     ""));
     // WRONG; Should be: "A(int a);"
 }
@@ -430,7 +431,7 @@ TEST(DeclPrinter, TestCXXConstructorDecl3) {
     "struct A {"
     "  A(const A &a);"
     "};",
-    constructor(ofClass(hasName("A"))).bind("id"),
+    constructorDecl(ofClass(hasName("A"))).bind("id"),
     ""));
     // WRONG; Should be: "A(const A &a);"
 }
@@ -440,7 +441,7 @@ TEST(DeclPrinter, TestCXXConstructorDecl4) {
     "struct A {"
     "  A(const A &a, int = 0);"
     "};",
-    constructor(ofClass(hasName("A"))).bind("id"),
+    constructorDecl(ofClass(hasName("A"))).bind("id"),
     ""));
     // WRONG; Should be: "A(const A &a, int = 0);"
 }
@@ -450,7 +451,7 @@ TEST(DeclPrinter, TestCXXConstructorDecl5) {
     "struct A {"
     "  A(const A &&a);"
     "};",
-    constructor(ofClass(hasName("A"))).bind("id"),
+    constructorDecl(ofClass(hasName("A"))).bind("id"),
     ""));
     // WRONG; Should be: "A(const A &&a);"
 }
@@ -460,7 +461,7 @@ TEST(DeclPrinter, TestCXXConstructorDecl6) {
     "struct A {"
     "  explicit A(int a);"
     "};",
-    constructor(ofClass(hasName("A"))).bind("id"),
+    constructorDecl(ofClass(hasName("A"))).bind("id"),
     ""));
     // WRONG; Should be: "explicit A(int a);"
 }
@@ -471,7 +472,7 @@ TEST(DeclPrinter, TestCXXConstructorDecl7) {
     "  constexpr A();"
     "};",
     ArrayRef<const char *>("-std=c++11"),
-    constructor(ofClass(hasName("A"))).bind("id"),
+    constructorDecl(ofClass(hasName("A"))).bind("id"),
     ""));
     // WRONG; Should be: "constexpr A();"
 }
@@ -482,7 +483,7 @@ TEST(DeclPrinter, TestCXXConstructorDecl8) {
     "  A() = default;"
     "};",
     ArrayRef<const char *>("-std=c++11"),
-    constructor(ofClass(hasName("A"))).bind("id"),
+    constructorDecl(ofClass(hasName("A"))).bind("id"),
     ""));
     // WRONG; Should be: "A() = default;"
 }
@@ -493,17 +494,41 @@ TEST(DeclPrinter, TestCXXConstructorDecl9) {
     "  A() = delete;"
     "};",
     ArrayRef<const char *>("-std=c++11"),
-    constructor(ofClass(hasName("A"))).bind("id"),
+    constructorDecl(ofClass(hasName("A"))).bind("id"),
     " = delete"));
     // WRONG; Should be: "A() = delete;"
 }
+
+TEST(DeclPrinter, TestCXXConstructorDecl10) {
+  ASSERT_TRUE(PrintedDeclCXX11Matches(
+    "template<typename... T>"
+    "struct A {"
+    "  A(const A &a);"
+    "};",
+    constructorDecl(ofClass(hasName("A"))).bind("id"),
+    ""));
+    // WRONG; Should be: "A(const A &a);"
+}
+
+#if !defined(_MSC_VER)
+TEST(DeclPrinter, TestCXXConstructorDecl11) {
+  ASSERT_TRUE(PrintedDeclCXX11Matches(
+    "template<typename... T>"
+    "struct A : public T... {"
+    "  A(T&&... ts) : T(ts)... {}"
+    "};",
+    constructorDecl(ofClass(hasName("A"))).bind("id"),
+    "A<T...>(T &&ts...) : T(ts)"));
+    // WRONG; Should be: "A(T&&... ts) : T(ts)..."
+}
+#endif
 
 TEST(DeclPrinter, TestCXXDestructorDecl1) {
   ASSERT_TRUE(PrintedDeclMatches(
     "struct A {"
     "  ~A();"
     "};",
-    destructor(ofClass(hasName("A"))).bind("id"),
+    destructorDecl(ofClass(hasName("A"))).bind("id"),
     "void ~A()"));
     // WRONG; Should be: "~A();"
 }
@@ -513,7 +538,7 @@ TEST(DeclPrinter, TestCXXDestructorDecl2) {
     "struct A {"
     "  virtual ~A();"
     "};",
-    destructor(ofClass(hasName("A"))).bind("id"),
+    destructorDecl(ofClass(hasName("A"))).bind("id"),
     "virtual void ~A()"));
     // WRONG; Should be: "virtual ~A();"
 }
@@ -523,7 +548,7 @@ TEST(DeclPrinter, TestCXXConversionDecl1) {
     "struct A {"
     "  operator int();"
     "};",
-    method(ofClass(hasName("A"))).bind("id"),
+    methodDecl(ofClass(hasName("A"))).bind("id"),
     "int operator int()"));
     // WRONG; Should be: "operator int();"
 }
@@ -533,7 +558,7 @@ TEST(DeclPrinter, TestCXXConversionDecl2) {
     "struct A {"
     "  operator bool();"
     "};",
-    method(ofClass(hasName("A"))).bind("id"),
+    methodDecl(ofClass(hasName("A"))).bind("id"),
     "bool operator _Bool()"));
     // WRONG; Should be: "operator bool();"
 }
@@ -544,7 +569,7 @@ TEST(DeclPrinter, TestCXXConversionDecl3) {
     "struct A {"
     "  operator Z();"
     "};",
-    method(ofClass(hasName("A"))).bind("id"),
+    methodDecl(ofClass(hasName("A"))).bind("id"),
     "Z operator struct Z()"));
     // WRONG; Should be: "operator Z();"
 }
@@ -556,7 +581,7 @@ TEST(DeclPrinter, TestCXXMethodDecl_AllocationFunction1) {
     "  void *operator new(std::size_t);"
     "};",
     ArrayRef<const char *>("-std=c++11"),
-    method(ofClass(hasName("Z"))).bind("id"),
+    methodDecl(ofClass(hasName("Z"))).bind("id"),
     "void *operator new(std::size_t)"));
     // Should be: with semicolon
 }
@@ -568,7 +593,7 @@ TEST(DeclPrinter, TestCXXMethodDecl_AllocationFunction2) {
     "  void *operator new[](std::size_t);"
     "};",
     ArrayRef<const char *>("-std=c++11"),
-    method(ofClass(hasName("Z"))).bind("id"),
+    methodDecl(ofClass(hasName("Z"))).bind("id"),
     "void *operator new[](std::size_t)"));
     // Should be: with semicolon
 }
@@ -579,7 +604,7 @@ TEST(DeclPrinter, TestCXXMethodDecl_AllocationFunction3) {
     "  void operator delete(void *);"
     "};",
     ArrayRef<const char *>("-std=c++11"),
-    method(ofClass(hasName("Z"))).bind("id"),
+    methodDecl(ofClass(hasName("Z"))).bind("id"),
     "void operator delete(void *) noexcept"));
     // Should be: with semicolon, without noexcept?
 }
@@ -589,7 +614,7 @@ TEST(DeclPrinter, TestCXXMethodDecl_AllocationFunction4) {
     "struct Z {"
     "  void operator delete(void *);"
     "};",
-    method(ofClass(hasName("Z"))).bind("id"),
+    methodDecl(ofClass(hasName("Z"))).bind("id"),
     "void operator delete(void *)"));
     // Should be: with semicolon
 }
@@ -600,7 +625,7 @@ TEST(DeclPrinter, TestCXXMethodDecl_AllocationFunction5) {
     "  void operator delete[](void *);"
     "};",
     ArrayRef<const char *>("-std=c++11"),
-    method(ofClass(hasName("Z"))).bind("id"),
+    methodDecl(ofClass(hasName("Z"))).bind("id"),
     "void operator delete[](void *) noexcept"));
     // Should be: with semicolon, without noexcept?
 }
@@ -628,7 +653,7 @@ TEST(DeclPrinter, TestCXXMethodDecl_Operator1) {
 
     ASSERT_TRUE(PrintedDeclMatches(
       Code,
-      method(ofClass(hasName("Z"))).bind("id"),
+      methodDecl(ofClass(hasName("Z"))).bind("id"),
       Expected));
   }
 }
@@ -652,7 +677,7 @@ TEST(DeclPrinter, TestCXXMethodDecl_Operator2) {
 
     ASSERT_TRUE(PrintedDeclMatches(
       Code,
-      method(ofClass(hasName("Z"))).bind("id"),
+      methodDecl(ofClass(hasName("Z"))).bind("id"),
       Expected));
   }
 }
@@ -879,7 +904,7 @@ TEST(DeclPrinter, TestClassTemplateDecl1) {
   ASSERT_TRUE(PrintedDeclMatches(
     "template<typename T>"
     "struct A { T a; };",
-    classTemplate(hasName("A")).bind("id"),
+    classTemplateDecl(hasName("A")).bind("id"),
     "template <typename T> struct A {\n}"));
     // Should be: with semicolon, with { ... }
 }
@@ -888,7 +913,7 @@ TEST(DeclPrinter, TestClassTemplateDecl2) {
   ASSERT_TRUE(PrintedDeclMatches(
     "template<typename T = int>"
     "struct A { T a; };",
-    classTemplate(hasName("A")).bind("id"),
+    classTemplateDecl(hasName("A")).bind("id"),
     "template <typename T = int> struct A {\n}"));
     // Should be: with semicolon, with { ... }
 }
@@ -897,7 +922,7 @@ TEST(DeclPrinter, TestClassTemplateDecl3) {
   ASSERT_TRUE(PrintedDeclMatches(
     "template<class T>"
     "struct A { T a; };",
-    classTemplate(hasName("A")).bind("id"),
+    classTemplateDecl(hasName("A")).bind("id"),
     "template <class T> struct A {\n}"));
     // Should be: with semicolon, with { ... }
 }
@@ -906,7 +931,7 @@ TEST(DeclPrinter, TestClassTemplateDecl4) {
   ASSERT_TRUE(PrintedDeclMatches(
     "template<typename T, typename U>"
     "struct A { T a; U b; };",
-    classTemplate(hasName("A")).bind("id"),
+    classTemplateDecl(hasName("A")).bind("id"),
     "template <typename T, typename U> struct A {\n}"));
     // Should be: with semicolon, with { ... }
 }
@@ -915,7 +940,7 @@ TEST(DeclPrinter, TestClassTemplateDecl5) {
   ASSERT_TRUE(PrintedDeclMatches(
     "template<int N>"
     "struct A { int a[N]; };",
-    classTemplate(hasName("A")).bind("id"),
+    classTemplateDecl(hasName("A")).bind("id"),
     "template <int N> struct A {\n}"));
     // Should be: with semicolon, with { ... }
 }
@@ -924,7 +949,7 @@ TEST(DeclPrinter, TestClassTemplateDecl6) {
   ASSERT_TRUE(PrintedDeclMatches(
     "template<int N = 42>"
     "struct A { int a[N]; };",
-    classTemplate(hasName("A")).bind("id"),
+    classTemplateDecl(hasName("A")).bind("id"),
     "template <int N = 42> struct A {\n}"));
     // Should be: with semicolon, with { ... }
 }
@@ -934,7 +959,7 @@ TEST(DeclPrinter, TestClassTemplateDecl7) {
     "typedef int MyInt;"
     "template<MyInt N>"
     "struct A { int a[N]; };",
-    classTemplate(hasName("A")).bind("id"),
+    classTemplateDecl(hasName("A")).bind("id"),
     "template <MyInt N> struct A {\n}"));
     // Should be: with semicolon, with { ... }
 }
@@ -942,7 +967,7 @@ TEST(DeclPrinter, TestClassTemplateDecl7) {
 TEST(DeclPrinter, TestClassTemplateDecl8) {
   ASSERT_TRUE(PrintedDeclMatches(
     "template<template<typename U> class T> struct A { };",
-    classTemplate(hasName("A")).bind("id"),
+    classTemplateDecl(hasName("A")).bind("id"),
     "template <template <typename U> class T> struct A {\n}"));
     // Should be: with semicolon, with { ... }
 }
@@ -951,7 +976,7 @@ TEST(DeclPrinter, TestClassTemplateDecl9) {
   ASSERT_TRUE(PrintedDeclMatches(
     "template<typename T> struct Z { };"
     "template<template<typename U> class T = Z> struct A { };",
-    classTemplate(hasName("A")).bind("id"),
+    classTemplateDecl(hasName("A")).bind("id"),
     "template <template <typename U> class T> struct A {\n}"));
     // Should be: with semicolon, with { ... }
 }
@@ -960,7 +985,7 @@ TEST(DeclPrinter, TestClassTemplateDecl10) {
   ASSERT_TRUE(PrintedDeclCXX11Matches(
     "template<typename... T>"
     "struct A { int a; };",
-    classTemplate(hasName("A")).bind("id"),
+    classTemplateDecl(hasName("A")).bind("id"),
     "template <typename ... T> struct A {\n}"));
     // Should be: with semicolon, with { ... }, without spaces before '...'
 }
@@ -969,7 +994,7 @@ TEST(DeclPrinter, TestClassTemplateDecl11) {
   ASSERT_TRUE(PrintedDeclCXX11Matches(
     "template<typename... T>"
     "struct A : public T... { int a; };",
-    classTemplate(hasName("A")).bind("id"),
+    classTemplateDecl(hasName("A")).bind("id"),
     "template <typename ... T> struct A : public T... {\n}"));
     // Should be: with semicolon, with { ... }, without spaces before '...'
 }
@@ -980,7 +1005,7 @@ TEST(DeclPrinter, TestClassTemplatePartialSpecializationDecl1) {
     "struct A { T a; U b; };"
     "template<typename T>"
     "struct A<T, int> { T a; };",
-    classTemplateSpecialization().bind("id"),
+    classTemplateSpecializationDecl().bind("id"),
     "struct A {\n}"));
     // WRONG; Should be: "template<typename T> struct A<T, int> { ... }"
 }
@@ -991,7 +1016,7 @@ TEST(DeclPrinter, TestClassTemplatePartialSpecializationDecl2) {
     "struct A { T a; };"
     "template<typename T>"
     "struct A<T *> { T a; };",
-    classTemplateSpecialization().bind("id"),
+    classTemplateSpecializationDecl().bind("id"),
     "struct A {\n}"));
     // WRONG; Should be: "template<typename T> struct A<T *> { ... }"
 }
@@ -1002,7 +1027,7 @@ TEST(DeclPrinter, TestClassTemplateSpecializationDecl1) {
     "struct A { T a; };"
     "template<>"
     "struct A<int> { int a; };",
-    classTemplateSpecialization().bind("id"),
+    classTemplateSpecializationDecl().bind("id"),
     "struct A {\n}"));
     // WRONG; Should be: "template<> struct A<int> { ... }"
 }
@@ -1011,7 +1036,7 @@ TEST(DeclPrinter, TestFunctionTemplateDecl1) {
   ASSERT_TRUE(PrintedDeclMatches(
     "template<typename T>"
     "void A(T &t);",
-    functionTemplate(hasName("A")).bind("id"),
+    functionTemplateDecl(hasName("A")).bind("id"),
     "template <typename T> void A(T &t)"));
     // Should be: with semicolon
 }
@@ -1020,7 +1045,7 @@ TEST(DeclPrinter, TestFunctionTemplateDecl2) {
   ASSERT_TRUE(PrintedDeclMatches(
     "template<typename T>"
     "void A(T &t) { }",
-    functionTemplate(hasName("A")).bind("id"),
+    functionTemplateDecl(hasName("A")).bind("id"),
     "template <typename T> void A(T &t)"));
     // Should be: with semicolon
 }
@@ -1029,7 +1054,7 @@ TEST(DeclPrinter, TestFunctionTemplateDecl3) {
   ASSERT_TRUE(PrintedDeclCXX11Matches(
     "template<typename... T>"
     "void A(T... a);",
-    functionTemplate(hasName("A")).bind("id"),
+    functionTemplateDecl(hasName("A")).bind("id"),
     "template <typename ... T> void A(T a...)"));
     // WRONG; Should be: "template <typename ... T> void A(T... a)"
     //        (not "T a...")
@@ -1039,7 +1064,7 @@ TEST(DeclPrinter, TestFunctionTemplateDecl3) {
 TEST(DeclPrinter, TestFunctionTemplateDecl4) {
   ASSERT_TRUE(PrintedDeclMatches(
     "struct Z { template<typename T> void A(T t); };",
-    functionTemplate(hasName("A")).bind("id"),
+    functionTemplateDecl(hasName("A")).bind("id"),
     "template <typename T> void A(T t)"));
     // Should be: with semicolon
 }
@@ -1047,7 +1072,7 @@ TEST(DeclPrinter, TestFunctionTemplateDecl4) {
 TEST(DeclPrinter, TestFunctionTemplateDecl5) {
   ASSERT_TRUE(PrintedDeclMatches(
     "struct Z { template<typename T> void A(T t) {} };",
-    functionTemplate(hasName("A")).bind("id"),
+    functionTemplateDecl(hasName("A")).bind("id"),
     "template <typename T> void A(T t)"));
     // Should be: with semicolon
 }
@@ -1057,7 +1082,7 @@ TEST(DeclPrinter, TestFunctionTemplateDecl6) {
     "template<typename T >struct Z {"
     "  template<typename U> void A(U t) {}"
     "};",
-    functionTemplate(hasName("A")).bind("id"),
+    functionTemplateDecl(hasName("A")).bind("id"),
     "template <typename U> void A(U t)"));
     // Should be: with semicolon
 }
@@ -1214,4 +1239,3 @@ TEST(DeclPrinter, TestTemplateArgumentList15) {
     "Z<sizeof...(T)> A"));
     // Should be: with semicolon, without extra space in "> >"
 }
-

@@ -24,6 +24,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCInstrInfo.h"
@@ -31,6 +32,7 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCTargetAsmParser.h"
 #include "llvm/MC/MCParser/MCAsmLexer.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
@@ -76,9 +78,9 @@ static bool CheckAsmLValue(const Expr *E, Sema &S) {
 /// isOperandMentioned - Return true if the specified operand # is mentioned
 /// anywhere in the decomposed asm string.
 static bool isOperandMentioned(unsigned OpNo,
-                         ArrayRef<AsmStmt::AsmStringPiece> AsmStrPieces) {
+                         ArrayRef<GCCAsmStmt::AsmStringPiece> AsmStrPieces) {
   for (unsigned p = 0, e = AsmStrPieces.size(); p != e; ++p) {
-    const AsmStmt::AsmStringPiece &Piece = AsmStrPieces[p];
+    const GCCAsmStmt::AsmStringPiece &Piece = AsmStrPieces[p];
     if (!Piece.isOperand()) continue;
 
     // If this is a reference to the input and if the input was the smaller
@@ -89,18 +91,18 @@ static bool isOperandMentioned(unsigned OpNo,
   return false;
 }
 
-StmtResult Sema::ActOnAsmStmt(SourceLocation AsmLoc, bool IsSimple,
-                              bool IsVolatile, unsigned NumOutputs,
-                              unsigned NumInputs, IdentifierInfo **Names,
-                              MultiExprArg constraints, MultiExprArg exprs,
-                              Expr *asmString, MultiExprArg clobbers,
-                              SourceLocation RParenLoc) {
+StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
+                                 bool IsVolatile, unsigned NumOutputs,
+                                 unsigned NumInputs, IdentifierInfo **Names,
+                                 MultiExprArg constraints, MultiExprArg exprs,
+                                 Expr *asmString, MultiExprArg clobbers,
+                                 SourceLocation RParenLoc) {
   unsigned NumClobbers = clobbers.size();
   StringLiteral **Constraints =
-    reinterpret_cast<StringLiteral**>(constraints.get());
-  Expr **Exprs = exprs.get();
+    reinterpret_cast<StringLiteral**>(constraints.data());
+  Expr **Exprs = exprs.data();
   StringLiteral *AsmString = cast<StringLiteral>(asmString);
-  StringLiteral **Clobbers = reinterpret_cast<StringLiteral**>(clobbers.get());
+  StringLiteral **Clobbers = reinterpret_cast<StringLiteral**>(clobbers.data());
 
   SmallVector<TargetInfo::ConstraintInfo, 4> OutputConstraintInfos;
 
@@ -198,13 +200,13 @@ StmtResult Sema::ActOnAsmStmt(SourceLocation AsmLoc, bool IsSimple,
                   diag::err_asm_unknown_register_name) << Clobber);
   }
 
-  AsmStmt *NS =
-    new (Context) AsmStmt(Context, AsmLoc, IsSimple, IsVolatile, NumOutputs,
-                          NumInputs, Names, Constraints, Exprs, AsmString,
-                          NumClobbers, Clobbers, RParenLoc);
+  GCCAsmStmt *NS =
+    new (Context) GCCAsmStmt(Context, AsmLoc, IsSimple, IsVolatile, NumOutputs,
+                             NumInputs, Names, Constraints, Exprs, AsmString,
+                             NumClobbers, Clobbers, RParenLoc);
   // Validate the asm string, ensuring it makes sense given the operands we
   // have.
-  SmallVector<AsmStmt::AsmStringPiece, 8> Pieces;
+  SmallVector<GCCAsmStmt::AsmStringPiece, 8> Pieces;
   unsigned DiagOffs;
   if (unsigned DiagID = NS->AnalyzeAsmString(Pieces, Context, DiagOffs)) {
     Diag(getLocationOfStringLiteralByte(AsmString, DiagOffs), DiagID)
@@ -328,6 +330,19 @@ static bool isMSAsmKeyword(StringRef Name) {
   return Ret;
 }
 
+// getIdentifierInfo - Given a Name and a range of tokens, find the associated
+// IdentifierInfo*.
+static IdentifierInfo *getIdentifierInfo(StringRef Name,
+                                         ArrayRef<Token> AsmToks,
+                                         unsigned Begin, unsigned End) {
+  for (unsigned i = Begin; i <= End; ++i) {
+    IdentifierInfo *II = AsmToks[i].getIdentifierInfo();
+    if (II && II->getName() == Name)
+      return II;
+  }
+  return 0;
+}
+
 // getSpelling - Get the spelling of the AsmTok token.
 static StringRef getSpelling(Sema &SemaRef, Token AsmTok) {
   StringRef Asm;
@@ -415,7 +430,7 @@ static std::string buildMSAsmString(Sema &SemaRef, ArrayRef<Token> AsmToks,
 
     if (isNewAsm) {
       if (i) {
-        AsmStrings.push_back(Asm.c_str());
+        AsmStrings.push_back(Asm.str());
         AsmTokRanges.push_back(std::make_pair(startTok, i-1));
         startTok = i;
         Res += Asm;
@@ -433,28 +448,29 @@ static std::string buildMSAsmString(Sema &SemaRef, ArrayRef<Token> AsmToks,
 
     Asm += getSpelling(SemaRef, AsmToks[i]);
   }
-  AsmStrings.push_back(Asm.c_str());
+  AsmStrings.push_back(Asm.str());
   AsmTokRanges.push_back(std::make_pair(startTok, AsmToks.size()-1));
   Res += Asm;
-  return Res.c_str();
+  return Res.str();
 }
 
 #define DEF_SIMPLE_MSASM                                                   \
   MSAsmStmt *NS =                                                          \
     new (Context) MSAsmStmt(Context, AsmLoc, LBraceLoc, /*IsSimple*/ true, \
                             /*IsVolatile*/ true, AsmToks, Inputs, Outputs, \
-                            AsmString, Clobbers, EndLoc);
+                            InputExprs, OutputExprs, AsmString, Clobbers,  \
+                            EndLoc);
 
 StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
                                 SourceLocation LBraceLoc,
                                 ArrayRef<Token> AsmToks,
                                 SourceLocation EndLoc) {
-  // MS-style inline assembly is not fully supported, so emit a warning.
-  Diag(AsmLoc, diag::warn_unsupported_msasm);
   SmallVector<StringRef,4> Clobbers;
   std::set<std::string> ClobberRegs;
   SmallVector<IdentifierInfo*, 4> Inputs;
   SmallVector<IdentifierInfo*, 4> Outputs;
+  SmallVector<Expr*, 4> InputExprs;
+  SmallVector<Expr*, 4> OutputExprs;
 
   // Empty asm statements don't need to instantiate the AsmParser, etc.
   if (AsmToks.empty()) {
@@ -465,7 +481,8 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
 
   std::vector<std::string> AsmStrings;
   std::vector<std::pair<unsigned,unsigned> > AsmTokRanges;
-  std::string AsmString = buildMSAsmString(*this, AsmToks, AsmStrings, AsmTokRanges);
+  std::string AsmString = buildMSAsmString(*this, AsmToks, AsmStrings,
+                                           AsmTokRanges);
 
   std::vector<std::vector<StringRef> > Pieces(AsmStrings.size());
   buildMSAsmPieces(AsmStrings, Pieces);
@@ -491,11 +508,11 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
   OwningPtr<llvm::MCSubtargetInfo>
     STI(TheTarget->createMCSubtargetInfo(TT, "", ""));
 
-  for (unsigned i = 0, e = AsmStrings.size(); i != e; ++i) {
+  for (unsigned StrIdx = 0, e = AsmStrings.size(); StrIdx != e; ++StrIdx) {
     llvm::SourceMgr SrcMgr;
     llvm::MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
     llvm::MemoryBuffer *Buffer =
-      llvm::MemoryBuffer::getMemBuffer(AsmStrings[i], "<inline asm>");
+      llvm::MemoryBuffer::getMemBuffer(AsmStrings[StrIdx], "<inline asm>");
 
     // Tell SrcMgr about this buffer, which is what the parser will pick up.
     SrcMgr.AddNewSourceBuffer(Buffer, llvm::SMLoc());
@@ -518,8 +535,8 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
 
     // Canonicalize the opcode to lower case.
     SmallString<128> Opcode;
-    for (unsigned i = 0, e = IDVal.size(); i != e; ++i)
-      Opcode.push_back(tolower(IDVal[i]));
+    for (unsigned j = 0, e = IDVal.size(); j != e; ++j)
+      Opcode.push_back(tolower(IDVal[j]));
 
     // Parse the operands.
     llvm::SMLoc IDLoc;
@@ -545,16 +562,16 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
     llvm::MCInstPrinter *IP =
       TheTarget->createMCInstPrinter(1, *MAI, *MII, *MRI, *STI);
 
-    // Build the list of clobbers.
+    // Build the list of clobbers, outputs and inputs.
     unsigned NumDefs = Desc.getNumDefs();
-    for (unsigned j = 0, e = Inst.getNumOperands(); j != e; ++j) {
-      const llvm::MCOperand &Op = Inst.getOperand(j);
+    for (unsigned i = 0, e = Inst.getNumOperands(); i != e; ++i) {
+      const llvm::MCOperand &Op = Inst.getOperand(i);
 
       // Immediate.
       if (Op.isImm() || Op.isFPImm())
         continue;
 
-      bool isDef = NumDefs && (j < NumDefs);
+      bool isDef = NumDefs && (i < NumDefs);
 
       // Register/Clobber.
       if (Op.isReg() && isDef) {
@@ -567,6 +584,35 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
           return StmtError(Diag(AsmLoc, diag::err_asm_unknown_register_name) <<
                            Clobber);
         ClobberRegs.insert(Reg);
+        continue;
+      }
+      // Expr/Input or Output.
+      if (Op.isExpr()) {
+        const llvm::MCExpr *Expr = Op.getExpr();
+        const llvm::MCSymbolRefExpr *SymRef;
+        if ((SymRef = dyn_cast<llvm::MCSymbolRefExpr>(Expr))) {
+          StringRef Name = SymRef->getSymbol().getName();
+          IdentifierInfo *II = getIdentifierInfo(Name, AsmToks,
+                                                 AsmTokRanges[StrIdx].first,
+                                                 AsmTokRanges[StrIdx].second);
+          if (II) {
+            CXXScopeSpec SS;
+            UnqualifiedId Id;
+            SourceLocation Loc;
+            Id.setIdentifier(II, AsmLoc);
+            ExprResult Result = ActOnIdExpression(getCurScope(), SS, Loc, Id,
+                                                  false, false);
+            if (!Result.isInvalid()) {
+              if (isDef) {
+                Outputs.push_back(II);
+                OutputExprs.push_back(Result.take());
+              } else {
+                Inputs.push_back(II);
+                InputExprs.push_back(Result.take());
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -577,6 +623,7 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
   MSAsmStmt *NS =
     new (Context) MSAsmStmt(Context, AsmLoc, LBraceLoc, IsSimple,
                             /*IsVolatile*/ true, AsmToks, Inputs, Outputs,
-                            AsmString, Clobbers, EndLoc);
+                            InputExprs, OutputExprs, AsmString, Clobbers,
+                            EndLoc);
   return Owned(NS);
 }
