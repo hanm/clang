@@ -509,7 +509,7 @@ def ExprInspectionChecker : Checker<"ExprInspection">,
 //===----------------------------------------------------------------------===//
 // Experimental checkers.
 //===----------------------------------------------------------------------===//
-let ParentPackage = Experimental in {
+let ParentPackage = Alpha in {
 
 def StaticVariableAccessChecker : Checker<"StaticVariableAccessChecker">,
   HelpText<"Check access of static variables.">,
