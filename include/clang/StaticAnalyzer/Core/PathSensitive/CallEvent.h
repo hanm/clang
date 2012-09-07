@@ -168,8 +168,6 @@ protected:
   /// result of this call.
   virtual void getExtraInvalidatedRegions(RegionList &Regions) const {}
 
-  virtual QualType getDeclaredResultType() const = 0;
-
 public:
   virtual ~CallEvent() {}
 
@@ -291,12 +289,9 @@ public:
     return cloneWithState<CallEvent>(NewState);
   }
 
-  /// \brief Returns true if this is a statement that can be considered for
-  /// inlining.
-  ///
-  /// FIXME: This should go away once CallEvents are cheap and easy to
-  /// construct from ExplodedNodes.
-  static bool mayBeInlined(const Stmt *S);
+  /// \brief Returns true if this is a statement is a function or method call
+  /// of some kind.
+  static bool isCallStmt(const Stmt *S);
 
   // Iterator access to formal parameters and their types.
 private:
@@ -359,8 +354,6 @@ protected:
                   const LocationContext *LCtx)
     : CallEvent(D, St, LCtx) {}
   AnyFunctionCall(const AnyFunctionCall &Other) : CallEvent(Other) {}
-
-  virtual QualType getDeclaredResultType() const;
 
 public:
   // This function is overridden by subclasses, but they must return
@@ -456,8 +449,6 @@ protected:
 
   virtual void getExtraInvalidatedRegions(RegionList &Regions) const;
 
-  virtual QualType getDeclaredResultType() const;
-
 public:
   /// \brief Returns the region associated with this instance of the block.
   ///
@@ -513,13 +504,7 @@ public:
   virtual const Expr *getCXXThisExpr() const { return 0; }
 
   /// \brief Returns the value of the implicit 'this' object.
-  virtual SVal getCXXThisVal() const {
-    const Expr *Base = getCXXThisExpr();
-    // FIXME: This doesn't handle an overloaded ->* operator.
-    if (!Base)
-      return UnknownVal();
-    return getSVal(Base);
-  }
+  virtual SVal getCXXThisVal() const;
 
   virtual const FunctionDecl *getDecl() const;
 
@@ -619,6 +604,8 @@ class CXXDestructorCall : public CXXInstanceCall {
   friend class CallEventManager;
 
 protected:
+  typedef llvm::PointerIntPair<const MemRegion *, 1, bool> DtorDataTy;
+
   /// Creates an implicit destructor.
   ///
   /// \param DD The destructor that will be called.
@@ -627,10 +614,10 @@ protected:
   /// \param St The path-sensitive state at this point in the program.
   /// \param LCtx The location context at this point in the program.
   CXXDestructorCall(const CXXDestructorDecl *DD, const Stmt *Trigger,
-                    const MemRegion *Target, ProgramStateRef St,
-                    const LocationContext *LCtx)
+                    const MemRegion *Target, bool IsBaseDestructor,
+                    ProgramStateRef St, const LocationContext *LCtx)
     : CXXInstanceCall(DD, St, LCtx) {
-    Data = Target;
+    Data = DtorDataTy(Target, IsBaseDestructor).getOpaqueValue();
     Location = Trigger->getLocEnd();
   }
 
@@ -641,8 +628,15 @@ public:
   virtual SourceRange getSourceRange() const { return Location; }
   virtual unsigned getNumArgs() const { return 0; }
 
+  virtual RuntimeDefinition getRuntimeDefinition() const;
+
   /// \brief Returns the value of the implicit 'this' object.
   virtual SVal getCXXThisVal() const;
+
+  /// Returns true if this is a call to a base class destructor.
+  bool isBaseDestructor() const {
+    return DtorDataTy::getFromOpaqueValue(Data).getInt();
+  }
 
   virtual Kind getKind() const { return CE_CXXDestructor; }
 
@@ -775,8 +769,6 @@ protected:
 
   virtual void getExtraInvalidatedRegions(RegionList &Regions) const;
 
-  virtual QualType getDeclaredResultType() const;
-
   /// Check if the selector may have multiple definitions (may have overrides).
   virtual bool canBeOverridenInSubclass(ObjCInterfaceDecl *IDecl,
                                         Selector Sel) const;
@@ -899,6 +891,13 @@ class CallEventManager {
     return new (allocate()) T(A1, A2, A3, St, LCtx);
   }
 
+  template <typename T, typename Arg1, typename Arg2, typename Arg3,
+            typename Arg4>
+  T *create(Arg1 A1, Arg2 A2, Arg3 A3, Arg4 A4, ProgramStateRef St,
+            const LocationContext *LCtx) {
+    return new (allocate()) T(A1, A2, A3, A4, St, LCtx);
+  }
+
 public:
   CallEventManager(llvm::BumpPtrAllocator &alloc) : Alloc(alloc) {}
 
@@ -925,9 +924,9 @@ public:
 
   CallEventRef<CXXDestructorCall>
   getCXXDestructorCall(const CXXDestructorDecl *DD, const Stmt *Trigger,
-                       const MemRegion *Target, ProgramStateRef State,
-                       const LocationContext *LCtx) {
-    return create<CXXDestructorCall>(DD, Trigger, Target, State, LCtx);
+                       const MemRegion *Target, bool IsBase,
+                       ProgramStateRef State, const LocationContext *LCtx) {
+    return create<CXXDestructorCall>(DD, Trigger, Target, IsBase, State, LCtx);
   }
 
   CallEventRef<CXXAllocatorCall>
