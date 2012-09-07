@@ -1,4 +1,4 @@
-// RUN: %clang_cc1  -analyze -analyzer-checker=experimental.StaticVariableAccessChecker -verify %s
+// RUN: %clang_cc1  -analyze -analyzer-checker=alpha.StaticVariableAccessChecker -verify %s
 
 int a_global[4];
 
