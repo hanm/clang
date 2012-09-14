@@ -64,7 +64,7 @@ protected:
   bool Inherited : 1;
 
   virtual ~Attr();
-  
+
   void* operator new(size_t bytes) throw() {
     llvm_unreachable("Attrs cannot be allocated with regular 'new'.");
   }
@@ -205,7 +205,7 @@ public:
   friend bool operator==(specific_attr_iterator Left,
                          specific_attr_iterator Right) {
     if (Left.Current < Right.Current)
-      Left.AdvanceToNext(Right.Current); 
+      Left.AdvanceToNext(Right.Current);
     else
       Right.AdvanceToNext(Left.Current);
     return Left.Current == Right.Current;
@@ -214,6 +214,11 @@ public:
                          specific_attr_iterator Right) {
     return !(Left == Right);
   }
+
+  void AdvanceToNextPublic(specific_attr_iterator right) const {
+    this->AdvanceToNext(right.Current);
+  }
+
 };
 
 template <typename SpecificAttr, typename Container>
@@ -232,11 +237,34 @@ inline bool hasSpecificAttr(const Container& container) {
   return specific_attr_begin<SpecificAttr>(container) !=
           specific_attr_end<SpecificAttr>(container);
 }
+
 template <typename SpecificAttr, typename Container>
 inline SpecificAttr *getSpecificAttr(const Container& container) {
   specific_attr_iterator<SpecificAttr, Container> i =
       specific_attr_begin<SpecificAttr>(container);
   if (i != specific_attr_end<SpecificAttr>(container))
+    return *i;
+  else
+    return 0;
+}
+
+template <typename SpecificAttr, typename Container>
+inline SpecificAttr *getSpecificAttr(const Container& container, int n) {
+  specific_attr_iterator<SpecificAttr, Container> i =
+      specific_attr_begin<SpecificAttr>(container);
+  int count = 1;
+
+  while (count < n && i != specific_attr_end<SpecificAttr>(container)) {
+    i.AdvanceToNextPublic(specific_attr_end<SpecificAttr>(container));
+    i++; // ATTENTION - ACHTUNG! the order is important!
+         //     putting i++ in front may cause segfaults because it does
+         //     not check not to go past the end of the iteration space.
+         //     It is safe to use it right after the overloaded != test
+         //     because it internally calls AdvanceToNext and because
+         //     the != test failed.
+    count++;
+  }
+  if (count == n && i != specific_attr_end<SpecificAttr>(container))
     return *i;
   else
     return 0;
