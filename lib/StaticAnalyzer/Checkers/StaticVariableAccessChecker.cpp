@@ -305,7 +305,7 @@ namespace {
   /// semantic. Note, that we can't be absolutely certain, that the given
   /// operator actually modifies the object. But, in practice, every C++
   /// programmer would expect calls like "x += 3" or "++x" to modify
-  /// x. We therefore assume the wost cast, i.e. that the variable is
+  /// x. We therefore assume the worst case, i.e. that the variable is
   /// being modified even we can't prove it for sure.
   bool isAWriteCXXOperator(OverloadedOperatorKind overloadedOp) {
     switch (overloadedOp) {
