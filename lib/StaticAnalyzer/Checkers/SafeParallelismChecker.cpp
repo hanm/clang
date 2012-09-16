@@ -29,7 +29,8 @@ using namespace clang;
 using namespace ento;
 
 namespace {
-class ASPSemanticCheckerTraverser : public RecursiveASTVisitor<ASPSemanticCheckerTraverser> {
+class ASPSemanticCheckerTraverser : 
+  public RecursiveASTVisitor<ASPSemanticCheckerTraverser> {
 
 private:
   // Private Members
@@ -61,26 +62,29 @@ private:
     /// 1. try to find among regions or region parameters of function
     /// a. regions
     //const AttrType* myAttr;
-    {const RegionAttr* myAttr;
-    int i = 1;
-    do {
-      myAttr = D->getAttr<RegionAttr>(i++);
-      if (myAttr) {
+    {
+      const RegionAttr* myAttr;
+      int i = 1;
+      do {
+        myAttr = D->getAttr<RegionAttr>(i++);
+        if (myAttr) {
           StringRef rName = myAttr->getRegion_name();
           if (rName==name) return true;
-      }
-    } while (myAttr);
+        }
+      } while (myAttr);
     }
+
     /// b. parameters
-    {const RegionParamAttr* myAttr;
-    int i = 1;
-    do {
-      myAttr = D->getAttr<RegionParamAttr>(i++);
-      if (myAttr) {
+    {
+      const RegionParamAttr* myAttr;
+      int i = 1;
+      do {
+        myAttr = D->getAttr<RegionParamAttr>(i++);
+        if (myAttr) {
           StringRef pName = myAttr->getParam_name();
           if (pName==name) return true;
-      }
-    } while (myAttr);
+        }
+      } while (myAttr);
     }
 
     /// if not found, search parent DeclContexts
@@ -212,10 +216,12 @@ class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
 
 public:
-  void checkASTDecl(const TranslationUnitDecl* D, AnalysisManager& mgr, BugReporter &BR) const {
+  void checkASTDecl(const TranslationUnitDecl* D, AnalysisManager& mgr, 
+                    BugReporter &BR) const {
     llvm::errs() << "DEBUG:: starting ASP Semantic Checker\n";
     /** initialize traverser */
-    ASPSemanticCheckerTraverser aspTraverser(BR, D->getASTContext(), mgr.getAnalysisDeclContext(D));
+    ASPSemanticCheckerTraverser aspTraverser(BR, D->getASTContext(), 
+                                             mgr.getAnalysisDeclContext(D));
     /** run checker */
     aspTraverser.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     llvm::errs() << "DEBUG:: done running ASP Semantic Checker\n\n";
