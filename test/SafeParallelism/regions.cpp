@@ -1,35 +1,28 @@
 // RUN: %clang_cc1 %s -verify
 
-//#include <iostream>
-
-//using namespace std;
-
-
 class 
 __attribute__((region("Links")))
 __attribute__ ((region_param("P"))) 
 Coo {
-    int money __attribute__((in_region("P:Links")));
+  int money __attribute__((in_region("P:Links")));
 
 public:
-    Coo (): money(70) {}
+  Coo (): money(70) {}
 
-    int get_some() __attribute__ ((pure_effect)){ 
-        return money;
-    }
+  int get_some() __attribute__ ((pure_effect)){ 
+    return money;
+  }
 
-    void set_money(int cash) __attribute__((writes_effect("P:Links"))) {
-        money = cash;
-    }
+  void set_money(int cash) __attribute__((writes_effect("P:Links"))) {
+    money = cash;
+  }
 };
-
 
 
 __attribute__((region("Roo"))) 
 int main (void) {
-    Coo __attribute__((region_arg("Roo"))) c;
-    c.set_money(42);
-    //cout << "Got " << c.get_some() << " dollyz\n";
-    return 0; 
+  Coo __attribute__((region_arg("Roo"))) c;
+  c.set_money(42);
+  return 0; 
 }
   
