@@ -252,7 +252,7 @@ template <typename SpecificAttr, typename Container>
 inline SpecificAttr *getSpecificAttr(const Container& container, int n) {
   specific_attr_iterator<SpecificAttr, Container> i =
       specific_attr_begin<SpecificAttr>(container);
-  int count = 1;
+  int count = 0;
 
   while (count < n && i != specific_attr_end<SpecificAttr>(container)) {
     i.AdvanceToNextPublic(specific_attr_end<SpecificAttr>(container));
