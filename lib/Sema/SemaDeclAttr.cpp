@@ -4600,19 +4600,37 @@ static void ProcessInheritableDeclAttr(Sema &S, Scope *scope, Decl *D,
 
   // Annotations for Safe Parallelism (ASP)
   // 1. Region Name&Parameter Declarations
-  case AttributeList::AT_Region: handleSafeParRegionAttr(S, D, Attr); break;
-  case AttributeList::AT_RegionParam: handleSafeParRegionParamAttr(S, D, Attr); break;
+  case AttributeList::AT_Region: 
+    handleSafeParRegionAttr(S, D, Attr); 
+    break;
+  case AttributeList::AT_RegionParam: 
+    handleSafeParRegionParamAttr(S, D, Attr); 
+    break;
 
   // 2. Assignment of Variables to RPLs
-  case AttributeList::AT_InRegion: handleSafeParInRegionAttr(S, D, Attr); break;
-  case AttributeList::AT_RegionArg: handleSafeParRegionArgAttr(S, D, Attr); break;
+  case AttributeList::AT_InRegion: 
+    handleSafeParInRegionAttr(S, D, Attr); 
+    break;
+  case AttributeList::AT_RegionArg: 
+    handleSafeParRegionArgAttr(S, D, Attr); 
+    break;
 
   // 3. Effect Declarations
-  case AttributeList::AT_PureEffect: handleSafeParPureEffectAttr(S, D, Attr); break;
-  case AttributeList::AT_ReadsEffect: handleSafeParEffectAttr<ReadsEffectAttr>(S, D, Attr); break;
-  case AttributeList::AT_AtomicReadsEffect: handleSafeParEffectAttr<AtomicReadsEffectAttr>(S, D, Attr); break;
-  case AttributeList::AT_WritesEffect: handleSafeParEffectAttr<WritesEffectAttr>(S, D, Attr); break;
-  case AttributeList::AT_AtomicWritesEffect: handleSafeParEffectAttr<AtomicWritesEffectAttr>(S, D, Attr); break;
+  case AttributeList::AT_PureEffect: 
+    handleSafeParPureEffectAttr(S, D, Attr); 
+    break;
+  case AttributeList::AT_ReadsEffect: 
+    handleSafeParEffectAttr<ReadsEffectAttr>(S, D, Attr); 
+    break;
+  case AttributeList::AT_AtomicReadsEffect: 
+    handleSafeParEffectAttr<AtomicReadsEffectAttr>(S, D, Attr); 
+    break;
+  case AttributeList::AT_WritesEffect: 
+    handleSafeParEffectAttr<WritesEffectAttr>(S, D, Attr); 
+    break;
+  case AttributeList::AT_AtomicWritesEffect: 
+    handleSafeParEffectAttr<AtomicWritesEffectAttr>(S, D, Attr); 
+    break;
 
   default:
     // Ask target about the attribute.
