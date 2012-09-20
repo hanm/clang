@@ -26,22 +26,32 @@ using namespace ento;
 
 
 namespace {
+  /**
+   *  Return true when the input string is a special RPL element
+   *  (e.g., '*', '?', 'Root'.
+   */
+  // TODO (?): '?', 'Root'
   bool isSpecialRplElement(const StringRef& s) {
-    if (!s.compare("*")) 
+    if (!s.compare("*"))
       return true;
-    else 
+    else
       return false;
   }
-  
+
+  /**
+   *  Return true when the input string is a valid region
+   *  name or region parameter declaration
+   */
   bool isValidRegionName(const StringRef& s) {
-    // true if it is one of the Special Rpl Elements
-    if (isSpecialRplElement(s)) return true;
-    
-    // must start with [_a-zA-Z] 
+    // false if it is one of the Special Rpl Elements
+    // => it is not allowed to redeclare them
+    if (isSpecialRplElement(s)) return false;
+
+    // must start with [_a-zA-Z]
     const char c = s.front();
-    if (c != '_' && 
+    if (c != '_' &&
         !( c >= 'a' && c <= 'z') &&
-        !( c >= 'A' && c <= 'Z')) 
+        !( c >= 'A' && c <= 'Z'))
       return false;
     // all remaining characters must be in [_a-zA-Z0-9]
     for (size_t i=0; i < s.size(); i++) {
@@ -52,11 +62,30 @@ namespace {
           !( c >= '0' && c <= '9'))
         return false;
     }
-    
+
     return true;
   }
 
-class ASPSemanticCheckerTraverser : 
+  /**
+   * Return the string name of the region or region parameter declaration
+   * based on the Kind of the Attribute (RegionAttr or RegionParamAttr)
+   */
+  inline
+  StringRef getRegionOrParamName(const Attr* attr) {
+    StringRef result = "";
+    attr::Kind kind = attr->getKind();
+    switch(kind) {
+    case attr::Region:
+      result = dyn_cast<RegionAttr>(attr)->getRegion_name(); break;
+    case attr::RegionParam:
+      result = dyn_cast<RegionParamAttr>(attr)->getParam_name(); break;
+    default:
+      result = "";
+    }
+    return result;
+  }
+
+class ASPSemanticCheckerTraverser :
   public RecursiveASTVisitor<ASPSemanticCheckerTraverser> {
 
 private:
@@ -66,8 +95,49 @@ private:
   AnalysisDeclContext* AC;
   raw_ostream& os;
 
-
   // Private Methods
+  /**
+   *  Emit a Warning when the input string is not a valid region name
+   *  or region parameter.
+   */
+  void helperEmitInvalidRegionOrParamWarning(Decl* D, const StringRef& str) {
+    std::string descr = "'";
+    descr.append(str);
+    descr.append("' invalid region or parameter name");
+
+    StringRef bugName = "invalid region or parameter name";
+    StringRef bugCategory = "Safe Parallelism";
+    StringRef bugStr = descr;
+
+    PathDiagnosticLocation VDLoc =
+       PathDiagnosticLocation::create(D, BR.getSourceManager());
+
+    BR.EmitBasicReport(D, bugName, bugCategory,
+                       bugStr, VDLoc, D->getSourceRange());
+  }
+
+  /**
+   *  Emit a Warning when the input string (which is assumed to be an RPL
+   *  element) is not declared.
+   */
+  void helperEmitUndeclaredRplElementWarning(Decl* D, const StringRef& str) {
+    std::string description_std = "'";
+    description_std.append(str);
+    description_std.append("' RPL element was not declared");
+    StringRef bugName = "RPL element was not declared";
+    StringRef bugCategory = "Safe Parallelism";
+    StringRef bugStr = description_std;
+
+    PathDiagnosticLocation VDLoc =
+       PathDiagnosticLocation::create(D, BR.getSourceManager());
+
+    BR.EmitBasicReport(D, bugName, bugCategory,
+                       bugStr, VDLoc, D->getSourceRange());
+  }
+
+  /**
+   *  Print to the debug output stream (os) the attribute
+   */
   template<typename AttrType>
   inline void helperPrintAttributes(Decl* D) {
     int i = 0;
@@ -78,77 +148,50 @@ private:
       attr = D->getAttr<AttrType>(i++);
     }
   }
-  
-  bool checkRegionDeclarations(Decl* D) {
-    os << "DEBUG:: well what have we here?!\n";
+
+  /**
+   *  Check that the region and region parameter declarations
+   *  of Declaration D are valid.
+   */
+  template<typename AttrType>
+  bool checkRegionAndParamDecls(Decl* D) {
     int i = 0;
     bool result = true;
-    const RegionAttr* myAttr = D->getAttr<RegionAttr>(i++);
+    const AttrType* myAttr = D->getAttr<AttrType>(i++);
     while (myAttr) {
-      os << "DEBUG:: well well...!\n";
-      const StringRef str = myAttr->getRegion_name();
+      const StringRef str = getRegionOrParamName(myAttr);
       if (!isValidRegionName(str)) {
         // Emit bug report!
-        std::string descr = "Invalid Region or Parameter name: '";
-        descr.append(str);
-        descr.append("'");
-              
-        PathDiagnosticLocation VDLoc =
-           PathDiagnosticLocation::createBegin(D, BR.getSourceManager());
-
-        BR.EmitBasicReport(D, descr.c_str(), "Safe Parallelism", descr.c_str(), VDLoc);
-        result = false; 
+        helperEmitInvalidRegionOrParamWarning(D, str);
+        result = false;
       }
-      myAttr = D->getAttr<RegionAttr>(i++);
+      myAttr = D->getAttr<AttrType>(i++);
     }
-    return result; 
+    return result;
   }
 
-  #define GET_NAME_FUNCTION(ATTR_TYPE)  GET_NAME_FUNCTION_##ATTR_TYPE()
-  
-  #define GET_NAME_FUNCTION_RegionAttr()       getRegion_name()
-  #define GET_NAME_FUNCTION_RegionParamAttr()  getParam_name()
-
-  #define SCAN_ATTRIBUTES(ATTR_TYPE) \
-  { \
-    int i = 0; \
-    const ATTR_TYPE* myAttr = D->getAttr<ATTR_TYPE>(i++); \
-    while (myAttr) { \
-      StringRef rName = myAttr->GET_NAME_FUNCTION(ATTR_TYPE); \
-      if (rName==name) return true; \
-      myAttr = D->getAttr<ATTR_TYPE>(i++); \
-    } \
-  }
-  
-  /* The template approach below doesn't work because templates are 
-  initialized after the preprocessor is run, so GET_NAME_FUNCTION_ATTR_TYPE \
-  is not macro-expanded to the correct function call.
-  
   template<typename AttrType>
-  bool helperFindRegionName(Decl* D, const StringRef& name)
-  { 
-    int i = 0; 
-    const AttrType* myAttr = D->getAttr<AttrType>(i++); 
-    while (myAttr) { 
-      StringRef rName = myAttr->GET_NAME_FUNCTION(AttrType);
-      if (rName==name) return true; 
-      myAttr = D->getAttr<AttrType>(i++); 
-    } 
-  }*/
-  
+  bool scanAttributes(Decl* D, const StringRef& name)
+  {
+    int i = 0;
+    const AttrType* myAttr = D->getAttr<AttrType>(i++);
+    while (myAttr) {
+      StringRef rName = getRegionOrParamName(myAttr);
+      if (rName==name) return true;
+      myAttr = D->getAttr<AttrType>(i++);
+    }
+    return false;
+  }
+
   /**
-   *  Looks for 'name' in the declaration 'D' and its parent scopes 
-   */    
+   *  Looks for 'name' in the declaration 'D' and its parent scopes
+   */
   bool findRegionName(Decl* D, StringRef name) {
     if (!D) return false;
     /// 1. try to find among regions or region parameters of function
-    /// a. regions
-    SCAN_ATTRIBUTES(RegionAttr);
-    //if (helperFindRegionName<RegionAttr>(D, name)) return true;
-
-    /// b. parameters
-    SCAN_ATTRIBUTES(RegionParamAttr);
-    //if (helperFindRegionName<RegionParamAttr>(D, name)) return true;
+    if (scanAttributes<RegionAttr>(D,name) ||
+        scanAttributes<RegionParamAttr>(D,name))
+      return true;
 
     /// if not found, search parent DeclContexts
     DeclContext *dc = D->getDeclContext();
@@ -167,26 +210,22 @@ private:
     }
     return false;
   }
-  
+
+  /**
+   *  Check that the annotations of type AttrType of declaration D
+   *  have RPLs whose elements have been declared
+   */
   bool checkRpl(Decl*D, StringRef rpl) {
     bool result = true;
     while(rpl.size() > 0) { /// for all RPL elements of the RPL
-      // FIXME: '::' can appear as part of an RPL element. Splitting must 
+      // FIXME: '::' can appear as part of an RPL element. Splitting must
       // be done differently to account for that.
       std::pair<StringRef,StringRef> pair = rpl.split(':');
       const StringRef& head = pair.first;
       /// head: is it a special RPL element? if not, is it declared?
       if (!isSpecialRplElement(head) && !findRegionName(D, head)) {
         // Emit bug report!
-        std::string description_std = "RPL element '";
-        description_std.append(head);
-        description_std.append("' was not declared");
-              
-        PathDiagnosticLocation VDLoc =
-           PathDiagnosticLocation::createBegin(D, BR.getSourceManager());
-
-        const char* descr = description_std.c_str();
-        BR.EmitBasicReport(D,descr, "Safe Parallelism", descr, VDLoc);
+        helperEmitUndeclaredRplElementWarning(D, head);
         result = false;
       }
       rpl = pair.second;
@@ -196,16 +235,14 @@ private:
   /// AttrType must implement getRpl
   template<typename AttrType>
   bool checkRpls(Decl* D) {
-    const AttrType* myAttr;
     int i = 0;
     bool result = true;
-    do { /// for all attributes of type AttrType
+    const AttrType* myAttr = D->getAttr<AttrType>(i++);
+    while (myAttr) { /// for all attributes of type AttrType
+      if (checkRpl(D, myAttr->getRpl()))
+        result = false;
       myAttr = D->getAttr<AttrType>(i++);
-      if (myAttr) {
-        checkRpl(D, myAttr->getRpl());
-      }
-    } while (myAttr);
-
+    }
     return result;
   }
 
@@ -227,21 +264,25 @@ public:
     os << "DEBUG:: printing ASP attributes for method or function '";
     D->getDeclName().printName(os);
     os << "':\n";
-    /// 1. Detect Region Declarations
+    /// A. Detect Annotations
+    /// A.1. Detect Region and Parameter Declarations
     helperPrintAttributes<RegionAttr>(D);
-    checkRegionDeclarations(D);
 
-    /// 2. Detect Region Parameter Declarations
+    /// A.2. Detect Region Parameter Declarations
     helperPrintAttributes<RegionParamAttr>(D);
 
-    /// 3. Effects
+    /// A.3. Detect Effects
     helperPrintAttributes<PureEffectAttr>(D); /// pure
     helperPrintAttributes<ReadsEffectAttr>(D); /// reads
     helperPrintAttributes<WritesEffectAttr>(D); /// writes
     helperPrintAttributes<AtomicReadsEffectAttr>(D); /// atomic reads
     helperPrintAttributes<AtomicWritesEffectAttr>(D); /// atomic writes
 
-    /// B. Check Effects
+    /// B. Check Annotations
+    /// B.1 Check Regions & Params
+    checkRegionAndParamDecls<RegionAttr>(D);
+    checkRegionAndParamDecls<RegionParamAttr>(D);
+    /// B.2 Check Effect RPLs
     checkRpls<ReadsEffectAttr>(D);
     checkRpls<WritesEffectAttr>(D);
     checkRpls<AtomicReadsEffectAttr>(D);
@@ -254,18 +295,26 @@ public:
     os << "DEBUG:: printing ASP attributes for class or struct '";
     D->getDeclName().printName(os);
     os << "':\n";
-    /// 1. Detect Region Declarations
+    /// A. Detect Region & Param Annotations
     helperPrintAttributes<RegionAttr>(D);
-    checkRegionDeclarations(D);
-
-    /// 2. Detect Region Parameter Declarations
     helperPrintAttributes<RegionParamAttr>(D);
+
+    /// B. Check Region & Param Names
+    checkRegionAndParamDecls<RegionAttr>(D);
+    checkRegionAndParamDecls<RegionParamAttr>(D);
 
     return true;
   }
 
   bool VisitFieldDecl(FieldDecl *D) {
     os << "DEBUG:: VisitFieldDecl\n";
+    /// A. Detect Region In & Arg annotations
+    helperPrintAttributes<InRegionAttr>(D); /// in region
+    helperPrintAttributes<RegionArgAttr>(D); /// in region
+
+    /// B. Check RPLs
+    checkRpls<InRegionAttr>(D);
+    checkRpls<RegionArgAttr>(D);
     return true;
   }
   bool VisitVarDecl(VarDecl *) {
@@ -294,11 +343,11 @@ class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
 
 public:
-  void checkASTDecl(const TranslationUnitDecl* D, AnalysisManager& mgr, 
+  void checkASTDecl(const TranslationUnitDecl* D, AnalysisManager& mgr,
                     BugReporter &BR) const {
     llvm::errs() << "DEBUG:: starting ASP Semantic Checker\n";
     /** initialize traverser */
-    ASPSemanticCheckerTraverser aspTraverser(BR, D->getASTContext(), 
+    ASPSemanticCheckerTraverser aspTraverser(BR, D->getASTContext(),
                                              mgr.getAnalysisDeclContext(D));
     /** run checker */
     aspTraverser.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
