@@ -2966,7 +2966,8 @@ void Parser::ParseCXX11AttributeSpecifier(ParsedAttributes &attrs,
     bool StandardAttr = IsBuiltInOrStandardCXX11Attribute(AttrName,ScopeName);
 
     if (Tok.is(tok::l_paren)) {
-      if (ScopeName && ScopeName->getName() == "gnu") {
+      if (ScopeName && (ScopeName->getName() == "gnu" ||
+                        ScopeName->getName() == "asp")) {
         ParseCXX11AttributeGNUStyleArgs(AttrName, AttrLoc, attrs);
       } else {
         if (StandardAttr)
