@@ -1385,8 +1385,9 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
     }
     
     // Notify the callback object that we've seen an inclusion directive.
-    Callbacks->InclusionDirective(HashLoc, IncludeTok, Filename, isAngled, File,
-                                  End, SearchPath, RelativePath);
+    Callbacks->InclusionDirective(HashLoc, IncludeTok, Filename, isAngled,
+              CharSourceRange::getCharRange(FilenameTok.getLocation(), CharEnd),
+                                  File, SearchPath, RelativePath);
   }
   
   if (File == 0) {

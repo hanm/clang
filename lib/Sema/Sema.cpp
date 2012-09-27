@@ -90,6 +90,7 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
     CollectStats(false), ExternalSource(0), CodeCompleter(CodeCompleter),
     CurContext(0), OriginalLexicalContext(0),
     PackContext(0), MSStructPragmaOn(false), VisContext(0),
+    IsBuildingRecoveryCallExpr(false),
     ExprNeedsCleanups(false), LateTemplateParser(0), OpaqueParser(0),
     IdResolver(pp), StdInitializerList(0), CXXTypeInfoDecl(0), MSVCGuidDecl(0),
     NSNumberDecl(0),
@@ -1026,6 +1027,9 @@ LambdaScopeInfo *Sema::getCurLambda() {
 }
 
 void Sema::ActOnComment(SourceRange Comment) {
+  if (!LangOpts.RetainCommentsFromSystemHeaders &&
+      SourceMgr.isInSystemHeader(Comment.getBegin()))
+    return;
   RawComment RC(SourceMgr, Comment);
   if (RC.isAlmostTrailingComment()) {
     SourceRange MagicMarkerRange(Comment.getBegin(),

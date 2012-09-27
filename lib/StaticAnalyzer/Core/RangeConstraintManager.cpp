@@ -325,12 +325,6 @@ public:
 
   const llvm::APSInt* getSymVal(ProgramStateRef St, SymbolRef sym) const;
 
-  // FIXME: Refactor into SimpleConstraintManager?
-  bool isEqual(ProgramStateRef St, SymbolRef sym, const llvm::APSInt& V) const {
-    const llvm::APSInt *i = getSymVal(St, sym);
-    return i ? *i == V : false;
-  }
-
   ProgramStateRef removeDeadBindings(ProgramStateRef St, SymbolReaper& SymReaper);
 
   void print(ProgramStateRef St, raw_ostream &Out,
@@ -379,7 +373,7 @@ RangeConstraintManager::GetRange(ProgramStateRef state, SymbolRef sym) {
   // Lazily generate a new RangeSet representing all possible values for the
   // given symbol type.
   BasicValueFactory &BV = getBasicVals();
-  QualType T = sym->getType(BV.getContext());
+  QualType T = sym->getType();
 
   RangeSet Result(F, BV.getMinValue(T), BV.getMaxValue(T));
 

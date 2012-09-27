@@ -226,8 +226,21 @@ private:
     return NodeVec.size()-1;
   }
 
-  unsigned makeMCall(unsigned NumArgs, const NamedDecl *D) {
-    NodeVec.push_back(SExprNode(EOP_MCall, NumArgs, D));
+  // Grab the very first declaration of virtual method D
+  const CXXMethodDecl* getFirstVirtualDecl(const CXXMethodDecl *D) {
+    while (true) {
+      D = D->getCanonicalDecl();
+      CXXMethodDecl::method_iterator I = D->begin_overridden_methods(),
+                                     E = D->end_overridden_methods();
+      if (I == E)
+        return D;  // Method does not override anything
+      D = *I;      // FIXME: this does not work with multiple inheritance.
+    }
+    return 0;
+  }
+
+  unsigned makeMCall(unsigned NumArgs, const CXXMethodDecl *D) {
+    NodeVec.push_back(SExprNode(EOP_MCall, NumArgs, getFirstVirtualDecl(D)));
     return NodeVec.size()-1;
   }
 
@@ -328,8 +341,7 @@ private:
         return buildSExpr(CMCE->getImplicitObjectArgument(), CallCtx, NDeref);
       }
       unsigned NumCallArgs = CMCE->getNumArgs();
-      unsigned Root =
-        makeMCall(NumCallArgs, CMCE->getMethodDecl()->getCanonicalDecl());
+      unsigned Root = makeMCall(NumCallArgs, CMCE->getMethodDecl());
       unsigned Sz = buildSExpr(CMCE->getImplicitObjectArgument(), CallCtx);
       Expr** CallArgs = CMCE->getArgs();
       for (unsigned i = 0; i < NumCallArgs; ++i) {
@@ -454,7 +466,6 @@ private:
   void buildSExprFromExpr(Expr *MutexExp, Expr *DeclExp, const NamedDecl *D) {
     CallingContext CallCtx(D);
 
-
     if (MutexExp) {
       if (StringLiteral* SLit = dyn_cast<StringLiteral>(MutexExp)) {
         if (SLit->getString() == StringRef("*"))
@@ -562,7 +573,9 @@ public:
 
   bool matches(const SExpr &Other, unsigned i = 0, unsigned j = 0) const {
     if (NodeVec[i].matches(Other.NodeVec[j])) {
-      unsigned n = NodeVec[i].arity();
+      unsigned ni = NodeVec[i].arity();
+      unsigned nj = Other.NodeVec[j].arity();
+      unsigned n = (ni < nj) ? ni : nj;
       bool Result = true;
       unsigned ci = i+1;  // first child of i
       unsigned cj = j+1;  // first child of j
@@ -572,6 +585,15 @@ public:
       }
       return Result;
     }
+    return false;
+  }
+
+  // A partial match between a.mu and b.mu returns true a and b have the same
+  // type (and thus mu refers to the same mutex declaration), regardless of
+  // whether a and b are different objects or not.
+  bool partiallyMatches(const SExpr &Other) const {
+    if (NodeVec[0].kind() == EOP_Dot)
+      return NodeVec[0].matches(Other.NodeVec[0]);
     return false;
   }
 
@@ -820,7 +842,7 @@ public:
     return false;
   }
 
-  LockData* findLock(FactManager& FM, const SExpr& M) const {
+  LockData* findLock(FactManager &FM, const SExpr &M) const {
     for (const_iterator I = begin(), E = end(); I != E; ++I) {
       const SExpr &Exp = FM[*I].MutID;
       if (Exp.matches(M))
@@ -829,11 +851,19 @@ public:
     return 0;
   }
 
-  LockData* findLockUniv(FactManager& FM, const SExpr& M) const {
+  LockData* findLockUniv(FactManager &FM, const SExpr &M) const {
     for (const_iterator I = begin(), E = end(); I != E; ++I) {
       const SExpr &Exp = FM[*I].MutID;
       if (Exp.matches(M) || Exp.isUniversal())
         return &FM[*I].LDat;
+    }
+    return 0;
+  }
+
+  FactEntry* findPartialMatch(FactManager &FM, const SExpr &M) const {
+    for (const_iterator I=begin(), E=end(); I != E; ++I) {
+      const SExpr& Exp = FM[*I].MutID;
+      if (Exp.partiallyMatches(M)) return &FM[*I];
     }
     return 0;
   }
@@ -862,6 +892,7 @@ struct CFGBlockInfo {
   SourceLocation EntryLoc;      // Location of first statement in block
   SourceLocation ExitLoc;       // Location of last statement in block.
   unsigned EntryIndex;          // Used to replay contexts later
+  bool Reachable;               // Is this block reachable?
 
   const FactSet &getSet(CFGBlockSide Side) const {
     return Side == CBS_Entry ? EntrySet : ExitSet;
@@ -872,7 +903,7 @@ struct CFGBlockInfo {
 
 private:
   CFGBlockInfo(LocalVarContext EmptyCtx)
-    : EntryContext(EmptyCtx), ExitContext(EmptyCtx)
+    : EntryContext(EmptyCtx), ExitContext(EmptyCtx), Reachable(false)
   { }
 
 public:
@@ -1651,7 +1682,7 @@ void ThreadSafetyAnalyzer::getEdgeLockset(FactSet& Result,
       case attr::SharedTrylockFunction: {
         SharedTrylockFunctionAttr *A =
           cast<SharedTrylockFunctionAttr>(Attr);
-        getMutexIDs(ExclusiveLocksToAdd, A, Exp, FunDecl,
+        getMutexIDs(SharedLocksToAdd, A, Exp, FunDecl,
                     PredBlock, CurrBlock, A->getSuccessValue(), Negate);
         break;
       }
@@ -1742,7 +1773,26 @@ void BuildLockset::warnIfMutexNotHeld(const NamedDecl *D, Expr *Exp,
   }
 
   LockData* LDat = FSet.findLockUniv(Analyzer->FactMan, Mutex);
-  if (!LDat || !LDat->isAtLeast(LK))
+  bool NoError = true;
+  if (!LDat) {
+    // No exact match found.  Look for a partial match.
+    FactEntry* FEntry = FSet.findPartialMatch(Analyzer->FactMan, Mutex);
+    if (FEntry) {
+      // Warn that there's no precise match.
+      LDat = &FEntry->LDat;
+      std::string PartMatchStr = FEntry->MutID.toString();
+      StringRef   PartMatchName(PartMatchStr);
+      Analyzer->Handler.handleMutexNotHeld(D, POK, Mutex.toString(), LK,
+                                           Exp->getExprLoc(), &PartMatchName);
+    } else {
+      // Warn that there's no match at all.
+      Analyzer->Handler.handleMutexNotHeld(D, POK, Mutex.toString(), LK,
+                                           Exp->getExprLoc());
+    }
+    NoError = false;
+  }
+  // Make sure the mutex we found is the right kind.
+  if (NoError && LDat && !LDat->isAtLeast(LK))
     Analyzer->Handler.handleMutexNotHeld(D, POK, Mutex.toString(), LK,
                                          Exp->getExprLoc());
 }
@@ -1757,9 +1807,12 @@ void BuildLockset::warnIfMutexHeld(const NamedDecl *D, Expr* Exp,
   }
 
   LockData* LDat = FSet.findLock(Analyzer->FactMan, Mutex);
-  if (LDat)
-    Analyzer->Handler.handleFunExcludesLock(D->getName(), Mutex.toString(),
+  if (LDat) {
+    std::string DeclName = D->getNameAsString();
+    StringRef   DeclNameSR (DeclName);
+    Analyzer->Handler.handleFunExcludesLock(DeclNameSR, Mutex.toString(),
                                             Exp->getExprLoc());
+  }
 }
 
 
@@ -2131,6 +2184,9 @@ void ThreadSafetyAnalyzer::runAnalysis(AnalysisDeclContext &AC) {
   PostOrderCFGView *SortedGraph = AC.getAnalysis<PostOrderCFGView>();
   PostOrderCFGView::CFGBlockSet VisitedBlocks(CFGraph);
 
+  // Mark entry block as reachable
+  BlockInfo[CFGraph->getEntry().getBlockID()].Reachable = true;
+
   // Compute SSA names for local variables
   LocalVarMap.traverseCFG(CFGraph, SortedGraph, BlockInfo);
 
@@ -2218,9 +2274,15 @@ void ThreadSafetyAnalyzer::runAnalysis(AnalysisDeclContext &AC) {
       if (*PI == 0 || !VisitedBlocks.alreadySet(*PI))
         continue;
 
+      int PrevBlockID = (*PI)->getBlockID();
+      CFGBlockInfo *PrevBlockInfo = &BlockInfo[PrevBlockID];
+
       // Ignore edges from blocks that can't return.
-      if ((*PI)->hasNoReturnElement())
+      if ((*PI)->hasNoReturnElement() || !PrevBlockInfo->Reachable)
         continue;
+
+      // Okay, we can reach this block from the entry.
+      CurrBlockInfo->Reachable = true;
 
       // If the previous block ended in a 'continue' or 'break' statement, then
       // a difference in locksets is probably due to a bug in that block, rather
@@ -2233,8 +2295,7 @@ void ThreadSafetyAnalyzer::runAnalysis(AnalysisDeclContext &AC) {
         }
       }
 
-      int PrevBlockID = (*PI)->getBlockID();
-      CFGBlockInfo *PrevBlockInfo = &BlockInfo[PrevBlockID];
+
       FactSet PrevLockset;
       getEdgeLockset(PrevLockset, PrevBlockInfo->ExitSet, *PI, CurrBlock);
 
@@ -2247,6 +2308,10 @@ void ThreadSafetyAnalyzer::runAnalysis(AnalysisDeclContext &AC) {
                          LEK_LockedSomePredecessors);
       }
     }
+
+    // Skip rest of block if it's not reachable.
+    if (!CurrBlockInfo->Reachable)
+      continue;
 
     // Process continue and break blocks. Assume that the lockset for the
     // resulting block is unaffected by any discrepancies in them.
@@ -2336,6 +2401,10 @@ void ThreadSafetyAnalyzer::runAnalysis(AnalysisDeclContext &AC) {
 
   CFGBlockInfo *Initial = &BlockInfo[CFGraph->getEntry().getBlockID()];
   CFGBlockInfo *Final   = &BlockInfo[CFGraph->getExit().getBlockID()];
+
+  // Skip the final check if the exit block is unreachable.
+  if (!Final->Reachable)
+    return;
 
   // FIXME: Should we call this function for all blocks which exit the function?
   intersectAndWarn(Initial->EntrySet, Final->ExitSet,

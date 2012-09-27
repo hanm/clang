@@ -573,6 +573,7 @@ ASTContext::ASTContext(LangOptions& LOpts, SourceManager &SM,
     DeclarationNames(*this),
     ExternalSource(0), Listener(0),
     Comments(SM), CommentsLoaded(false),
+    CommentCommandTraits(BumpAlloc),
     LastSDM(0, 0),
     UniqueBlockByRefTypeID(0) 
 {
@@ -761,12 +762,12 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target) {
   InitBuiltinType(Int128Ty,            BuiltinType::Int128);
   InitBuiltinType(UnsignedInt128Ty,    BuiltinType::UInt128);
 
-  if (LangOpts.CPlusPlus) { // C++ 3.9.1p5
+  if (LangOpts.CPlusPlus && LangOpts.WChar) { // C++ 3.9.1p5
     if (TargetInfo::isTypeSigned(Target.getWCharType()))
       InitBuiltinType(WCharTy,           BuiltinType::WChar_S);
     else  // -fshort-wchar makes wchar_t be unsigned.
       InitBuiltinType(WCharTy,           BuiltinType::WChar_U);
-  } else // C99
+  } else // C99 (or C++ using -fno-wchar)
     WCharTy = getFromTargetType(Target.getWCharType());
 
   WIntTy = getFromTargetType(Target.getWIntType());
@@ -3683,10 +3684,13 @@ ASTContext::getCanonicalTemplateArgument(const TemplateArgument &Arg) const {
       return Arg;
 
     case TemplateArgument::Declaration: {
-      if (Decl *D = Arg.getAsDecl())
-          return TemplateArgument(D->getCanonicalDecl());
-      return TemplateArgument((Decl*)0);
+      ValueDecl *D = cast<ValueDecl>(Arg.getAsDecl()->getCanonicalDecl());
+      return TemplateArgument(D, Arg.isDeclForReferenceParam());
     }
+
+    case TemplateArgument::NullPtr:
+      return TemplateArgument(getCanonicalType(Arg.getNullPtrType()),
+                              /*isNullPtr*/true);
 
     case TemplateArgument::Template:
       return TemplateArgument(getCanonicalTemplateName(Arg.getAsTemplate()));
@@ -6830,7 +6834,7 @@ unsigned ASTContext::getIntWidth(QualType T) const {
   return (unsigned)getTypeSize(T);
 }
 
-QualType ASTContext::getCorrespondingUnsignedType(QualType T) {
+QualType ASTContext::getCorrespondingUnsignedType(QualType T) const {
   assert(T->hasSignedIntegerRepresentation() && "Unexpected type");
   
   // Turn <4 x signed int> -> <4 x unsigned int>

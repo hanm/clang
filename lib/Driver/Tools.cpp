@@ -219,11 +219,11 @@ void Clang::AddPreprocessingOptions(Compilation &C,
       (A = Args.getLastArg(options::OPT_MMD))) {
     // Determine the output location.
     const char *DepFile;
-    if (Output.getType() == types::TY_Dependencies) {
-      DepFile = Output.getFilename();
-    } else if (Arg *MF = Args.getLastArg(options::OPT_MF)) {
+    if (Arg *MF = Args.getLastArg(options::OPT_MF)) {
       DepFile = MF->getValue(Args);
       C.addFailureResultFile(DepFile);
+    } else if (Output.getType() == types::TY_Dependencies) {
+      DepFile = Output.getFilename();
     } else if (A->getOption().matches(options::OPT_M) ||
                A->getOption().matches(options::OPT_MM)) {
       DepFile = "-";
@@ -442,7 +442,7 @@ static const char *getLLVMArchSuffixForARM(StringRef CPU) {
     .Cases("arm1136j-s",  "arm1136jf-s",  "arm1176jz-s", "v6")
     .Cases("arm1176jzf-s",  "mpcorenovfp",  "mpcore", "v6")
     .Cases("arm1156t2-s",  "arm1156t2f-s", "v6t2")
-    .Cases("cortex-a8", "cortex-a9", "v7")
+    .Cases("cortex-a8", "cortex-a9", "cortex-a15", "v7")
     .Case("cortex-m3", "v7m")
     .Case("cortex-m4", "v7m")
     .Case("cortex-m0", "v6m")
@@ -576,7 +576,8 @@ static void addFPMathArgs(const Driver &D, const Arg *A, const ArgList &Args,
     CmdArgs.push_back("-target-feature");
     CmdArgs.push_back("+neonfp");
     
-    if (CPU != "cortex-a8" && CPU != "cortex-a9" && CPU != "cortex-a9-mp")    
+    if (CPU != "cortex-a8" && CPU != "cortex-a9" && CPU != "cortex-a9-mp" &&
+        CPU != "cortex-a15")
       D.Diag(diag::err_drv_invalid_feature) << "-mfpmath=neon" << CPU;
     
   } else if (FPMath == "vfp" || FPMath == "vfp2" || FPMath == "vfp3" ||
@@ -777,44 +778,18 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
     CmdArgs.push_back("-no-implicit-float");
 }
 
-// Get default architecture.
-static const char* getMipsArchFromCPU(StringRef CPUName) {
-  if (CPUName == "mips32" || CPUName == "mips32r2")
-    return "mips";
-
-  assert((CPUName == "mips64" || CPUName == "mips64r2") &&
-         "Unexpected cpu name.");
-
-  return "mips64";
-}
-
-// Check that ArchName is a known Mips architecture name.
-static bool checkMipsArchName(StringRef ArchName) {
-  return ArchName == "mips" ||
-         ArchName == "mipsel" ||
-         ArchName == "mips64" ||
-         ArchName == "mips64el";
-}
-
-// Get default target cpu.
-static const char* getMipsCPUFromArch(StringRef ArchName) {
-  if (ArchName == "mips" || ArchName == "mipsel")
+// Translate MIPS CPU name alias option to CPU name.
+static StringRef getMipsCPUFromAlias(const Arg &A) {
+  if (A.getOption().matches(options::OPT_mips32))
     return "mips32";
-
-  assert((ArchName == "mips64" || ArchName == "mips64el") &&
-         "Unexpected arch name.");
-
-  return "mips64";
-}
-
-// Get default ABI.
-static const char* getMipsABIFromArch(StringRef ArchName) {
-    if (ArchName == "mips" || ArchName == "mipsel")
-      return "o32";
-    
-    assert((ArchName == "mips64" || ArchName == "mips64el") &&
-           "Unexpected arch name.");
-    return "n64";
+  if (A.getOption().matches(options::OPT_mips32r2))
+    return "mips32r2";
+  if (A.getOption().matches(options::OPT_mips64))
+    return "mips64";
+  if (A.getOption().matches(options::OPT_mips64r2))
+    return "mips64r2";
+  llvm_unreachable("Unexpected option");
+  return "";
 }
 
 // Get CPU and ABI names. They are not independent
@@ -823,26 +798,53 @@ static void getMipsCPUAndABI(const ArgList &Args,
                              const ToolChain &TC,
                              StringRef &CPUName,
                              StringRef &ABIName) {
-  StringRef ArchName;
+  const char *DefMips32CPU = "mips32";
+  const char *DefMips64CPU = "mips64";
 
-  // Select target cpu and architecture.
-  if (Arg *A = Args.getLastArg(options::OPT_mcpu_EQ)) {
-    CPUName = A->getValue(Args);
-    ArchName = getMipsArchFromCPU(CPUName);
-  }
-  else {
-    ArchName = Args.MakeArgString(TC.getArchName());
-    if (!checkMipsArchName(ArchName))
-      TC.getDriver().Diag(diag::err_drv_invalid_arch_name) << ArchName;
+  if (Arg *A = Args.getLastArg(options::OPT_march_EQ,
+                               options::OPT_mcpu_EQ,
+                               options::OPT_mips_CPUs_Group)) {
+    if (A->getOption().matches(options::OPT_mips_CPUs_Group))
+      CPUName = getMipsCPUFromAlias(*A);
     else
-      CPUName = getMipsCPUFromArch(ArchName);
+      CPUName = A->getValue(Args);
   }
- 
-  // Select the ABI to use.
+
   if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ))
     ABIName = A->getValue(Args);
-  else 
-    ABIName = getMipsABIFromArch(ArchName);
+
+  // Setup default CPU and ABI names.
+  if (CPUName.empty() && ABIName.empty()) {
+    switch (TC.getTriple().getArch()) {
+    default:
+      llvm_unreachable("Unexpected triple arch name");
+    case llvm::Triple::mips:
+    case llvm::Triple::mipsel:
+      CPUName = DefMips32CPU;
+      break;
+    case llvm::Triple::mips64:
+    case llvm::Triple::mips64el:
+      CPUName = DefMips64CPU;
+      break;
+    }
+  }
+
+  if (!ABIName.empty()) {
+    // Deduce CPU name from ABI name.
+    CPUName = llvm::StringSwitch<const char *>(ABIName)
+      .Cases("o32", "eabi", DefMips32CPU)
+      .Cases("n32", "n64", DefMips64CPU)
+      .Default("");
+  }
+  else if (!CPUName.empty()) {
+    // Deduce ABI name from CPU name.
+    ABIName = llvm::StringSwitch<const char *>(CPUName)
+      .Cases("mips32", "mips32r2", "o32")
+      .Cases("mips64", "mips64r2", "n64")
+      .Default("");
+  }
+
+  // FIXME: Warn on inconsistent cpu and abi usage.
 }
 
 // Select the MIPS float ABI as determined by -msoft-float, -mhard-float,
@@ -985,6 +987,8 @@ static std::string getPPCTargetCPU(const ArgList &Args) {
       .Case("970", "970")
       .Case("G5", "g5")
       .Case("a2", "a2")
+      .Case("e500mc", "e500mc")
+      .Case("e5500", "e5500")
       .Case("power6", "pwr6")
       .Case("power7", "pwr7")
       .Case("powerpc", "ppc")
@@ -1410,14 +1414,13 @@ static void addAsanRTLinux(const ToolChain &TC, const ArgList &Args,
     if (!Args.hasArg(options::OPT_shared)) {
       if (!Args.hasArg(options::OPT_pie))
         TC.getDriver().Diag(diag::err_drv_asan_android_requires_pie);
-      // For an executable, we add a .preinit_array stub.
-      CmdArgs.push_back("-u");
-      CmdArgs.push_back("__asan_preinit");
-      CmdArgs.push_back("-lasan");
     }
 
-    CmdArgs.push_back("-lasan_preload");
-    CmdArgs.push_back("-ldl");
+    SmallString<128> LibAsan(TC.getDriver().ResourceDir);
+    llvm::sys::path::append(LibAsan, "lib", "linux",
+        (Twine("libclang_rt.asan-") +
+            TC.getArchName() + "-android.so"));
+    CmdArgs.push_back(Args.MakeArgString(LibAsan));
   } else {
     if (!Args.hasArg(options::OPT_shared)) {
       // LibAsan is "libclang_rt.asan-<ArchName>.a" in the Linux library
@@ -1607,8 +1610,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
     CmdArgs.push_back("-analyzer-eagerly-assume");
 
-    CmdArgs.push_back("-analyzer-ipa=inlining");
-
     // Add default argument set.
     if (!Args.hasArg(options::OPT__analyzer_no_default_checks)) {
       CmdArgs.push_back("-analyzer-checker=core");
@@ -1748,25 +1749,30 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // flag disables them after the flag enabling them, enable the codegen
   // optimization. This is complicated by several "umbrella" flags.
   if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_fno_fast_math,
                                options::OPT_ffinite_math_only,
                                options::OPT_fno_finite_math_only,
                                options::OPT_fhonor_infinities,
                                options::OPT_fno_honor_infinities))
-    if (A->getOption().getID() != options::OPT_fno_finite_math_only &&
+    if (A->getOption().getID() != options::OPT_fno_fast_math &&
+        A->getOption().getID() != options::OPT_fno_finite_math_only &&
         A->getOption().getID() != options::OPT_fhonor_infinities)
       CmdArgs.push_back("-menable-no-infs");
   if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_fno_fast_math,
                                options::OPT_ffinite_math_only,
                                options::OPT_fno_finite_math_only,
                                options::OPT_fhonor_nans,
                                options::OPT_fno_honor_nans))
-    if (A->getOption().getID() != options::OPT_fno_finite_math_only &&
+    if (A->getOption().getID() != options::OPT_fno_fast_math &&
+        A->getOption().getID() != options::OPT_fno_finite_math_only &&
         A->getOption().getID() != options::OPT_fhonor_nans)
       CmdArgs.push_back("-menable-no-nans");
 
   // -fmath-errno is the default on some platforms, e.g. BSD-derived OSes.
   bool MathErrno = getToolChain().IsMathErrnoDefault();
   if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_fno_fast_math,
                                options::OPT_fmath_errno,
                                options::OPT_fno_math_errno))
     MathErrno = A->getOption().getID() == options::OPT_fmath_errno;
@@ -1779,38 +1785,46 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // madness.
   bool AssociativeMath = false;
   if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_fno_fast_math,
                                options::OPT_funsafe_math_optimizations,
                                options::OPT_fno_unsafe_math_optimizations,
                                options::OPT_fassociative_math,
                                options::OPT_fno_associative_math))
-    if (A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
+    if (A->getOption().getID() != options::OPT_fno_fast_math &&
+        A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
         A->getOption().getID() != options::OPT_fno_associative_math)
       AssociativeMath = true;
   bool ReciprocalMath = false;
   if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_fno_fast_math,
                                options::OPT_funsafe_math_optimizations,
                                options::OPT_fno_unsafe_math_optimizations,
                                options::OPT_freciprocal_math,
                                options::OPT_fno_reciprocal_math))
-    if (A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
+    if (A->getOption().getID() != options::OPT_fno_fast_math &&
+        A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
         A->getOption().getID() != options::OPT_fno_reciprocal_math)
       ReciprocalMath = true;
   bool SignedZeros = true;
   if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_fno_fast_math,
                                options::OPT_funsafe_math_optimizations,
                                options::OPT_fno_unsafe_math_optimizations,
                                options::OPT_fsigned_zeros,
                                options::OPT_fno_signed_zeros))
-    if (A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
+    if (A->getOption().getID() != options::OPT_fno_fast_math &&
+        A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
         A->getOption().getID() != options::OPT_fsigned_zeros)
       SignedZeros = false;
   bool TrappingMath = true;
   if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_fno_fast_math,
                                options::OPT_funsafe_math_optimizations,
                                options::OPT_fno_unsafe_math_optimizations,
                                options::OPT_ftrapping_math,
                                options::OPT_fno_trapping_math))
-    if (A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
+    if (A->getOption().getID() != options::OPT_fno_fast_math &&
+        A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
         A->getOption().getID() != options::OPT_ftrapping_math)
       TrappingMath = false;
   if (!MathErrno && AssociativeMath && ReciprocalMath && !SignedZeros &&
@@ -1820,6 +1834,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   // Validate and pass through -fp-contract option. 
   if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_fno_fast_math,
                                options::OPT_ffp_contract)) {
     if (A->getOption().getID() == options::OPT_ffp_contract) {
       StringRef Val = A->getValue(Args);
@@ -1829,7 +1844,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         D.Diag(diag::err_drv_unsupported_option_argument)
           << A->getOption().getName() << Val;
       }
-    } else { // A is OPT_ffast_math
+    } else if (A->getOption().getID() == options::OPT_ffast_math) {
       // If fast-math is set then set the fp-contract mode to fast.
       CmdArgs.push_back(Args.MakeArgString("-ffp-contract=fast"));
     }
@@ -1840,10 +1855,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // preprocessor macros. This is distinct from enabling any optimizations as
   // these options induce language changes which must survive serialization
   // and deserialization, etc.
-  if (Args.hasArg(options::OPT_ffast_math))
-    CmdArgs.push_back("-ffast-math");
-  if (Args.hasArg(options::OPT_ffinite_math_only))
-    CmdArgs.push_back("-ffinite-math-only");
+  if (Arg *A = Args.getLastArg(options::OPT_ffast_math, options::OPT_fno_fast_math))
+    if (A->getOption().matches(options::OPT_ffast_math))
+      CmdArgs.push_back("-ffast-math");
+  if (Arg *A = Args.getLastArg(options::OPT_ffinite_math_only, options::OPT_fno_fast_math))
+    if (A->getOption().matches(options::OPT_ffinite_math_only))
+      CmdArgs.push_back("-ffinite-math-only");
 
   // Decide whether to use verbose asm. Verbose assembly is the default on
   // toolchains which have the integrated assembler on by default.
@@ -2365,17 +2382,19 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (StackProtectorLevel) {
     CmdArgs.push_back("-stack-protector");
     CmdArgs.push_back(Args.MakeArgString(Twine(StackProtectorLevel)));
+  }
 
-    // --param ssp-buffer-size=
-    for (arg_iterator it = Args.filtered_begin(options::OPT__param),
-           ie = Args.filtered_end(); it != ie; ++it) {
-      StringRef Str((*it)->getValue(Args));
-      if (Str.startswith("ssp-buffer-size=")) {
+  // --param ssp-buffer-size=
+  for (arg_iterator it = Args.filtered_begin(options::OPT__param),
+       ie = Args.filtered_end(); it != ie; ++it) {
+    StringRef Str((*it)->getValue(Args));
+    if (Str.startswith("ssp-buffer-size=")) {
+      if (StackProtectorLevel) {
         CmdArgs.push_back("-stack-protector-buffer-size");
         // FIXME: Verify the argument is a valid integer.
         CmdArgs.push_back(Args.MakeArgString(Str.drop_front(16)));
-        (*it)->claim();
       }
+      (*it)->claim();
     }
   }
 
@@ -2801,6 +2820,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-serialize-diagnostic-file");
     CmdArgs.push_back(Args.MakeArgString(A->getValue(Args)));
   }
+
+  if (Args.hasArg(options::OPT_fretain_comments_from_system_headers))
+    CmdArgs.push_back("-fretain-comments-from-system-headers");
 
   // Forward -Xclang arguments to -cc1, and -mllvm arguments to the LLVM option
   // parser.
@@ -4960,14 +4982,21 @@ void openbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
     // the default system libraries. Just mimic this for now.
     CmdArgs.push_back("-lgcc");
 
-    if (Args.hasArg(options::OPT_pthread))
-      CmdArgs.push_back("-lpthread");
+    if (Args.hasArg(options::OPT_pthread)) {
+      if (!Args.hasArg(options::OPT_shared) &&
+          Args.hasArg(options::OPT_pg))
+         CmdArgs.push_back("-lpthread_p");
+      else
+         CmdArgs.push_back("-lpthread");
+    }
+
     if (!Args.hasArg(options::OPT_shared)) {
-      if (Args.hasArg(options::OPT_pg)) 
+      if (Args.hasArg(options::OPT_pg))
          CmdArgs.push_back("-lc_p");
       else
          CmdArgs.push_back("-lc");
     }
+
     CmdArgs.push_back("-lgcc");
   }
 
@@ -5759,8 +5788,10 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
     const char *crtbegin;
     if (Args.hasArg(options::OPT_static))
       crtbegin = isAndroid ? "crtbegin_static.o" : "crtbeginT.o";
-    else if (Args.hasArg(options::OPT_shared) || Args.hasArg(options::OPT_pie))
+    else if (Args.hasArg(options::OPT_shared))
       crtbegin = isAndroid ? "crtbegin_so.o" : "crtbeginS.o";
+    else if (Args.hasArg(options::OPT_pie))
+      crtbegin = isAndroid ? "crtbegin_dynamic.o" : "crtbeginS.o";
     else
       crtbegin = isAndroid ? "crtbegin_dynamic.o" : "crtbegin.o";
     CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crtbegin)));
@@ -5826,8 +5857,10 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
     if (!Args.hasArg(options::OPT_nostartfiles)) {
       const char *crtend;
-      if (Args.hasArg(options::OPT_shared) || Args.hasArg(options::OPT_pie))
+      if (Args.hasArg(options::OPT_shared))
         crtend = isAndroid ? "crtend_so.o" : "crtendS.o";
+      else if (Args.hasArg(options::OPT_pie))
+        crtend = isAndroid ? "crtend_android.o" : "crtendS.o";
       else
         crtend = isAndroid ? "crtend_android.o" : "crtend.o";
 

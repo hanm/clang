@@ -36,7 +36,8 @@ RValue CodeGenFunction::EmitCXXMemberCall(const CXXMethodDecl *MD,
   // C++11 [class.mfct.non-static]p2:
   //   If a non-static member function of a class X is called for an object that
   //   is not of type X, or of a type derived from X, the behavior is undefined.
-  EmitCheck(CT_MemberCall, This, getContext().getRecordType(MD->getParent()));
+  EmitTypeCheck(TCK_MemberCall, This,
+                getContext().getRecordType(MD->getParent()));
 
   CallArgList Args;
 
@@ -342,7 +343,7 @@ CodeGenFunction::EmitCXXMemberPointerCallExpr(const CXXMemberCallExpr *E,
   else 
     This = EmitLValue(BaseExpr).getAddress();
 
-  EmitCheck(CT_MemberCall, This, QualType(MPT->getClass(), 0));
+  EmitTypeCheck(TCK_MemberCall, This, QualType(MPT->getClass(), 0));
 
   // Ask the ABI to load the callee.  Note that This is modified.
   llvm::Value *Callee =
@@ -885,7 +886,7 @@ CodeGenFunction::EmitNewArrayInitializer(const CXXNewExpr *E,
     if (constNum->getZExtValue() <= initializerElements) {
       // If there was a cleanup, deactivate it.
       if (cleanupDominator)
-        DeactivateCleanupBlock(cleanup, cleanupDominator);;
+        DeactivateCleanupBlock(cleanup, cleanupDominator);
       return;
     }
   } else {
@@ -1381,8 +1382,14 @@ static void EmitObjectDelete(CodeGenFunction &CGF,
         if (UseGlobalDelete) {
           // If we're supposed to call the global delete, make sure we do so
           // even if the destructor throws.
+
+          // Derive the complete-object pointer, which is what we need
+          // to pass to the deallocation function.
+          llvm::Value *completePtr =
+            CGF.CGM.getCXXABI().adjustToCompleteObject(CGF, Ptr, ElementType);
+
           CGF.EHStack.pushCleanup<CallObjectDelete>(NormalAndEHCleanup,
-                                                    Ptr, OperatorDelete, 
+                                                    completePtr, OperatorDelete,
                                                     ElementType);
         }
         

@@ -1,8 +1,8 @@
-// RUN: rm -f %t.*.plist > /dev/null 2>&1
+// RUN: rm -f %t.objc.plist %t.objcpp.plist
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10 -analyze -analyzer-checker=core,osx.coreFoundation.CFRetainRelease,osx.cocoa.ClassRelease,osx.cocoa.RetainCount -analyzer-store=region -fblocks -verify -Wno-objc-root-class %s -analyzer-output=plist -o %t.objc.plist
-// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -analyze -analyzer-checker=core,osx.coreFoundation.CFRetainRelease,osx.cocoa.ClassRelease,osx.cocoa.RetainCount -analyzer-store=region -fblocks -verify -x objective-c++ -Wno-objc-root-class %s -analyzer-output=plist -o %t.objcpp.plist
-// RUN: FileCheck -input-file=%t.objc.plist %s
-// RUN: FileCheck -input-file=%t.objcpp.plist %s
+// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -analyze -analyzer-checker=core,osx.coreFoundation.CFRetainRelease,osx.cocoa.ClassRelease,osx.cocoa.RetainCount -analyzer-store=region -fblocks -verify -x objective-c++ -std=gnu++98 -Wno-objc-root-class %s -analyzer-output=plist -o %t.objcpp.plist
+// FIXLATER: cat %t.objc.plist ; FileCheck --input-file=%t.objc.plist %s
+// FIXLATER: cat %t.objcpp.plist ; FileCheck --input-file=%t.objcpp.plist %s
 
 #if __has_feature(attribute_ns_returns_retained)
 #define NS_RETURNS_RETAINED __attribute__((ns_returns_retained))
@@ -1923,8 +1923,6 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
   CFPlugInInstanceCreate(kCFAllocatorDefault, factoryUUID, typeUUID); // no-warning
 }
 
-// CHECK: <plist version="1.0">
-// CHECK: <dict>
 // CHECK:  <key>diagnostics</key>
 // CHECK-NEXT:  <array>
 // CHECK-NEXT:   <dict>
@@ -2025,7 +2023,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -2100,7 +2098,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +2 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +2 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +2 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -2175,7 +2173,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count decremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count decremented. The object now has a +1 retain count</string>
+// CHECK-NEXT:      <string>Reference count decremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -2250,7 +2248,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object released</string>
+// CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -2347,7 +2345,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference-counted object is used after it is released</string>
+// CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Reference-counted object is used after it is released</string>
@@ -2461,7 +2459,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -2536,7 +2534,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +2 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +2 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +2 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -2611,7 +2609,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count decremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count decremented. The object now has a +1 retain count</string>
+// CHECK-NEXT:      <string>Reference count decremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -2686,7 +2684,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object released</string>
+// CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -2783,7 +2781,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference-counted object is used after it is released</string>
+// CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Reference-counted object is used after it is released</string>
@@ -2897,7 +2895,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -2966,6 +2964,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:          </array>
 // CHECK-NEXT:        </dict>
 // CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>369</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>369</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>369</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;x&apos; is 0</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;x&apos; is 0</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -3062,7 +3089,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;date&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;date&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;date&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;date&apos;</string>
@@ -3142,7 +3169,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -3217,7 +3244,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +2 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +2 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +2 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -3292,7 +3319,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
+// CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -3340,7 +3367,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;date&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;date&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;date&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;date&apos;</string>
@@ -3420,7 +3447,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -3495,7 +3522,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +2 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +2 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +2 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -3558,7 +3585,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;date&apos; is not referenced later in this execution path and has a retain count of +2</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;date&apos; is not referenced later in this execution path and has a retain count of +2</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;date&apos; is not referenced later in this execution path and has a retain count of +2</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;date&apos;</string>
@@ -3672,7 +3699,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -3747,7 +3774,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
+// CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -3776,7 +3803,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;date&apos; is returned from a function whose name (&apos;f7&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;date&apos; is returned from a function whose name (&apos;f7&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;date&apos; is returned from a function whose name (&apos;f7&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;date&apos;</string>
@@ -3856,7 +3883,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;MyDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;MyDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;MyDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -3931,7 +3958,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +2 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +2 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +2 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -4006,7 +4033,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
+// CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -4054,7 +4081,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;date&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;date&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;date&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;date&apos;</string>
@@ -4134,7 +4161,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Variable &apos;p&apos; initialized to a null pointer value</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Variable &apos;p&apos; initialized to a null pointer value</string>
+// CHECK-NEXT:      <string>Variable &apos;p&apos; initialized to a null pointer value</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -4205,6 +4232,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:       </array>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>406</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>406</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>406</integer>
+// CHECK-NEXT:          <key>col</key><integer>11</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;date&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;date&apos; is null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
 // CHECK-NEXT:      <key>edges</key>
 // CHECK-NEXT:       <array>
@@ -4265,7 +4321,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Dereference of null pointer (loaded from variable &apos;p&apos;)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Dereference of null pointer (loaded from variable &apos;p&apos;)</string>
+// CHECK-NEXT:      <string>Dereference of null pointer (loaded from variable &apos;p&apos;)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Dereference of null pointer (loaded from variable &apos;p&apos;)</string>
@@ -4278,6 +4334,445 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>406</integer>
 // CHECK-NEXT:    <key>col</key><integer>14</integer>
+// CHECK-NEXT:    <key>file</key><integer>0</integer>
+// CHECK-NEXT:   </dict>
+// CHECK-NEXT:   </dict>
+// CHECK-NEXT:   <dict>
+// CHECK-NEXT:    <key>path</key>
+// CHECK-NEXT:    <array>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>415</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>415</integer>
+// CHECK-NEXT:            <key>col</key><integer>11</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>415</integer>
+// CHECK-NEXT:            <key>col</key><integer>20</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>415</integer>
+// CHECK-NEXT:            <key>col</key><integer>42</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>415</integer>
+// CHECK-NEXT:       <key>col</key><integer>20</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>415</integer>
+// CHECK-NEXT:          <key>col</key><integer>20</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>415</integer>
+// CHECK-NEXT:          <key>col</key><integer>75</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Call to function &apos;DADiskCreateFromBSDName&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Call to function &apos;DADiskCreateFromBSDName&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>415</integer>
+// CHECK-NEXT:            <key>col</key><integer>20</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>415</integer>
+// CHECK-NEXT:            <key>col</key><integer>42</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>416</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>416</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>416</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is non-null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is non-null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>13</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>17</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>13</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>17</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>418</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>418</integer>
+// CHECK-NEXT:            <key>col</key><integer>6</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>418</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>418</integer>
+// CHECK-NEXT:            <key>col</key><integer>6</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>419</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>419</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>419</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>17</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>17</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>48</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>48</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>421</integer>
+// CHECK-NEXT:       <key>col</key><integer>48</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>421</integer>
+// CHECK-NEXT:          <key>col</key><integer>48</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>421</integer>
+// CHECK-NEXT:          <key>col</key><integer>48</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;disk&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;disk&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:    </array>
+// CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;disk&apos;</string>
+// CHECK-NEXT:    <key>category</key><string>Memory (Core Foundation/Objective-C)</string>
+// CHECK-NEXT:    <key>type</key><string>Leak</string>
+// CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
+// CHECK-NEXT:   <key>issue_context</key><string>f10</string>
+// CHECK-NEXT:   <key>issue_hash</key><integer>7</integer>
+// CHECK-NEXT:   <key>location</key>
+// CHECK-NEXT:   <dict>
+// CHECK-NEXT:    <key>line</key><integer>421</integer>
+// CHECK-NEXT:    <key>col</key><integer>48</integer>
 // CHECK-NEXT:    <key>file</key><integer>0</integer>
 // CHECK-NEXT:   </dict>
 // CHECK-NEXT:   </dict>
@@ -4353,6 +4848,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:       </array>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>416</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>416</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>416</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
 // CHECK-NEXT:      <key>edges</key>
 // CHECK-NEXT:       <array>
@@ -4453,6 +4977,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:          </array>
 // CHECK-NEXT:        </dict>
 // CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>419</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>419</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>419</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -4549,7 +5102,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;DADiskCopyDescription&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;DADiskCopyDescription&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;DADiskCopyDescription&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -4646,7 +5199,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Assuming &apos;dict&apos; is non-null</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming &apos;dict&apos; is non-null</string>
+// CHECK-NEXT:      <string>Assuming &apos;dict&apos; is non-null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -4743,7 +5296,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;dict&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;dict&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;dict&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;dict&apos;</string>
@@ -4857,7 +5410,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -4988,7 +5541,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -5091,6 +5644,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:          </array>
 // CHECK-NEXT:        </dict>
 // CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>422</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>422</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>422</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;dict&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;dict&apos; is null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -5187,7 +5769,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;DADiskCopyWholeDisk&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;DADiskCopyWholeDisk&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;DADiskCopyWholeDisk&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -5284,7 +5866,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Assuming &apos;disk&apos; is non-null</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming &apos;disk&apos; is non-null</string>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is non-null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -5381,7 +5963,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;disk&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;disk&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;disk&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;disk&apos;</string>
@@ -5394,1472 +5976,6 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>425</integer>
 // CHECK-NEXT:    <key>col</key><integer>20</integer>
-// CHECK-NEXT:    <key>file</key><integer>0</integer>
-// CHECK-NEXT:   </dict>
-// CHECK-NEXT:   </dict>
-// CHECK-NEXT:   <dict>
-// CHECK-NEXT:    <key>path</key>
-// CHECK-NEXT:    <array>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>415</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>415</integer>
-// CHECK-NEXT:            <key>col</key><integer>11</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>418</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>418</integer>
-// CHECK-NEXT:            <key>col</key><integer>6</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>418</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>418</integer>
-// CHECK-NEXT:            <key>col</key><integer>6</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>421</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>421</integer>
-// CHECK-NEXT:            <key>col</key><integer>17</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>421</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>421</integer>
-// CHECK-NEXT:            <key>col</key><integer>17</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>424</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>424</integer>
-// CHECK-NEXT:            <key>col</key><integer>6</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>424</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>424</integer>
-// CHECK-NEXT:            <key>col</key><integer>6</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>427</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>427</integer>
-// CHECK-NEXT:            <key>col</key><integer>16</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>427</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>427</integer>
-// CHECK-NEXT:            <key>col</key><integer>16</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>427</integer>
-// CHECK-NEXT:            <key>col</key><integer>30</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>427</integer>
-// CHECK-NEXT:            <key>col</key><integer>46</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>event</string>
-// CHECK-NEXT:      <key>location</key>
-// CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>427</integer>
-// CHECK-NEXT:       <key>col</key><integer>30</integer>
-// CHECK-NEXT:       <key>file</key><integer>0</integer>
-// CHECK-NEXT:      </dict>
-// CHECK-NEXT:      <key>ranges</key>
-// CHECK-NEXT:      <array>
-// CHECK-NEXT:        <array>
-// CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>427</integer>
-// CHECK-NEXT:          <key>col</key><integer>30</integer>
-// CHECK-NEXT:          <key>file</key><integer>0</integer>
-// CHECK-NEXT:         </dict>
-// CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>428</integer>
-// CHECK-NEXT:          <key>col</key><integer>68</integer>
-// CHECK-NEXT:          <key>file</key><integer>0</integer>
-// CHECK-NEXT:         </dict>
-// CHECK-NEXT:        </array>
-// CHECK-NEXT:      </array>
-// CHECK-NEXT:      <key>depth</key><integer>0</integer>
-// CHECK-NEXT:      <key>extended_message</key>
-// CHECK-NEXT:      <string>Call to function &apos;DADissenterCreate&apos; returns a Core Foundation object with a +1 retain count</string>
-// CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;DADissenterCreate&apos; returns a Core Foundation object with a +1 retain count</string>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>427</integer>
-// CHECK-NEXT:            <key>col</key><integer>30</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>427</integer>
-// CHECK-NEXT:            <key>col</key><integer>46</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>15</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>event</string>
-// CHECK-NEXT:      <key>location</key>
-// CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>429</integer>
-// CHECK-NEXT:       <key>col</key><integer>7</integer>
-// CHECK-NEXT:       <key>file</key><integer>0</integer>
-// CHECK-NEXT:      </dict>
-// CHECK-NEXT:      <key>ranges</key>
-// CHECK-NEXT:      <array>
-// CHECK-NEXT:        <array>
-// CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>429</integer>
-// CHECK-NEXT:          <key>col</key><integer>7</integer>
-// CHECK-NEXT:          <key>file</key><integer>0</integer>
-// CHECK-NEXT:         </dict>
-// CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>429</integer>
-// CHECK-NEXT:          <key>col</key><integer>15</integer>
-// CHECK-NEXT:          <key>file</key><integer>0</integer>
-// CHECK-NEXT:         </dict>
-// CHECK-NEXT:        </array>
-// CHECK-NEXT:      </array>
-// CHECK-NEXT:      <key>depth</key><integer>0</integer>
-// CHECK-NEXT:      <key>extended_message</key>
-// CHECK-NEXT:      <string>Assuming &apos;dissenter&apos; is non-null</string>
-// CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming &apos;dissenter&apos; is non-null</string>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>15</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>18</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>22</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>18</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>22</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>25</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>28</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>event</string>
-// CHECK-NEXT:      <key>location</key>
-// CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>429</integer>
-// CHECK-NEXT:       <key>col</key><integer>25</integer>
-// CHECK-NEXT:       <key>file</key><integer>0</integer>
-// CHECK-NEXT:      </dict>
-// CHECK-NEXT:      <key>ranges</key>
-// CHECK-NEXT:      <array>
-// CHECK-NEXT:        <array>
-// CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>429</integer>
-// CHECK-NEXT:          <key>col</key><integer>25</integer>
-// CHECK-NEXT:          <key>file</key><integer>0</integer>
-// CHECK-NEXT:         </dict>
-// CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>429</integer>
-// CHECK-NEXT:          <key>col</key><integer>28</integer>
-// CHECK-NEXT:          <key>file</key><integer>0</integer>
-// CHECK-NEXT:         </dict>
-// CHECK-NEXT:        </array>
-// CHECK-NEXT:      </array>
-// CHECK-NEXT:      <key>depth</key><integer>0</integer>
-// CHECK-NEXT:      <key>extended_message</key>
-// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;dissenter&apos; is not referenced later in this execution path and has a retain count of +1</string>
-// CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;dissenter&apos; is not referenced later in this execution path and has a retain count of +1</string>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:    </array>
-// CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;dissenter&apos;</string>
-// CHECK-NEXT:    <key>category</key><string>Memory (Core Foundation/Objective-C)</string>
-// CHECK-NEXT:    <key>type</key><string>Leak</string>
-// CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
-// CHECK-NEXT:   <key>issue_context</key><string>f10</string>
-// CHECK-NEXT:   <key>issue_hash</key><integer>15</integer>
-// CHECK-NEXT:   <key>location</key>
-// CHECK-NEXT:   <dict>
-// CHECK-NEXT:    <key>line</key><integer>429</integer>
-// CHECK-NEXT:    <key>col</key><integer>25</integer>
-// CHECK-NEXT:    <key>file</key><integer>0</integer>
-// CHECK-NEXT:   </dict>
-// CHECK-NEXT:   </dict>
-// CHECK-NEXT:   <dict>
-// CHECK-NEXT:    <key>path</key>
-// CHECK-NEXT:    <array>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>415</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>415</integer>
-// CHECK-NEXT:            <key>col</key><integer>11</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>416</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>418</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>418</integer>
-// CHECK-NEXT:            <key>col</key><integer>6</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>418</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>418</integer>
-// CHECK-NEXT:            <key>col</key><integer>6</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>419</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>421</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>421</integer>
-// CHECK-NEXT:            <key>col</key><integer>17</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>421</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>421</integer>
-// CHECK-NEXT:            <key>col</key><integer>17</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>422</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>424</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>424</integer>
-// CHECK-NEXT:            <key>col</key><integer>6</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>424</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>424</integer>
-// CHECK-NEXT:            <key>col</key><integer>6</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>425</integer>
-// CHECK-NEXT:            <key>col</key><integer>10</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>427</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>427</integer>
-// CHECK-NEXT:            <key>col</key><integer>16</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>427</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>427</integer>
-// CHECK-NEXT:            <key>col</key><integer>16</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>15</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>429</integer>
-// CHECK-NEXT:            <key>col</key><integer>15</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>431</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>431</integer>
-// CHECK-NEXT:            <key>col</key><integer>14</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>431</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>431</integer>
-// CHECK-NEXT:            <key>col</key><integer>14</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>431</integer>
-// CHECK-NEXT:            <key>col</key><integer>26</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>431</integer>
-// CHECK-NEXT:            <key>col</key><integer>40</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>event</string>
-// CHECK-NEXT:      <key>location</key>
-// CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>431</integer>
-// CHECK-NEXT:       <key>col</key><integer>26</integer>
-// CHECK-NEXT:       <key>file</key><integer>0</integer>
-// CHECK-NEXT:      </dict>
-// CHECK-NEXT:      <key>ranges</key>
-// CHECK-NEXT:      <array>
-// CHECK-NEXT:        <array>
-// CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>431</integer>
-// CHECK-NEXT:          <key>col</key><integer>26</integer>
-// CHECK-NEXT:          <key>file</key><integer>0</integer>
-// CHECK-NEXT:         </dict>
-// CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>431</integer>
-// CHECK-NEXT:          <key>col</key><integer>61</integer>
-// CHECK-NEXT:          <key>file</key><integer>0</integer>
-// CHECK-NEXT:         </dict>
-// CHECK-NEXT:        </array>
-// CHECK-NEXT:      </array>
-// CHECK-NEXT:      <key>depth</key><integer>0</integer>
-// CHECK-NEXT:      <key>extended_message</key>
-// CHECK-NEXT:      <string>Call to function &apos;DASessionCreate&apos; returns a Core Foundation object with a +1 retain count</string>
-// CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;DASessionCreate&apos; returns a Core Foundation object with a +1 retain count</string>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>431</integer>
-// CHECK-NEXT:            <key>col</key><integer>26</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>431</integer>
-// CHECK-NEXT:            <key>col</key><integer>40</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>13</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>event</string>
-// CHECK-NEXT:      <key>location</key>
-// CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>432</integer>
-// CHECK-NEXT:       <key>col</key><integer>7</integer>
-// CHECK-NEXT:       <key>file</key><integer>0</integer>
-// CHECK-NEXT:      </dict>
-// CHECK-NEXT:      <key>ranges</key>
-// CHECK-NEXT:      <array>
-// CHECK-NEXT:        <array>
-// CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>432</integer>
-// CHECK-NEXT:          <key>col</key><integer>7</integer>
-// CHECK-NEXT:          <key>file</key><integer>0</integer>
-// CHECK-NEXT:         </dict>
-// CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>432</integer>
-// CHECK-NEXT:          <key>col</key><integer>13</integer>
-// CHECK-NEXT:          <key>file</key><integer>0</integer>
-// CHECK-NEXT:         </dict>
-// CHECK-NEXT:        </array>
-// CHECK-NEXT:      </array>
-// CHECK-NEXT:      <key>depth</key><integer>0</integer>
-// CHECK-NEXT:      <key>extended_message</key>
-// CHECK-NEXT:      <string>Assuming &apos;session&apos; is non-null</string>
-// CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming &apos;session&apos; is non-null</string>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>13</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>16</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>20</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>16</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>20</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>23</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>26</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>event</string>
-// CHECK-NEXT:      <key>location</key>
-// CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>432</integer>
-// CHECK-NEXT:       <key>col</key><integer>23</integer>
-// CHECK-NEXT:       <key>file</key><integer>0</integer>
-// CHECK-NEXT:      </dict>
-// CHECK-NEXT:      <key>ranges</key>
-// CHECK-NEXT:      <array>
-// CHECK-NEXT:        <array>
-// CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>432</integer>
-// CHECK-NEXT:          <key>col</key><integer>23</integer>
-// CHECK-NEXT:          <key>file</key><integer>0</integer>
-// CHECK-NEXT:         </dict>
-// CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>432</integer>
-// CHECK-NEXT:          <key>col</key><integer>26</integer>
-// CHECK-NEXT:          <key>file</key><integer>0</integer>
-// CHECK-NEXT:         </dict>
-// CHECK-NEXT:        </array>
-// CHECK-NEXT:      </array>
-// CHECK-NEXT:      <key>depth</key><integer>0</integer>
-// CHECK-NEXT:      <key>extended_message</key>
-// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;session&apos; is not referenced later in this execution path and has a retain count of +1</string>
-// CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;session&apos; is not referenced later in this execution path and has a retain count of +1</string>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:    </array>
-// CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;session&apos;</string>
-// CHECK-NEXT:    <key>category</key><string>Memory (Core Foundation/Objective-C)</string>
-// CHECK-NEXT:    <key>type</key><string>Leak</string>
-// CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
-// CHECK-NEXT:   <key>issue_context</key><string>f10</string>
-// CHECK-NEXT:   <key>issue_hash</key><integer>18</integer>
-// CHECK-NEXT:   <key>location</key>
-// CHECK-NEXT:   <dict>
-// CHECK-NEXT:    <key>line</key><integer>432</integer>
-// CHECK-NEXT:    <key>col</key><integer>23</integer>
 // CHECK-NEXT:    <key>file</key><integer>0</integer>
 // CHECK-NEXT:   </dict>
 // CHECK-NEXT:   </dict>
@@ -6961,7 +6077,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -7058,7 +6174,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;DADiskCreateFromIOMedia&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;DADiskCreateFromIOMedia&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;DADiskCreateFromIOMedia&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -7155,7 +6271,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Assuming &apos;disk&apos; is non-null</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming &apos;disk&apos; is non-null</string>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is non-null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -7292,6 +6408,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:          </array>
 // CHECK-NEXT:        </dict>
 // CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>422</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>422</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>422</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;dict&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;dict&apos; is null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -7422,7 +6567,1409 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>427</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>427</integer>
+// CHECK-NEXT:            <key>col</key><integer>16</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>427</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>427</integer>
+// CHECK-NEXT:            <key>col</key><integer>16</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>428</integer>
+// CHECK-NEXT:            <key>col</key><integer>67</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>428</integer>
+// CHECK-NEXT:            <key>col</key><integer>67</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>428</integer>
+// CHECK-NEXT:       <key>col</key><integer>67</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>428</integer>
+// CHECK-NEXT:          <key>col</key><integer>67</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>428</integer>
+// CHECK-NEXT:          <key>col</key><integer>67</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;disk&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;disk&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:    </array>
+// CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;disk&apos;</string>
+// CHECK-NEXT:    <key>category</key><string>Memory (Core Foundation/Objective-C)</string>
+// CHECK-NEXT:    <key>type</key><string>Leak</string>
+// CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
+// CHECK-NEXT:   <key>issue_context</key><string>f10</string>
+// CHECK-NEXT:   <key>issue_hash</key><integer>14</integer>
+// CHECK-NEXT:   <key>location</key>
+// CHECK-NEXT:   <dict>
+// CHECK-NEXT:    <key>line</key><integer>428</integer>
+// CHECK-NEXT:    <key>col</key><integer>67</integer>
+// CHECK-NEXT:    <key>file</key><integer>0</integer>
+// CHECK-NEXT:   </dict>
+// CHECK-NEXT:   </dict>
+// CHECK-NEXT:   <dict>
+// CHECK-NEXT:    <key>path</key>
+// CHECK-NEXT:    <array>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>415</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>415</integer>
+// CHECK-NEXT:            <key>col</key><integer>11</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>416</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>416</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>416</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>418</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>418</integer>
+// CHECK-NEXT:            <key>col</key><integer>6</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>418</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>418</integer>
+// CHECK-NEXT:            <key>col</key><integer>6</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>419</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>419</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>419</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>17</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>17</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>422</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>422</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>422</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;dict&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;dict&apos; is null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>424</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>424</integer>
+// CHECK-NEXT:            <key>col</key><integer>6</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>424</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>424</integer>
+// CHECK-NEXT:            <key>col</key><integer>6</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>425</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>425</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>425</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>427</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>427</integer>
+// CHECK-NEXT:            <key>col</key><integer>16</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>427</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>427</integer>
+// CHECK-NEXT:            <key>col</key><integer>16</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>427</integer>
+// CHECK-NEXT:            <key>col</key><integer>30</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>427</integer>
+// CHECK-NEXT:            <key>col</key><integer>46</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>427</integer>
+// CHECK-NEXT:       <key>col</key><integer>30</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>427</integer>
+// CHECK-NEXT:          <key>col</key><integer>30</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>428</integer>
+// CHECK-NEXT:          <key>col</key><integer>68</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Call to function &apos;DADissenterCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Call to function &apos;DADissenterCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>427</integer>
+// CHECK-NEXT:            <key>col</key><integer>30</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>427</integer>
+// CHECK-NEXT:            <key>col</key><integer>46</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>15</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>429</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>429</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>429</integer>
+// CHECK-NEXT:          <key>col</key><integer>15</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;dissenter&apos; is non-null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;dissenter&apos; is non-null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>15</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>18</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>22</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>18</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>22</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>25</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>429</integer>
+// CHECK-NEXT:            <key>col</key><integer>28</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>429</integer>
+// CHECK-NEXT:       <key>col</key><integer>25</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>429</integer>
+// CHECK-NEXT:          <key>col</key><integer>25</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>429</integer>
+// CHECK-NEXT:          <key>col</key><integer>28</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;dissenter&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;dissenter&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:    </array>
+// CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;dissenter&apos;</string>
+// CHECK-NEXT:    <key>category</key><string>Memory (Core Foundation/Objective-C)</string>
+// CHECK-NEXT:    <key>type</key><string>Leak</string>
+// CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
+// CHECK-NEXT:   <key>issue_context</key><string>f10</string>
+// CHECK-NEXT:   <key>issue_hash</key><integer>15</integer>
+// CHECK-NEXT:   <key>location</key>
+// CHECK-NEXT:   <dict>
+// CHECK-NEXT:    <key>line</key><integer>429</integer>
+// CHECK-NEXT:    <key>col</key><integer>25</integer>
+// CHECK-NEXT:    <key>file</key><integer>0</integer>
+// CHECK-NEXT:   </dict>
+// CHECK-NEXT:   </dict>
+// CHECK-NEXT:   <dict>
+// CHECK-NEXT:    <key>path</key>
+// CHECK-NEXT:    <array>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>415</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>415</integer>
+// CHECK-NEXT:            <key>col</key><integer>11</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>416</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>416</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>416</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>416</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>418</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>418</integer>
+// CHECK-NEXT:            <key>col</key><integer>6</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>418</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>418</integer>
+// CHECK-NEXT:            <key>col</key><integer>6</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>419</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>419</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>419</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>419</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>17</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>421</integer>
+// CHECK-NEXT:            <key>col</key><integer>17</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>422</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>422</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>422</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;dict&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;dict&apos; is null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>422</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>424</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>424</integer>
+// CHECK-NEXT:            <key>col</key><integer>6</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>424</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>424</integer>
+// CHECK-NEXT:            <key>col</key><integer>6</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>425</integer>
+// CHECK-NEXT:            <key>col</key><integer>10</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>425</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>425</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>425</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;disk&apos; is null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -7527,6 +8074,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:       </array>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>429</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>429</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>429</integer>
+// CHECK-NEXT:          <key>col</key><integer>15</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;dissenter&apos; is null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;dissenter&apos; is null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
 // CHECK-NEXT:      <key>edges</key>
 // CHECK-NEXT:       <array>
@@ -7581,81 +8157,13 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:         <key>end</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>line</key><integer>431</integer>
+// CHECK-NEXT:            <key>col</key><integer>26</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>4</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>13</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>7</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>432</integer>
-// CHECK-NEXT:            <key>col</key><integer>13</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>433</integer>
-// CHECK-NEXT:            <key>col</key><integer>1</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>433</integer>
-// CHECK-NEXT:            <key>col</key><integer>1</integer>
+// CHECK-NEXT:            <key>line</key><integer>431</integer>
+// CHECK-NEXT:            <key>col</key><integer>40</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:          </array>
@@ -7666,27 +8174,236 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>kind</key><string>event</string>
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>433</integer>
-// CHECK-NEXT:       <key>col</key><integer>1</integer>
+// CHECK-NEXT:       <key>line</key><integer>431</integer>
+// CHECK-NEXT:       <key>col</key><integer>26</integer>
 // CHECK-NEXT:       <key>file</key><integer>0</integer>
 // CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>431</integer>
+// CHECK-NEXT:          <key>col</key><integer>26</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>431</integer>
+// CHECK-NEXT:          <key>col</key><integer>61</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
 // CHECK-NEXT:      <key>depth</key><integer>0</integer>
 // CHECK-NEXT:      <key>extended_message</key>
-// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;disk&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Call to function &apos;DASessionCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;disk&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Call to function &apos;DASessionCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>431</integer>
+// CHECK-NEXT:            <key>col</key><integer>26</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>431</integer>
+// CHECK-NEXT:            <key>col</key><integer>40</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>4</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>13</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>432</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>432</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>432</integer>
+// CHECK-NEXT:          <key>col</key><integer>13</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;session&apos; is non-null</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;session&apos; is non-null</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>7</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>13</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>16</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>20</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>16</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>20</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>23</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>432</integer>
+// CHECK-NEXT:            <key>col</key><integer>26</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>432</integer>
+// CHECK-NEXT:       <key>col</key><integer>23</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>432</integer>
+// CHECK-NEXT:          <key>col</key><integer>23</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>432</integer>
+// CHECK-NEXT:          <key>col</key><integer>26</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;session&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;session&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
-// CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;disk&apos;</string>
+// CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;session&apos;</string>
 // CHECK-NEXT:    <key>category</key><string>Memory (Core Foundation/Objective-C)</string>
 // CHECK-NEXT:    <key>type</key><string>Leak</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>f10</string>
-// CHECK-NEXT:   <key>issue_hash</key><integer>19</integer>
+// CHECK-NEXT:   <key>issue_hash</key><integer>18</integer>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
-// CHECK-NEXT:    <key>line</key><integer>433</integer>
-// CHECK-NEXT:    <key>col</key><integer>1</integer>
+// CHECK-NEXT:    <key>line</key><integer>432</integer>
+// CHECK-NEXT:    <key>col</key><integer>23</integer>
 // CHECK-NEXT:    <key>file</key><integer>0</integer>
 // CHECK-NEXT:   </dict>
 // CHECK-NEXT:   </dict>
@@ -7788,7 +8505,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFArrayGetValueAtIndex&apos; returns a Core Foundation object with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFArrayGetValueAtIndex&apos; returns a Core Foundation object with a +0 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFArrayGetValueAtIndex&apos; returns a Core Foundation object with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -7851,7 +8568,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
+// CHECK-NEXT:      <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
@@ -7931,7 +8648,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;MyCreateFun&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;MyCreateFun&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;MyCreateFun&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -7979,7 +8696,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;o&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;o&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;o&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;o&apos;</string>
@@ -8059,7 +8776,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -8134,7 +8851,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object sent -autorelease message</string>
+// CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -8209,7 +8926,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object sent -autorelease message</string>
+// CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -8272,7 +8989,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object over-autoreleased: object was sent -autorelease 2 times but the object has a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object over-autoreleased: object was sent -autorelease 2 times but the object has a +1 retain count</string>
+// CHECK-NEXT:      <string>Object over-autoreleased: object was sent -autorelease 2 times but the object has a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Object sent -autorelease too many times</string>
@@ -8352,7 +9069,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -8427,7 +9144,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object sent -autorelease message</string>
+// CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -8502,7 +9219,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object sent -autorelease message</string>
+// CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -8565,7 +9282,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object over-autoreleased: object was sent -autorelease 2 times but the object has a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object over-autoreleased: object was sent -autorelease 2 times but the object has a +0 retain count</string>
+// CHECK-NEXT:      <string>Object over-autoreleased: object was sent -autorelease 2 times but the object has a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Object sent -autorelease too many times</string>
@@ -8645,7 +9362,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -8720,7 +9437,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object sent -autorelease message</string>
+// CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -8795,7 +9512,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object sent -autorelease message</string>
+// CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -8892,7 +9609,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object over-autoreleased: object was sent -autorelease 2 times but the object has a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object over-autoreleased: object was sent -autorelease 2 times but the object has a +1 retain count</string>
+// CHECK-NEXT:      <string>Object over-autoreleased: object was sent -autorelease 2 times but the object has a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Object sent -autorelease too many times</string>
@@ -8938,7 +9655,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -8986,7 +9703,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -9066,7 +9783,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Assuming &apos;p&apos; is null</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming &apos;p&apos; is null</string>
+// CHECK-NEXT:      <string>Assuming &apos;p&apos; is null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -9095,7 +9812,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Assuming pointer value is null</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming pointer value is null</string>
+// CHECK-NEXT:      <string>Assuming pointer value is null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -9164,6 +9881,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:          </array>
 // CHECK-NEXT:        </dict>
 // CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>516</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>516</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>516</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;x&apos; is not equal to 0</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;x&apos; is not equal to 0</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -9226,7 +9972,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Null pointer argument in call to CFRelease</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Null pointer argument in call to CFRelease</string>
+// CHECK-NEXT:      <string>Null pointer argument in call to CFRelease</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Null pointer argument in call to CFRelease</string>
@@ -9306,7 +10052,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Assuming &apos;p&apos; is null</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming &apos;p&apos; is null</string>
+// CHECK-NEXT:      <string>Assuming &apos;p&apos; is null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -9335,7 +10081,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Assuming pointer value is null</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming pointer value is null</string>
+// CHECK-NEXT:      <string>Assuming pointer value is null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -9404,6 +10150,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:          </array>
 // CHECK-NEXT:        </dict>
 // CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>516</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>516</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>516</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;x&apos; is 0</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;x&apos; is 0</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -9466,7 +10241,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Null pointer argument in call to CFRetain</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Null pointer argument in call to CFRetain</string>
+// CHECK-NEXT:      <string>Null pointer argument in call to CFRetain</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Null pointer argument in call to CFRetain</string>
@@ -9546,7 +10321,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +0 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -9621,7 +10396,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller with a +0 retain count</string>
+// CHECK-NEXT:      <string>Object returned to caller with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -9650,7 +10425,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object with a +0 retain count returned to caller where a +1 (owning) retain count is expected</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object with a +0 retain count returned to caller where a +1 (owning) retain count is expected</string>
+// CHECK-NEXT:      <string>Object with a +0 retain count returned to caller where a +1 (owning) retain count is expected</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Object with a +0 retain count returned to caller where a +1 (owning) retain count is expected</string>
@@ -9730,7 +10505,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -9799,6 +10574,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:          </array>
 // CHECK-NEXT:        </dict>
 // CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>582</integer>
+// CHECK-NEXT:       <key>col</key><integer>6</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>582</integer>
+// CHECK-NEXT:          <key>col</key><integer>6</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>582</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;name&apos; is nil</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;name&apos; is nil</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -9861,7 +10665,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;kind&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;kind&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;kind&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;kind&apos;</string>
@@ -9949,6 +10753,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:       </array>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>582</integer>
+// CHECK-NEXT:       <key>col</key><integer>6</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>582</integer>
+// CHECK-NEXT:          <key>col</key><integer>6</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>582</integer>
+// CHECK-NEXT:          <key>col</key><integer>10</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;name&apos; is non-nil</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;name&apos; is non-nil</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
 // CHECK-NEXT:      <key>edges</key>
 // CHECK-NEXT:       <array>
@@ -10009,7 +10842,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Variable &apos;kindC&apos; initialized to a null pointer value</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Variable &apos;kindC&apos; initialized to a null pointer value</string>
+// CHECK-NEXT:      <string>Variable &apos;kindC&apos; initialized to a null pointer value</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -10078,6 +10911,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:          </array>
 // CHECK-NEXT:        </dict>
 // CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>593</integer>
+// CHECK-NEXT:       <key>col</key><integer>6</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>593</integer>
+// CHECK-NEXT:          <key>col</key><integer>6</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>593</integer>
+// CHECK-NEXT:          <key>col</key><integer>9</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;kind&apos; is nil</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;kind&apos; is nil</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -10242,7 +11104,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Array access (from variable &apos;kindC&apos;) results in a null pointer dereference</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Array access (from variable &apos;kindC&apos;) results in a null pointer dereference</string>
+// CHECK-NEXT:      <string>Array access (from variable &apos;kindC&apos;) results in a null pointer dereference</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Array access (from variable &apos;kindC&apos;) results in a null pointer dereference</string>
@@ -10356,7 +11218,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +0 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -10453,7 +11315,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Assuming &apos;name&apos; is non-nil</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming &apos;name&apos; is non-nil</string>
+// CHECK-NEXT:      <string>Assuming &apos;name&apos; is non-nil</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -10556,6 +11418,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:          </array>
 // CHECK-NEXT:        </dict>
 // CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>593</integer>
+// CHECK-NEXT:       <key>col</key><integer>6</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>593</integer>
+// CHECK-NEXT:          <key>col</key><integer>6</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>593</integer>
+// CHECK-NEXT:          <key>col</key><integer>9</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;kind&apos; is non-nil</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;kind&apos; is non-nil</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -10822,7 +11713,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
+// CHECK-NEXT:      <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
@@ -10902,7 +11793,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -10977,7 +11868,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object released by directly sending the &apos;-dealloc&apos; message</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object released by directly sending the &apos;-dealloc&apos; message</string>
+// CHECK-NEXT:      <string>Object released by directly sending the &apos;-dealloc&apos; message</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -11040,7 +11931,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference-counted object is used after it is released</string>
+// CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Reference-counted object is used after it is released</string>
@@ -11154,7 +12045,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -11229,7 +12120,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object released</string>
+// CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -11292,7 +12183,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference-counted object is used after it is released</string>
+// CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Reference-counted object is used after it is released</string>
@@ -11372,7 +12263,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +0 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -11447,7 +12338,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +1 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -11495,7 +12386,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;dict&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;dict&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;dict&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;dict&apos;</string>
@@ -11575,7 +12466,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +0 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -11650,7 +12541,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +1 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -11732,7 +12623,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;dict&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;dict&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;dict&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;dict&apos;</string>
@@ -11846,7 +12737,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +0 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -11909,7 +12800,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
+// CHECK-NEXT:      <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
@@ -11989,7 +12880,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -12037,7 +12928,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -12151,7 +13042,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -12260,7 +13151,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object sent -autorelease message</string>
+// CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -12335,7 +13226,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller with a +0 retain count</string>
+// CHECK-NEXT:      <string>Object returned to caller with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -12364,7 +13255,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object with a +0 retain count returned to caller where a +1 (owning) retain count is expected</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object with a +0 retain count returned to caller where a +1 (owning) retain count is expected</string>
+// CHECK-NEXT:      <string>Object with a +0 retain count returned to caller where a +1 (owning) retain count is expected</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Object with a +0 retain count returned to caller where a +1 (owning) retain count is expected</string>
@@ -12444,7 +13335,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -12519,7 +13410,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
+// CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -12548,7 +13439,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is returned from a method whose name (&apos;NoCopyString&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is returned from a method whose name (&apos;NoCopyString&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is returned from a method whose name (&apos;NoCopyString&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -12628,7 +13519,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -12703,7 +13594,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
+// CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -12732,7 +13623,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is returned from a method whose name (&apos;noCopyString&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is returned from a method whose name (&apos;noCopyString&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is returned from a method whose name (&apos;noCopyString&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -12752,10 +13643,44 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:    <key>path</key>
 // CHECK-NEXT:    <array>
 // CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>control</string>
+// CHECK-NEXT:      <key>edges</key>
+// CHECK-NEXT:       <array>
+// CHECK-NEXT:        <dict>
+// CHECK-NEXT:         <key>start</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>838</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>838</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:         <key>end</key>
+// CHECK-NEXT:          <array>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>839</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:           <dict>
+// CHECK-NEXT:            <key>line</key><integer>839</integer>
+// CHECK-NEXT:            <key>col</key><integer>3</integer>
+// CHECK-NEXT:            <key>file</key><integer>0</integer>
+// CHECK-NEXT:           </dict>
+// CHECK-NEXT:          </array>
+// CHECK-NEXT:        </dict>
+// CHECK-NEXT:       </array>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>838</integer>
+// CHECK-NEXT:       <key>line</key><integer>839</integer>
 // CHECK-NEXT:       <key>col</key><integer>3</integer>
 // CHECK-NEXT:       <key>file</key><integer>0</integer>
 // CHECK-NEXT:      </dict>
@@ -12763,12 +13688,12 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <array>
 // CHECK-NEXT:        <array>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>838</integer>
+// CHECK-NEXT:          <key>line</key><integer>839</integer>
 // CHECK-NEXT:          <key>col</key><integer>3</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>838</integer>
+// CHECK-NEXT:          <key>line</key><integer>839</integer>
 // CHECK-NEXT:          <key>col</key><integer>18</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
@@ -12776,15 +13701,15 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      </array>
 // CHECK-NEXT:      <key>depth</key><integer>0</integer>
 // CHECK-NEXT:      <key>extended_message</key>
-// CHECK-NEXT:      <string>Calling &apos;NoCopyString&apos;</string>
+// CHECK-NEXT:      <string>Calling &apos;noCopyString&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Calling &apos;NoCopyString&apos;</string>
+// CHECK-NEXT:      <string>Calling &apos;noCopyString&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>833</integer>
+// CHECK-NEXT:       <key>line</key><integer>834</integer>
 // CHECK-NEXT:       <key>col</key><integer>1</integer>
 // CHECK-NEXT:       <key>file</key><integer>0</integer>
 // CHECK-NEXT:      </dict>
@@ -12792,7 +13717,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Entered call from &apos;test_RDar6859457&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Entered call from &apos;test_RDar6859457&apos;</string>
+// CHECK-NEXT:      <string>Entered call from &apos;test_RDar6859457&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -12802,12 +13727,12 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:         <key>start</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>833</integer>
+// CHECK-NEXT:            <key>line</key><integer>834</integer>
 // CHECK-NEXT:            <key>col</key><integer>1</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>833</integer>
+// CHECK-NEXT:            <key>line</key><integer>834</integer>
 // CHECK-NEXT:            <key>col</key><integer>1</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -12815,12 +13740,12 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:         <key>end</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>833</integer>
+// CHECK-NEXT:            <key>line</key><integer>834</integer>
 // CHECK-NEXT:            <key>col</key><integer>30</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>833</integer>
+// CHECK-NEXT:            <key>line</key><integer>834</integer>
 // CHECK-NEXT:            <key>col</key><integer>35</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -12836,12 +13761,12 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:         <key>start</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>833</integer>
+// CHECK-NEXT:            <key>line</key><integer>834</integer>
 // CHECK-NEXT:            <key>col</key><integer>30</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>833</integer>
+// CHECK-NEXT:            <key>line</key><integer>834</integer>
 // CHECK-NEXT:            <key>col</key><integer>35</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -12849,12 +13774,12 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:         <key>end</key>
 // CHECK-NEXT:          <array>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>833</integer>
+// CHECK-NEXT:            <key>line</key><integer>834</integer>
 // CHECK-NEXT:            <key>col</key><integer>37</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
 // CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>833</integer>
+// CHECK-NEXT:            <key>line</key><integer>834</integer>
 // CHECK-NEXT:            <key>col</key><integer>37</integer>
 // CHECK-NEXT:            <key>file</key><integer>0</integer>
 // CHECK-NEXT:           </dict>
@@ -12866,7 +13791,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>kind</key><string>event</string>
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>833</integer>
+// CHECK-NEXT:       <key>line</key><integer>834</integer>
 // CHECK-NEXT:       <key>col</key><integer>37</integer>
 // CHECK-NEXT:       <key>file</key><integer>0</integer>
 // CHECK-NEXT:      </dict>
@@ -12874,12 +13799,12 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <array>
 // CHECK-NEXT:        <array>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>833</integer>
+// CHECK-NEXT:          <key>line</key><integer>834</integer>
 // CHECK-NEXT:          <key>col</key><integer>37</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>833</integer>
+// CHECK-NEXT:          <key>line</key><integer>834</integer>
 // CHECK-NEXT:          <key>col</key><integer>59</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
@@ -12889,13 +13814,13 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>838</integer>
+// CHECK-NEXT:       <key>line</key><integer>839</integer>
 // CHECK-NEXT:       <key>col</key><integer>3</integer>
 // CHECK-NEXT:       <key>file</key><integer>0</integer>
 // CHECK-NEXT:      </dict>
@@ -12903,12 +13828,12 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <array>
 // CHECK-NEXT:        <array>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>838</integer>
+// CHECK-NEXT:          <key>line</key><integer>839</integer>
 // CHECK-NEXT:          <key>col</key><integer>3</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
 // CHECK-NEXT:         <dict>
-// CHECK-NEXT:          <key>line</key><integer>838</integer>
+// CHECK-NEXT:          <key>line</key><integer>839</integer>
 // CHECK-NEXT:          <key>col</key><integer>18</integer>
 // CHECK-NEXT:          <key>file</key><integer>0</integer>
 // CHECK-NEXT:         </dict>
@@ -12916,43 +13841,9 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      </array>
 // CHECK-NEXT:      <key>depth</key><integer>1</integer>
 // CHECK-NEXT:      <key>extended_message</key>
-// CHECK-NEXT:      <string>Returning from &apos;NoCopyString&apos;</string>
+// CHECK-NEXT:      <string>Returning from &apos;noCopyString&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Returning from &apos;NoCopyString&apos;</string>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>838</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>838</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>839</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>839</integer>
-// CHECK-NEXT:            <key>col</key><integer>3</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
+// CHECK-NEXT:      <string>Returning from &apos;noCopyString&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -13000,7 +13891,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -13080,7 +13971,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -13155,7 +14046,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
+// CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -13184,7 +14075,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is returned from a method whose name (&apos;:&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is returned from a method whose name (&apos;:&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is returned from a method whose name (&apos;:&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -13230,7 +14121,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -13278,7 +14169,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -13324,7 +14215,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -13372,7 +14263,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -13418,7 +14309,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;IOBSDNameMatching&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;IOBSDNameMatching&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;IOBSDNameMatching&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -13466,7 +14357,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -13512,7 +14403,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;IOServiceMatching&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;IOServiceMatching&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;IOServiceMatching&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -13560,7 +14451,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -13606,7 +14497,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;IOServiceNameMatching&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;IOServiceNameMatching&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;IOServiceNameMatching&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -13654,7 +14545,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -13734,7 +14625,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CreateDict&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CreateDict&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CreateDict&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -13809,7 +14700,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object released</string>
+// CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -13872,7 +14763,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference-counted object is used after it is released</string>
+// CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Reference-counted object is used after it is released</string>
@@ -13918,7 +14809,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;IORegistryEntryIDMatching&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;IORegistryEntryIDMatching&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;IORegistryEntryIDMatching&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -13966,7 +14857,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -14012,7 +14903,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;IOOpenFirmwarePathMatching&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;IOOpenFirmwarePathMatching&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;IOOpenFirmwarePathMatching&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -14060,7 +14951,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -14140,7 +15031,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CreateDict&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CreateDict&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CreateDict&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -14215,7 +15106,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object released</string>
+// CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -14278,7 +15169,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference-counted object is used after it is released</string>
+// CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Reference-counted object is used after it is released</string>
@@ -14358,7 +15249,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CreateDict&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CreateDict&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CreateDict&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -14433,7 +15324,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object released</string>
+// CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -14496,7 +15387,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference-counted object is used after it is released</string>
+// CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Reference-counted object is used after it is released</string>
@@ -14576,7 +15467,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CreateDict&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CreateDict&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CreateDict&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -14651,7 +15542,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object released</string>
+// CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -14714,7 +15605,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference-counted object is used after it is released</string>
+// CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Reference-counted object is used after it is released</string>
@@ -14828,7 +15719,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -14937,7 +15828,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count decremented</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count decremented</string>
+// CHECK-NEXT:      <string>Reference count decremented</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -15012,7 +15903,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +1 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -15075,7 +15966,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;number&apos;</string>
@@ -15189,7 +16080,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CGColorSpaceCreateDeviceRGB&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CGColorSpaceCreateDeviceRGB&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CGColorSpaceCreateDeviceRGB&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -15252,7 +16143,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -15366,7 +16257,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CGColorSpaceCreateDeviceRGB&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CGColorSpaceCreateDeviceRGB&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CGColorSpaceCreateDeviceRGB&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -15429,7 +16320,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -15543,7 +16434,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CGGradientCreateWithColorComponents&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CGGradientCreateWithColorComponents&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CGGradientCreateWithColorComponents&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -15591,7 +16482,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;myGradient&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;myGradient&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;myGradient&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;myGradient&apos;</string>
@@ -15671,7 +16562,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -15719,7 +16610,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;number&apos;</string>
@@ -15799,7 +16690,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CGBitmapContextCreateWithData&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CGBitmapContextCreateWithData&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CGBitmapContextCreateWithData&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -15847,7 +16738,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -15927,7 +16818,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -15975,7 +16866,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;y&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;y&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;y&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;y&apos;</string>
@@ -16089,7 +16980,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -16137,7 +17028,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;number&apos;</string>
@@ -16183,7 +17074,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>The &apos;release&apos; message should be sent to instances of class &apos;RDar7252064&apos; and not the class directly</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>The &apos;release&apos; message should be sent to instances of class &apos;RDar7252064&apos; and not the class directly</string>
+// CHECK-NEXT:      <string>The &apos;release&apos; message should be sent to instances of class &apos;RDar7252064&apos; and not the class directly</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>The &apos;release&apos; message should be sent to instances of class &apos;RDar7252064&apos; and not the class directly</string>
@@ -16263,7 +17154,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>The &apos;retain&apos; message should be sent to instances of class &apos;RDar7252064&apos; and not the class directly</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>The &apos;retain&apos; message should be sent to instances of class &apos;RDar7252064&apos; and not the class directly</string>
+// CHECK-NEXT:      <string>The &apos;retain&apos; message should be sent to instances of class &apos;RDar7252064&apos; and not the class directly</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>The &apos;retain&apos; message should be sent to instances of class &apos;RDar7252064&apos; and not the class directly</string>
@@ -16343,7 +17234,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>The &apos;autorelease&apos; message should be sent to instances of class &apos;RDar7252064&apos; and not the class directly</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>The &apos;autorelease&apos; message should be sent to instances of class &apos;RDar7252064&apos; and not the class directly</string>
+// CHECK-NEXT:      <string>The &apos;autorelease&apos; message should be sent to instances of class &apos;RDar7252064&apos; and not the class directly</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>The &apos;autorelease&apos; message should be sent to instances of class &apos;RDar7252064&apos; and not the class directly</string>
@@ -16423,7 +17314,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>The &apos;drain&apos; message should be sent to instances of class &apos;NSAutoreleasePool&apos; and not the class directly</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>The &apos;drain&apos; message should be sent to instances of class &apos;NSAutoreleasePool&apos; and not the class directly</string>
+// CHECK-NEXT:      <string>The &apos;drain&apos; message should be sent to instances of class &apos;NSAutoreleasePool&apos; and not the class directly</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>The &apos;drain&apos; message should be sent to instances of class &apos;NSAutoreleasePool&apos; and not the class directly</string>
@@ -16503,7 +17394,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -16551,7 +17442,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;str&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;str&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;str&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;str&apos;</string>
@@ -16631,7 +17522,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -16679,7 +17570,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;str&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;str&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;str&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;str&apos;</string>
@@ -16793,7 +17684,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -16841,7 +17732,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;str2&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;str2&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;str2&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;str2&apos;</string>
@@ -16921,7 +17812,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -16969,7 +17860,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;x&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;x&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;x&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;x&apos;</string>
@@ -17049,7 +17940,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -17097,7 +17988,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;x&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;x&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;x&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;x&apos;</string>
@@ -17177,7 +18068,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -17225,7 +18116,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;x&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;x&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;x&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;x&apos;</string>
@@ -17305,7 +18196,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -17380,7 +18271,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
+// CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -17409,7 +18300,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is returned from a method that is annotated as NS_RETURNS_NOT_RETAINED</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is returned from a method that is annotated as NS_RETURNS_NOT_RETAINED</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is returned from a method that is annotated as NS_RETURNS_NOT_RETAINED</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -17489,7 +18380,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Calling &apos;returnsCFRetainedAsCF&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Calling &apos;returnsCFRetainedAsCF&apos;</string>
+// CHECK-NEXT:      <string>Calling &apos;returnsCFRetainedAsCF&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -17503,7 +18394,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Entered call from &apos;newCFRetainedAsCFNoAttr&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Entered call from &apos;newCFRetainedAsCFNoAttr&apos;</string>
+// CHECK-NEXT:      <string>Entered call from &apos;newCFRetainedAsCFNoAttr&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -17600,7 +18491,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Calling &apos;returnsRetainedCFDate&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Calling &apos;returnsRetainedCFDate&apos;</string>
+// CHECK-NEXT:      <string>Calling &apos;returnsRetainedCFDate&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -17614,7 +18505,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Entered call from &apos;returnsCFRetainedAsCF&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Entered call from &apos;returnsCFRetainedAsCF&apos;</string>
+// CHECK-NEXT:      <string>Entered call from &apos;returnsCFRetainedAsCF&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -17677,7 +18568,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -17706,7 +18597,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Returning from &apos;returnsRetainedCFDate&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Returning from &apos;returnsRetainedCFDate&apos;</string>
+// CHECK-NEXT:      <string>Returning from &apos;returnsRetainedCFDate&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -17735,7 +18626,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Returning from &apos;returnsCFRetainedAsCF&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Returning from &apos;returnsCFRetainedAsCF&apos;</string>
+// CHECK-NEXT:      <string>Returning from &apos;returnsCFRetainedAsCF&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -17844,7 +18735,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object sent -autorelease message</string>
+// CHECK-NEXT:      <string>Object sent -autorelease message</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -17919,7 +18810,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller with a +0 retain count</string>
+// CHECK-NEXT:      <string>Object returned to caller with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -17948,7 +18839,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object with a +0 retain count returned to caller where a +1 (owning) retain count is expected</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object with a +0 retain count returned to caller where a +1 (owning) retain count is expected</string>
+// CHECK-NEXT:      <string>Object with a +0 retain count returned to caller where a +1 (owning) retain count is expected</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Object with a +0 retain count returned to caller where a +1 (owning) retain count is expected</string>
@@ -18028,7 +18919,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Calling &apos;returnsRetainedCFDate&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Calling &apos;returnsRetainedCFDate&apos;</string>
+// CHECK-NEXT:      <string>Calling &apos;returnsRetainedCFDate&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -18042,7 +18933,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Entered call from &apos;alsoReturnsRetained&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Entered call from &apos;alsoReturnsRetained&apos;</string>
+// CHECK-NEXT:      <string>Entered call from &apos;alsoReturnsRetained&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -18105,7 +18996,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -18134,7 +19025,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Returning from &apos;returnsRetainedCFDate&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Returning from &apos;returnsRetainedCFDate&apos;</string>
+// CHECK-NEXT:      <string>Returning from &apos;returnsRetainedCFDate&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -18243,7 +19134,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
+// CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -18272,7 +19163,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is returned from a method whose name (&apos;alsoReturnsRetained&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is returned from a method whose name (&apos;alsoReturnsRetained&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is returned from a method whose name (&apos;alsoReturnsRetained&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -18352,7 +19243,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Calling &apos;returnsRetainedCFDate&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Calling &apos;returnsRetainedCFDate&apos;</string>
+// CHECK-NEXT:      <string>Calling &apos;returnsRetainedCFDate&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -18366,7 +19257,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Entered call from &apos;alsoReturnsRetainedAsCF&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Entered call from &apos;alsoReturnsRetainedAsCF&apos;</string>
+// CHECK-NEXT:      <string>Entered call from &apos;alsoReturnsRetainedAsCF&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -18429,7 +19320,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -18458,7 +19349,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Returning from &apos;returnsRetainedCFDate&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Returning from &apos;returnsRetainedCFDate&apos;</string>
+// CHECK-NEXT:      <string>Returning from &apos;returnsRetainedCFDate&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -18567,7 +19458,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
+// CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -18596,7 +19487,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is returned from a method whose name (&apos;alsoReturnsRetainedAsCF&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is returned from a method whose name (&apos;alsoReturnsRetainedAsCF&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is returned from a method whose name (&apos;alsoReturnsRetainedAsCF&apos;) does not start with &apos;copy&apos;, &apos;mutableCopy&apos;, &apos;alloc&apos; or &apos;new&apos;.  This violates the naming convention rules given in the Memory Management Guide for Cocoa</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -18710,7 +19601,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFNumberCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFNumberCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFNumberCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -18758,7 +19649,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;value&apos;</string>
@@ -18872,7 +19763,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFNumberCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFNumberCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFNumberCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -18943,6 +19834,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:       </array>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>1431</integer>
+// CHECK-NEXT:       <key>col</key><integer>7</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>1431</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>1431</integer>
+// CHECK-NEXT:          <key>col</key><integer>7</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;x&apos; is 0</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;x&apos; is 0</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
 // CHECK-NEXT:      <key>edges</key>
 // CHECK-NEXT:       <array>
@@ -18988,7 +19908,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;value&apos;</string>
@@ -19068,7 +19988,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -19131,7 +20051,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;number&apos;</string>
@@ -19211,7 +20131,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -19274,7 +20194,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Calling anonymous block</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Calling anonymous block</string>
+// CHECK-NEXT:      <string>Calling anonymous block</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -19288,7 +20208,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Entered call from &apos;test_blocks_1_indirect_retain_via_call&apos;</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Entered call from &apos;test_blocks_1_indirect_retain_via_call&apos;</string>
+// CHECK-NEXT:      <string>Entered call from &apos;test_blocks_1_indirect_retain_via_call&apos;</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -19363,7 +20283,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +2 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +2 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +2 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -19392,7 +20312,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Returning to caller</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Returning to caller</string>
+// CHECK-NEXT:      <string>Returning to caller</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -19440,7 +20360,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +2</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +2</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;number&apos; is not referenced later in this execution path and has a retain count of +2</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;number&apos;</string>
@@ -19622,7 +20542,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFErrorCopyUserInfo&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFErrorCopyUserInfo&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFErrorCopyUserInfo&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -19719,7 +20639,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Assuming &apos;info&apos; is not equal to null</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Assuming &apos;info&apos; is not equal to null</string>
+// CHECK-NEXT:      <string>Assuming &apos;info&apos; is not equal to null</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -19756,120 +20676,33 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:       </array>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>1537</integer>
-// CHECK-NEXT:            <key>col</key><integer>9</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>1537</integer>
-// CHECK-NEXT:            <key>col</key><integer>21</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>1538</integer>
-// CHECK-NEXT:            <key>col</key><integer>5</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>1538</integer>
-// CHECK-NEXT:            <key>col</key><integer>5</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>1538</integer>
-// CHECK-NEXT:            <key>col</key><integer>5</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>1538</integer>
-// CHECK-NEXT:            <key>col</key><integer>5</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>1529</integer>
-// CHECK-NEXT:            <key>col</key><integer>5</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>1529</integer>
-// CHECK-NEXT:            <key>col</key><integer>9</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
-// CHECK-NEXT:      <key>kind</key><string>control</string>
-// CHECK-NEXT:      <key>edges</key>
-// CHECK-NEXT:       <array>
-// CHECK-NEXT:        <dict>
-// CHECK-NEXT:         <key>start</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>1529</integer>
-// CHECK-NEXT:            <key>col</key><integer>5</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>1529</integer>
-// CHECK-NEXT:            <key>col</key><integer>9</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:         <key>end</key>
-// CHECK-NEXT:          <array>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>1539</integer>
-// CHECK-NEXT:            <key>col</key><integer>1</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:           <dict>
-// CHECK-NEXT:            <key>line</key><integer>1539</integer>
-// CHECK-NEXT:            <key>col</key><integer>1</integer>
-// CHECK-NEXT:            <key>file</key><integer>0</integer>
-// CHECK-NEXT:           </dict>
-// CHECK-NEXT:          </array>
-// CHECK-NEXT:        </dict>
-// CHECK-NEXT:       </array>
-// CHECK-NEXT:     </dict>
-// CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
 // CHECK-NEXT:      <key>location</key>
 // CHECK-NEXT:      <dict>
-// CHECK-NEXT:       <key>line</key><integer>1539</integer>
-// CHECK-NEXT:       <key>col</key><integer>1</integer>
+// CHECK-NEXT:       <key>line</key><integer>1537</integer>
+// CHECK-NEXT:       <key>col</key><integer>9</integer>
 // CHECK-NEXT:       <key>file</key><integer>0</integer>
 // CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>1537</integer>
+// CHECK-NEXT:          <key>col</key><integer>9</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>1537</integer>
+// CHECK-NEXT:          <key>col</key><integer>91</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
 // CHECK-NEXT:      <key>depth</key><integer>0</integer>
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;info&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;info&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;info&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;info&apos;</string>
@@ -19877,11 +20710,11 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:    <key>type</key><string>Leak</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>rdar_8724287</string>
-// CHECK-NEXT:   <key>issue_hash</key><integer>14</integer>
+// CHECK-NEXT:   <key>issue_hash</key><integer>12</integer>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
-// CHECK-NEXT:    <key>line</key><integer>1539</integer>
-// CHECK-NEXT:    <key>col</key><integer>1</integer>
+// CHECK-NEXT:    <key>line</key><integer>1537</integer>
+// CHECK-NEXT:    <key>col</key><integer>9</integer>
 // CHECK-NEXT:    <key>file</key><integer>0</integer>
 // CHECK-NEXT:   </dict>
 // CHECK-NEXT:   </dict>
@@ -19949,7 +20782,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -20024,7 +20857,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
+// CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -20053,7 +20886,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is returned from a function whose name (&apos;camelcase_createno&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is returned from a function whose name (&apos;camelcase_createno&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is returned from a function whose name (&apos;camelcase_createno&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -20133,7 +20966,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -20208,7 +21041,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
+// CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -20237,7 +21070,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is returned from a function whose name (&apos;camelcase_copying&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is returned from a function whose name (&apos;camelcase_copying&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is returned from a function whose name (&apos;camelcase_copying&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -20317,7 +21150,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -20392,7 +21225,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
+// CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -20421,7 +21254,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is returned from a function whose name (&apos;camel_creat&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is returned from a function whose name (&apos;camel_creat&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is returned from a function whose name (&apos;camel_creat&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -20501,7 +21334,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFArrayCreateMutable&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -20576,7 +21409,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
+// CHECK-NEXT:      <string>Object returned to caller as an owning reference (single retain count transferred to caller)</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>event</string>
@@ -20605,7 +21438,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: allocated object is returned from a function whose name (&apos;camel_copymachine&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: allocated object is returned from a function whose name (&apos;camel_copymachine&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
+// CHECK-NEXT:      <string>Object leaked: allocated object is returned from a function whose name (&apos;camel_copymachine&apos;) does not contain &apos;Copy&apos; or &apos;Create&apos;.  This violates the naming convention rules given in the Memory Management Guide for Core Foundation</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object</string>
@@ -20719,7 +21552,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CFDateCreate&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -20767,7 +21600,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;vals&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;vals&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;vals&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;vals&apos;</string>
@@ -20881,7 +21714,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -20956,7 +21789,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object released</string>
+// CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -21053,7 +21886,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference-counted object is used after it is released</string>
+// CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Reference-counted object is used after it is released</string>
@@ -21201,7 +22034,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -21264,7 +22097,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;a&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;a&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;a&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;a&apos;</string>
@@ -21412,7 +22245,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -21475,7 +22308,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;a2&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;a2&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;a2&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;a2&apos;</string>
@@ -21623,7 +22456,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>NSArray literal is an object with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>NSArray literal is an object with a +0 retain count</string>
+// CHECK-NEXT:      <string>NSArray literal is an object with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -21698,7 +22531,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +1 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -21761,7 +22594,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;a3&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;a3&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;a3&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;a3&apos;</string>
@@ -21909,7 +22742,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -21972,7 +22805,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;a&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;a&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;a&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;a&apos;</string>
@@ -22120,7 +22953,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>NSDictionary literal is an object with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>NSDictionary literal is an object with a +0 retain count</string>
+// CHECK-NEXT:      <string>NSDictionary literal is an object with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -22195,7 +23028,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +1 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -22258,7 +23091,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;a&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;a&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;a&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;a&apos;</string>
@@ -22338,7 +23171,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>NSNumber literal is an object with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>NSNumber literal is an object with a +0 retain count</string>
+// CHECK-NEXT:      <string>NSNumber literal is an object with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -22413,7 +23246,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +1 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -22461,7 +23294,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;value&apos;</string>
@@ -22541,7 +23374,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>NSNumber boxed expression produces an object with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>NSNumber boxed expression produces an object with a +0 retain count</string>
+// CHECK-NEXT:      <string>NSNumber boxed expression produces an object with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -22616,7 +23449,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +1 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -22679,7 +23512,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;value&apos;</string>
@@ -22793,7 +23626,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>NSString boxed expression produces an object with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>NSString boxed expression produces an object with a +0 retain count</string>
+// CHECK-NEXT:      <string>NSString boxed expression produces an object with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -22868,7 +23701,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference count incremented. The object now has a +1 retain count</string>
+// CHECK-NEXT:      <string>Reference count incremented. The object now has a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -22916,7 +23749,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;value&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;value&apos;</string>
@@ -23038,6 +23871,35 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:       </array>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
+// CHECK-NEXT:      <key>kind</key><string>event</string>
+// CHECK-NEXT:      <key>location</key>
+// CHECK-NEXT:      <dict>
+// CHECK-NEXT:       <key>line</key><integer>1855</integer>
+// CHECK-NEXT:       <key>col</key><integer>8</integer>
+// CHECK-NEXT:       <key>file</key><integer>0</integer>
+// CHECK-NEXT:      </dict>
+// CHECK-NEXT:      <key>ranges</key>
+// CHECK-NEXT:      <array>
+// CHECK-NEXT:        <array>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>1855</integer>
+// CHECK-NEXT:          <key>col</key><integer>8</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:         <dict>
+// CHECK-NEXT:          <key>line</key><integer>1855</integer>
+// CHECK-NEXT:          <key>col</key><integer>12</integer>
+// CHECK-NEXT:          <key>file</key><integer>0</integer>
+// CHECK-NEXT:         </dict>
+// CHECK-NEXT:        </array>
+// CHECK-NEXT:      </array>
+// CHECK-NEXT:      <key>depth</key><integer>0</integer>
+// CHECK-NEXT:      <key>extended_message</key>
+// CHECK-NEXT:      <string>Assuming &apos;y&apos; is &lt;= 2</string>
+// CHECK-NEXT:      <key>message</key>
+// CHECK-NEXT:      <string>Assuming &apos;y&apos; is &lt;= 2</string>
+// CHECK-NEXT:     </dict>
+// CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
 // CHECK-NEXT:      <key>edges</key>
 // CHECK-NEXT:       <array>
@@ -23132,7 +23994,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Method returns an Objective-C object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Method returns an Objective-C object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -23241,7 +24103,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object released</string>
+// CHECK-NEXT:      <string>Object released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -23304,7 +24166,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Reference-counted object is used after it is released</string>
+// CHECK-NEXT:      <string>Reference-counted object is used after it is released</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Reference-counted object is used after it is released</string>
@@ -23418,7 +24280,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>NSArray literal is an object with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>NSArray literal is an object with a +0 retain count</string>
+// CHECK-NEXT:      <string>NSArray literal is an object with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -23481,7 +24343,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
+// CHECK-NEXT:      <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
@@ -23595,7 +24457,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>NSArray literal is an object with a +0 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>NSArray literal is an object with a +0 retain count</string>
+// CHECK-NEXT:      <string>NSArray literal is an object with a +0 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -23658,7 +24520,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
+// CHECK-NEXT:      <string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Incorrect decrement of the reference count of an object that is not owned at this point by the caller</string>
@@ -23738,7 +24600,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Call to function &apos;CreateMyCFType&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Call to function &apos;CreateMyCFType&apos; returns a Core Foundation object with a +1 retain count</string>
+// CHECK-NEXT:      <string>Call to function &apos;CreateMyCFType&apos; returns a Core Foundation object with a +1 retain count</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:     <dict>
 // CHECK-NEXT:      <key>kind</key><string>control</string>
@@ -23786,7 +24648,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:      <key>extended_message</key>
 // CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;x&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:      <key>message</key>
-// CHECK-NEXT: <string>Object leaked: object allocated and stored into &apos;x&apos; is not referenced later in this execution path and has a retain count of +1</string>
+// CHECK-NEXT:      <string>Object leaked: object allocated and stored into &apos;x&apos; is not referenced later in this execution path and has a retain count of +1</string>
 // CHECK-NEXT:     </dict>
 // CHECK-NEXT:    </array>
 // CHECK-NEXT:    <key>description</key><string>Potential leak of an object stored into &apos;x&apos;</string>
@@ -23803,4 +24665,3 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 // CHECK-NEXT:   </dict>
 // CHECK-NEXT:   </dict>
 // CHECK-NEXT:  </array>
-// CHECK-NEXT: </dict>

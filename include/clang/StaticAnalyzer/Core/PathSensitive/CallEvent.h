@@ -20,6 +20,7 @@
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/ExprObjC.h"
+#include "clang/Analysis/AnalysisContext.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SVals.h"
 #include "llvm/ADT/PointerIntPair.h"
@@ -120,8 +121,7 @@ private:
   const LocationContext *LCtx;
   llvm::PointerUnion<const Expr *, const Decl *> Origin;
 
-  // DO NOT IMPLEMENT
-  CallEvent &operator=(const CallEvent &);
+  void operator=(const CallEvent &) LLVM_DELETED_FUNCTION;
 
 protected:
   // This is user data for subclasses.
@@ -293,6 +293,9 @@ public:
   /// of some kind.
   static bool isCallStmt(const Stmt *S);
 
+  /// \brief Returns the result type of a function, method declaration.
+  static QualType getDeclaredResultType(const Decl *D);
+
   // Iterator access to formal parameters and their types.
 private:
   typedef std::const_mem_fun_t<QualType, ParmVarDecl> get_type_fun;
@@ -364,9 +367,16 @@ public:
 
   virtual RuntimeDefinition getRuntimeDefinition() const {
     const FunctionDecl *FD = getDecl();
-    // Note that hasBody() will fill FD with the definition FunctionDecl.
-    if (FD && FD->hasBody(FD))
-      return RuntimeDefinition(FD);
+    // Note that the AnalysisDeclContext will have the FunctionDecl with
+    // the definition (if one exists).
+    if (FD) {
+      AnalysisDeclContext *AD =
+        getLocationContext()->getAnalysisDeclContext()->
+        getManager()->getContext(FD);
+      if (AD->getBody())
+        return RuntimeDefinition(AD->getDecl());
+    }
+
     return RuntimeDefinition();
   }
 
@@ -549,6 +559,8 @@ public:
   }
 
   virtual const Expr *getCXXThisExpr() const;
+  
+  virtual RuntimeDefinition getRuntimeDefinition() const;
 
   virtual Kind getKind() const { return CE_CXXMember; }
 
