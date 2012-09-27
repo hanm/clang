@@ -1878,6 +1878,12 @@ private:
                                     SourceLocation *EndLoc = 0);
   void ParseCXX11Attributes(ParsedAttributesWithRange &attrs,
                             SourceLocation *EndLoc = 0);
+  void ParseCXX11AttributeGNUStyleArgs(IdentifierInfo *AttrName,
+                                   SourceLocation AttrNameLoc,
+                                   ParsedAttributes &Attrs);
+  bool IsBuiltInOrStandardCXX11Attribute(IdentifierInfo *AttrName,
+                                         IdentifierInfo *ScopeName);
+
   IdentifierInfo *TryParseCXX11AttributeIdentifier(SourceLocation &Loc);
 
   void MaybeParseMicrosoftAttributes(ParsedAttributes &attrs,

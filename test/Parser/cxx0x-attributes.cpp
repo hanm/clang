@@ -4,7 +4,7 @@
 namespace std {
   typedef decltype(sizeof(int)) size_t;
 
-  // libc++'s implementation
+  // libc++'s implementation	
   template <class _E>
   class initializer_list
   {
@@ -46,8 +46,13 @@ int array_attr [1] [[]];
 alignas(8) int aligned_attr;
 [[test::valid(for 42 [very] **** '+' symbols went on a trip and had a "good"_time; the end.)]]
   int garbage_attr;
-[[,,,static, class, namespace,, inline, constexpr, mutable,, bi\
-tand, bitor::compl(!.*_ Cx.!U^*R),,,]] int more_garbage_attr;
+[[,,,static, class, namespace,, inline, constexpr, mutable,, bitand, bitor::compl(!.*_ Cx.!U^*R),,,]] int more_garbage_attr; // expected-warning {{unknown attribute 'static' ignored}} \
+	// expected-warning {{unknown attribute 'class' ignored}} \
+	// expected-warning {{unknown attribute 'namespace' ignored}} \
+	// expected-warning {{unknown attribute 'inline' ignored}} \
+	// expected-warning {{unknown attribute 'constexpr' ignored}} \
+	// expected-warning {{unknown attribute 'mutable' ignored}} \
+	// expected-warning {{unknown attribute 'bitand' ignored}} 
 [[u8"invalid!"]] int invalid_string_attr; // expected-error {{expected ']'}}
 void fn_attr () [[]];
 void noexcept_fn_attr () noexcept [[]];

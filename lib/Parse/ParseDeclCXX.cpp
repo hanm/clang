@@ -2963,46 +2963,34 @@ void Parser::ParseCXX11AttributeSpecifier(ParsedAttributes &attrs,
       }
     }
 
-    bool AttrParsed = false;
-    switch (AttributeList::getKind(AttrName, ScopeName,
-                                   AttributeList::AS_CXX11)) {
-    // No arguments
-    case AttributeList::AT_CarriesDependency:
-    // FIXME: implement generic support of attributes with C++11 syntax
-    // see Parse/ParseDecl.cpp: ParseGNUAttributes
-    case AttributeList::AT_FallThrough:
-    case AttributeList::AT_NoReturn: {
-      if (Tok.is(tok::l_paren)) {
-        Diag(Tok.getLocation(), diag::err_cxx11_attribute_forbids_arguments)
-          << AttrName->getName();
-        break;
-      }
+    bool StandardAttr = IsBuiltInOrStandardCXX11Attribute(AttrName,ScopeName);
 
+    if (Tok.is(tok::l_paren)) {
+      if (ScopeName && ScopeName->getName() == "gnu") {
+        ParseCXX11AttributeGNUStyleArgs(AttrName, AttrLoc, attrs);
+      } else {
+        if (StandardAttr)
+          Diag(Tok.getLocation(), diag::err_cxx11_attribute_forbids_arguments)
+            << AttrName->getName();
+
+        // FIXME: handle other formats of c++11 attribute arguments
+        ConsumeParen();
+        SkipUntil(tok::r_paren, false);
+      }
+    } else {
       attrs.addNew(AttrName,
                    SourceRange(ScopeLoc.isValid() ? ScopeLoc : AttrLoc,
                                AttrLoc),
                    ScopeName, ScopeLoc, 0,
                    SourceLocation(), 0, 0, AttributeList::AS_CXX11);
-      AttrParsed = true;
-      break;
-    }
-
-    // Silence warnings
-    default: break;
-    }
-
-    // Skip the entire parameter clause, if any
-    if (!AttrParsed && Tok.is(tok::l_paren)) {
-      ConsumeParen();
-      // SkipUntil maintains the balancedness of tokens.
-      SkipUntil(tok::r_paren, false);
     }
 
     if (Tok.is(tok::ellipsis)) {
-      if (AttrParsed)
+      ConsumeToken();
+
+      if (StandardAttr)
         Diag(Tok, diag::err_cxx11_attribute_forbids_ellipsis)
           << AttrName->getName();
-      ConsumeToken();
     }
   }
 
@@ -3012,6 +3000,72 @@ void Parser::ParseCXX11AttributeSpecifier(ParsedAttributes &attrs,
     *endLoc = Tok.getLocation();
   if (ExpectAndConsume(tok::r_square, diag::err_expected_rsquare))
     SkipUntil(tok::r_square, false);
+}
+
+bool Parser::IsBuiltInOrStandardCXX11Attribute(IdentifierInfo *AttrName,
+                                               IdentifierInfo *ScopeName) {
+  switch (AttributeList::getKind(AttrName, ScopeName,
+                                 AttributeList::AS_CXX11)) {
+  case AttributeList::AT_CarriesDependency:
+  case AttributeList::AT_FallThrough:
+  case AttributeList::AT_NoReturn: {
+    return true;
+  }
+
+  default:
+    return false;
+  }
+}
+
+void Parser::ParseCXX11AttributeGNUStyleArgs(IdentifierInfo *AttrName,
+                                             SourceLocation AttrNameLoc,
+                                             ParsedAttributes &Attrs) {
+  assert(Tok.is(tok::l_paren) && "Attribute arg list not starting with '('");
+
+  ConsumeParen();
+
+  IdentifierInfo *ParmName = 0;
+  SourceLocation ParmLoc;
+
+  switch (Tok.getKind()) {
+  case tok::identifier:
+    ParmName = Tok.getIdentifierInfo();
+    ParmLoc = ConsumeToken();
+    break;
+
+  default:
+    break;
+  }
+
+  ExprVector ArgExprs;
+
+  if (ParmLoc.isValid() ? Tok.is(tok::comma) : Tok.isNot(tok::r_paren)) {
+    // Eat the comma.
+    if (ParmLoc.isValid())
+      ConsumeToken();
+
+    // Parse the non-empty comma-separated list of expressions.
+    while (1) {
+      ExprResult ArgExpr(ParseAssignmentExpression());
+      if (ArgExpr.isInvalid()) {
+        SkipUntil(tok::r_paren);
+        return;
+      }
+      ArgExprs.push_back(ArgExpr.release());
+      if (Tok.isNot(tok::comma))
+        break;
+      ConsumeToken(); // Eat the comma, move to the next argument
+    }
+  }
+
+  SourceLocation RParen = Tok.getLocation();
+  if (!ExpectAndConsume(tok::r_paren, diag::err_expected_rparen)) {
+    AttributeList *attr = Attrs.addNew(AttrName,
+                                       SourceRange(AttrNameLoc, RParen), 0,
+                                       AttrNameLoc,ParmName, ParmLoc,
+                                       ArgExprs.data(), ArgExprs.size(),
+                                       AttributeList::AS_CXX11);
+  }
 }
 
 /// ParseCXX11Attributes - Parse a C++11 attribute-specifier-seq.

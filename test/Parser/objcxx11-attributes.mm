@@ -32,8 +32,9 @@ void f(X *noreturn) {
   // An attribute is OK.
   [[]];
   [[int(), noreturn]]; // expected-warning {{attribute noreturn cannot be specified on a statement}}
-  [[class, test(foo 'x' bar),,,]];
-  [[bitand, noreturn]]; // expected-warning {{attribute noreturn cannot be specified on a statement}}
+  [[class, test(foo 'x' bar),,,]]; // expected-warning {{attribute class cannot be specified on a statement}}
+  [[bitand, noreturn]]; // expected-warning {{attribute noreturn cannot be specified on a statement}} \
+  expected-warning {{attribute bitand cannot be specified on a statement}} 
 
   // FIXME: Suppress vexing parse warning
   [[noreturn]]int(e)(); // expected-warning {{function declaration}} expected-note {{replace parentheses with an initializer}} 
