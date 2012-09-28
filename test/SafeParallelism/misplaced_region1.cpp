@@ -1,5 +1,7 @@
-// RUN: %clang_cc1 %s -verify
+// RUN: %clang_cc1 -DASP_GNU_SYNTAX %s -verify
+// RUN: %clang_cc1 -DASP_CXX11_SYNTAX -std=c++11 %s -verify
 
+#ifdef ASP_GNU_SYNTAX
 class
 __attribute__((region("Money")))
 __attribute__ ((region_param("P"))) 
@@ -45,4 +47,55 @@ int main (void) {
   int six  = 4+2;
   return 0;
 }
+
+#endif
+
+#ifdef ASP_CXX11_SYNTAX
+class
+[[asp::region("Money")]]
+[[asp::region_param("P")]]
+[[asp::in_region("P:Money")]] // expected-warning {{attribute only applies to fields}}
+Coo {
+
+  int money [[asp::in_region("P:Money")]]
+            [[asp::region_param("P")]]  // expected-warning {{attribute only applies to classes and structs and functions}}
+            [[asp::region("Honey")]]; // expected-warning {{attribute only applies to classes and structs and functions and globals}}
+
+public:
+  Coo () [[asp::pure_effect]] 
+         [[asp::region("Money")]]   
+         [[asp::in_region("P:Money")]] // expected-warning {{attribute only applies to fields}}
+         [[asp::region_param("P")]] 
+        : money(0) {}
+
+  Coo (int cash [[asp::in_region("P:Money")]] // expected-warning {{attribute only applies to fields}}
+                [[asp::region("Money")]] )  // expected-warning {{attribute only applies to classes and structs and functions and globals}}
+       [[asp::pure_effect]] : money(cash) {}
+
+  int get_some() [[asp::reads_effect("P:Money")]]{ 
+    return money;
+  }
+
+  void set_money(int cash [[asp::region_param("P")]] )  // expected-warning {{attribute only applies to classes and structs and functions}} 
+                          [[asp::writes_effect("P:Money")]] {
+    money = cash ;
+  }
+
+  void add_money(int cash) [[asp::atomic_writes_effect("P:Money")]] {
+    money += cash ;
+  }
+};
+
+
+
+[[asp::region("Roo")]] 
+int main (void) {
+  Coo [[asp::region_arg("Roo")]] c;
+  Coo [[asp::region_arg("Rah")]] *d = new Coo [[asp::region_arg("Root:Rah")]] (77);
+  int five [[asp::region_arg("Boo")]] = 4+1;
+  int six  = 4+2;
+  return 0;
+}
+
+#endif
   

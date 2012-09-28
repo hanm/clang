@@ -910,19 +910,19 @@ def Region : InheritableAttr {
 }
 
 def InRegion : InheritableAttr {
-  let Spellings = [ASP<"in_region">];
+  let Spellings = [ASP<"in_region">, CXX11<"asp", "in_region">];
   let Subjects = [Var];
   let Args = [StringArgument<"rpl">];
 }
 
 def RegionParam : InheritableAttr {
-  let Spellings = [ASP<"region_param">];
+  let Spellings = [ASP<"region_param">, CXX11<"asp", "region_param">];
   let Subjects = [Record, ParmVar];
   let Args = [StringArgument<"param_name">];
 }  
 
 def RegionArg : InheritableAttr {
-  let Spellings = [ASP<"region_arg">];
+  let Spellings = [ASP<"region_arg">, CXX11<"asp", "region_arg">];
   let Subjects = [Var];
   let Args = [StringArgument<"rpl">];
 }  
@@ -931,30 +931,30 @@ def RegionArg : InheritableAttr {
 /// EFFECTS
 
 def PureEffect : InheritableAttr {
-  let Spellings = [ASP<"pure_effect">];
+  let Spellings = [ASP<"pure_effect">, CXX11<"asp", "pure_effect">];
   let Subjects = [Function];
 }  
 
 def ReadsEffect : InheritableAttr {
-  let Spellings = [ASP<"reads_effect">];
+  let Spellings = [ASP<"reads_effect">, CXX11<"asp", "reads_effect">];
   let Subjects = [Function];
   let Args = [StringArgument<"rpl">];
 }  
 
 def AtomicReadsEffect : InheritableAttr {
-  let Spellings = [ASP<"atomic_reads_effect">];
+  let Spellings = [ASP<"atomic_reads_effect">, CXX11<"asp", "atomic_reads_effect">];
   let Subjects = [Function];
   let Args = [StringArgument<"rpl">];
 }  
 
 def WritesEffect : InheritableAttr {
-  let Spellings = [ASP<"writes_effect">];
+  let Spellings = [ASP<"writes_effect">, CXX11<"asp", "writes_effect">];
   let Subjects = [Function];
   let Args = [StringArgument<"rpl">];
 }  
 
 def AtomicWritesEffect : InheritableAttr {
-  let Spellings = [ASP<"atomic_writes_effect">];
+  let Spellings = [ASP<"atomic_writes_effect">, CXX11<"asp", "atomic_writes_effect">];
   let Subjects = [Function];
   let Args = [StringArgument<"rpl">];
 }  
