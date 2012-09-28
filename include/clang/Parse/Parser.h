@@ -1880,6 +1880,8 @@ private:
                             SourceLocation *EndLoc = 0);
   void ParseCXX11AttributeGNUStyleArgs(IdentifierInfo *AttrName,
                                    SourceLocation AttrNameLoc,
+																	 IdentifierInfo *ScopeName,
+																	 SourceLocation ScopeLoc,
                                    ParsedAttributes &Attrs);
   bool IsBuiltInOrStandardCXX11Attribute(IdentifierInfo *AttrName,
                                          IdentifierInfo *ScopeName);

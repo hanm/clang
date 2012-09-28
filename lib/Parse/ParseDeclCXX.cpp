@@ -2968,7 +2968,8 @@ void Parser::ParseCXX11AttributeSpecifier(ParsedAttributes &attrs,
     if (Tok.is(tok::l_paren)) {
       if (ScopeName && (ScopeName->getName() == "gnu" ||
                         ScopeName->getName() == "asp")) {
-        ParseCXX11AttributeGNUStyleArgs(AttrName, AttrLoc, attrs);
+        ParseCXX11AttributeGNUStyleArgs(AttrName, AttrLoc, ScopeName,
+                                        ScopeLoc, attrs);
       } else {
         if (StandardAttr)
           Diag(Tok.getLocation(), diag::err_cxx11_attribute_forbids_arguments)
@@ -3020,6 +3021,8 @@ bool Parser::IsBuiltInOrStandardCXX11Attribute(IdentifierInfo *AttrName,
 
 void Parser::ParseCXX11AttributeGNUStyleArgs(IdentifierInfo *AttrName,
                                              SourceLocation AttrNameLoc,
+																						 IdentifierInfo *ScopeName,
+																						 SourceLocation ScopeLoc,
                                              ParsedAttributes &Attrs) {
   assert(Tok.is(tok::l_paren) && "Attribute arg list not starting with '('");
 
@@ -3062,8 +3065,8 @@ void Parser::ParseCXX11AttributeGNUStyleArgs(IdentifierInfo *AttrName,
   SourceLocation RParen = Tok.getLocation();
   if (!ExpectAndConsume(tok::r_paren, diag::err_expected_rparen)) {
     AttributeList *attr = Attrs.addNew(AttrName,
-                                       SourceRange(AttrNameLoc, RParen), 0,
-                                       AttrNameLoc,ParmName, ParmLoc,
+                                       SourceRange(AttrNameLoc, RParen), ScopeName,
+																			 ScopeLoc, ParmName, ParmLoc,
                                        ArgExprs.data(), ArgExprs.size(),
                                        AttributeList::AS_CXX11);
   }

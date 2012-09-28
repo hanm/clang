@@ -905,7 +905,7 @@ class ASP<string name> : Spelling<name, "ASP">;
 /// REGIONS
 
 def Region : InheritableAttr {
-  let Spellings = [ASP<"region">];
+  let Spellings = [ASP<"region">,  CXX11<"asp", "region">];
   let Args = [StringArgument<"region_name">];
 }
 
