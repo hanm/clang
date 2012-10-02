@@ -154,8 +154,8 @@ void Parser::ParseGNUAttributes(ParsedAttributes &attrs,
           Eof.setLocation(Tok.getLocation());
           LA->Toks.push_back(Eof);
         } else {
-          ParseGNUAttributeArgs(AttrName, AttrNameLoc, attrs, endLoc, 
-            0, AttrNameLoc, AttributeList::AS_GNU);
+          ParseGNUAttributeArgs(AttrName, AttrNameLoc, attrs, endLoc,
+                                0, AttrNameLoc, AttributeList::AS_GNU);
         }
       } else {
         attrs.addNew(AttrName, AttrNameLoc, 0, AttrNameLoc,
@@ -926,8 +926,8 @@ void Parser::ParseLexedAttribute(LateParsedAttribute &LA,
       if (HasFunScope)
         Actions.ActOnReenterFunctionContext(Actions.CurScope, D);
 
-      ParseGNUAttributeArgs(&LA.AttrName, LA.AttrNameLoc, Attrs, &endLoc, 
-        0, LA.AttrNameLoc, AttributeList::Syntax::AS_GNU);
+      ParseGNUAttributeArgs(&LA.AttrName, LA.AttrNameLoc, Attrs, &endLoc,
+                            0, LA.AttrNameLoc, AttributeList::AS_GNU);
 
       if (HasFunScope) {
         Actions.ActOnExitFunctionContext();
@@ -940,7 +940,7 @@ void Parser::ParseLexedAttribute(LateParsedAttribute &LA,
       // If there are multiple decls, then the decl cannot be within the
       // function scope.
       ParseGNUAttributeArgs(&LA.AttrName, LA.AttrNameLoc, Attrs, &endLoc,
-        0, LA.AttrNameLoc, AttributeList::Syntax::AS_GNU);
+                            0, LA.AttrNameLoc, AttributeList::AS_GNU);
     }
   } else {
     Diag(Tok, diag::warn_attribute_no_decl) << LA.AttrName.getName();
