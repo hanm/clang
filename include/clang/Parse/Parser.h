@@ -1848,7 +1848,10 @@ private:
   void ParseGNUAttributeArgs(IdentifierInfo *AttrName,
                              SourceLocation AttrNameLoc,
                              ParsedAttributes &Attrs,
-                             SourceLocation *EndLoc);
+                             SourceLocation *EndLoc,
+                             IdentifierInfo *ScopeName,
+                             SourceLocation ScopeLoc,
+                             AttributeList::Syntax Syntax);
 
   void MaybeParseCXX0XAttributes(Declarator &D) {
     if (getLangOpts().CPlusPlus0x && isCXX11AttributeSpecifier()) {

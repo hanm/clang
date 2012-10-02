@@ -2968,8 +2968,8 @@ void Parser::ParseCXX11AttributeSpecifier(ParsedAttributes &attrs,
     if (Tok.is(tok::l_paren)) {
       if (ScopeName && (ScopeName->getName() == "gnu" ||
                         ScopeName->getName() == "asp")) {
-        ParseCXX11AttributeGNUStyleArgs(AttrName, AttrLoc, ScopeName,
-                                        ScopeLoc, attrs);
+                          ParseGNUAttributeArgs(AttrName, AttrLoc, attrs, endLoc,
+                            ScopeName, ScopeLoc, AttributeList::AS_CXX11);
       } else {
         if (StandardAttr)
           Diag(Tok.getLocation(), diag::err_cxx11_attribute_forbids_arguments)
