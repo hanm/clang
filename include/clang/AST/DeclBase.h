@@ -456,10 +456,6 @@ public:
     return hasAttrs() ? getSpecificAttr<T>(getAttrs()) : 0;
   }
 
-  template<typename T> T *getAttr(int n) const {
-    return hasAttrs() ? getSpecificAttr<T>(getAttrs(), n) : 0;
-  }
-
   template<typename T> bool hasAttr() const {
     return hasAttrs() && hasSpecificAttr<T>(getAttrs());
   }

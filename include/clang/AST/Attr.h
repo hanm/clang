@@ -248,28 +248,6 @@ inline SpecificAttr *getSpecificAttr(const Container& container) {
     return 0;
 }
 
-template <typename SpecificAttr, typename Container>
-inline SpecificAttr *getSpecificAttr(const Container& container, int n) {
-  specific_attr_iterator<SpecificAttr, Container> i =
-      specific_attr_begin<SpecificAttr>(container);
-  int count = 0;
-
-  while (count < n && i != specific_attr_end<SpecificAttr>(container)) {
-    i.AdvanceToNextPublic(specific_attr_end<SpecificAttr>(container));
-    i++; // ATTENTION - ACHTUNG! the order is important!
-         //     putting i++ in front may cause segfaults because it does
-         //     not check not to go past the end of the iteration space.
-         //     It is safe to use it right after the overloaded != test
-         //     because it internally calls AdvanceToNext and because
-         //     the != test failed.
-    count++;
-  }
-  if (count == n && i != specific_attr_end<SpecificAttr>(container))
-    return *i;
-  else
-    return 0;
-}
-
 /// getMaxAlignment - Returns the highest alignment value found among
 /// AlignedAttrs in an AttrVec, or 0 if there are none.
 inline unsigned getMaxAttrAlignment(const AttrVec& V, ASTContext &Ctx) {

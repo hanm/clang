@@ -24,6 +24,13 @@
 using namespace clang;
 using namespace ento;
 
+#define ASP_DEBUG
+
+#ifdef ASP_DEBUG
+static raw_ostream& os = llvm::errs();
+#else
+static raw_ostream& os = llvm::nulls();
+#endif
 
 namespace {
   /**
@@ -88,12 +95,11 @@ namespace {
   template<typename AttrType>
   bool scanAttributes(Decl* D, const StringRef& name)
   {
-    int i = 0;
-    const AttrType* myAttr = D->getAttr<AttrType>(i++);
-    while (myAttr) {
-      StringRef rName = getRegionOrParamName(myAttr);
-      if (rName==name) return true;
-      myAttr = D->getAttr<AttrType>(i++);
+    for (specific_attr_iterator<AttrType>
+         i = D->specific_attr_begin<AttrType>(),
+         e = D->specific_attr_end<AttrType>();
+         i != e; ++i) {
+      if (getRegionOrParamName(*i)==name) return true;
     }
     return false;
   }
@@ -138,6 +144,8 @@ private:
   ElementVector rplElements;
 
   /// RplRef class
+  // Idea Have an RplRef class, friends with Rpl to efficiently perform 
+  // isIncluded and isUnder tests
   class RplRef {
     long firstIdx; 
     long lastIdx;
@@ -179,7 +187,7 @@ private:
       return *this;
     }
     inline bool isEmpty() {
-      //llvm::errs() << "DEBUG:: isEmpty[RplRef] returned " 
+      //os  << "DEBUG:: isEmpty[RplRef] returned " 
       //    << (lastIdx<firstIdx ? "true" : "false") << "\n";
       return (lastIdx<firstIdx) ? true : false;
     }
@@ -203,14 +211,14 @@ private:
     
     /// Inclusion: this c= rhs
     bool isIncludedIn(RplRef& rhs) { 
-      //llvm::errs() << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef](" 
+      //os  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef](" 
       //    << this->toString() << ", " << rhs.toString() << ")\n";
       /// Root c= Root    
       if (isEmpty() && rhs.isEmpty())
         return true;
       /// R c= R':* <==  R <= R'
       if (!rhs.getLastElement().compare("*")) {
-        llvm::errs() <<"DEBUG:: isIncludedIn[RplRef] compared *==0\n";
+        os <<"DEBUG:: isIncludedIn[RplRef] compared *==0\n";
         return isUnder(rhs.stripLast());
       }
       /// Both cannot be empty[==Root] (see 1st case above)
@@ -222,7 +230,7 @@ private:
       /// R:[i] c= R':[i]  <== R <= R'
       if (!rhs.getLastElement().compare(getLastElement()))
         return this->stripLast().isIncludedIn(rhs.stripLast());
-      /// TODO : more rules
+      /// TODO : more rules (include Param, ...)
       return false;
     }
   }; // end class RplRef
@@ -238,10 +246,8 @@ public:
       const StringRef& head = pair.first;
       /// head: is it a special RPL element? if not, is it declared?
       if (!isSpecialRplElement(head) && !findRegionName(D, head)) {
-        /// TODO
-        // Emit bug report!
-        //helperEmitUndeclaredRplElementWarning(D, head);
-        //result = false;
+        /// Don't produce an error, this should have been checked already.
+        /// Instead try to proceed...
       }
       rplElements.push_back(head);
       rpl = pair.second;
@@ -288,43 +294,40 @@ public:
     RplRef* rhs = new RplRef(rhsRpl);
     bool result = lhs->isIncludedIn(*rhs);
     delete lhs; delete rhs;
-    llvm::errs() << "DEBUG:: ~~~~~ isIncludedIn[RPL](" << this->toString() << ", "
+    os << "DEBUG:: ~~~~~ isIncludedIn[RPL](" << this->toString() << ", "
         << rhsRpl.toString() << ")=" << (result ? "true" : "false") << "\n";
     return result;
   }
   /// Substitution
   bool substitute(StringRef from, Rpl& to) {
-    llvm::errs() << "DEBUG:: before substitution: ";
-    printElements(llvm::errs());
-    llvm::errs() << "\n";
+    os << "DEBUG:: before substitution: ";
+    printElements(os);
+    os << "\n";
     /// 1. find all occurences of 'from'
     for (ElementVector::iterator
             it = rplElements.begin();
          it != rplElements.end(); it++) {
       if (!((*it).compare(from))) { 
-        llvm::errs() << "DEBUG:: found '" << from 
+        os << "DEBUG:: found '" << from 
           << "' replaced with '" ;
-        to.printElements(llvm::errs());
+        to.printElements(os);
         //size_t len = to.length();
         it = rplElements.erase(it);
         it = rplElements.insert(it, to.rplElements.begin(), to.rplElements.end());
-        llvm::errs() << "' == '";
-        printElements(llvm::errs());
-        llvm::errs() << "'\n";
+        os << "' == '";
+        printElements(os);
+        os << "'\n";
       }
     }
-    llvm::errs() << "DEBUG:: after substitution: ";
-    printElements(llvm::errs());
-    llvm::errs() << "\n";
+    os << "DEBUG:: after substitution: ";
+    printElements(os);
+    os << "\n";
     return false;
   }  
   
   /// Iterator
 }; // end class Rpl
 
-
-// Idea Have an RplRef class, friends with Rpl to efficiently perform 
-// isIncluded and isUnder tests
 
 ///-///////////////////////////////////////////////////////////////////////////
 /// Effect Class
@@ -447,7 +450,7 @@ public:
   bool isSubEffectOf(Effect& e) {
     bool result = (isPureEffect() ||
             (isSubEffectKindOf(e) && rpl->isIncludedIn(*(e.rpl))));
-    llvm::errs() << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
+    os  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
         << e.toString() << ")=" << (result ? "true" : "false") << "\n";
     return result;
   }
@@ -503,7 +506,6 @@ private:
     StringRef bugCategory = "Safe Parallelism";
     StringRef bugStr = description_std;
 
-    //TODO get ProgramPoint for Stmt S
     PathDiagnosticLocation VDLoc =
        PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
 
@@ -528,10 +530,8 @@ public:
         effectSummary(effectsummary), 
         isCoveredBySummary(true) 
   {
-    //os << "DEBUG::  Starting Stmt visitor~~\n";
     stmt->printPretty(os, 0, Ctx.getPrintingPolicy());
     Visit(stmt);
-    //os << "DEBUG::  Finito!\n";
   }
   
   /// Destructor
@@ -550,18 +550,15 @@ public:
   
   /// Visitors
   void VisitChildren(Stmt *S) {
-    //os << "DEBUG:: VisitChildren\n";
     for (Stmt::child_iterator I = S->child_begin(), E = S->child_end(); I!=E; ++I)
       if (Stmt *child = *I)
         Visit(child);
   }
 
   void VisitStmt(Stmt *S) {
-    //os << "DEBUG:: VisitStmt\n";
     VisitChildren(S);
   }
 
-  //bool VisitMemberExpr(MemberExpr* E) {
   void VisitMemberExpr(MemberExpr* E) {
     os << "DEBUG:: VisitMemberExpr: ";
     E->printPretty(os, 0, Ctx.getPrintingPolicy());
@@ -589,7 +586,7 @@ public:
       /// add effect reads vd
       InRegionAttr* at = vd->getAttr<InRegionAttr>();
       if (!at) {
-        // 
+        // TODO
         os << "DEBUG:: didn't find 'in' annotation for field (perhaps use default?)\n";
       }
       RegionArgAttr* arg = vd->getAttr<RegionArgAttr>();
@@ -754,12 +751,12 @@ private:
    */
   template<typename AttrType>
   inline void helperPrintAttributes(Decl* D) {
-    int i = 0;
-    const AttrType* attr = D->getAttr<AttrType>(i++);
-     while (attr) {
-      attr->printPretty(os, Ctx.getPrintingPolicy());
-      os << "\n";
-      attr = D->getAttr<AttrType>(i++);
+    for (specific_attr_iterator<AttrType>
+         i = D->specific_attr_begin<AttrType>(),
+         e = D->specific_attr_end<AttrType>();
+         i != e; ++i) {
+      (*i)->printPretty(os, Ctx.getPrintingPolicy());
+      os << "\n";      
     }
   }
 
@@ -769,17 +766,17 @@ private:
    */
   template<typename AttrType>
   bool checkRegionAndParamDecls(Decl* D) {
-    int i = 0;
     bool result = true;
-    const AttrType* myAttr = D->getAttr<AttrType>(i++);
-    while (myAttr) {
-      const StringRef str = getRegionOrParamName(myAttr);
+    for (specific_attr_iterator<AttrType>
+         i = D->specific_attr_begin<AttrType>(),
+         e = D->specific_attr_end<AttrType>();
+         i != e; ++i) {
+      const StringRef str = getRegionOrParamName(*i);
       if (!isValidRegionName(str)) {
         // Emit bug report!
         helperEmitInvalidRegionOrParamWarning(D, str);
         result = false;
       }
-      myAttr = D->getAttr<AttrType>(i++);
     }
     return result;
   }
@@ -811,17 +808,20 @@ private:
   ///                                 RegionArgAttr, & Effect Attributes)
   template<typename AttrType>
   bool checkRpls(Decl* D) {
-    int i = 0;
     bool result = true;
-    const AttrType* myAttr = D->getAttr<AttrType>(i++);
-    while (myAttr) { /// for all attributes of type AttrType
-      if (checkRpl(D, myAttr->getRpl()))
+    for (specific_attr_iterator<AttrType>
+         i = D->specific_attr_begin<AttrType>(),
+         e = D->specific_attr_end<AttrType>();
+         i != e; ++i) {
+      if (!checkRpl(D, (*i)->getRpl()))
         result = false;
-      myAttr = D->getAttr<AttrType>(i++);
     }
     return result;
   }
 
+  inline EffectKind getEffectKind(const PureEffectAttr* attr) {
+    return PureEffect;
+  }
   inline EffectKind getEffectKind(const ReadsEffectAttr* attr) {
     return ReadsEffect;
   }
@@ -837,23 +837,21 @@ private:
   
   template<typename AttrType>
   void buildPartialEffectSummary(Decl* D, Effect::EffectVector& ev) {
-    int i = 0;
-    //bool result = true;
-    const AttrType* myAttr = D->getAttr<AttrType>(i++);
-    while (myAttr) { /// for all attributes of type AttrType
-      StringRef s = myAttr->getRpl();
-      Rpl* rpl = new Rpl(s,D);
-      EffectKind ec = getEffectKind(myAttr); // TODO
-      
-      Effect* e = new Effect(ec, rpl);
-      ev.push_back(e);
-      myAttr = D->getAttr<AttrType>(i++);
+    for (specific_attr_iterator<AttrType>
+         i = D->specific_attr_begin<AttrType>(),
+         e = D->specific_attr_end<AttrType>();
+         i != e; ++i) {
+      EffectKind ec = getEffectKind(*i); 
+      Rpl* rpl = 0; // TODO: I would like to be able to call this on 
+                    // PureEffectAttr as well, but the compiler complains
+                    // that such attributes don't have a getRpl method...
+      if (!dyn_cast<PureEffectAttr>(*i)) rpl = new Rpl((*i)->getRpl(), D);
+      ev.push_back(new Effect(ec, rpl));
     }
-    //return result;
   }
 
   void buildEffectSummary(Decl* D, Effect::EffectVector& ev) {   
-    //bulidPartialEffectSummary<PureEffectAttr>(D, ev);
+    //buildPartialEffectSummary<PureEffectAttr>(D, ev);
     buildPartialEffectSummary<ReadsEffectAttr>(D, ev);
     buildPartialEffectSummary<WritesEffectAttr>(D, ev);
     buildPartialEffectSummary<AtomicReadsEffectAttr>(D, ev);
@@ -881,11 +879,11 @@ public:
   /// Constructor
   explicit ASPSemanticCheckerTraverser (
     ento::BugReporter& BR, ASTContext& ctx,
-    AnalysisDeclContext* AC
+    AnalysisDeclContext* AC, raw_ostream& os
     ) : BR(BR),
         Ctx(ctx),
         AC(AC),
-        os(llvm::errs())
+        os(os)
   {}
 
   bool VisitValueDecl(ValueDecl* E) {
@@ -1123,13 +1121,13 @@ class  SafeParallelismChecker
 public:
   void checkASTDecl(const TranslationUnitDecl* D, AnalysisManager& mgr,
                     BugReporter &BR) const {
-    llvm::errs() << "DEBUG:: starting ASP Semantic Checker\n";
+    os << "DEBUG:: starting ASP Semantic Checker\n";
     /** initialize traverser */
     ASPSemanticCheckerTraverser aspTraverser(BR, D->getASTContext(),
-                                             mgr.getAnalysisDeclContext(D));
+                                             mgr.getAnalysisDeclContext(D), os);
     /** run checker */
     aspTraverser.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
-    llvm::errs() << "DEBUG:: done running ASP Semantic Checker\n\n";
+    os << "DEBUG:: done running ASP Semantic Checker\n\n";
   }
 };
 } // end unnamed namespace
