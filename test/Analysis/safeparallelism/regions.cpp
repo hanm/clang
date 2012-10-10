@@ -36,19 +36,24 @@ public:
     next(c.next)
   {}
 
-  void set_money(int cash) // expected-warning {{RPL element was not declared}}  
+  void set_money(int cash) // expected-warning {{RPL element was not declared}} expected-warning{{effect summary is not minimal}} expected-warning{{effect summary is not minimal}} expected-warning{{effect summary is not minimal}} expected-warning{{effect summary is not minimal}}
     __attribute__((reads_effect("P1")))
     __attribute__((reads_effect("P1:R2")))
     __attribute__((reads_effect("P1:R2:R3")))
     __attribute__((reads_effect("P1:R2:R2:R3"))) 
-    __attribute__((writes_effect("P1:R3"))) { 
+    __attribute__((reads_effect("P1:R3")))  
+    __attribute__((atomic_reads_effect("P1:R3")))  
+    __attribute__((atomic_writes_effect("P1:R3")))  
+    __attribute__((writes_effect("P1:R3"))) 
+    __attribute__((pure_effect)) 
+  { 
     cash += next->money;        // reads P1, P1:R2:R3
     cash -= next->next->money;  // reads P1, P1:R2, P1:R2:R2:R3
     money = cash + 4 + cash;    // writes P1:R3
   }
   __attribute__((region("R3")))
-  void add_money(int cash) __attribute__((writes_effect("P1:R3"))) {
-    money += cash;
+  void add_money(int cash) {
+    money += cash; // expected-warning {{effect not covered by effect summary}}
   }
   void subtract_money(int cash) __attribute__((reads_effect("P1:R3"))) { // expected-warning {{RPL element was not declared}}  
     money -= (cash) ? cash+3 : cash=3;  // expected-warning{{effect not covered by effect summary}}

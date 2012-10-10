@@ -73,6 +73,35 @@ namespace {
     return true;
   }
 
+  inline bool isValidTypeForIn(const Type* t) {
+    if (t->isScalarType()) return true;
+    else return false;
+  }
+
+  inline bool isValidTypeForArg(const Type* t) {
+    if (t->isAggregateType() 
+        || (t->isAnyPointerType() 
+            && t->getPointeeType().getTypePtr()->isAggregateType())) 
+      return true;
+    else 
+      return false;
+  }
+  
+  // TODO pass arg attr as parameter
+  inline bool hasValidRegionParamAttr(const Type* T) { 
+    bool result = false;
+    if (const TagType* tt = dyn_cast<TagType>(T)) {
+      const TagDecl* td = tt->getDecl();
+      const RegionParamAttr* rpa = td->getAttr<RegionParamAttr>();
+      // TODO check the number of params is equal to arg attr.
+      if (rpa) result = true; 
+    } else if (const BuiltinType* tt = dyn_cast<BuiltinType>(T)) {
+      // TODO check the number of parameters of the arg attr to be 1
+      result = true;
+    } 
+    return result;
+  }
+
   /**
    * Return the string name of the region or region parameter declaration
    * based on the Kind of the Attribute (RegionAttr or RegionParamAttr)
@@ -193,6 +222,8 @@ private:
     }
     
     bool isUnder(RplRef& rhs) {
+      os  << "DEBUG:: ~~~~~~~~isUnder[RplRef](" 
+          << this->toString() << ", " << rhs.toString() << ")\n";
       /// R <= Root
       if (rhs.isEmpty())
         return true;
@@ -205,33 +236,32 @@ private:
         return stripLast().isUnder(rhs);
       /// R:r <= R' <==  R <= R'
       /// R:[i] <= R' <==  R <= R'
-      return stripLast().isUnder(rhs.stripLast());
-      /// TODO z-regions 
+      return stripLast().isUnder(rhs);
+      // TODO z-regions 
     }
     
     /// Inclusion: this c= rhs
     bool isIncludedIn(RplRef& rhs) { 
-      //os  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef](" 
-      //    << this->toString() << ", " << rhs.toString() << ")\n";
-      /// Root c= Root    
-      if (isEmpty() && rhs.isEmpty())
-        return true;
-      /// R c= R':* <==  R <= R'
-      if (!rhs.getLastElement().compare("*")) {
-        os <<"DEBUG:: isIncludedIn[RplRef] compared *==0\n";
-        return isUnder(rhs.stripLast());
-      }
-      /// Both cannot be empty[==Root] (see 1st case above)
-      /// Case1 rhs.isEmpty (e.g., R1 <=? Root) ==> not included
-      /// Case2 lhs.isEmpty (e.g., Root <= R1[!='*']) ==> not included
-      if (isEmpty() || rhs.isEmpty())
+      os  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef](" 
+          << this->toString() << ", " << rhs.toString() << ")\n";
+      if (rhs.isEmpty()) {
+        /// Root c= Root    
+        if (isEmpty()) return true;
+        /// RPL c=? Root and RPL!=Root ==> not included      
+        else /*!isEmpty()*/ return false;
+      } else { /// rhs is not empty
+        /// R c= R':* <==  R <= R'
+        if (!rhs.getLastElement().compare("*")) {
+          os <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
+          return isUnder(rhs.stripLast());
+        }
+        ///   R:r c= R':r    <==  R <= R'
+        /// R:[i] c= R':[i]  <==  R <= R'
+        if (!isEmpty() && !getLastElement().compare(rhs.getLastElement()))
+          return stripLast().isIncludedIn(rhs.stripLast());
+        // TODO : more rules (include Param, ...)
         return false;
-      /// R:r c= R':r  <== R <= R'
-      /// R:[i] c= R':[i]  <== R <= R'
-      if (!rhs.getLastElement().compare(getLastElement()))
-        return this->stripLast().isIncludedIn(rhs.stripLast());
-      /// TODO : more rules (include Param, ...)
-      return false;
+      }
     }
   }; // end class RplRef
   
@@ -354,7 +384,7 @@ private:
   Rpl* rpl;
 
   /// Sub-Effect Kind
-  inline bool isSubEffectKindOf(Effect& e) {
+  inline bool isSubEffectKindOf(const Effect& e) const {
     bool result = false;
     if (effectKind == PureEffect) return true; // optimization
     
@@ -391,7 +421,7 @@ public:
     delete rpl;
   }
   /// Printing
-  inline bool printEffectKind(raw_ostream& os) {
+  inline bool printEffectKind(raw_ostream& os) const {
     bool hasRpl = true;
     switch(effectKind) {
     case PureEffect: os << "Pure Effect"; hasRpl = false; break;
@@ -403,7 +433,7 @@ public:
     return hasRpl;
   }
 
-  void print(raw_ostream& os) {
+  void print(raw_ostream& os) const {
     bool hasRpl = printEffectKind(os);
     if (hasRpl) {
       os << " on ";
@@ -412,13 +442,13 @@ public:
     }
   }
   /// Various
-  inline bool isPureEffect() {
+  inline bool isPureEffect() const {
     return (effectKind == PureEffect) ? true : false;
   }
   
-  inline bool hasRplArgument() { return !isPureEffect(); }
+  inline bool hasRplArgument() const { return !isPureEffect(); }
 
-  std::string toString() {
+  std::string toString() const {
     std::string sbuf;
     llvm::raw_string_ostream os(sbuf);
     print(os);
@@ -426,10 +456,10 @@ public:
   }
   
   /// Getters
-  EffectKind getEffectKind() { return effectKind; }
+  EffectKind getEffectKind() const { return effectKind; }
   Rpl* getRpl() { return rpl; }
 
-  inline bool isAtomic() { 
+  inline bool isAtomic() const { 
     return (effectKind==AtomicReadsEffect ||
             effectKind==AtomicWritesEffect) ? true : false;
   }
@@ -447,7 +477,7 @@ public:
    * ~~~~~~~~~~~~~~~~~~~~~~~~~
    *    E1(rpl1) <= E2(rpl2) 
    */
-  bool isSubEffectOf(Effect& e) {
+  bool isSubEffectOf(const Effect& e) const {
     bool result = (isPureEffect() ||
             (isSubEffectKindOf(e) && rpl->isIncludedIn(*(e.rpl))));
     os  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
@@ -563,7 +593,7 @@ public:
     os << "DEBUG:: VisitMemberExpr: ";
     E->printPretty(os, 0, Ctx.getPrintingPolicy());
     os << "\n";
-    os << "Rvalue=" << E->isRValue()
+    /*os << "Rvalue=" << E->isRValue()
        << ", Lvalue=" << E->isLValue()
        << ", Xvalue=" << E->isGLValue()
        << ", GLvalue=" << E->isGLValue() << "\n";
@@ -571,7 +601,7 @@ public:
     if (lvc==Expr::LV_Valid)
       os << "LV_Valid\n";
     else
-      os << "not LV_Valid\n";
+      os << "not LV_Valid\n";*/
 
     ValueDecl* vd = E->getMemberDecl();
     vd->print(os, Ctx.getPrintingPolicy());
@@ -582,15 +612,16 @@ public:
       // TODO
     }
     /// 2. vd is a FieldDecl
-    if (dyn_cast<FieldDecl>(vd)) {
-      /// add effect reads vd
-      InRegionAttr* at = vd->getAttr<InRegionAttr>();
-      if (!at) {
-        // TODO
-        os << "DEBUG:: didn't find 'in' annotation for field (perhaps use default?)\n";
-      }
-      RegionArgAttr* arg = vd->getAttr<RegionArgAttr>();
+    /// Type_vd <args> vd in RPL
+    const FieldDecl* fd  = dyn_cast<FieldDecl>(vd);    
+    if (fd) {
+      /// 2.1. apply substitutions
+      const RegionArgAttr* arg = fd->getAttr<RegionArgAttr>();
       if (arg) {
+        const RecordDecl* rd = fd->getParent();
+        const RegionParamAttr* rpa = rd->getAttr<RegionParamAttr>();
+        assert(rpa);
+        StringRef from = rpa->getParam_name();
         // apply substitution to temp effects
         StringRef s = arg->getRpl();
         Rpl* rpl = new Rpl(s, vd);
@@ -598,42 +629,52 @@ public:
               it = effectsTmp.begin(),
               end = effectsTmp.end();
               it != end; it++) {
-          // TODO find proper from to substitute hard-coded "P1"
-          (*it)->substitute("P1", *rpl);
+          (*it)->substitute(from, *rpl);
         }
       }
-      /// TODO is this atomic or not? just ignore atomic for now
-      StringRef s = at->getRpl();
-      Rpl* rpl = new Rpl(s, vd);
-      //r->printElements(os);
-      EffectKind ec = (hasWriteSemantics) ? WritesEffect : ReadsEffect;
-      Effect* e = new Effect(ec, rpl);
+      /// 2.2. Push partially built effect onto temp stack
+      StringRef s;
+      Effect* e = 0;
+      // TODO if basic type or pointer or reference use 'in' clause
+      const InRegionAttr* at = fd->getAttr<InRegionAttr>();
+      if (at) {
+        s = at->getRpl();
+        // TODO else use arg clause 
+        /// TODO is this atomic or not? just ignore atomic for now
+        Rpl* rpl = new Rpl(s, vd);
+        EffectKind ec = (hasWriteSemantics) ? WritesEffect : ReadsEffect;
+        e = new Effect(ec, rpl);
+        // push effects on temp-stack for possible substitution
+      }
+      if (e) effectsTmp.push_back(e);
+      
+      /// 2.3. Visit Base with read semantics, then restore write semantics
       bool hws = hasWriteSemantics;
-      //TODO push effects on temp-stack for possible substitution
-      effectsTmp.push_back(e);
       hasWriteSemantics = false;
       Visit(E->getBase());
       hasWriteSemantics = hws;
-      e = effectsTmp.pop_back_val();
-      os << "### "; e->print(os); os << "\n";
-      //Check that effects are covered by effect summary
-      if (!e->isCoveredBy(effectSummary)) {
-        ///TODO produce warning
-        os << "DEBUG:: effects not covered error\n";
-        std::string str = e->toString();
-        helperEmitEffectNotCoveredWarning(E, vd, str);
-        isCoveredBySummary = false;
+ 
+      /// Post-Visit Actions: check that effects (after substitution) 
+      /// are covered by effect summary
+      if (e) {
+        e = effectsTmp.pop_back_val();
+        os << "### "; e->print(os); os << "\n";
+        if (!e->isCoveredBy(effectSummary)) {
+          std::string str = e->toString();
+          helperEmitEffectNotCoveredWarning(E, vd, str);
+          isCoveredBySummary = false;
+        }
       }
-      effects.push_back(e);
+      /// Add effect to this function's effect set (why?)
+      //effects.push_back(e);
     }
   }
 
-  //bool VisitDeclRefExpr(DeclRefExpr* E) {
   void VisitDeclRefExpr(DeclRefExpr* E) {
     os << "DEBUG:: VisitDeclRefExpr --- whatever that is!: ";
     E->printPretty(os, 0, Ctx.getPrintingPolicy());
     os << "\n";
-    os << "Rvalue=" << E->isRValue()
+    /*os << "Rvalue=" << E->isRValue()
        << ", Lvalue=" << E->isLValue()
        << ", Xvalue=" << E->isGLValue()
        << ", GLvalue=" << E->isGLValue() << "\n";
@@ -644,29 +685,9 @@ public:
       os << "not LV_Valid\n";
     ValueDecl* vd = E->getDecl();
     vd->print(os, Ctx.getPrintingPolicy());
-    os << "\n";
-    
-    //return true;
+    os << "\n";*/
   }
   
-  /*void VisitCastExpr(CastExpr* E) {
-    os << "DEBUG:: VisitCastExpr: ";
-    E->printPretty(os, 0, Ctx.getPrintingPolicy());
-    os << "\n";
-    os << "Rvalue=" << E->isRValue()
-       << ", Lvalue=" << E->isLValue()
-       << ", Xvalue=" << E->isGLValue()
-       << ", GLvalue=" << E->isGLValue() << "\n";
-    Expr::LValueClassification lvc = E->ClassifyLValue(Ctx);
-    if (lvc==Expr::LV_Valid)
-      os << "LV_Valid\n";
-    else
-      os << "not LV_Valid\n";
-
-    Visit(E->getSubExpr());
-    //return true;
-  }*/
-
   void VisitCompoundAssignOperator(CompoundAssignOperator* E) {
     os << "DEBUG:: !!!!!!!!!!! Mother of compound Assign!!!!!!!!!!!!!\n";
     E->printPretty(os, 0, Ctx.getPrintingPolicy());
@@ -690,9 +711,9 @@ public:
     Visit(E->getLHS());
     hasWriteSemantics = hws;
     Visit(E->getRHS());
-    
-    //return true;
   }
+  
+  // TODO ++ etc operators
 }; // end class StmtVisitor
 ///-///////////////////////////////////////////////////////////////////////////
 /// AST Traverser Class
@@ -746,6 +767,37 @@ private:
                        bugStr, VDLoc, D->getSourceRange());
   }
 
+  /**
+   *
+   */
+  void helperEmitInvalidTypeForAttr(const Decl* D, 
+                                  const Attr* attr, const StringRef& str) {
+    std::string attrType = "";
+    if (isa<InRegionAttr>(attr)) attrType = "in";
+    else if (isa<RegionArgAttr>(attr)) attrType = "arg";
+    else {
+      llvm::errs() << "Safe Parallelism Checker Internal Error: "
+          << "called 'helperEmitInvalidTypeForAttr' on invalid attribute\n";
+      return;
+    }
+    std::string bugName = "invalid type for '";
+    bugName.append(attrType);
+    bugName.append("' attribute");
+    
+    std::string description_std = "'";
+    description_std.append(str);
+    description_std.append("' ");
+    description_std.append(bugName);
+    StringRef bugCategory = "Safe Parallelism";
+    StringRef bugStr = description_std;
+
+    PathDiagnosticLocation VDLoc =
+       PathDiagnosticLocation::create(D, BR.getSourceManager());
+
+    BR.EmitBasicReport(D, bugName, bugCategory,
+                       bugStr, VDLoc, D->getSourceRange());    
+  }
+    
   /**
    *  Print to the debug output stream (os) the attribute
    */
@@ -856,22 +908,58 @@ private:
     buildPartialEffectSummary<WritesEffectAttr>(D, ev);
     buildPartialEffectSummary<AtomicReadsEffectAttr>(D, ev);
     buildPartialEffectSummary<AtomicWritesEffectAttr>(D, ev);
-    const PureEffectAttr* myAttr = D->getAttr<PureEffectAttr>();
-    if (ev.size()==0 && myAttr) {
+    if (D->getAttr<PureEffectAttr>()) {
       Effect* e = new Effect(PureEffect, 0);
       ev.push_back(e);      
     }
-    // print effect summary
-    os << "DEBUG:: Effect summary: \n";
+  }
+  
+  void checkEffectSummary(Decl* D, Effect::EffectVector& ev) {
+    Effect::EffectVector::iterator I = ev.begin(); // not a const iterator
+    while (I != ev.end()) { // ev.end() is not loop invariant
+      const Effect* e = *I;
+      bool found = false;
+      for (Effect::EffectVector::iterator 
+            J = ev.begin(); J != ev.end(); J++) {
+        if (I != J && e->isSubEffectOf(*(*J))) {
+          // warning: e is covered by *J
+          StringRef bugName = "effect summary is not minimal";
+          std::string sbuf;
+          llvm::raw_string_ostream strbuf(sbuf);
+          strbuf << "'"; e->print(strbuf);
+          strbuf << "' covered by '";
+          (*J)->print(strbuf); strbuf << "': ";
+          strbuf << bugName;
+
+          StringRef bugCategory = "Safe Parallelism";
+          StringRef bugStr = strbuf.str();
+
+          PathDiagnosticLocation VDLoc =
+            PathDiagnosticLocation::create(D, BR.getSourceManager());
+          
+          BR.EmitBasicReport(D, bugName, bugCategory,
+                   bugStr, VDLoc, D->getSourceRange());
+          found = true;
+          break;
+        } // end if
+        //if (found) break; // found one effect that covers this, so stop looking.
+      } // end inner for loop
+      /// optimization: remove e from effect Summary
+      if (found) I = ev.erase(I);
+      else       I++;
+    } // end while loop
+  } 
+  
+  void printEffectSummary(Effect::EffectVector& ev, raw_ostream& os) {
     for (Effect::EffectVector::const_iterator 
             I = ev.begin(),
             E = ev.end(); 
             I != E; I++) {
       (*I)->print(os);
       os << "\n";
-    }
+    }    
   }
-  
+
 public:
 
   typedef RecursiveASTVisitor<ASPSemanticCheckerTraverser> BaseClass;
@@ -922,13 +1010,24 @@ public:
     checkRpls<AtomicReadsEffectAttr>(D);
     checkRpls<AtomicWritesEffectAttr>(D);
 
+    /// C. Check effect summary
     const FunctionDecl* Definition;
     if (D->hasBody(Definition)) {
       Stmt* st = Definition->getBody(Definition);
       assert(st);
       //os << "DEBUG:: calling Stmt Visitor\n";
+      /// C.1. Build Effect Summary
       Effect::EffectVector effectSummary;
       buildEffectSummary(D, effectSummary);
+      os << "Effect Summary from annotation:\n";
+      printEffectSummary(effectSummary, os);
+
+      /// C.2. Check Effect Summary is consistent and minimal
+      checkEffectSummary(D, effectSummary);
+      os << "Minimal Effect Summary:\n";
+      printEffectSummary(effectSummary, os);
+      
+      /// C.3. Check Effect Summary covers method effects
       EffectCollectorVisitor ecv(BR, Ctx, AC, os, effectSummary, st);
       destroyEffectVector(effectSummary);
       //os << "DEBUG:: DONE!! \n";
@@ -961,6 +1060,35 @@ public:
     /// B. Check RPLs
     checkRpls<InRegionAttr>(D);
     checkRpls<RegionArgAttr>(D);
+    
+    /// C. Check validity of annotations
+    /// C.1. 'in' clause only applies to basic types.
+    if (const InRegionAttr* attr = D->getAttr<InRegionAttr>()) {
+      const Type *t = D->getType().getTypePtr();
+      if (!isValidTypeForIn(t)) {
+        std::string sbuf;
+        llvm::raw_string_ostream strbuf(sbuf);
+        D->getType().print(strbuf, Ctx.getPrintingPolicy());
+        helperEmitInvalidTypeForAttr(D, attr, strbuf.str());
+      }
+    }
+    /// C.2. 'arg' clause only applies to aggregate types (class, struct,
+    ///      union) and must have the same number of region parameters.
+    if (const RegionArgAttr* attr = D->getAttr<RegionArgAttr>()) {
+      const Type *t = D->getType().getTypePtr();
+      if (t->isPointerType()) t->getPointeeType(); 
+            // FIXME also support pointer to pointer to pointer...
+            // Note right now we support the syntax of single pointer with 
+            // an 'in' annotation for the pointer and an 'arg' one for the 
+            // base type.
+      if (!isValidTypeForArg(t) // FIXME
+          && hasValidRegionParamAttr(t)) { //FIXME
+        std::string sbuf;
+        llvm::raw_string_ostream strbuf(sbuf);
+        D->getType().print(strbuf, Ctx.getPrintingPolicy());
+        helperEmitInvalidTypeForAttr(D, attr, strbuf.str());
+      }
+    }
     return true;
   }
   bool VisitVarDecl(VarDecl *) {
