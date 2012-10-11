@@ -740,13 +740,17 @@ OverloadCandidate::DeductionFailureInfo::getSecondArg() {
   return 0;
 }
 
-void OverloadCandidateSet::clear() {
+void OverloadCandidateSet::destroyCandidates() {
   for (iterator i = begin(), e = end(); i != e; ++i) {
     for (unsigned ii = 0, ie = i->NumConversions; ii != ie; ++ii)
       i->Conversions[ii].~ImplicitConversionSequence();
     if (!i->Viable && i->FailureKind == ovl_fail_bad_deduction)
       i->DeductionFailure.Destroy();
   }
+}
+
+void OverloadCandidateSet::clear() {
+  destroyCandidates();
   NumInlineSequences = 0;
   Candidates.clear();
   Functions.clear();
@@ -8537,7 +8541,7 @@ void NoteSurrogateCandidate(Sema &S, OverloadCandidate *Cand) {
 }
 
 void NoteBuiltinOperatorCandidate(Sema &S,
-                                  const char *Opc,
+                                  StringRef Opc,
                                   SourceLocation OpLoc,
                                   OverloadCandidate *Cand) {
   assert(Cand->NumConversions <= 2 && "builtin operator is not binary");
@@ -8806,7 +8810,7 @@ void CompleteNonViableCandidate(Sema &S, OverloadCandidate *Cand,
 void OverloadCandidateSet::NoteCandidates(Sema &S,
                                           OverloadCandidateDisplayKind OCD,
                                           llvm::ArrayRef<Expr *> Args,
-                                          const char *Opc,
+                                          StringRef Opc,
                                           SourceLocation OpLoc) {
   // Sort the candidates by viability and position.  Sorting directly would
   // be prohibitive, so we make a set of pointers and sort those.
@@ -9981,7 +9985,7 @@ Sema::CreateOverloadedUnaryOp(SourceLocation OpLoc, unsigned OpcIn,
                                               llvm::makeArrayRef(Args, NumArgs),
                                                    Context.DependentTy,
                                                    VK_RValue,
-                                                   OpLoc));
+                                                   OpLoc, false));
   }
 
   // Build an empty overload set.
@@ -10058,7 +10062,7 @@ Sema::CreateOverloadedUnaryOp(SourceLocation OpLoc, unsigned OpcIn,
       CallExpr *TheCall =
         new (Context) CXXOperatorCallExpr(Context, Op, FnExpr.take(),
                                           llvm::makeArrayRef(Args, NumArgs),
-                                          ResultTy, VK, OpLoc);
+                                          ResultTy, VK, OpLoc, false);
 
       if (CheckCallReturnType(FnDecl->getResultType(), OpLoc, TheCall,
                               FnDecl))
@@ -10159,7 +10163,8 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
         return Owned(new (Context) BinaryOperator(Args[0], Args[1], Opc,
                                                   Context.DependentTy,
                                                   VK_RValue, OK_Ordinary,
-                                                  OpLoc));
+                                                  OpLoc,
+                                                  FPFeatures.fp_contract));
 
       return Owned(new (Context) CompoundAssignOperator(Args[0], Args[1], Opc,
                                                         Context.DependentTy,
@@ -10167,7 +10172,8 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
                                                         OK_Ordinary,
                                                         Context.DependentTy,
                                                         Context.DependentTy,
-                                                        OpLoc));
+                                                        OpLoc,
+                                                        FPFeatures.fp_contract));
     }
 
     // FIXME: save results of ADL from here?
@@ -10179,11 +10185,9 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
                                      NestedNameSpecifierLoc(), OpNameInfo, 
                                      /*ADL*/ true, IsOverloaded(Fns),
                                      Fns.begin(), Fns.end());
-    return Owned(new (Context) CXXOperatorCallExpr(Context, Op, Fn,
-                                                   Args,
-                                                   Context.DependentTy,
-                                                   VK_RValue,
-                                                   OpLoc));
+    return Owned(new (Context) CXXOperatorCallExpr(Context, Op, Fn, Args,
+                                                Context.DependentTy, VK_RValue,
+                                                OpLoc, FPFeatures.fp_contract));
   }
 
   // Always do placeholder-like conversions on the RHS.
@@ -10298,7 +10302,8 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
 
         CXXOperatorCallExpr *TheCall =
           new (Context) CXXOperatorCallExpr(Context, Op, FnExpr.take(),
-                                            Args, ResultTy, VK, OpLoc);
+                                            Args, ResultTy, VK, OpLoc,
+                                            FPFeatures.fp_contract);
 
         if (CheckCallReturnType(FnDecl->getResultType(), OpLoc, TheCall,
                                 FnDecl))
@@ -10430,7 +10435,7 @@ Sema::CreateOverloadedArraySubscriptExpr(SourceLocation LLoc,
                                                    Args,
                                                    Context.DependentTy,
                                                    VK_RValue,
-                                                   RLoc));
+                                                   RLoc, false));
   }
 
   // Handle placeholders on both operands.
@@ -10507,7 +10512,8 @@ Sema::CreateOverloadedArraySubscriptExpr(SourceLocation LLoc,
         CXXOperatorCallExpr *TheCall =
           new (Context) CXXOperatorCallExpr(Context, OO_Subscript,
                                             FnExpr.take(), Args,
-                                            ResultTy, VK, RLoc);
+                                            ResultTy, VK, RLoc,
+                                            false);
 
         if (CheckCallReturnType(FnDecl->getResultType(), LLoc, TheCall,
                                 FnDecl))
@@ -11035,7 +11041,7 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
   CXXOperatorCallExpr *TheCall =
     new (Context) CXXOperatorCallExpr(Context, OO_Call, NewFn.take(),
                                       llvm::makeArrayRef(MethodArgs, NumArgs+1),
-                                      ResultTy, VK, RParenLoc);
+                                      ResultTy, VK, RParenLoc, false);
   delete [] MethodArgs;
 
   if (CheckCallReturnType(Method->getResultType(), LParenLoc, TheCall,
@@ -11208,7 +11214,7 @@ Sema::BuildOverloadedArrowExpr(Scope *S, Expr *Base, SourceLocation OpLoc) {
   ResultTy = ResultTy.getNonLValueExprType(Context);
   CXXOperatorCallExpr *TheCall =
     new (Context) CXXOperatorCallExpr(Context, OO_Arrow, FnExpr.take(),
-                                      Base, ResultTy, VK, OpLoc);
+                                      Base, ResultTy, VK, OpLoc, false);
 
   if (CheckCallReturnType(Method->getResultType(), OpLoc, TheCall,
                           Method))

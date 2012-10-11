@@ -111,6 +111,9 @@ static const char *GetArmArchForMArch(StringRef Value) {
     .Cases("armv7a", "armv7-a", "armv7")
     .Cases("armv7r", "armv7-r", "armv7")
     .Cases("armv7m", "armv7-m", "armv7")
+    .Cases("armv7f", "armv7-f", "armv7f")
+    .Cases("armv7k", "armv7-k", "armv7k")
+    .Cases("armv7s", "armv7-s", "armv7s")
     .Default(0);
 }
 
@@ -124,6 +127,8 @@ static const char *GetArmArchForMCpu(StringRef Value) {
            "arm1176jzf-s", "cortex-m0", "armv6")
     .Cases("cortex-a8", "cortex-r4", "cortex-m3", "cortex-a9", "cortex-a15",
            "armv7")
+    .Case("cortex-a9-mp", "armv7f")
+    .Case("swift", "armv7s")
     .Default(0);
 }
 
@@ -327,7 +332,9 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
 
   // Darwin doesn't support real static executables, don't link any runtime
   // libraries with -static.
-  if (Args.hasArg(options::OPT_static))
+  if (Args.hasArg(options::OPT_static) ||
+      Args.hasArg(options::OPT_fapple_kext) ||
+      Args.hasArg(options::OPT_mkernel))
     return;
 
   // Reject -static-libgcc for now, we can deal with this when and if someone
@@ -525,7 +532,8 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
     // If no OSX or iOS target has been specified and we're compiling for armv7,
     // go ahead as assume we're targeting iOS.
     if (OSXTarget.empty() && iOSTarget.empty() &&
-        getDarwinArchName(Args) == "armv7")
+        (getDarwinArchName(Args) == "armv7" ||
+         getDarwinArchName(Args) == "armv7s"))
         iOSTarget = iOSVersionMin;
 
     // Handle conflicting deployment targets
@@ -670,7 +678,14 @@ void DarwinClang::AddCCKextLibArgs(const ArgList &Args,
   llvm::sys::Path P(getDriver().ResourceDir);
   P.appendComponent("lib");
   P.appendComponent("darwin");
-  P.appendComponent("libclang_rt.cc_kext.a");
+
+  // Use the newer cc_kext for iOS ARM after 6.0.
+  if (!isTargetIPhoneOS() || isTargetIOSSimulator() ||
+      !isIPhoneOSVersionLT(6, 0)) {
+    P.appendComponent("libclang_rt.cc_kext.a");
+  } else {
+    P.appendComponent("libclang_rt.cc_kext_ios5.a");
+  }
 
   // For now, allow missing resource libraries to support developers who may
   // not have compiler-rt checked out or integrated into their build.
@@ -698,11 +713,11 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
     if (A->getOption().matches(options::OPT_Xarch__)) {
       // Skip this argument unless the architecture matches either the toolchain
       // triple arch, or the arch being bound.
-      //
-      // FIXME: Canonicalize name.
-      StringRef XarchArch = A->getValue(Args, 0);
-      if (!(XarchArch == getArchName()  ||
-            (BoundArch && XarchArch == BoundArch)))
+      llvm::Triple::ArchType XarchArch =
+        llvm::Triple::getArchTypeForDarwinArchName(A->getValue(Args, 0));
+      if (!(XarchArch == getArch()  ||
+            (BoundArch && XarchArch ==
+             llvm::Triple::getArchTypeForDarwinArchName(BoundArch))))
         continue;
 
       Arg *OriginalArg = A;
@@ -879,6 +894,12 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
       DAL->AddJoinedArg(0, MArch, "armv6k");
     else if (Name == "armv7")
       DAL->AddJoinedArg(0, MArch, "armv7a");
+    else if (Name == "armv7f")
+      DAL->AddJoinedArg(0, MArch, "armv7f");
+    else if (Name == "armv7k")
+      DAL->AddJoinedArg(0, MArch, "armv7k");
+    else if (Name == "armv7s")
+      DAL->AddJoinedArg(0, MArch, "armv7s");
 
     else
       llvm_unreachable("invalid Darwin arch");
@@ -889,6 +910,25 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
   // argument.
   if (BoundArch)
     AddDeploymentTarget(*DAL);
+
+  // For iOS 6, undo the translation to add -static for -mkernel/-fapple-kext.
+  // FIXME: It would be far better to avoid inserting those -static arguments,
+  // but we can't check the deployment target in the translation code until
+  // it is set here.
+  if (isTargetIPhoneOS() && !isIPhoneOSVersionLT(6, 0)) {
+    for (ArgList::iterator it = DAL->begin(), ie = DAL->end(); it != ie; ) {
+      Arg *A = *it;
+      ++it;
+      if (A->getOption().getID() != options::OPT_mkernel &&
+          A->getOption().getID() != options::OPT_fapple_kext)
+        continue;
+      assert(it != ie && "unexpected argument translation");
+      A = *it;
+      assert(A->getOption().getID() == options::OPT_static &&
+             "missing expected -static argument");
+      it = DAL->getArgs().erase(it);
+    }
+  }
 
   // Validate the C++ standard library choice.
   CXXStdlibType Type = GetCXXStdlibType(*DAL);
@@ -915,9 +955,7 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
 }
 
 bool Darwin::IsUnwindTablesDefault() const {
-  // FIXME: Gross; we should probably have some separate target
-  // definition, possibly even reusing the one in clang.
-  return getArchName() == "x86_64";
+  return getArch() == llvm::Triple::x86_64;
 }
 
 bool Darwin::UseDwarfDebugFlags() const {
@@ -937,14 +975,14 @@ const char *Darwin::GetDefaultRelocationModel() const {
 }
 
 const char *Darwin::GetForcedPicModel() const {
-  if (getArchName() == "x86_64")
+  if (getArch() == llvm::Triple::x86_64)
     return "pic";
   return 0;
 }
 
 bool Darwin::SupportsProfiling() const {
   // Profiling instrumentation is only supported on x86.
-  return getArchName() == "i386" || getArchName() == "x86_64";
+  return getArch() == llvm::Triple::x86 || getArch() == llvm::Triple::x86_64;
 }
 
 bool Darwin::SupportsObjCGC() const {
@@ -1153,7 +1191,10 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(
   static const char *const MIPSLibDirs[] = { "/lib" };
   static const char *const MIPSTriples[] = { "mips-linux-gnu" };
   static const char *const MIPSELLibDirs[] = { "/lib" };
-  static const char *const MIPSELTriples[] = { "mipsel-linux-gnu" };
+  static const char *const MIPSELTriples[] = {
+    "mipsel-linux-gnu",
+    "mipsel-linux-android"
+  };
 
   static const char *const MIPS64LibDirs[] = { "/lib64", "/lib" };
   static const char *const MIPS64Triples[] = { "mips64-linux-gnu" };
@@ -1414,8 +1455,6 @@ Tool &Generic_GCC::SelectTool(const Compilation &C,
 }
 
 bool Generic_GCC::IsUnwindTablesDefault() const {
-  // FIXME: Gross; we should probably have some separate target
-  // definition, possibly even reusing the one in clang.
   return getArch() == llvm::Triple::x86_64;
 }
 
@@ -1625,19 +1664,43 @@ void Bitrig::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
       DriverArgs.hasArg(options::OPT_nostdincxx))
     return;
 
-  std::string Triple = getTriple().str();
-  if (Triple.substr(0, 5) == "amd64")
-    Triple.replace(0, 5, "x86_64");
+  switch (GetCXXStdlibType(DriverArgs)) {
+  case ToolChain::CST_Libcxx:
+    addSystemInclude(DriverArgs, CC1Args,
+                     getDriver().SysRoot + "/usr/include/c++/");
+    break;
+  case ToolChain::CST_Libstdcxx:
+    addSystemInclude(DriverArgs, CC1Args,
+                     getDriver().SysRoot + "/usr/include/c++/stdc++");
+    addSystemInclude(DriverArgs, CC1Args,
+                     getDriver().SysRoot + "/usr/include/c++/stdc++/backward");
 
-  addSystemInclude(DriverArgs, CC1Args, "/usr/include/c++/4.6.2");
-  addSystemInclude(DriverArgs, CC1Args, "/usr/include/c++/4.6.2/backward");
-  addSystemInclude(DriverArgs, CC1Args, "/usr/include/c++/4.6.2/" + Triple);
-
+    StringRef Triple = getTriple().str();
+    if (Triple.startswith("amd64"))
+      addSystemInclude(DriverArgs, CC1Args,
+                       getDriver().SysRoot + "/usr/include/c++/stdc++/x86_64" +
+                       Triple.substr(5));
+    else
+      addSystemInclude(DriverArgs, CC1Args,
+                       getDriver().SysRoot + "/usr/include/c++/stdc++/" +
+                       Triple);
+    break;
+  }
 }
 
 void Bitrig::AddCXXStdlibLibArgs(const ArgList &Args,
                                  ArgStringList &CmdArgs) const {
-  CmdArgs.push_back("-lstdc++");
+  switch (GetCXXStdlibType(Args)) {
+  case ToolChain::CST_Libcxx:
+    CmdArgs.push_back("-lc++");
+    CmdArgs.push_back("-lcxxrt");
+    // Include supc++ to provide Unwind until provided by libcxx.
+    CmdArgs.push_back("-lgcc");
+    break;
+  case ToolChain::CST_Libstdcxx:
+    CmdArgs.push_back("-lstdc++");
+    break;
+  }
 }
 
 /// FreeBSD - FreeBSD tool chain which can call as(1) and ld(1) directly.
@@ -2039,6 +2102,25 @@ static bool isMipsArch(llvm::Triple::ArchType Arch) {
          Arch == llvm::Triple::mips64el;
 }
 
+static bool isMipsR2Arch(llvm::Triple::ArchType Arch,
+                         const ArgList &Args) {
+  if (Arch != llvm::Triple::mips &&
+      Arch != llvm::Triple::mipsel)
+    return false;
+
+  Arg *A = Args.getLastArg(options::OPT_march_EQ,
+                           options::OPT_mcpu_EQ,
+                           options::OPT_mips_CPUs_Group);
+
+  if (!A)
+    return false;
+
+  if (A->getOption().matches(options::OPT_mips_CPUs_Group))
+    return A->getOption().matches(options::OPT_mips32r2);
+
+  return A->getValue(Args) == StringRef("mips32r2");
+}
+
 static StringRef getMultilibDir(const llvm::Triple &Triple,
                                 const ArgList &Args) {
   if (!isMipsArch(Triple.getArch()))
@@ -2120,9 +2202,16 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
   if (GCCInstallation.isValid()) {
     const llvm::Triple &GCCTriple = GCCInstallation.getTriple();
     const std::string &LibPath = GCCInstallation.getParentLibPath();
-    addPathIfExists((GCCInstallation.getInstallPath() +
-                     GCCInstallation.getMultiarchSuffix()),
-                    Paths);
+
+    if (IsAndroid && isMipsR2Arch(Triple.getArch(), Args))
+      addPathIfExists(GCCInstallation.getInstallPath() +
+                      GCCInstallation.getMultiarchSuffix() +
+                      "/mips-r2",
+                      Paths);
+    else
+      addPathIfExists((GCCInstallation.getInstallPath() +
+                       GCCInstallation.getMultiarchSuffix()),
+                      Paths);
 
     // If the GCC installation we found is inside of the sysroot, we want to
     // prefer libraries installed in the parent prefix of the GCC installation.

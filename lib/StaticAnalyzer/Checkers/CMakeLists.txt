@@ -27,6 +27,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   DeadStoresChecker.cpp
   DebugCheckers.cpp
   DereferenceChecker.cpp
+  DirectIvarAssignment.cpp
   DivZeroChecker.cpp
   DynamicTypePropagation.cpp
   ExprInspectionChecker.cpp
@@ -43,7 +44,6 @@ add_clang_library(clangStaticAnalyzerCheckers
   NSAutoreleasePoolChecker.cpp
   NSErrorChecker.cpp
   NoReturnFunctionChecker.cpp
-  OSAtomicChecker.cpp
   ObjCAtSyncChecker.cpp
   ObjCContainersASTChecker.cpp
   ObjCContainersChecker.cpp

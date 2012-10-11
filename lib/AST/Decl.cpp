@@ -193,7 +193,7 @@ static bool useInlineVisibilityHidden(const NamedDecl *D) {
   // anyway.
   return TSK != TSK_ExplicitInstantiationDeclaration &&
     TSK != TSK_ExplicitInstantiationDefinition &&
-    FD->hasBody(Def) && Def->isInlined();
+    FD->hasBody(Def) && Def->isInlined() && !Def->hasAttr<GNUInlineAttr>();
 }
 
 static LinkageInfo getLVForNamespaceScopeDecl(const NamedDecl *D,
@@ -1204,8 +1204,11 @@ void VarDecl::setStorageClass(StorageClass SC) {
 }
 
 SourceRange VarDecl::getSourceRange() const {
-  if (getInit())
-    return SourceRange(getOuterLocStart(), getInit()->getLocEnd());
+  if (const Expr *Init = getInit()) {
+    SourceLocation InitEnd = Init->getLocEnd();
+    if (InitEnd.isValid())
+      return SourceRange(getOuterLocStart(), InitEnd);
+  }
   return DeclaratorDecl::getSourceRange();
 }
 

@@ -407,8 +407,6 @@ def err_object_cannot_be_passed_returned_by_value : Error<
 def err_parameters_retval_cannot_have_fp16_type : Error<
   "%select{parameters|function return value}0 cannot have __fp16 type; did you forget * ?">;
 def warn_enum_value_overflow : Warning<"overflow in enumeration value">;
-def warn_pragma_options_align_unsupported_option : Warning<
-  "unsupported alignment option in '#pragma options align'">;
 def warn_pragma_options_align_reset_failed : Warning<
   "#pragma options align=reset failed: %0">;
 def err_pragma_options_align_mac68k_target_unsupported : Error<
@@ -707,8 +705,28 @@ def err_gc_weak_property_strong_type : Error<
   "weak attribute declared on a __strong type property in GC mode">;
 def warn_receiver_is_weak : Warning <
   "weak %select{receiver|property|implicit property}0 may be "
-  "unpredictably null in ARC mode">,
+  "unpredictably set to nil">,
   InGroup<DiagGroup<"receiver-is-weak">>, DefaultIgnore;
+def note_arc_assign_to_strong : Note<
+  "assign the value to a strong variable to keep the object alive during use">;
+def warn_arc_repeated_use_of_weak : Warning <
+  "weak %select{variable|property|implicit property|instance variable}0 %1 is "
+  "accessed multiple times in this %select{function|method|block|lambda}2 "
+  "but may be unpredictably set to nil; assign to a strong variable to keep "
+  "the object alive">,
+  InGroup<ARCRepeatedUseOfWeak>, DefaultIgnore;
+def warn_implicitly_retains_self : Warning <
+  "block implicitly retains 'self'; explicitly mention 'self' to indicate "
+  "this is intended behavior">,
+  InGroup<DiagGroup<"implicit-retain-self">>;
+def warn_arc_possible_repeated_use_of_weak : Warning <
+  "weak %select{variable|property|implicit property|instance variable}0 %1 may "
+  "be accessed multiple times in this %select{function|method|block|lambda}2 "
+  "and may be unpredictably set to nil; assign to a strong variable to keep "
+  "the object alive">,
+  InGroup<ARCRepeatedUseOfWeakMaybe>, DefaultIgnore;
+def note_arc_weak_also_accessed_here : Note<
+  "also accessed here">;
 def err_incomplete_synthesized_property : Error<
   "cannot synthesize property %0 with incomplete type %1">;
 
@@ -763,7 +781,7 @@ def err_static_assert_expression_is_not_constant : Error<
 def err_static_assert_failed : Error<"static_assert failed %0">;
 
 def warn_inline_namespace_reopened_noninline : Warning<
-  "inline namespace cannot be re-opened as a non-inline namespace">;
+  "inline namespace cannot be reopened as a non-inline namespace">;
 def err_inline_namespace_mismatch : Error<
   "%select{|non-}0inline namespace "
   "cannot be reopened as %select{non-|}0inline">;
@@ -1728,7 +1746,8 @@ def warn_nsobject_attribute : Warning<
   "__attribute ((NSObject)) may be put on a typedef only, "
   "attribute is ignored">, InGroup<NSobjectAttribute>;
 def warn_attribute_weak_on_local : Warning<
-  "__weak attribute cannot be specified on an automatic variable">,
+  "__weak attribute cannot be specified on an automatic variable when ARC "
+  "is not enabled">,
   InGroup<IgnoredAttributes>;
 def warn_weak_identifier_undeclared : Warning<
   "weak identifier %0 never declared">;
@@ -1782,6 +1801,8 @@ def err_attribute_vecreturn_only_pod_record : Error<
 def err_cconv_change : Error<
   "function declared '%0' here was previously declared "
   "%select{'%2'|without calling convention}1">;
+def warn_cconv_ignored : Warning<
+  "calling convention %0 ignored for this target">, InGroup<IgnoredAttributes>;
 def err_cconv_knr : Error<
   "function with no prototype cannot use %0 calling convention">;
 def err_cconv_varargs : Error<
@@ -1947,7 +1968,7 @@ def warn_impcast_integer_precision : Warning<
   InGroup<DiagGroup<"conversion">>, DefaultIgnore;
 def warn_impcast_integer_64_32 : Warning<
   "implicit conversion loses integer precision: %0 to %1">,
-  InGroup<DiagGroup<"shorten-64-to-32">>, DefaultIgnore;
+  InGroup<Shorten64To32>, DefaultIgnore;
 def warn_impcast_integer_precision_constant : Warning<
   "implicit conversion from %2 to %3 changes value from %0 to %1">,
   InGroup<ConstantConversion>;
@@ -1962,7 +1983,7 @@ def warn_impcast_string_literal_to_bool : Warning<
   InGroup<StringConversion>, DefaultIgnore;
 def warn_impcast_different_enum_types : Warning<
   "implicit conversion from enumeration type %0 to different enumeration type "
-  "%1">, InGroup<DiagGroup<"conversion">>;
+  "%1">, InGroup<EnumConversion>;
 def warn_impcast_bool_to_null_pointer : Warning<
     "initialization of pointer of type %0 to null from a constant boolean "
     "expression">, InGroup<BoolConversion>;
@@ -3826,16 +3847,14 @@ def warn_precedence_bitwise_rel : Warning<
   InGroup<Parentheses>;
 def note_precedence_bitwise_first : Note<
   "place parentheses around the %0 expression to evaluate it first">;
-def note_precedence_bitwise_silence : Note<
-  "place parentheses around the %0 expression to silence this warning">;
+def note_precedence_silence : Note<
+  "place parentheses around the '%0' expression to silence this warning">;
 
 def warn_precedence_conditional : Warning<
   "operator '?:' has lower precedence than '%0'; '%0' will be evaluated first">,
   InGroup<Parentheses>;
 def note_precedence_conditional_first : Note<
   "place parentheses around the '?:' expression to evaluate it first">;
-def note_precedence_conditional_silence : Note<
-  "place parentheses around the '%0' expression to silence this warning">;
 
 def warn_logical_instead_of_bitwise : Warning<
   "use of logical '%0' with constant operand">,
@@ -3847,13 +3866,12 @@ def note_logical_instead_of_bitwise_remove_constant : Note<
 
 def warn_bitwise_and_in_bitwise_or : Warning<
   "'&' within '|'">, InGroup<BitwiseOpParentheses>;
-def note_bitwise_and_in_bitwise_or_silence : Note<
-  "place parentheses around the '&' expression to silence this warning">;
 
 def warn_logical_and_in_logical_or : Warning<
   "'&&' within '||'">, InGroup<LogicalOpParentheses>;
-def note_logical_and_in_logical_or_silence : Note<
-  "place parentheses around the '&&' expression to silence this warning">;
+
+def warn_addition_in_bitshift : Warning<
+  "'%0' within '%1'">, InGroup<ShiftOpParentheses>;
 
 def warn_self_assignment : Warning<
   "explicitly assigning a variable of type %0 to itself">,
@@ -5664,7 +5682,7 @@ def warn_unannotated_fallthrough_per_function : Warning<
   "unannotated fall-through between switch labels in partly-annotated "
   "function">, InGroup<ImplicitFallthroughPerFunction>, DefaultIgnore;
 def note_insert_fallthrough_fixit : Note<
-  "insert '[[clang::fallthrough]];' to silence this warning">;
+  "insert '%0;' to silence this warning">;
 def note_insert_break_fixit : Note<
   "insert 'break;' to avoid fall-through">;
 def err_fallthrough_attr_wrong_target : Error<

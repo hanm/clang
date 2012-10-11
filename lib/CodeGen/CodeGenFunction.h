@@ -1503,7 +1503,7 @@ public:
   static bool hasAggregateLLVMType(QualType T);
 
   /// createBasicBlock - Create an LLVM basic block.
-  llvm::BasicBlock *createBasicBlock(StringRef name = "",
+  llvm::BasicBlock *createBasicBlock(const Twine &name = "",
                                      llvm::Function *parent = 0,
                                      llvm::BasicBlock *before = 0) {
 #ifdef NDEBUG
@@ -1653,13 +1653,26 @@ public:
   void EmitExprAsInit(const Expr *init, const ValueDecl *D,
                       LValue lvalue, bool capturedByInit);
 
+  /// EmitAggregateCopy - Emit an aggrate assignment.
+  ///
+  /// The difference to EmitAggregateCopy is that tail padding is not copied.
+  /// This is required for correctness when assigning non-POD structures in C++.
+  void EmitAggregateAssign(llvm::Value *DestPtr, llvm::Value *SrcPtr,
+                           QualType EltTy, bool isVolatile=false,
+                           CharUnits Alignment = CharUnits::Zero()) {
+    EmitAggregateCopy(DestPtr, SrcPtr, EltTy, isVolatile, Alignment, true);
+  }
+
   /// EmitAggregateCopy - Emit an aggrate copy.
   ///
   /// \param isVolatile - True iff either the source or the destination is
   /// volatile.
+  /// \param isAssignment - If false, allow padding to be copied.  This often
+  /// yields more efficient.
   void EmitAggregateCopy(llvm::Value *DestPtr, llvm::Value *SrcPtr,
                          QualType EltTy, bool isVolatile=false,
-                         CharUnits Alignment = CharUnits::Zero());
+                         CharUnits Alignment = CharUnits::Zero(),
+                         bool isAssignment = false);
 
   /// StartBlock - Start new block named N. If insert block is a dummy block
   /// then reuse it.
@@ -1828,6 +1841,7 @@ public:
 
   llvm::Value* EmitCXXTypeidExpr(const CXXTypeidExpr *E);
   llvm::Value *EmitDynamicCast(llvm::Value *V, const CXXDynamicCastExpr *DCE);
+  llvm::Value* EmitCXXUuidofExpr(const CXXUuidofExpr *E);
 
   void MaybeEmitStdInitializerListCleanup(llvm::Value *loc, const Expr *init);
   void EmitStdInitializerListCleanup(llvm::Value *loc,
@@ -1854,7 +1868,7 @@ public:
 
   /// \brief Emit a check that \p V is the address of storage of the
   /// appropriate size and alignment for an object of type \p Type.
-  void EmitTypeCheck(TypeCheckKind TCK, llvm::Value *V,
+  void EmitTypeCheck(TypeCheckKind TCK, SourceLocation Loc, llvm::Value *V,
                      QualType Type, CharUnits Alignment = CharUnits::Zero());
 
   llvm::Value *EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
@@ -2197,6 +2211,7 @@ public:
   LValue EmitCXXBindTemporaryLValue(const CXXBindTemporaryExpr *E);
   LValue EmitLambdaLValue(const LambdaExpr *E);
   LValue EmitCXXTypeidLValue(const CXXTypeidExpr *E);
+  LValue EmitCXXUuidofLValue(const CXXUuidofExpr *E);
 
   LValue EmitObjCMessageExprLValue(const ObjCMessageExpr *E);
   LValue EmitObjCIvarRefLValue(const ObjCIvarRefExpr *E);
@@ -2249,6 +2264,7 @@ public:
                                                    const CXXRecordDecl *RD);
 
   RValue EmitCXXMemberCall(const CXXMethodDecl *MD,
+                           SourceLocation CallLoc,
                            llvm::Value *Callee,
                            ReturnValueSlot ReturnValue,
                            llvm::Value *This,
@@ -2535,9 +2551,23 @@ public:
   void EmitBranchOnBoolExpr(const Expr *Cond, llvm::BasicBlock *TrueBlock,
                             llvm::BasicBlock *FalseBlock);
 
+  /// \brief Emit a description of a type in a format suitable for passing to
+  /// a runtime sanitizer handler.
+  llvm::Constant *EmitCheckTypeDescriptor(QualType T);
+
+  /// \brief Convert a value into a format suitable for passing to a runtime
+  /// sanitizer handler.
+  llvm::Value *EmitCheckValue(llvm::Value *V);
+
+  /// \brief Emit a description of a source location in a format suitable for
+  /// passing to a runtime sanitizer handler.
+  llvm::Constant *EmitCheckSourceLocation(SourceLocation Loc);
+
   /// \brief Create a basic block that will call the trap intrinsic, and emit a
   /// conditional branch to it.
-  void EmitCheck(llvm::Value *Checked);
+  void EmitCheck(llvm::Value *Checked, StringRef CheckName,
+                 llvm::ArrayRef<llvm::Constant *> StaticArgs,
+                 llvm::ArrayRef<llvm::Value *> DynamicArgs);
 
   /// EmitCallArg - Emit a single call argument.
   void EmitCallArg(CallArgList &args, const Expr *E, QualType ArgType);

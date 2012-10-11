@@ -2879,6 +2879,21 @@ IdentifierInfo *Parser::TryParseCXX11AttributeIdentifier(SourceLocation &Loc) {
   }
 }
 
+static bool IsBuiltInOrStandardCXX11Attribute(IdentifierInfo *AttrName,
+                                               IdentifierInfo *ScopeName) {
+  switch (AttributeList::getKind(AttrName, ScopeName,
+                                 AttributeList::AS_CXX11)) {
+  case AttributeList::AT_CarriesDependency:
+  case AttributeList::AT_FallThrough:
+  case AttributeList::AT_NoReturn: {
+    return true;
+  }
+
+  default:
+    return false;
+  }
+}
+
 /// ParseCXX11AttributeSpecifier - Parse a C++11 attribute-specifier. Currently
 /// only parses standard attributes.
 ///
@@ -2965,11 +2980,15 @@ void Parser::ParseCXX11AttributeSpecifier(ParsedAttributes &attrs,
 
     bool StandardAttr = IsBuiltInOrStandardCXX11Attribute(AttrName,ScopeName);
 
+    bool AttrParsed = false;
+
+    // Parse attribute arguments
     if (Tok.is(tok::l_paren)) {
-      if (ScopeName && (ScopeName->getName() == "gnu" ||
-                        ScopeName->getName() == "asp")) {
+      if (ScopeName && ScopeName->getName() == "gnu" ||
+          ScopeName && ScopeName->getName() == "asp") {
         ParseGNUAttributeArgs(AttrName, AttrLoc, attrs, endLoc,
                               ScopeName, ScopeLoc, AttributeList::AS_CXX11);
+        AttrParsed = true;
       } else {
         if (StandardAttr)
           Diag(Tok.getLocation(), diag::err_cxx11_attribute_forbids_arguments)
@@ -2979,20 +2998,20 @@ void Parser::ParseCXX11AttributeSpecifier(ParsedAttributes &attrs,
         ConsumeParen();
         SkipUntil(tok::r_paren, false);
       }
-    } else {
+    }
+
+    if (!AttrParsed)
       attrs.addNew(AttrName,
                    SourceRange(ScopeLoc.isValid() ? ScopeLoc : AttrLoc,
                                AttrLoc),
                    ScopeName, ScopeLoc, 0,
                    SourceLocation(), 0, 0, AttributeList::AS_CXX11);
-    }
 
     if (Tok.is(tok::ellipsis)) {
       ConsumeToken();
 
-      if (StandardAttr)
-        Diag(Tok, diag::err_cxx11_attribute_forbids_ellipsis)
-          << AttrName->getName();
+      Diag(Tok, diag::err_cxx11_attribute_forbids_ellipsis)
+        << AttrName->getName();
     }
   }
 

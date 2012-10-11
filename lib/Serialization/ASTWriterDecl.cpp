@@ -416,7 +416,7 @@ void ASTDeclWriter::VisitObjCMethodDecl(ObjCMethodDecl *D) {
   }
   Record.push_back(D->isInstanceMethod());
   Record.push_back(D->isVariadic());
-  Record.push_back(D->isSynthesized());
+  Record.push_back(D->isPropertyAccessor());
   Record.push_back(D->isDefined());
   Record.push_back(D->IsOverriding);
 
@@ -984,6 +984,7 @@ void ASTDeclWriter::VisitCXXConversionDecl(CXXConversionDecl *D) {
 
 void ASTDeclWriter::VisitImportDecl(ImportDecl *D) {
   VisitDecl(D);
+  Record.push_back(Writer.getSubmoduleID(D->getImportedModule()));
   ArrayRef<SourceLocation> IdentifierLocs = D->getIdentifierLocs();
   Record.push_back(!IdentifierLocs.empty());
   if (IdentifierLocs.empty()) {
@@ -1106,6 +1107,7 @@ void ASTDeclWriter::VisitClassTemplateSpecializationDecl(
   Writer.AddTemplateArgumentList(&D->getTemplateArgs(), Record);
   Writer.AddSourceLocation(D->getPointOfInstantiation(), Record);
   Record.push_back(D->getSpecializationKind());
+  Record.push_back(D->isCanonicalDecl());
 
   if (D->isCanonicalDecl()) {
     // When reading, we'll add it to the folding set of the following template. 

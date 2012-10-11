@@ -735,6 +735,20 @@ public:
   /// should not be used elsewhere.
   void EmitCurrentDiagnostic(unsigned DiagID);
 
+  /// Records and restores the FP_CONTRACT state on entry/exit of compound
+  /// statements.
+  class FPContractStateRAII {
+  public:
+    FPContractStateRAII(Sema& S)
+      : S(S), OldFPContractState(S.FPFeatures.fp_contract) {}
+    ~FPContractStateRAII() {
+      S.FPFeatures.fp_contract = OldFPContractState;
+    }
+  private:
+    Sema& S;
+    bool OldFPContractState : 1;
+  };
+
 public:
   Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
        TranslationUnitKind TUKind = TU_Complete,
@@ -1308,7 +1322,6 @@ public:
   bool SetParamDefaultArgument(ParmVarDecl *Param, Expr *DefaultArg,
                                SourceLocation EqualLoc);
 
-  void CheckSelfReference(Decl *OrigDecl, Expr *E);
   void AddInitializerToDecl(Decl *dcl, Expr *init, bool DirectInit,
                             bool TypeMayContainAuto);
   void ActOnUninitializedDecl(Decl *dcl, bool TypeMayContainAuto);
@@ -2295,17 +2308,7 @@ public:
   void CollectImmediateProperties(ObjCContainerDecl *CDecl,
             llvm::DenseMap<IdentifierInfo *, ObjCPropertyDecl*>& PropMap,
             llvm::DenseMap<IdentifierInfo *, ObjCPropertyDecl*>& SuperPropMap);
-
-
-  /// LookupPropertyDecl - Looks up a property in the current class and all
-  /// its protocols.
-  ObjCPropertyDecl *LookupPropertyDecl(const ObjCContainerDecl *CDecl,
-                                       IdentifierInfo *II);
   
-  /// PropertyIfSetterOrGetter - Looks up the property if named declaration
-  /// is a setter or getter method backing a property.
-  ObjCPropertyDecl *PropertyIfSetterOrGetter(NamedDecl *D);
-
   /// Called by ActOnProperty to handle \@property declarations in
   /// class extensions.
   Decl *HandlePropertyInClassExtension(Scope *S,
@@ -6315,8 +6318,7 @@ public:
 
   /// ActOnPragmaOptionsAlign - Called on well formed \#pragma options align.
   void ActOnPragmaOptionsAlign(PragmaOptionsAlignKind Kind,
-                               SourceLocation PragmaLoc,
-                               SourceLocation KindLoc);
+                               SourceLocation PragmaLoc);
 
   enum PragmaPackKind {
     PPK_Default, // #pragma pack([n])

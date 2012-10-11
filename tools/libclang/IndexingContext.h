@@ -382,6 +382,9 @@ public:
                       StringRef filename, const FileEntry *File,
                       bool isImport, bool isAngled);
 
+  void importedModule(const ImportDecl *ImportD);
+  void importedPCH(const FileEntry *File);
+
   void startedTranslationUnit();
 
   void indexDecl(const Decl *D);

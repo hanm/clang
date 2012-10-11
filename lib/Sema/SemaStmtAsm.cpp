@@ -331,6 +331,28 @@ static bool isMSAsmKeyword(StringRef Name) {
   return Ret;
 }
 
+// Check to see if the expression is a substring of the asm operand.
+static StringRef getMSInlineAsmExprName(StringRef Name) {
+  // Strip off the size directives.
+  // E.g., DWORD PTR [V] -> V
+  if (Name.startswith("BYTE") || Name.startswith("byte") ||
+      Name.startswith("WORD") || Name.startswith("word") ||
+      Name.startswith("DWORD") || Name.startswith("dword") ||
+      Name.startswith("QWORD") || Name.startswith("qword") ||
+      Name.startswith("XWORD") || Name.startswith("xword") ||
+      Name.startswith("XMMWORD") || Name.startswith("xmmword") ||
+      Name.startswith("YMMWORD") || Name.startswith("ymmword")) {
+    std::pair< StringRef, StringRef > SplitName = Name.split(' ');
+    assert((SplitName.second.startswith("PTR") ||
+            SplitName.second.startswith("ptr")) &&
+           "Expected PTR/ptr!");
+    SplitName = SplitName.second.split('[');
+    SplitName = SplitName.second.split(']');
+    return SplitName.first;
+  }
+  return Name;
+}
+
 // getIdentifierInfo - Given a Name and a range of tokens, find the associated
 // IdentifierInfo*.
 static IdentifierInfo *getIdentifierInfo(StringRef Name,
@@ -377,9 +399,11 @@ static bool isSimpleMSAsm(std::vector<StringRef> &Pieces,
   if (isMSAsmKeyword(Pieces[0]))
       return false;
 
-  for (unsigned i = 1, e = Pieces.size(); i != e; ++i)
-    if (!TI.isValidGCCRegisterName(Pieces[i]))
+  for (unsigned i = 1, e = Pieces.size(); i != e; ++i) {
+    StringRef Op = getMSInlineAsmExprName(Pieces[i]);
+    if (!TI.isValidGCCRegisterName(Op))
       return false;
+  }
   return true;
 }
 
@@ -500,11 +524,6 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
   // AsmParser doesn't fully support these asm statements.
   if (bailOnMSAsm(Pieces)) { DEF_SIMPLE_MSASM(EmptyAsmStr); return Owned(NS); }
 
-  // Initialize targets and assembly printers/parsers.
-  llvm::InitializeAllTargetInfos();
-  llvm::InitializeAllTargetMCs();
-  llvm::InitializeAllAsmParsers();
-
   // Get the target specific parser.
   std::string Error;
   const std::string &TT = Context.getTargetInfo().getTriple().getTriple();
@@ -558,92 +577,80 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
 
     // Match the MCInstr.
     unsigned Kind;
+    unsigned Opcode;
     unsigned ErrorInfo;
-    SmallVector<llvm::MCInst, 2> Instrs;
-    HadError = TargetParser->MatchInstruction(IDLoc, Kind, Operands, Instrs,
+    SmallVector<std::pair< unsigned, std::string >, 4> MapAndConstraints;
+    HadError = TargetParser->MatchInstruction(IDLoc, Operands, *Str.get(), Kind,
+                                              Opcode, MapAndConstraints,
                                               ErrorInfo,
                                               /*matchingInlineAsm*/ true);
     // If we had an error parsing the operands, fail gracefully.
     if (HadError) { DEF_SIMPLE_MSASM(EmptyAsmStr); return Owned(NS); }
 
     // Get the instruction descriptor.
-    llvm::MCInst Inst = Instrs.back();
     const llvm::MCInstrInfo *MII = TheTarget->createMCInstrInfo();
-    const llvm::MCInstrDesc &Desc = MII->get(Inst.getOpcode());
+    const llvm::MCInstrDesc &Desc = MII->get(Opcode);
     llvm::MCInstPrinter *IP =
       TheTarget->createMCInstPrinter(1, *MAI, *MII, *MRI, *STI);
 
     // Build the list of clobbers, outputs and inputs.
     unsigned NumDefs = Desc.getNumDefs();
     for (unsigned i = 1, e = Operands.size(); i != e; ++i) {
-      if (Operands[i]->isToken() || Operands[i]->isImm())
+      // Skip immediates.
+      if (Operands[i]->isImm())
         continue;
 
-      // FIXME: The getMCInstOperandNum() function does not work with tied 
-      // operands or custom converters.
-      unsigned NumMCOperands;
-      unsigned MCIdx = TargetParser->getMCInstOperandNum(Kind, Operands, i,
-                                                         NumMCOperands);
-      assert (NumMCOperands && "Expected at least 1 MCOperand!");
-
-      for (unsigned j = MCIdx, e = MCIdx + NumMCOperands; j != e; ++j) {
-        const llvm::MCOperand &Op = Inst.getOperand(j);
-
-        // Skip immediates.
-        if (Op.isImm() || Op.isFPImm())
-          continue;
-
-        // Skip invalid register operands.
-        if (Op.isReg() && Op.getReg() == 0)
-          continue;
-
-        // Register/Clobber.
-        if (Op.isReg() && NumDefs && (j < NumDefs)) {
+      // Register.
+      if (Operands[i]->isReg()) {
+        // Clobber.
+        if (NumDefs && (MapAndConstraints[i-1].first < NumDefs)) {
           std::string Reg;
           llvm::raw_string_ostream OS(Reg);
-          IP->printRegName(OS, Op.getReg());
-
+          IP->printRegName(OS, Operands[i]->getReg());
           StringRef Clobber(OS.str());
           if (!Context.getTargetInfo().isValidClobber(Clobber))
             return StmtError(
               Diag(AsmLoc, diag::err_asm_unknown_register_name) << Clobber);
           ClobberRegs.insert(Reg);
-          continue;
         }
-        // Expr/Input or Output.
-        if (Op.isExpr()) {
-          const llvm::MCExpr *Expr = Op.getExpr();
-          const llvm::MCSymbolRefExpr *SymRef;
-          if ((SymRef = dyn_cast<llvm::MCSymbolRefExpr>(Expr))) {
-            StringRef Name = SymRef->getSymbol().getName();
-            IdentifierInfo *II = getIdentifierInfo(Name, AsmToks,
-                                                   AsmTokRanges[StrIdx].first,
-                                                   AsmTokRanges[StrIdx].second);
-            if (II) {
-              CXXScopeSpec SS;
-              UnqualifiedId Id;
-              SourceLocation Loc;
-              Id.setIdentifier(II, AsmLoc);
-              ExprResult Result = ActOnIdExpression(getCurScope(), SS, Loc, Id,
-                                                    false, false);
-              if (!Result.isInvalid()) {
-                // FIXME: Determine the proper constraints.
-                bool isMemDef = (i == 1) && Desc.mayStore();
-                if (isMemDef) {
-                  Outputs.push_back(II);
-                  OutputExprs.push_back(Result.take());
-                  OutputExprNames.push_back(Name.str());
-                  OutputExprStrIdx.push_back(StrIdx);
-                  OutputConstraints.push_back("=r");
-                } else {
-                  Inputs.push_back(II);
-                  InputExprs.push_back(Result.take());
-                  InputExprNames.push_back(Name.str());
-                  InputExprStrIdx.push_back(StrIdx);
-                  InputConstraints.push_back("r");
-                }
-              }
-            }
+        continue;
+      }
+
+      // Expr/Input or Output.
+      StringRef Name = getMSInlineAsmExprName(Pieces[StrIdx][i]);
+
+      // The expr may be a register.
+      // E.g., DWORD PTR [eax]
+      if (Context.getTargetInfo().isValidGCCRegisterName(Name))
+        continue;
+
+      IdentifierInfo *II = getIdentifierInfo(Name, AsmToks,
+                                             AsmTokRanges[StrIdx].first,
+                                             AsmTokRanges[StrIdx].second);
+      if (II) {
+        CXXScopeSpec SS;
+        UnqualifiedId Id;
+        SourceLocation Loc;
+        Id.setIdentifier(II, AsmLoc);
+        ExprResult Result = ActOnIdExpression(getCurScope(), SS, Loc, Id,
+                                              false, false);
+        if (!Result.isInvalid()) {
+          // FIXME: Determine the proper constraints.
+          bool isMemDef = (i == 1) && Desc.mayStore();
+          if (isMemDef) {
+            Outputs.push_back(II);
+            OutputExprs.push_back(Result.take());
+            OutputExprNames.push_back(Name.str());
+            OutputExprStrIdx.push_back(StrIdx);
+
+            std::string Constraint = "=" + MapAndConstraints[i-1].second;
+            OutputConstraints.push_back(Constraint);
+          } else {
+            Inputs.push_back(II);
+            InputExprs.push_back(Result.take());
+            InputExprNames.push_back(Name.str());
+            InputExprStrIdx.push_back(StrIdx);
+            InputConstraints.push_back(MapAndConstraints[i-1].second);
           }
         }
       }

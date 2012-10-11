@@ -342,11 +342,6 @@ def MacOSXAPIChecker : Checker<"API">,
   HelpText<"Check for proper uses of various Mac OS X APIs">,
   DescFile<"MacOSXAPIChecker.cpp">;
 
-def OSAtomicChecker : Checker<"AtomicCAS">,
-  InPackage<OSX>,
-  HelpText<"Evaluate calls to OSAtomic functions">,
-  DescFile<"OSAtomicChecker.cpp">;
-
 def MacOSKeychainAPIChecker : Checker<"SecKeychainAPI">,
   InPackage<OSX>,
   HelpText<"Check for proper uses of Secure Keychain APIs">,
@@ -415,7 +410,11 @@ def ObjCDeallocChecker : Checker<"Dealloc">,
 
 def IvarInvalidationChecker : Checker<"InstanceVariableInvalidation">,
   HelpText<"Check that the invalidatable instance variables are invalidated in the methods annotated with objc_instance_variable_invalidator">,
-  DescFile<"IvarInvalidationCheckerChecker.cpp">;
+  DescFile<"IvarInvalidationChecker.cpp">;
+
+def DirectIvarAssignment : Checker<"DirectIvarAssignment">,
+  HelpText<"Check that the invalidatable instance variables are invalidated in the methods annotated with objc_instance_variable_invalidator">,
+  DescFile<"DirectIvarAssignment.cpp">;
 
 } // end "alpha.osx.cocoa"
 
@@ -481,6 +480,10 @@ def CallGraphViewer : Checker<"ViewCallGraph">,
 
 def CallGraphDumper : Checker<"DumpCallGraph">,
   HelpText<"Display Call Graph">,
+  DescFile<"DebugCheckers.cpp">;
+
+def ConfigDumper : Checker<"ConfigDumper">,
+  HelpText<"Dump config table">,
   DescFile<"DebugCheckers.cpp">;
 
 def TraversalDumper : Checker<"DumpTraversal">,

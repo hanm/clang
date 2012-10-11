@@ -441,6 +441,34 @@ private:
   /// #pragma pack...
   void HandlePragmaPack();
 
+  /// \brief Handle the annotation token produced for
+  /// #pragma ms_struct...
+  void HandlePragmaMSStruct();
+
+  /// \brief Handle the annotation token produced for
+  /// #pragma align...
+  void HandlePragmaAlign();
+
+  /// \brief Handle the annotation token produced for
+  /// #pragma weak id...
+  void HandlePragmaWeak();
+
+  /// \brief Handle the annotation token produced for
+  /// #pragma weak id = id...
+  void HandlePragmaWeakAlias();
+
+  /// \brief Handle the annotation token produced for
+  /// #pragma redefine_extname...
+  void HandlePragmaRedefineExtname();
+
+  /// \brief Handle the annotation token produced for
+  /// #pragma STDC FP_CONTRACT...
+  void HandlePragmaFPContract();
+
+  /// \brief Handle the annotation token produced for
+  /// #pragma OPENCL EXTENSION...
+  void HandlePragmaOpenCLExtension();
+
   /// GetLookAheadToken - This peeks ahead N tokens and returns that token
   /// without consuming any tokens.  LookAhead(0) returns 'Tok', LookAhead(1)
   /// returns the token after Tok, etc.
@@ -1881,13 +1909,6 @@ private:
                                     SourceLocation *EndLoc = 0);
   void ParseCXX11Attributes(ParsedAttributesWithRange &attrs,
                             SourceLocation *EndLoc = 0);
-  void ParseCXX11AttributeGNUStyleArgs(IdentifierInfo *AttrName,
-                                   SourceLocation AttrNameLoc,
-																	 IdentifierInfo *ScopeName,
-																	 SourceLocation ScopeLoc,
-                                   ParsedAttributes &Attrs);
-  bool IsBuiltInOrStandardCXX11Attribute(IdentifierInfo *AttrName,
-                                         IdentifierInfo *ScopeName);
 
   IdentifierInfo *TryParseCXX11AttributeIdentifier(SourceLocation &Loc);
 
