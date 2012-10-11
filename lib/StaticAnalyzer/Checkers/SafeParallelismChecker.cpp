@@ -33,6 +33,7 @@ static raw_ostream& os = llvm::nulls();
 #endif
 
 namespace {
+  RegionParamAttr *BuiltinDefaulrRegionParam;
   /**
    *  Return true when the input string is a special RPL element
    *  (e.g., '*', '?', 'Root'.
@@ -98,6 +99,20 @@ namespace {
     } else if (const BuiltinType* tt = dyn_cast<BuiltinType>(T)) {
       // TODO check the number of parameters of the arg attr to be 1
       result = true;
+    } 
+    return result;
+  }
+
+  inline const RegionParamAttr* getRegionParamAttr(const Type* T) { 
+    const RegionParamAttr* result = 0; // null
+    if (const TagType* tt = dyn_cast<TagType>(T)) {
+      const TagDecl* td = tt->getDecl();
+      const RegionParamAttr* rpa = td->getAttr<RegionParamAttr>();
+      // TODO check the number of params is equal to arg attr.
+      if (rpa) result = rpa; 
+    } else if (const BuiltinType* tt = dyn_cast<BuiltinType>(T)) {
+      // TODO check the number of parameters of the arg attr to be 1
+      result = BuiltinDefaulrRegionParam;
     } 
     return result;
   }
@@ -330,7 +345,9 @@ public:
   }
   /// Substitution
   bool substitute(StringRef from, Rpl& to) {
-    os << "DEBUG:: before substitution: ";
+    os << "DEBUG:: before substitution(" << from << "<-";
+    to.printElements(os);
+    os <<"): ";
     printElements(os);
     os << "\n";
     /// 1. find all occurences of 'from'
@@ -349,7 +366,9 @@ public:
         os << "'\n";
       }
     }
-    os << "DEBUG:: after substitution: ";
+    os << "DEBUG:: after substitution(" << from << "<-";
+    to.printElements(os);
+    os << "): ";
     printElements(os);
     os << "\n";
     return false;
@@ -608,8 +627,10 @@ public:
     os << "\n";
 
     /// 1. vd is a FunctionDecl
-    if (dyn_cast<FunctionDecl>(vd)) {
+    const FunctionDecl* fund = dyn_cast<FunctionDecl>(vd);
+    if (fund) {
       // TODO
+      
     }
     /// 2. vd is a FieldDecl
     /// Type_vd <args> vd in RPL
@@ -618,8 +639,10 @@ public:
       /// 2.1. apply substitutions
       const RegionArgAttr* arg = fd->getAttr<RegionArgAttr>();
       if (arg) {
-        const RecordDecl* rd = fd->getParent();
-        const RegionParamAttr* rpa = rd->getAttr<RegionParamAttr>();
+        //const RecordDecl* rd = fd->getParent(); //FIXME
+        const Type* t = fd->getType().getTypePtr();
+        if (t->isPointerType()) t = t->getPointeeType().getTypePtr();
+        const RegionParamAttr* rpa = getRegionParamAttr(t);
         assert(rpa);
         StringRef from = rpa->getParam_name();
         // apply substitution to temp effects
@@ -636,9 +659,9 @@ public:
       StringRef s;
       Effect* e = 0;
       // TODO if basic type or pointer or reference use 'in' clause
-      const InRegionAttr* at = fd->getAttr<InRegionAttr>();
-      if (at) {
-        s = at->getRpl();
+      const InRegionAttr* inat = fd->getAttr<InRegionAttr>();
+      if (inat) {
+        s = inat->getRpl();
         // TODO else use arg clause 
         /// TODO is this atomic or not? just ignore atomic for now
         Rpl* rpl = new Rpl(s, vd);
@@ -1076,13 +1099,13 @@ public:
     ///      union) and must have the same number of region parameters.
     if (const RegionArgAttr* attr = D->getAttr<RegionArgAttr>()) {
       const Type *t = D->getType().getTypePtr();
-      if (t->isPointerType()) t->getPointeeType(); 
+      if (t->isPointerType()) t = t->getPointeeType().getTypePtr(); 
             // FIXME also support pointer to pointer to pointer...
             // Note right now we support the syntax of single pointer with 
             // an 'in' annotation for the pointer and an 'arg' one for the 
             // base type.
       if (!isValidTypeForArg(t) // FIXME
-          && hasValidRegionParamAttr(t)) { //FIXME
+          && !hasValidRegionParamAttr(t)) { //FIXME
         std::string sbuf;
         llvm::raw_string_ostream strbuf(sbuf);
         D->getType().print(strbuf, Ctx.getPrintingPolicy());
@@ -1253,8 +1276,13 @@ public:
     /** initialize traverser */
     ASPSemanticCheckerTraverser aspTraverser(BR, D->getASTContext(),
                                              mgr.getAnalysisDeclContext(D), os);
+    BuiltinDefaulrRegionParam = ::new(D->getASTContext()) 
+        RegionParamAttr(D->getSourceRange(), D->getASTContext(), "P");
     /** run checker */
     aspTraverser.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+    // FIXME: deleting BuiltinDefaulrRegionParam below creates dangling 
+    // pointers (i.e. there's some memory leak somewhere).
+    //::delete BuiltinDefaulrRegionParam;
     os << "DEBUG:: done running ASP Semantic Checker\n\n";
   }
 };
