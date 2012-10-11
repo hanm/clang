@@ -75,5 +75,4 @@ void foo(int i) {
   }
 
   [[carries_dependency]] return; // expected-warning {{attribute carries_dependency cannot be specified on a statement}}
->>>>>>> e8219a655128b98d0573658a139de5d848451fda
 }
