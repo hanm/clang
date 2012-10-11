@@ -193,11 +193,11 @@ private:
   class RplRef {
     long firstIdx; 
     long lastIdx;
-    Rpl& rpl;
+    const Rpl& rpl;
   
   public:
     /// Constructor
-    RplRef(Rpl& r) : rpl(r) {
+    RplRef(const Rpl& r) : rpl(r) {
       firstIdx = 0;
       lastIdx = rpl.rplElements.size()-1;
     }
@@ -300,7 +300,7 @@ public:
     //return result;
   }
   /// Printing
-  void printElements(raw_ostream& os) {
+  void printElements(raw_ostream& os) const {
     ElementVector::const_iterator I = rplElements.begin();
     ElementVector::const_iterator E = rplElements.end();
     for (; I < E-1; I++) {
@@ -310,12 +310,14 @@ public:
     if (I==E-1)
       os << (*I);
   }
-  std::string toString() {
+  
+  std::string toString() const {
     std::string sbuf;
     llvm::raw_string_ostream os(sbuf);
     printElements(os);
     return std::string(os.str());
   }
+  
   /// Getters
   inline const StringRef getLastElement() {
     return rplElements.back(); 
@@ -326,7 +328,7 @@ public:
   }
   
   /// Nesting (Under)
-  bool isUnder(Rpl& rhsRpl) {
+  bool isUnder(const Rpl& rhsRpl) const {
     RplRef* lhs = new RplRef(*this);
     RplRef* rhs = new RplRef(rhsRpl);
     bool result = lhs->isIncludedIn(*rhs);
@@ -334,7 +336,7 @@ public:
     return result;
   }
   /// Inclusion
-  bool isIncludedIn(Rpl& rhsRpl) { 
+  bool isIncludedIn(const Rpl& rhsRpl) const { 
     RplRef* lhs = new RplRef(*this);
     RplRef* rhs = new RplRef(rhsRpl);
     bool result = lhs->isIncludedIn(*rhs);
@@ -358,7 +360,6 @@ public:
         os << "DEBUG:: found '" << from 
           << "' replaced with '" ;
         to.printElements(os);
-        //size_t len = to.length();
         it = rplElements.erase(it);
         it = rplElements.insert(it, to.rplElements.begin(), to.rplElements.end());
         os << "' == '";
@@ -401,6 +402,7 @@ private:
   /// Fields
   EffectKind effectKind;
   Rpl* rpl;
+  const Attr* attr; // used to get SourceLocation information
 
   /// Sub-Effect Kind
   inline bool isSubEffectKindOf(const Effect& e) const {
@@ -434,7 +436,8 @@ public:
   typedef llvm::SmallVector<Effect*, EFFECT_VECTOR_SIZE> EffectVector;
 
   /// Constructors
-  Effect(EffectKind ec, Rpl* r) : effectKind(ec), rpl(r) {}
+  Effect(EffectKind ec, Rpl* r, const Attr* a) 
+        : effectKind(ec), rpl(r), attr(a) {}
   /// Destructors
   virtual ~Effect() { 
     delete rpl;
@@ -460,7 +463,7 @@ public:
       rpl->printElements(os);
     }
   }
-  /// Various
+  /// Predicates
   inline bool isPureEffect() const {
     return (effectKind == PureEffect) ? true : false;
   }
@@ -474,14 +477,18 @@ public:
     return std::string(os.str());
   }
   
-  /// Getters
-  EffectKind getEffectKind() const { return effectKind; }
-  Rpl* getRpl() { return rpl; }
-
   inline bool isAtomic() const { 
     return (effectKind==AtomicReadsEffect ||
             effectKind==AtomicWritesEffect) ? true : false;
   }
+
+  /// Getters
+  inline EffectKind getEffectKind() const { return effectKind; }
+  
+  inline const Rpl* getRpl() { return rpl; }
+
+  inline SourceLocation getLocation() { return attr->getLocation();}
+  
   /// Substitution
   inline bool substitute(StringRef from, Rpl& to) {
     if (rpl)
@@ -661,12 +668,12 @@ public:
       // TODO if basic type or pointer or reference use 'in' clause
       const InRegionAttr* inat = fd->getAttr<InRegionAttr>();
       if (inat) {
-        s = inat->getRpl();
+        //s = inat->getRpl();
         // TODO else use arg clause 
         /// TODO is this atomic or not? just ignore atomic for now
-        Rpl* rpl = new Rpl(s, vd);
+        //Rpl* rpl = new Rpl(s, vd);
         EffectKind ec = (hasWriteSemantics) ? WritesEffect : ReadsEffect;
-        e = new Effect(ec, rpl);
+        e = new Effect(ec, new Rpl(inat->getRpl(), vd), inat);
         // push effects on temp-stack for possible substitution
       }
       if (e) effectsTmp.push_back(e);
@@ -755,7 +762,8 @@ private:
    *  Emit a Warning when the input string is not a valid region name
    *  or region parameter.
    */
-  void helperEmitInvalidRegionOrParamWarning(Decl* D, const StringRef& str) {
+  void helperEmitInvalidRegionOrParamWarning(
+                      Decl* D, const StringRef& str, SourceLocation loc) {
     std::string descr = "'";
     descr.append(str);
     descr.append("' invalid region or parameter name");
@@ -764,8 +772,7 @@ private:
     StringRef bugCategory = "Safe Parallelism";
     StringRef bugStr = descr;
 
-    PathDiagnosticLocation VDLoc =
-       PathDiagnosticLocation::create(D, BR.getSourceManager());
+    PathDiagnosticLocation VDLoc(loc, BR.getSourceManager());
 
     BR.EmitBasicReport(D, bugName, bugCategory,
                        bugStr, VDLoc, D->getSourceRange());
@@ -775,7 +782,8 @@ private:
    *  Emit a Warning when the input string (which is assumed to be an RPL
    *  element) is not declared.
    */
-  void helperEmitUndeclaredRplElementWarning(Decl* D, const StringRef& str) {
+  void helperEmitUndeclaredRplElementWarning(
+                        Decl* D, const StringRef& str, SourceLocation loc) {
     std::string description_std = "'";
     description_std.append(str);
     description_std.append("' RPL element was not declared");
@@ -783,9 +791,7 @@ private:
     StringRef bugCategory = "Safe Parallelism";
     StringRef bugStr = description_std;
 
-    PathDiagnosticLocation VDLoc =
-       PathDiagnosticLocation::create(D, BR.getSourceManager());
-
+    PathDiagnosticLocation VDLoc(loc, BR.getSourceManager());
     BR.EmitBasicReport(D, bugName, bugCategory,
                        bugStr, VDLoc, D->getSourceRange());
   }
@@ -796,6 +802,7 @@ private:
   void helperEmitInvalidTypeForAttr(const Decl* D, 
                                   const Attr* attr, const StringRef& str) {
     std::string attrType = "";
+    SourceLocation loc = attr->getLocation();
     if (isa<InRegionAttr>(attr)) attrType = "in";
     else if (isa<RegionArgAttr>(attr)) attrType = "arg";
     else {
@@ -814,9 +821,7 @@ private:
     StringRef bugCategory = "Safe Parallelism";
     StringRef bugStr = description_std;
 
-    PathDiagnosticLocation VDLoc =
-       PathDiagnosticLocation::create(D, BR.getSourceManager());
-
+    PathDiagnosticLocation VDLoc(loc, BR.getSourceManager());
     BR.EmitBasicReport(D, bugName, bugCategory,
                        bugStr, VDLoc, D->getSourceRange());    
   }
@@ -846,10 +851,12 @@ private:
          i = D->specific_attr_begin<AttrType>(),
          e = D->specific_attr_end<AttrType>();
          i != e; ++i) {
+      //const Attr* attr = *i;
       const StringRef str = getRegionOrParamName(*i);
       if (!isValidRegionName(str)) {
         // Emit bug report!
-        helperEmitInvalidRegionOrParamWarning(D, str);
+        helperEmitInvalidRegionOrParamWarning(D, str, (*i)->getLocation());
+        //SourceLocation loc = attr->getLocation();
         result = false;
       }
     }
@@ -860,7 +867,7 @@ private:
    *  Check that the annotations of type AttrType of declaration D
    *  have RPLs whose elements have been declared
    */
-  bool checkRpl(Decl*D, StringRef rpl) {
+  bool checkRpl(Decl*D, StringRef rpl, SourceLocation loc) {
     bool result = true;
     while(rpl.size() > 0) { /// for all RPL elements of the RPL
       // FIXME: '::' can appear as part of an RPL element. Splitting must
@@ -870,7 +877,7 @@ private:
       /// head: is it a special RPL element? if not, is it declared?
       if (!isSpecialRplElement(head) && !findRegionName(D, head)) {
         // Emit bug report!
-        helperEmitUndeclaredRplElementWarning(D, head);
+        helperEmitUndeclaredRplElementWarning(D, head, loc);
         result = false;
       }
       rpl = pair.second;
@@ -888,7 +895,7 @@ private:
          i = D->specific_attr_begin<AttrType>(),
          e = D->specific_attr_end<AttrType>();
          i != e; ++i) {
-      if (!checkRpl(D, (*i)->getRpl()))
+      if (!checkRpl(D, (*i)->getRpl(), (*i)->getLocation()))
         result = false;
     }
     return result;
@@ -921,7 +928,7 @@ private:
                     // PureEffectAttr as well, but the compiler complains
                     // that such attributes don't have a getRpl method...
       if (!dyn_cast<PureEffectAttr>(*i)) rpl = new Rpl((*i)->getRpl(), D);
-      ev.push_back(new Effect(ec, rpl));
+      ev.push_back(new Effect(ec, rpl, *i));
     }
   }
 
@@ -931,8 +938,8 @@ private:
     buildPartialEffectSummary<WritesEffectAttr>(D, ev);
     buildPartialEffectSummary<AtomicReadsEffectAttr>(D, ev);
     buildPartialEffectSummary<AtomicWritesEffectAttr>(D, ev);
-    if (D->getAttr<PureEffectAttr>()) {
-      Effect* e = new Effect(PureEffect, 0);
+    if (const PureEffectAttr* attr = D->getAttr<PureEffectAttr>()) {
+      Effect* e = new Effect(PureEffect, 0, attr);
       ev.push_back(e);      
     }
   }
@@ -957,9 +964,8 @@ private:
           StringRef bugCategory = "Safe Parallelism";
           StringRef bugStr = strbuf.str();
 
-          PathDiagnosticLocation VDLoc =
-            PathDiagnosticLocation::create(D, BR.getSourceManager());
-          
+          PathDiagnosticLocation VDLoc((*I)->getLocation(), BR.getSourceManager());
+
           BR.EmitBasicReport(D, bugName, bugCategory,
                    bugStr, VDLoc, D->getSourceRange());
           found = true;
