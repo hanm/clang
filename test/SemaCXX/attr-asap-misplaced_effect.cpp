@@ -1,7 +1,7 @@
-// RUN: %clang_cc1 -DASP_GNU_SYNTAX %s -verify
-// RUN: %clang_cc1 -DASP_CXX11_SYNTAX -std=c++11 %s -verify
+// RUN: %clang_cc1 -DASAP_GNU_SYNTAX %s -verify
+// RUN: %clang_cc1 -DASAP_CXX11_SYNTAX -std=c++11 %s -verify
 
-#ifdef ASP_GNU_SYNTAX
+#ifdef ASAP_GNU_SYNTAX
 class
 __attribute__((region("Money")))
 __attribute__ ((param("P"))) 
@@ -40,7 +40,7 @@ int main (void) {
 
 #endif
 
-#ifdef ASP_CXX11_SYNTAX
+#ifdef ASAP_CXX11_SYNTAX
 class
 [[asap::region("Money")]]
 [[asap::param("P")]]
