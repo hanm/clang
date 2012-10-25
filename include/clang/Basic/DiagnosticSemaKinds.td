@@ -1839,7 +1839,6 @@ def warn_safepar_attribute_wrong_decl_type : Warning<
   "%0 attribute only applies to %select{"
   "classes and structs and functions and globals|"
   "classes and structs and functions|"
-  "fields|"
   "fields or function parameters or variables|"
   "functions}1">,
   InGroup<SafeParallelismAttributes>;

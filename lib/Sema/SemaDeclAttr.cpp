@@ -907,7 +907,7 @@ static void handleLocksExcludedAttr(Sema &S, Decl *D,
                                                  StartArg, Size));
 }
 
-
+/// N.B. TODO FIXME -- Use this code as guidance
 static void handleExtVectorTypeAttr(Sema &S, Scope *scope, Decl *D,
                                     const AttributeList &Attr) {
   TypedefNameDecl *tDecl = dyn_cast<TypedefNameDecl>(D);
@@ -4227,20 +4227,13 @@ static void handleForceInlineAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 enum SafeParallelismAttributeDeclKind {
   SafeParExpectedClassOrFunctionOrGlobal,		 	// region (region_name) FIXME:Global not yet supported
   SafeParExpectedClassOrFunction, 					// region_param(region_name)
-  SafeParExpectedField, 							// in_region(RPL)
   SafeParExpectedFieldOrParamOrVariable,			// region_arg(RPL)
   SafeParExpectedFunction 							// Effects
 };
 
 
-/// Generic ASP attibute handler. Does nothing except check that the attribute
+/// Generic ASaP attibute handler. Does nothing except check that the attribute
 /// has exactly one argument.
-/*static void handleASPAttr(Sema &S, Decl *D, const AttributeList &Attr) {
-  assert(!Attr.isInvalid());
-  if (!checkAttributeNumArgs(S, Attr, 1))
-    return;
-
-}*/
 
 static void handleSafeParRegionAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   assert(!Attr.isInvalid());
@@ -4272,6 +4265,7 @@ static void handleSafeParRegionParamAttr(Sema &S, Decl *D, const AttributeList &
     return;
   }
 
+  // Only a single parameter annotation per type is allowed
   if (D->hasAttr<RegionParamAttr>()) {
     S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_duplicate_attribute)
             << Attr.getName();
@@ -4283,31 +4277,6 @@ static void handleSafeParRegionParamAttr(Sema &S, Decl *D, const AttributeList &
   StringLiteral *Str = dyn_cast<StringLiteral>(Arg);
 
   D->addAttr(::new (S.Context) RegionParamAttr(Attr.getRange(), S.Context,
-		  	  	  	  	  	  	  	  	  	   	  	  	   Str->getString()));
-}
-
-static void handleSafeParInRegionAttr(Sema &S, Decl *D, const AttributeList &Attr) {
-  assert(!Attr.isInvalid());
-  if (!checkAttributeNumArgs(S, Attr, 1))
-    return;
-
-  if (!isa<FieldDecl>(D)) {
-    S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
-    	      << Attr.getName() << SafeParExpectedField;
-    return;
-  }
-
-  if (D->hasAttr<InRegionAttr>()) {
-    S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_duplicate_attribute)
-            << Attr.getName();
-    return;
-  }
-
-  Expr *Arg = Attr.getArg(0);
-  Arg = Arg->IgnoreParenCasts();
-  StringLiteral *Str = dyn_cast<StringLiteral>(Arg);
-
-  D->addAttr(::new (S.Context) InRegionAttr(Attr.getRange(), S.Context,
 		  	  	  	  	  	  	  	  	  	   	  	  	   Str->getString()));
 }
 
@@ -4324,13 +4293,6 @@ static void handleSafeParRegionArgAttr(Sema &S, Decl *D, const AttributeList &At
     return;
   }
 
-  if (D->hasAttr<RegionArgAttr>()) {
-    S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_duplicate_attribute)
-            << Attr.getName();
-    return;
-  }
-  // TODO: check that we are not using arg on a type that is not a pointer or a reference
-
   Expr *Arg = Attr.getArg(0);
   Arg = Arg->IgnoreParenCasts();
   StringLiteral *Str = dyn_cast<StringLiteral>(Arg);
@@ -4342,7 +4304,7 @@ static void handleSafeParRegionArgAttr(Sema &S, Decl *D, const AttributeList &At
 
 /// EFFECTS
 
-static void handleSafeParPureEffectAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleSafeParNoEffectAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   assert(!Attr.isInvalid());
   if (!checkAttributeNumArgs(S, Attr, 0))
     return;
@@ -4353,7 +4315,7 @@ static void handleSafeParPureEffectAttr(Sema &S, Decl *D, const AttributeList &A
     return;
   }
 
-  D->addAttr(::new (S.Context) PureEffectAttr(Attr.getRange(), S.Context));
+  D->addAttr(::new (S.Context) NoEffectAttr(Attr.getRange(), S.Context));
 
 }
 
@@ -4648,7 +4610,7 @@ static void ProcessInheritableDeclAttr(Sema &S, Scope *scope, Decl *D,
     handleTypeTagForDatatypeAttr(S, D, Attr);
     break;
 
-  // Annotations for Safe Parallelism (ASP)
+  // Annotations for Safe Parallelism (ASaP)
   // 1. Region Name&Parameter Declarations
   case AttributeList::AT_Region:
     handleSafeParRegionAttr(S, D, Attr);
@@ -4658,16 +4620,17 @@ static void ProcessInheritableDeclAttr(Sema &S, Scope *scope, Decl *D,
     break;
 
   // 2. Assignment of Variables to RPLs
-  case AttributeList::AT_InRegion:
-    handleSafeParInRegionAttr(S, D, Attr);
-    break;
+  //case AttributeList::AT_InRegion:
+    // DEPRECATED -- do nothing
+    //handleSafeParInRegionAttr(S, D, Attr);
+    //break;
   case AttributeList::AT_RegionArg:
     handleSafeParRegionArgAttr(S, D, Attr);
     break;
 
   // 3. Effect Declarations
-  case AttributeList::AT_PureEffect:
-    handleSafeParPureEffectAttr(S, D, Attr);
+  case AttributeList::AT_NoEffect:
+    handleSafeParNoEffectAttr(S, D, Attr);
     break;
   case AttributeList::AT_ReadsEffect:
     handleSafeParEffectAttr<ReadsEffectAttr>(S, D, Attr);

@@ -215,10 +215,6 @@ public:
     return !(Left == Right);
   }
 
-  void AdvanceToNextPublic(specific_attr_iterator right) const {
-    this->AdvanceToNext(right.Current);
-  }
-
 };
 
 template <typename SpecificAttr, typename Container>
