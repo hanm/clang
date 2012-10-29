@@ -26,9 +26,9 @@
 using namespace clang;
 using namespace ento;
 
-#define ASP_DEBUG
+#define ASAP_DEBUG
 
-#ifdef ASP_DEBUG
+#ifdef ASAP_DEBUG
 static raw_ostream& os = llvm::errs();
 static raw_ostream& osv2 = llvm::nulls();
 #else
@@ -182,7 +182,12 @@ namespace {
         RecordDecl* rd = dyn_cast<RecordDecl>(dc);
         assert(rd);
         return findRegionName(rd, name);
+      } else if (dc->isNamespace()) {
+        NamespaceDecl *nd = dyn_cast<NamespaceDecl>(dc);
+        assert(nd);
+        return findRegionName(nd, name);
       } else {
+        /// no ASaP annotations on other types of declarations
         dc = dc->getParent();
       }
     }
@@ -478,6 +483,17 @@ public:
       rpl->printElements(os);
     }
   }
+
+  static void printEffectSummary(Effect::EffectVector& ev, raw_ostream& os) {
+    for (Effect::EffectVector::const_iterator 
+            I = ev.begin(),
+            E = ev.end(); 
+            I != E; I++) {
+      (*I)->print(os);
+      os << "\n";
+    }    
+  }
+
   /// Predicates
   inline bool isNoEffect() const {
     return (effectKind == NoEffect) ? true : false;
@@ -919,19 +935,74 @@ public:
 }; // end class StmtVisitor
 ///-///////////////////////////////////////////////////////////////////////////
 /// AST Traverser Class
-class ASPSemanticCheckerTraverser :
-  public RecursiveASTVisitor<ASPSemanticCheckerTraverser> {
-  
+
+class ASaPEffectsCheckerTraverser :
+  public RecursiveASTVisitor<ASaPEffectsCheckerTraverser> {
+
 private:
-  // Private Members
+  /// Private Fields
   ento::BugReporter& BR;
   ASTContext& Ctx;
   AnalysisDeclContext* AC;
   raw_ostream& os;
-  std::map<FunctionDecl*, Effect::EffectVector*> effectSummaryMap;
+  bool fatalError;
+  EffectSummaryMapTy& effectSummaryMap;
+  
+public:
+
+  typedef RecursiveASTVisitor<ASaPEffectsCheckerTraverser> BaseClass;
+
+  /// Constructor
+  explicit ASaPEffectsCheckerTraverser(
+    ento::BugReporter& BR, ASTContext& ctx,
+    AnalysisDeclContext* AC, raw_ostream& os,
+    EffectSummaryMapTy& esm
+    ) : BR(BR),
+        Ctx(ctx),
+        AC(AC),
+        os(os),
+        fatalError(false),
+        effectSummaryMap(esm)
+  {}
+
+  /// Visitors
+  bool VisitFunctionDecl(FunctionDecl* D) {
+    const FunctionDecl* Definition;
+    if (D->hasBody(Definition)) {
+      Stmt* st = Definition->getBody(Definition);
+      assert(st);
+      //os << "DEBUG:: calling Stmt Visitor\n";
+      
+      ///  Check that Effect Summary covers method effects
+      Effect::EffectVector *ev = effectSummaryMap[D];
+      assert(ev);
+      
+      EffectCollectorVisitor ecv(BR, Ctx, AC, os, 
+                                 *ev, effectSummaryMap, st);
+      os << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ "
+         << "(END EffectCollectorVisitor)\n";
+      
+      //os << "DEBUG:: DONE!! \n";
+    }    
+    return true;    
+  }
+  
+};
+
+class ASaPSemanticCheckerTraverser :
+  public RecursiveASTVisitor<ASaPSemanticCheckerTraverser> {
+  
+private:
+  /// Private Fields
+  ento::BugReporter& BR;
+  ASTContext& Ctx;
+  AnalysisDeclContext* AC;
+  raw_ostream& os;
+  bool fatalError;
+  EffectSummaryMapTy& effectSummaryMap;
   
 
-  // Private Methods
+  /// Private Methods
   /**
    *  Issues Warning: '<str>' <bugName> on Declaration
    */
@@ -1058,6 +1129,7 @@ private:
     // check if there are annotations left
     while (i!=e) {
       helperEmitSuperfluousRegionArg(D, *i);
+      fatalError = true;
       i++;
     }
   }
@@ -1222,30 +1294,27 @@ private:
     } // end while loop
   } 
   
-  void printEffectSummary(Effect::EffectVector& ev, raw_ostream& os) {
-    for (Effect::EffectVector::const_iterator 
-            I = ev.begin(),
-            E = ev.end(); 
-            I != E; I++) {
-      (*I)->print(os);
-      os << "\n";
-    }    
-  }
-
 public:
 
-  typedef RecursiveASTVisitor<ASPSemanticCheckerTraverser> BaseClass;
+  typedef RecursiveASTVisitor<ASaPSemanticCheckerTraverser> BaseClass;
 
   /// Constructor
-  explicit ASPSemanticCheckerTraverser (
+  explicit ASaPSemanticCheckerTraverser (
     ento::BugReporter& BR, ASTContext& ctx,
-    AnalysisDeclContext* AC, raw_ostream& os
+    AnalysisDeclContext* AC, raw_ostream& os,
+    EffectSummaryMapTy& esm
     ) : BR(BR),
         Ctx(ctx),
         AC(AC),
-        os(os)
+        os(os),
+        fatalError(false),
+        effectSummaryMap(esm)
   {}
 
+  /// Getters & Setters
+  inline bool encounteredFatalError() { return fatalError; }
+  
+  /// Visitors
   bool VisitValueDecl(ValueDecl* E) {
     os << "DEBUG:: VisitValueDecl : ";
     E->print(os, Ctx.getPrintingPolicy());
@@ -1255,7 +1324,7 @@ public:
 
   bool VisitFunctionDecl(FunctionDecl* D) {
     os << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-       << "DEBUG:: printing ASP attributes for method or function '";
+       << "DEBUG:: printing ASaP attributes for method or function '";
     D->getDeclName().printName(os);
     os << "':\n";
     /// A. Detect Annotations
@@ -1283,42 +1352,24 @@ public:
     checkRpls<AtomicWritesEffectAttr>(D);
 
     /// C. Check effect summary
-    const FunctionDecl* Definition;
-    if (D->hasBody(Definition)) {
-      Stmt* st = Definition->getBody(Definition);
-      assert(st);
-      //os << "DEBUG:: calling Stmt Visitor\n";
-      /// C.1. Build Effect Summary
-      Effect::EffectVector *ev = new Effect::EffectVector();
-      Effect::EffectVector &effectSummary = *ev;
-      buildEffectSummary(D, effectSummary);
-      os << "Effect Summary from annotation:\n";
-      printEffectSummary(effectSummary, os);
+    /// C.1. Build Effect Summary
+    Effect::EffectVector *ev = new Effect::EffectVector();
+    Effect::EffectVector &effectSummary = *ev;
+    buildEffectSummary(D, effectSummary);
+    os << "Effect Summary from annotation:\n";
+    Effect::printEffectSummary(effectSummary, os);
 
-      /// C.2. Check Effect Summary is consistent and minimal
-      checkEffectSummary(D, effectSummary);
-      os << "Minimal Effect Summary:\n";
-      printEffectSummary(effectSummary, os);
-      effectSummaryMap[D] = ev;
-      
-      /// C.3. Check Effect Summary covers method effects
-      // TODO This pass should be run in a separate pass after all
-      // the checks of this pass are performed and have passed.
-      //EffectCollectorVisitor ecv(BR, Ctx, AC, os, 
-      //                           effectSummary, effectSummaryMap, st);
-      os << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ "
-         << "(END EffectCollectorVisitor)\n";
-      //destroyEffectVector(effectSummary);
-      //delete ev;\
-      
-      //os << "DEBUG:: DONE!! \n";
-    }
+    /// C.2. Check Effect Summary is consistent and minimal
+    checkEffectSummary(D, effectSummary);
+    os << "Minimal Effect Summary:\n";
+    Effect::printEffectSummary(effectSummary, os);
+    effectSummaryMap[D] = ev;
     
     return true;
   }
 
   bool VisitRecordDecl (RecordDecl* D) {
-    os << "DEBUG:: printing ASP attributes for class or struct '";
+    os << "DEBUG:: printing ASaP attributes for class or struct '";
     D->getDeclName().printName(os);
     os << "':\n";
     /// A. Detect Region & Param Annotations
@@ -1495,7 +1546,7 @@ public:
     return true;
   }*/
 
-};
+}; // end class ASaPSemanticCheckerTraverser
 
 class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
@@ -1503,18 +1554,28 @@ class  SafeParallelismChecker
 public:
   void checkASTDecl(const TranslationUnitDecl* D, AnalysisManager& mgr,
                     BugReporter &BR) const {
-    os << "DEBUG:: starting ASP Semantic Checker\n";
-    /** initialize traverser */
-    ASPSemanticCheckerTraverser aspTraverser(BR, D->getASTContext(),
-                                             mgr.getAnalysisDeclContext(D), os);
+    os << "DEBUG:: starting ASaP Semantic Checker\n";
     BuiltinDefaulrRegionParam = ::new(D->getASTContext()) 
         RegionParamAttr(D->getSourceRange(), D->getASTContext(), "P");
+    /** initialize traverser */
+    EffectSummaryMapTy esm;
+    ASaPSemanticCheckerTraverser 
+      asapSemaChecker(BR, D->getASTContext(),
+                    mgr.getAnalysisDeclContext(D), os, esm);
     /** run checker */
-    aspTraverser.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+    asapSemaChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+    
+    if (!asapSemaChecker.encounteredFatalError()) {
+      /// Check that Effect Summaries cover effects
+      ASaPEffectsCheckerTraverser asapEffectChecker(BR, D->getASTContext(),
+                    mgr.getAnalysisDeclContext(D), os, esm);
+      asapEffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+    }
+    
     // FIXME: deleting BuiltinDefaulrRegionParam below creates dangling 
     // pointers (i.e. there's some memory leak somewhere).
     //::delete BuiltinDefaulrRegionParam;
-    os << "DEBUG:: done running ASP Semantic Checker\n\n";
+    os << "DEBUG:: done running ASaP Semantic Checker\n\n";
   }
 };
 } // end unnamed namespace

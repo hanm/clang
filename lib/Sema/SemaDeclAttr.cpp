@@ -4225,10 +4225,10 @@ static void handleForceInlineAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 //===----------------------------------------------------------------------===//
 
 enum SafeParallelismAttributeDeclKind {
-  SafeParExpectedClassOrFunctionOrGlobal,		 	// region (region_name) FIXME:Global not yet supported
-  SafeParExpectedClassOrFunction, 					// region_param(region_name)
-  SafeParExpectedFieldOrParamOrVariable,			// region_arg(RPL)
-  SafeParExpectedFunction 							// Effects
+  SafeParExpectedClassOrFunctionOrNamespace,  // region (region_name) 
+  SafeParExpectedClassOrFunction, 					  // param(region_name)
+  SafeParExpectedFieldOrParamOrVariable,			// arg(RPL)
+  SafeParExpectedFunction 							      // Effects
 };
 
 
@@ -4240,9 +4240,10 @@ static void handleSafeParRegionAttr(Sema &S, Decl *D, const AttributeList &Attr)
   if (!checkAttributeNumArgs(S, Attr, 1))
     return;
   // TODO region name declarations should be allowed at global scope, and possibly at block scope.
-  if (!isa<RecordDecl>(D) && !isa<FunctionDecl>(D) && !isa<FunctionTemplateDecl>(D)) {
+  if (!isa<RecordDecl>(D) && !isa<FunctionDecl>(D) 
+      && !isa<FunctionTemplateDecl>(D) && !isa<NamespaceDecl>(D)) {
     S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
-    	      << Attr.getName() << SafeParExpectedClassOrFunctionOrGlobal;;
+    	      << Attr.getName() << SafeParExpectedClassOrFunctionOrNamespace;;
     return;
   }
 
