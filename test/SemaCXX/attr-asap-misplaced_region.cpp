@@ -10,7 +10,7 @@ Coo {
 
   int __attribute__((arg("P:Money")))
       __attribute__ ((param("P")))  // expected-warning {{attribute only applies to classes and structs and functions}}
-      __attribute__((region("Honey"))) money; // expected-warning {{attribute only applies to classes and structs and functions and globals}}
+      __attribute__((region("Honey"))) money; // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
 
 public:
   Coo () __attribute__((no_effect)) 
@@ -21,7 +21,7 @@ public:
         : money(0) {}
 
   Coo (int cash __attribute__((arg("P:Money"))) 
-                __attribute__((region("Money"))) )  // expected-warning {{attribute only applies to classes and structs and functions and globals}}
+                __attribute__((region("Money"))) )  // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
        __attribute__((no_effect)) : money(cash) {}
 
   int get_some() __attribute__((reads("P:Money"))){ 
@@ -60,7 +60,7 @@ Coo {
 
   int [[asap::arg("P:Money")]]
       [[asap::param("P")]]  // expected-warning {{attribute only applies to classes and structs and functions}}
-      [[asap::region("Honey")]] money ; // expected-warning {{attribute only applies to classes and structs and functions and globals}}
+      [[asap::region("Honey")]] money ; // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
 
 public:
   Coo () [[asap::no_effect]] 
@@ -71,7 +71,7 @@ public:
         : money(0) {}
 
   Coo (int cash [[asap::arg("P:Money")]] 
-                [[asap::region("Money")]] )  // expected-warning {{attribute only applies to classes and structs and functions and globals}}
+                [[asap::region("Money")]] )  // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
        [[asap::no_effect]] : money(cash) {}
 
   int get_some() [[asap::reads("P:Money")]]{ 

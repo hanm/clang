@@ -1837,7 +1837,7 @@ def warn_mismatched_availability: Warning<
 // ASaP: Safe Parallelism Attributes
 def warn_safepar_attribute_wrong_decl_type : Warning<
   "%0 attribute only applies to %select{"
-  "classes and structs and functions and namepsaces|"
+  "classes and structs and functions and namespaces|"
   "classes and structs and functions|"
   "fields or function parameters or variables|"
   "functions}1">,
