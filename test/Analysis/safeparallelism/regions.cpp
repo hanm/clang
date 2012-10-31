@@ -6,12 +6,8 @@
 class 
 __attribute__((region("1R1")))        //expected-warning {{invalid region name}}
 __attribute__((param("1P1")))  // expected-warning {{invalid region parameter name}} 
-__attribute__((region("R1")))
-__attribute__((region("R2")))
-__attribute__((region("R3")))
-__attribute__((region("_R2")))
-__attribute__((region("R_2")))
-__attribute__((region("R_2c_")))
+__attribute__((region("R1"), region("R2"), region("R3"), 
+               region("_R2"), region("R_2"), region("R_2_c")))
 C0 { 
 };
 
@@ -72,7 +68,13 @@ public:
   { 
     cash += next->money;        // reads P1, P1:R2:R3
     cash -= next->next->money;  // reads P1, P1:R2, P1:R2:R2:R3
+    money++;                    // writes P1:R3
+    money--;                    // writes P1:R3
+    ++money;                    // writes P1:R3
+    --money;                    // writes P1:R3
     money = cash + 4 + cash;    // writes P1:R3
+    !cash ? (cash = money) : money++;   // writes P1:R3 or reads P1:R3
+    cash ? money++ : (cash = money = 42);   // writes P1:R3 or reads P1:R3
   }
   __attribute__((region("R3")))
   void add_money(int cash) {

@@ -79,12 +79,6 @@ namespace {
     return true;
   }
 
-  /* DEPRECATED in_region
-  inline bool isValidTypeForIn(const Type* t) {
-    if (t->isScalarType()) return true;
-    else return false;
-  }*/
-
   // FIXME
   inline bool isValidTypeForArg(const QualType qt, const RegionArgAttr* ra) {
     bool result = true;
@@ -198,15 +192,21 @@ namespace {
 /// Rpl Class
 class Rpl {
   friend class Rpl;
+public:
+  /// Types
+#ifndef RPL_VECTOR_SIZE
+  #define RPL_VECTOR_SIZE 4
+#endif  
+  typedef llvm::SmallVector<Rpl*, RPL_VECTOR_SIZE> RplVector;
+  
 private:
   /// Fields
   StringRef rpl;
-  Decl* decl;
   typedef llvm::SmallVector<StringRef,8> ElementVector;
   ElementVector rplElements;
 
   /// RplRef class
-  // Idea Have an RplRef class, friends with Rpl to efficiently perform 
+  // We use the RplRef class, friends with Rpl to efficiently perform 
   // isIncluded and isUnder tests
   class RplRef {
     long firstIdx; 
@@ -301,23 +301,28 @@ private:
   
 public:
   /// Constructors
-  Rpl(StringRef rpl, Decl* D):rpl(rpl), decl(D) {
+  Rpl(StringRef rpl):rpl(rpl) {
     //bool result = true;
     while(rpl.size() > 0) { /// for all RPL elements of the RPL
       // FIXME: '::' can appear as part of an RPL element. Splitting must
       // be done differently to account for that.
       std::pair<StringRef,StringRef> pair = rpl.split(':');
-      const StringRef& head = pair.first;
-      /// head: is it a special RPL element? if not, is it declared?
-      if (!isSpecialRplElement(head) && !findRegionName(D, head)) {
-        /// Don't produce an error, this should have been checked already.
-        /// Instead try to proceed...
-      }
-      rplElements.push_back(head);
+      rplElements.push_back(pair.first);
       rpl = pair.second;
     }
-    //return result;
   }
+  
+  /// Destructors
+  static void destroyRplVector(RplVector& ev) {
+    for (RplVector::const_iterator
+            it = ev.begin(),
+            end = ev.end();
+          it != end; it++) {
+      delete (*it);
+    }
+  }
+
+  
   /// Printing
   void printElements(raw_ostream& os) const {
     ElementVector::const_iterator I = rplElements.begin();
@@ -414,9 +419,8 @@ enum EffectKind {
   /// atomic writes effect
   AtomicWritesEffect
 };
-#ifndef EFFECT_VECTOR_SIZE
-#define EFFECT_VECTOR_SIZE 16
-#endif
+
+
 class Effect {
 private:
   /// Fields
@@ -453,15 +457,29 @@ private:
 
 public:
   /// Types
+#ifndef EFFECT_VECTOR_SIZE
+  #define EFFECT_VECTOR_SIZE 16
+#endif
   typedef llvm::SmallVector<Effect*, EFFECT_VECTOR_SIZE> EffectVector;
 
   /// Constructors
   Effect(EffectKind ec, Rpl* r, const Attr* a) 
         : effectKind(ec), rpl(r), attr(a) {}
+
   /// Destructors
   virtual ~Effect() { 
     delete rpl;
   }
+
+  static void destroyEffectVector(Effect::EffectVector& ev) {
+    for (Effect::EffectVector::const_iterator
+            it = ev.begin(),
+            end = ev.end();
+          it != end; it++) {
+      delete (*it);
+    }
+  }
+
   /// Printing
   inline bool printEffectKind(raw_ostream& os) const {
     bool hasRpl = true;
@@ -558,44 +576,40 @@ public:
 typedef std::map<FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
 
 ///-///////////////////////////////////////////////////////////////////////////
-/// Stmt Visitor Class
+/// Stmt Visitor Classes
 
-void destroyEffectVector(Effect::EffectVector& ev) {
-  for (Effect::EffectVector::const_iterator
-          it = ev.begin(),
-          end = ev.end();
-        it != end; it++) {
-    delete (*it);
-  }
-}
 
 class EffectCollectorVisitor
     : public StmtVisitor<EffectCollectorVisitor, void> {
 
 private:
-  /// Types
-  typedef llvm::SmallVector<Effect*,8> TmpEffectVector;
-
   /// Fields
   ento::BugReporter& BR;
   ASTContext& Ctx;
+  AnalysisManager& mgr;
   AnalysisDeclContext* AC;
   raw_ostream& os;
+
+  bool typecheckAssignment;
   bool hasWriteSemantics;
   bool isBase;
   int nDerefs;
-  TmpEffectVector effectsTmp;
+  
+  Effect::EffectVector effectsTmp;
   Effect::EffectVector effects;
   Effect::EffectVector& effectSummary;
   EffectSummaryMapTy& effectSummaryMap;  
+  Rpl::RplVector *lhsRegions, *rhsRegions;
   bool isCoveredBySummary;
   
   /// Private Methods
   void helperEmitEffectNotCoveredWarning(Stmt* S, Decl* D, const StringRef& str) {
+    StringRef bugName = "effect not covered by effect summary";
     std::string description_std = "'";
     description_std.append(str);
-    description_std.append("' effect not covered by effect summary");
-    StringRef bugName = "effect not covered by effect summary";
+    description_std.append("' ");
+    description_std.append(bugName);
+    
     StringRef bugCategory = "Safe Parallelism";
     StringRef bugStr = description_std;
 
@@ -606,11 +620,35 @@ private:
                        bugStr, VDLoc, S->getSourceRange());
   }
 
+  void helperEmitInvalidAssignmentWarning(Stmt* S, Rpl* lhs, Rpl* rhs) {
+    StringRef bugName = "invalid assignment";
+
+    std::string description_std = "RHS region '";
+    description_std.append(rhs?rhs->toString():"");
+    description_std.append("' is not included in LHS region '");
+    description_std.append(lhs?lhs->toString():"");
+    description_std.append("' ");
+    description_std.append(bugName);
+
+    StringRef bugCategory = "Safe Parallelism";
+    StringRef bugStr = description_std;
+
+    PathDiagnosticLocation VDLoc =
+       PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
+    
+    BugType *BT = new BugType(bugName, bugCategory);
+    BugReport *R = new BugReport(*BT, bugStr, VDLoc);
+    BR.EmitReport(R);
+    //BR.EmitBasicReport(D, bugName, bugCategory,
+    //                   bugStr, VDLoc, S->getSourceRange());
+  }
+
 public:
   /// Constructor
   EffectCollectorVisitor (
     ento::BugReporter& BR, 
     ASTContext& Ctx, 
+    AnalysisManager& mgr,
     AnalysisDeclContext* AC,
     raw_ostream& os, 
     Effect::EffectVector& effectsummary, 
@@ -618,8 +656,10 @@ public:
     Stmt* stmt
     ) : BR(BR),
         Ctx(Ctx), 
+        mgr(mgr),
         AC(AC),
         os(os), 
+        typecheckAssignment(false),
         hasWriteSemantics(false), 
         isBase(false),
         nDerefs(0),
@@ -634,7 +674,7 @@ public:
   /// Destructor
   virtual ~EffectCollectorVisitor() {
     /// free effectsTmp
-    for(TmpEffectVector::const_iterator
+    for(Effect::EffectVector::const_iterator
             it = effectsTmp.begin(),
             end = effectsTmp.end();
             it != end; it++) {
@@ -749,17 +789,17 @@ public:
         if (*it) ++nDerefs;
         else (*it) --nDerefs;
       }*/
-      os << "\n";
+      //os << "\n";
       // TODO if (!arg) arg = some default
       assert(argit!=endit);
       if (isBase) {
         /// 2.1 Substitution
-        const RegionArgAttr* arg = *argit;
-        const RegionArgAttr* substarg = *argit;
+        /// 2.1.1 Substitution of effects
+        //const RegionArgAttr* arg = *argit;
+        const RegionArgAttr* substarg;
         //QualType qt = fd->getType();
         QualType substqt = fd->getType();
         
-        // FIXME what if nDerefs > 1
         os << "DEBUG:: nDerefs = " << nDerefs << "\n";
         for (int i = nDerefs; i>0; i--) {
           // FIXME only call effect collection after all the annotation 
@@ -771,9 +811,10 @@ public:
         assert(argit!=endit);
         substarg = *argit;
         
-        os << "arg : ";
-        arg->printPretty(os, Ctx.getPrintingPolicy());
-        os << "\nsubstarg : ";
+        //os << "arg : ";
+        //arg->printPretty(os, Ctx.getPrintingPolicy());
+        //os << "\n";
+        os << "DEBUG::substarg : ";
         substarg->printPretty(os, Ctx.getPrintingPolicy());
         os << "\n";
         
@@ -784,15 +825,49 @@ public:
         // apply substitution to temp effects
         StringRef to = substarg->getRpl();
         if (from.compare(to)) { // if (from != to) then substitute
-          Rpl* rpl = new Rpl(to, vd);
-          for (TmpEffectVector::const_iterator
-              it = effectsTmp.begin(),
-              end = effectsTmp.end();
-              it != end; it++) {
+          Rpl* rpl = new Rpl(to);
+          for (Effect::EffectVector::const_iterator
+                  it = effectsTmp.begin(),
+                  end = effectsTmp.end();
+                it != end; it++) {
             (*it)->substitute(from, *rpl);
           }
+          /// 2.1.2 Substitution of Regions (for typechecking)
+          if (typecheckAssignment) {
+            for (Rpl::RplVector::const_iterator
+                    it = lhsRegions->begin(),
+                    end = lhsRegions->end();
+                  it != end; it++) {
+              (*it)->substitute(from, *rpl);
+            }
+          }
         }
-      } // end if(isBase)
+      } else if (typecheckAssignment) { // isBase == false ==> init regions
+        llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator 
+            i = argv.rbegin(),
+            e = argv.rend();
+        /// 2.1.2.1 drop region args that are sidestepped by dereferrences.
+        int ndrfs = nDerefs; 
+        while (ndrfs>0 && i != e) {
+          i++;
+          ndrfs--;
+        }
+
+        assert(ndrfs==0 || ndrfs==-1);  
+        if (ndrfs==0) { /// skip the 1st arg, then add the rest
+          assert(i!=e);
+          i++;
+        }
+        while(i!=e) {
+          RegionArgAttr *arg = *i;
+          Rpl *rpl = new Rpl(arg->getRpl());           
+          (*lhsRegions).push_back(rpl);
+          os << "DEBUG:: adding RPL for typechecking ~~~~~~~~~~ " 
+             << rpl->toString() << "\n";
+          i++; 
+        }
+      }
+      
       /// 2.2 Collect Effects
       // TODO :: take into account nDerefs
       if (nDerefs<0) { // nDeref<0 ==> AddrOf Taken
@@ -810,7 +885,7 @@ public:
           /// TODO is this atomic or not? ignore atomic for now
           effectsTmp.push_back(
                   new Effect(ReadsEffect, 
-                             new Rpl((*argit)->getRpl(), vd), 
+                             new Rpl((*argit)->getRpl()), 
                              *argit));
                   
           effectNr++;
@@ -818,10 +893,10 @@ public:
           qt = qt->getPointeeType();
           argit++;
         }
-        /// 2.2.2 Take care of destination, unless this is the base of a 
-        /// member expression. In that case, the '.' operator describes the
-        /// offset from the base, and the substitution performed in earlier in
-        /// 2.1 takes care of that offset.
+        /// 2.2.2 Take care of the destination of dereferrences, unless this 
+        /// is the base of a member expression. In that case, the '.' operator 
+        /// describes the offset from the base, and the substitution performed 
+        /// in earlier in 2.1 takes care of that offset.
         assert(argit!=endit);
         if (!isBase) {
           /// TODO is this atomic or not? just ignore atomic for now
@@ -833,7 +908,7 @@ public:
             // TODO for each field add effect & i++
           } else {
             effectsTmp.push_back(
-                      new Effect(ec, new Rpl((*argit)->getRpl(), vd), *argit));
+                      new Effect(ec, new Rpl((*argit)->getRpl()), *argit));
             effectNr++;
           }
         }
@@ -848,9 +923,10 @@ public:
       isBase = true;
       Visit(E->getBase());
       
+      /// Post visitation checking
       hasWriteSemantics = saved_hws;
-      isBase = saved_isBase; // probably we can just set isBase to false
-     
+      isBase = saved_isBase; 
+           
       /// Post-Visit Actions: check that effects (after substitutions) 
       /// are covered by effect summary
       while (effectNr) {
@@ -880,6 +956,29 @@ public:
     Visit(E->getSubExpr());
   }
 
+  inline void VisitPrePostIncDec(UnaryOperator *E) {
+    bool savedHws = hasWriteSemantics;
+    hasWriteSemantics=true;
+    Visit(E->getSubExpr());
+    hasWriteSemantics = savedHws;  
+  }
+  
+  void VisitUnaryPostInc(UnaryOperator *E) {
+    VisitPrePostIncDec(E);
+  }
+  
+  void VisitUnaryPostDec(UnaryOperator *E) {
+    VisitPrePostIncDec(E);
+  }
+  
+  void VisitUnaryPreInc(UnaryOperator *E) {
+    VisitPrePostIncDec(E);
+  }
+  
+  void VisitUnaryPreDec(UnaryOperator *E) {
+    VisitPrePostIncDec(E);
+  }
+  
   // TODO collect effects
   void VisitDeclRefExpr(DeclRefExpr* E) {
     os << "DEBUG:: VisitDeclRefExpr --- whatever that is!: ";
@@ -905,37 +1004,82 @@ public:
     os << "DEBUG:: visiting 'this' expression\n";
     nDerefs = 0;
   }
+
+  inline void visitAssignment(BinaryOperator *E) {
+    bool saved_hws = this->hasWriteSemantics;
+    lhsRegions = new Rpl::RplVector();
+    Visit(E->getRHS());
+    
+    rhsRegions = lhsRegions;
+    lhsRegions = new Rpl::RplVector();
+    hasWriteSemantics = true;
+    Visit(E->getLHS());
+    
+    /// Check assignment
+    if(typecheckAssignment) {
+      if (rhsRegions && lhsRegions) {
+        // Typecheck 
+        Rpl::RplVector::const_iterator 
+                rhsI = rhsRegions->begin(),
+                lhsI = lhsRegions->begin(),
+                rhsE = rhsRegions->end(),
+                lhsE = lhsRegions->end();
+        for ( ;
+              rhsI != rhsE && lhsI != lhsE;
+              rhsI++, lhsI++) {
+          Rpl *lhs = *lhsI;
+          Rpl *rhs = *rhsI;
+          if (!rhs->isIncludedIn(*lhs)) {
+            helperEmitInvalidAssignmentWarning(E, lhs, rhs);
+          }
+        }
+        assert(rhsI==rhsE);
+        assert(lhsI==lhsE);
+      } else if (!rhsRegions && lhsRegions) {
+        if (lhsRegions->begin()!=lhsRegions->end()) {
+          helperEmitInvalidAssignmentWarning(E, *lhsRegions->begin(), 0);
+        }
+      }
+    }
+    
+    /// Cleanup
+    hasWriteSemantics = saved_hws;
+    delete lhsRegions;
+    lhsRegions = 0;
+    delete rhsRegions;
+    rhsRegions = 0;
+  }
   
   void VisitCompoundAssignOperator(CompoundAssignOperator* E) {
     os << "DEBUG:: !!!!!!!!!!! Mother of compound Assign!!!!!!!!!!!!!\n";
     E->printPretty(os, 0, Ctx.getPrintingPolicy());
     os << "\n";
-    //Expr* lhs = E->getLHS();
-    //Expr* rhs = E->getRHS();
-    bool hws = this->hasWriteSemantics;
-    hasWriteSemantics = true;
-    Visit(E->getLHS());
-    hasWriteSemantics = hws;
-    Visit(E->getRHS());
-    //return true;
+    bool saved_tca = typecheckAssignment;
+    typecheckAssignment = false;
+    visitAssignment(E);
+    typecheckAssignment = saved_tca;
   }
 
-  void VisitBinAssign(BinaryOperator* E) {
+  void VisitBinAssign(BinaryOperator *E) {
     os << "DEBUG:: >>>>>>>>>>VisitBinAssign<<<<<<<<<<<<<<<<<\n";
     E->printPretty(os, 0, Ctx.getPrintingPolicy());
     os << "\n";
-    bool hws = this->hasWriteSemantics;
-    hasWriteSemantics = true;
-    Visit(E->getLHS());
-    hasWriteSemantics = hws;
-    Visit(E->getRHS());
+    bool saved_tca = typecheckAssignment;
+    typecheckAssignment = true;
+    visitAssignment(E);
+    typecheckAssignment = saved_tca;
   }
   
   // TODO ++ etc operators
 }; // end class StmtVisitor
+
 ///-///////////////////////////////////////////////////////////////////////////
 /// AST Traverser Class
 
+
+/**
+ * Wrapper pass that calls effect checker on each function definition.
+ */
 class ASaPEffectsCheckerTraverser :
   public RecursiveASTVisitor<ASaPEffectsCheckerTraverser> {
 
@@ -943,6 +1087,7 @@ private:
   /// Private Fields
   ento::BugReporter& BR;
   ASTContext& Ctx;
+  AnalysisManager& mgr;
   AnalysisDeclContext* AC;
   raw_ostream& os;
   bool fatalError;
@@ -954,11 +1099,12 @@ public:
 
   /// Constructor
   explicit ASaPEffectsCheckerTraverser(
-    ento::BugReporter& BR, ASTContext& ctx,
-    AnalysisDeclContext* AC, raw_ostream& os,
+    ento::BugReporter& BR, ASTContext& ctx, 
+    AnalysisManager& mgr, AnalysisDeclContext* AC, raw_ostream& os,
     EffectSummaryMapTy& esm
     ) : BR(BR),
         Ctx(ctx),
+        mgr(mgr),
         AC(AC),
         os(os),
         fatalError(false),
@@ -977,7 +1123,7 @@ public:
       Effect::EffectVector *ev = effectSummaryMap[D];
       assert(ev);
       
-      EffectCollectorVisitor ecv(BR, Ctx, AC, os, 
+      EffectCollectorVisitor ecv(BR, Ctx, mgr, AC, os, 
                                  *ev, effectSummaryMap, st);
       os << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ "
          << "(END EffectCollectorVisitor)\n";
@@ -1242,7 +1388,7 @@ private:
       Rpl* rpl = 0; // TODO: I would like to be able to call this on 
                     // NoEffectAttr as well, but the compiler complains
                     // that such attributes don't have a getRpl method...
-      if (!dyn_cast<NoEffectAttr>(*i)) rpl = new Rpl((*i)->getRpl(), D);
+      if (!dyn_cast<NoEffectAttr>(*i)) rpl = new Rpl((*i)->getRpl());
       ev.push_back(new Effect(ec, rpl, *i));
     }
   }
@@ -1424,41 +1570,6 @@ public:
     return true;
   }
 
-  /*bool VisitBinAssign(BinaryOperator* E) {
-    os << "DEBUG:: >>>>>>>>>>VisitBinAssign<<<<<<<<<<<<<<<<<\n";
-    return true;
-  }
-
-  bool VisitBinAddAssign(const CompoundAssignOperator* E) {
-    os << "DEBUG:: >>>>>>>>>>VisitBinAddAssign<<<<<<<<<<<<<<<<<\n";
-    return true;
-  }
-
-  bool VisitCompoundAssignOperator(CompoundAssignOperator* E) {
-    os << "DEBUG:: !!!!!!!!!!! Mother of compound Assign!!!!!!!!!!!!!\n";
-    //Expr* lhs = E->getLHS();
-    //Expr* rhs = E->getRHS();
-
-    return true;
-  }
-
-  bool VisitCXXThisExpr(CXXThisExpr* E) {
-    os << "DEBUG:: VisitCXXThisExpr: ";
-    E->printPretty(os, 0, Ctx.getPrintingPolicy());
-    os << "\n";
-    return true;
-  }
-
-  bool VisitUnaryOperator(UnaryOperator* E) {
-    os << "DEBUG:: VisitUnaryOperator :) :) \n";
-    return true;
-  }
-
-  bool VisitUnaryExprOrTypeTraitExpr(UnaryExprOrTypeTraitExpr* E) {
-    os << "DEBUG:: VisitUnaryExprOrTypeTraitExpr\n";
-    return true;
-  }*/
-
   /*bool VisitCastExpr(CastExpr* E) {
     os << "DEBUG:: VisitCastExpr: ";
     E->printPretty(os, 0, Ctx.getPrintingPolicy());
@@ -1476,55 +1587,6 @@ public:
     return true;
   }
 
-  bool VisitMemberExpr(MemberExpr* E) {
-    os << "DEBUG:: VisitMemberExpr: ";
-    E->printPretty(os, 0, Ctx.getPrintingPolicy());
-    os << "\n";
-    os << "Rvalue=" << E->isRValue()
-       << ", Lvalue=" << E->isLValue()
-       << ", Xvalue=" << E->isGLValue()
-       << ", GLvalue=" << E->isGLValue() << "\n";
-    Expr::LValueClassification lvc = E->ClassifyLValue(Ctx);
-    if (lvc==Expr::LV_Valid)
-      os << "LV_Valid\n";
-    else
-      os << "not LV_Valid\n";
-
-    ValueDecl* vd = E->getMemberDecl();
-    vd->print(os, Ctx.getPrintingPolicy());
-    os << "\n";
-
-    /// add effect reads vd
-    InRegionAttr* at = vd->getAttr<InRegionAttr>();
-    /// TODO is this a read or a write? atomic or not? just go with write for now
-    StringRef s = at->getRpl();
-    Rpl* rpl = new Rpl(s, vd);
-    //r->printElements(os);
-    EffectKind ec = WritesEffect;
-    Effect* e = new Effect(ec, *rpl);
-    os << "### "; e->print(os); os << "\n";
-    return true;
-  }
-
-  bool VisitDeclRefExpr(DeclRefExpr* E) {
-    os << "DEBUG:: VisitDeclRefExpr --- whatever that is!: ";
-    E->printPretty(os, 0, Ctx.getPrintingPolicy());
-    os << "\n";
-    os << "Rvalue=" << E->isRValue()
-       << ", Lvalue=" << E->isLValue()
-       << ", Xvalue=" << E->isGLValue()
-       << ", GLvalue=" << E->isGLValue() << "\n";
-    Expr::LValueClassification lvc = E->ClassifyLValue(Ctx);
-    if (lvc==Expr::LV_Valid)
-      os << "LV_Valid\n";
-    else
-      os << "not LV_Valid\n";
-    ValueDecl* vd = E->getDecl();
-    vd->print(os, Ctx.getPrintingPolicy());
-    os << "\n";
-
-    return true;
-  }*/
 
   bool VisitCallExpr(CallExpr* E) { return true; }
 
@@ -1540,7 +1602,7 @@ public:
     os << "DEBUG:: VisitCXXOperatorCall\n";
     return true;
   }
-
+*/
   /*bool VisitAssignmentExpression() {
     os << "DEBUG:: VisitAssignmentExpression\n"
     return true;
@@ -1560,7 +1622,7 @@ public:
     /** initialize traverser */
     EffectSummaryMapTy esm;
     ASaPSemanticCheckerTraverser 
-      asapSemaChecker(BR, D->getASTContext(),
+      asapSemaChecker(BR, D->getASTContext(), 
                     mgr.getAnalysisDeclContext(D), os, esm);
     /** run checker */
     asapSemaChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
@@ -1568,7 +1630,7 @@ public:
     if (!asapSemaChecker.encounteredFatalError()) {
       /// Check that Effect Summaries cover effects
       ASaPEffectsCheckerTraverser asapEffectChecker(BR, D->getASTContext(),
-                    mgr.getAnalysisDeclContext(D), os, esm);
+                    mgr, mgr.getAnalysisDeclContext(D), os, esm);
       asapEffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     }
     
