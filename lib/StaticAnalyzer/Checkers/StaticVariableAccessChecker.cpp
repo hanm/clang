@@ -44,6 +44,7 @@ namespace clang {
     typedef llvm::SmallPtrSet<ValueDecl*,4> ResultType;
     ResultType BaseVariables;
 
+    // Constructor
     ExprLValueBaseVarEvaluator(Expr* LValueExpr) {
        Visit(LValueExpr);
     }
@@ -54,6 +55,7 @@ namespace clang {
       BaseVariables.insert(E->getDecl());
     }
 
+    // Visit Base.Member or Base->Member expression
     void VisitMemberExpr(MemberExpr* E) {
       // We need to check if the member is a static variable; in which
       // case, it is the member expression that form the base

@@ -45,7 +45,8 @@ Rectangle __attribute__((arg("Pr:*:Next")))
   ** pnextstar __attribute((arg("Links"), arg("Pr:Links")));
 
 void do_pointer_stuff(int _x, int _y) 
-  __attribute__((writes("Pr:R1:*"), writes("Pr:R2:*")))
+  __attribute__((writes("Pr:R1:*")))
+  __attribute__((writes("Pr:R2:*")))
   //__attribute__((writes("P:R1:Y"))) // Y not declared here TODO: support it
   __attribute__((writes("Pr:*:Links")))
   __attribute__((writes("Links")))
@@ -58,7 +59,9 @@ void do_pointer_stuff(int _x, int _y)
   pp = &*&p1;         // writes Pr:Links                                                              expected-warning{{invalid assignment}}
   ppstar = &*&p1;     // writes Pr:Links
   ppp = &(*&pp);      // writes Links
-  *ppp = &p2;         // reads Links, writes Pr:Links                                                 expected-warning{{invalid assignment}}
+  *ppp = pp = &p2;         // reads Links, writes Pr:Links              expected-warning{{RHS region 'Pr:R2' is not included in LHS region 'Pool:*' invalid assignment}}
+  *ppp = ppstar = &p2;         // reads Links, writes Pr:Links          expected-warning{{RHS region 'Pr:*' is not included in LHS region 'Pool:*' invalid assignment}}
+  *pppstar = ppstar = &p2;         // reads Links, writes Pr:Links
   *pppstar = &p2;         // reads Links, writes Pr:Links
   *ppp = *&pp;        // reads Links, writes Pr:Links + reads Pr:Links
   *ppp = next->pp;    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
