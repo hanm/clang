@@ -599,7 +599,7 @@ private:
   Effect::EffectVector effects;
   Effect::EffectVector& effectSummary;
   EffectSummaryMapTy& effectSummaryMap;  
-  Rpl::RplVector *lhsRegions, *rhsRegions;
+  Rpl::RplVector *lhsRegions, *rhsRegions, *tmpRegions;
   bool isCoveredBySummary;
   
   /// Private Methods
@@ -665,6 +665,7 @@ public:
         nDerefs(0),
         effectSummary(effectsummary), 
         effectSummaryMap(effectSummaryMap),
+        lhsRegions(0), rhsRegions(0), tmpRegions(0),
         isCoveredBySummary(true) 
   {
     stmt->printPretty(os, 0, Ctx.getPrintingPolicy());
@@ -674,12 +675,9 @@ public:
   /// Destructor
   virtual ~EffectCollectorVisitor() {
     /// free effectsTmp
-    for(Effect::EffectVector::const_iterator
-            it = effectsTmp.begin(),
-            end = effectsTmp.end();
-            it != end; it++) {
-      delete (*it);
-    }
+    Effect::destroyEffectVector(effectsTmp);
+    Rpl::destroyRplVector(*tmpRegions);
+    delete tmpRegions;
   }
   
   /// Getters
@@ -835,8 +833,8 @@ public:
           /// 2.1.2 Substitution of Regions (for typechecking)
           if (typecheckAssignment) {
             for (Rpl::RplVector::const_iterator
-                    it = lhsRegions->begin(),
-                    end = lhsRegions->end();
+                    it = tmpRegions->begin(),
+                    end = tmpRegions->end();
                   it != end; it++) {
               (*it)->substitute(from, *rpl);
             }
@@ -861,7 +859,7 @@ public:
         while(i!=e) {
           RegionArgAttr *arg = *i;
           Rpl *rpl = new Rpl(arg->getRpl());           
-          (*lhsRegions).push_back(rpl);
+          (*tmpRegions).push_back(rpl);
           os << "DEBUG:: adding RPL for typechecking ~~~~~~~~~~ " 
              << rpl->toString() << "\n";
           i++; 
@@ -869,7 +867,7 @@ public:
       }
       
       /// 2.2 Collect Effects
-      // TODO :: take into account nDerefs
+      os << "DEBUG:: isBase = " << (isBase ? "true" : "false") << "\n";
       if (nDerefs<0) { // nDeref<0 ==> AddrOf Taken
         // Do nothing. Aliasing captured by type-checker
       } else { // nDeref >=0
@@ -904,8 +902,19 @@ public:
           // if it is an aggregate type we have to capture all the copy effects
           // at most one of isAddrOf and isDeref can be true
           // last type to work on
-          if (fd->getType()->isAggregateType()) {
+          if (fd->getType()->isStructureOrClassType()) {
             // TODO for each field add effect & i++
+            /// Actually this translates into an implicit call to an 
+            /// implicit copy function... treat it as a function call.
+            /*const RecordDecl *RD = dyn_cast<RecordDecl>(fd);
+            assert(fd);
+            for (RecordDecl::field_iterator 
+                    it = RD->field_begin(),
+                    end = RD->field_end();
+                 it != end; it++) {
+              FieldDecl *fd = *it; //TODO
+              
+            }*/
           } else {
             effectsTmp.push_back(
                       new Effect(ec, new Rpl((*argit)->getRpl()), *argit));
@@ -1005,18 +1014,32 @@ public:
     nDerefs = 0;
   }
 
-  inline void visitAssignment(BinaryOperator *E) {
+  inline void helperVisitAssignment(BinaryOperator *E) {
+    os << "DEBUG:: helperVisitAssignment (typecheck=" 
+       << (typecheckAssignment?"true":"false") <<")\n";
     bool saved_hws = this->hasWriteSemantics;
-    lhsRegions = new Rpl::RplVector();
-    Visit(E->getRHS());
+    if (tmpRegions) {
+      Rpl::destroyRplVector(*tmpRegions);
+      delete tmpRegions;
+    }
+
+    tmpRegions = new Rpl::RplVector();
+    Visit(E->getRHS());    
+    rhsRegions = tmpRegions;
     
-    rhsRegions = lhsRegions;
-    lhsRegions = new Rpl::RplVector();
+    tmpRegions = new Rpl::RplVector();
     hasWriteSemantics = true;
     Visit(E->getLHS());
+    lhsRegions = tmpRegions;
+    tmpRegions = 0;
     
     /// Check assignment
+    os << "DEBUG:: typecheck = " << typecheckAssignment 
+       << ", lhs=" << (lhsRegions==0?"NULL":"Not_NULL") 
+       << ", rhs=" << (rhsRegions==0?"NULL":"Not_NULL") 
+       <<"\n";
     if(typecheckAssignment) {
+      
       if (rhsRegions && lhsRegions) {
         // Typecheck 
         Rpl::RplVector::const_iterator 
@@ -1044,8 +1067,9 @@ public:
     
     /// Cleanup
     hasWriteSemantics = saved_hws;
-    delete lhsRegions;
-    lhsRegions = 0;
+    //delete lhsRegions;
+    tmpRegions = lhsRegions; // propagate up for chains of assignments
+    Rpl::destroyRplVector(*rhsRegions);
     delete rhsRegions;
     rhsRegions = 0;
   }
@@ -1056,7 +1080,7 @@ public:
     os << "\n";
     bool saved_tca = typecheckAssignment;
     typecheckAssignment = false;
-    visitAssignment(E);
+    helperVisitAssignment(E);
     typecheckAssignment = saved_tca;
   }
 
@@ -1066,10 +1090,28 @@ public:
     os << "\n";
     bool saved_tca = typecheckAssignment;
     typecheckAssignment = true;
-    visitAssignment(E);
+    helperVisitAssignment(E);
     typecheckAssignment = saved_tca;
   }
   
+  void VisitCallExpr(CallExpr* E) { 
+    os << "DEBUG:: VisitCallExpr\n";
+  }
+
+  /// Visit non-static C++ member function call
+  void VisitCXXMemberCallExpr(CXXMemberCallExpr *E) {
+    os << "DEBUG:: VisitCXXMemberCallExpr\n";
+  }
+
+  /// Visits a C++ overloaded operator call where the operator
+  /// is implemented as a non-static member function
+  void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *E) {
+    os << "DEBUG:: VisitCXXOperatorCall\n";
+    E->dump(os, BR.getSourceManager());
+    E->printPretty(os, 0, Ctx.getPrintingPolicy());
+    os << "\n";
+  }
+
   // TODO ++ etc operators
 }; // end class StmtVisitor
 
