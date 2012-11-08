@@ -28,6 +28,15 @@ using namespace ento;
 
 #define ASAP_DEBUG
 
+// The following definition selects code that uses the 
+// specific_attr_reverse_iterator functionality. This option is kept around
+// because I suspect *not* using it may actually perform better... The
+// alternative being to build an llvm::SmallVector using the fwd iterator,
+// then traversing it through the reverse iterator. The reason this might be
+// preferable is because after building it, the SmallVector is 'reverse 
+// iterated' multiple times.
+#define ATTR_REVERSE_ITERATOR_SUPPORTED
+
 #ifdef ASAP_DEBUG
 static raw_ostream& os = llvm::errs();
 static raw_ostream& osv2 = llvm::nulls();
@@ -676,8 +685,10 @@ public:
   virtual ~EffectCollectorVisitor() {
     /// free effectsTmp
     Effect::destroyEffectVector(effectsTmp);
-    Rpl::destroyRplVector(*tmpRegions);
-    delete tmpRegions;
+    if (tmpRegions) { 
+      Rpl::destroyRplVector(*tmpRegions);
+      delete tmpRegions;
+    }
   }
   
   /// Getters
@@ -763,6 +774,11 @@ public:
     if (fd) {
       StringRef s;
       int effectNr = 0;
+#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
+      specific_attr_reverse_iterator<RegionArgAttr>
+        argit = fd->specific_attr_rbegin<RegionArgAttr>(),
+        endit = fd->specific_attr_rend<RegionArgAttr>();
+#else
       /// Build a reverse iterator over RegionArgAttr
       llvm::SmallVector<RegionArgAttr*, 8> argv;
       for (specific_attr_iterator<RegionArgAttr> 
@@ -775,19 +791,7 @@ public:
         argit = argv.rbegin(),
         endit = argv.rend();
       // Done preparing reverse iterator
-      // DEBUG print derefStack
-      /*os << "DEBUG:: derefStack = ";
-      int nDerefs = 0;
-      for (llvm::SmallVector<bool,4>::iterator 
-              it = derefStack.begin(),
-              end = derefStack.end();
-            it!=end; it++) {
-        if (*it) os << "* ";
-        else os << "& ";
-        if (*it) ++nDerefs;
-        else (*it) --nDerefs;
-      }*/
-      //os << "\n";
+#endif
       // TODO if (!arg) arg = some default
       assert(argit!=endit);
       if (isBase) {
@@ -841,9 +845,16 @@ public:
           }
         }
       } else if (typecheckAssignment) { // isBase == false ==> init regions
+#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
+        specific_attr_reverse_iterator<RegionArgAttr>
+            i = fd->specific_attr_rbegin<RegionArgAttr>(),
+            e = fd->specific_attr_rend<RegionArgAttr>();
+#else
         llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator 
             i = argv.rbegin(),
             e = argv.rend();
+#endif
+
         /// 2.1.2.1 drop region args that are sidestepped by dereferrences.
         int ndrfs = nDerefs; 
         while (ndrfs>0 && i != e) {
@@ -872,9 +883,15 @@ public:
         // Do nothing. Aliasing captured by type-checker
       } else { // nDeref >=0
         /// 2.2.1. Take care of dereferences first
+#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
+        specific_attr_reverse_iterator<RegionArgAttr>
+            argit = fd->specific_attr_rbegin<RegionArgAttr>(),
+            endit = fd->specific_attr_rend<RegionArgAttr>();
+#else
         llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator 
                 argit = argv.rbegin(),
                 endit = argv.rend();
+#endif
         QualType qt = fd->getType();
         
         for (int i = nDerefs; i>0; i--) {
@@ -1290,6 +1307,11 @@ private:
   void checkTypeRegionArgs(ValueDecl* D) {
     QualType qt = D->getType();
     // here we need a reverse iterator over RegionArgAttr
+#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
+    specific_attr_reverse_iterator<RegionArgAttr>
+      i = D->specific_attr_rbegin<RegionArgAttr>(),
+      e = D->specific_attr_rend<RegionArgAttr>();
+#else
     llvm::SmallVector<RegionArgAttr*, 8> argv;
     for (specific_attr_iterator<RegionArgAttr> 
             i = D->specific_attr_begin<RegionArgAttr>(),
@@ -1300,7 +1322,7 @@ private:
     llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator 
       i = argv.rbegin(),
       e = argv.rend();
-    
+#endif    
     while (i!=e && qt->isPointerType()) {
       checkIsValidTypeForArg(D, qt, *i);      
       i++;
