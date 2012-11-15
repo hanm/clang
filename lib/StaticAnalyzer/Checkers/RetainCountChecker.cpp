@@ -342,20 +342,7 @@ void RefVal::print(raw_ostream &Out) const {
 // RefBindings - State used to track object reference counts.
 //===----------------------------------------------------------------------===//
 
-typedef llvm::ImmutableMap<SymbolRef, RefVal> RefBindings;
-
-namespace clang {
-namespace ento {
-template<>
-struct ProgramStateTrait<RefBindings>
-  : public ProgramStatePartialTrait<RefBindings> {
-  static void *GDMIndex() {
-    static int RefBIndex = 0;
-    return &RefBIndex;
-  }
-};
-}
-}
+REGISTER_MAP_WITH_PROGRAMSTATE(RefBindings, SymbolRef, RefVal)
 
 static inline const RefVal *getRefBinding(ProgramStateRef State,
                                           SymbolRef Sym) {
@@ -2203,6 +2190,7 @@ GetAllocationSite(ProgramStateManager& StateMgr, const ExplodedNode *N,
 
   // If allocation happened in a function different from the leak node context,
   // do not report the binding.
+  assert(N && "Could not find allocation node");
   if (N->getLocationContext() != LeakContext) {
     FirstBinding = 0;
   }
@@ -2258,6 +2246,7 @@ CFRefLeakReportVisitor::getEndPath(BugReporterContext &BRC,
 
   // Get the retain count.
   const RefVal* RV = getRefBinding(EndN->getState(), Sym);
+  assert(RV);
 
   if (RV->getKind() == RefVal::ErrorLeakReturned) {
     // FIXME: Per comments in rdar://6320065, "create" only applies to CF
@@ -2794,8 +2783,7 @@ void RetainCountChecker::processSummaryOfInlined(const RetainSummary &Summ,
   // Consult the summary for the return value.
   RetEffect RE = Summ.getRetEffect();
   if (RE.getKind() == RetEffect::NoRetHard) {
-    SymbolRef Sym = state->getSVal(CallOrMsg.getOriginExpr(),
-        C.getLocationContext()).getAsSymbol();
+    SymbolRef Sym = CallOrMsg.getReturnValue().getAsSymbol();
     if (Sym)
       state = removeRefBinding(state, Sym);
   }
@@ -2874,8 +2862,7 @@ void RetainCountChecker::checkSummary(const RetainSummary &Summ,
 
     case RetEffect::OwnedAllocatedSymbol:
     case RetEffect::OwnedSymbol: {
-      SymbolRef Sym = state->getSVal(CallOrMsg.getOriginExpr(),
-                                     C.getLocationContext()).getAsSymbol();
+      SymbolRef Sym = CallOrMsg.getReturnValue().getAsSymbol();
       if (!Sym)
         break;
 
@@ -2894,10 +2881,10 @@ void RetainCountChecker::checkSummary(const RetainSummary &Summ,
     case RetEffect::ARCNotOwnedSymbol:
     case RetEffect::NotOwnedSymbol: {
       const Expr *Ex = CallOrMsg.getOriginExpr();
-      SymbolRef Sym = state->getSVal(Ex, C.getLocationContext()).getAsSymbol();
+      SymbolRef Sym = CallOrMsg.getReturnValue().getAsSymbol();
       if (!Sym)
         break;
-
+      assert(Ex);
       // Use GetReturnType in order to give [NSFoo alloc] the type NSFoo *.
       QualType ResultTy = GetReturnType(Ex, C.getASTContext());
       state = setRefBinding(state, Sym, RefVal::makeNotOwned(RE.getObjKind(),
@@ -3119,7 +3106,7 @@ void RetainCountChecker::processNonLeakError(ProgramStateRef St,
                                         C.isObjCGCEnabled(), SummaryLog,
                                         N, Sym);
   report->addRange(ErrorRange);
-  C.EmitReport(report);
+  C.emitReport(report);
 }
 
 //===----------------------------------------------------------------------===//
@@ -3203,12 +3190,6 @@ bool RetainCountChecker::evalCall(const CallExpr *CE, CheckerContext &C) const {
 // Handle return statements.
 //===----------------------------------------------------------------------===//
 
-// Return true if the current LocationContext has no caller context.
-static bool inTopFrame(CheckerContext &C) {
-  const LocationContext *LC = C.getLocationContext();
-  return LC->getParent() == 0;  
-}
-
 void RetainCountChecker::checkPreStmt(const ReturnStmt *S,
                                       CheckerContext &C) const {
 
@@ -3217,7 +3198,7 @@ void RetainCountChecker::checkPreStmt(const ReturnStmt *S,
   // better checking even for inlined calls, and see if they match
   // with their expected semantics (e.g., the method should return a retained
   // object, etc.).
-  if (!inTopFrame(C))
+  if (!C.inTopFrame())
     return;
 
   const Expr *RetE = S->getRetValue();
@@ -3349,7 +3330,7 @@ void RetainCountChecker::checkReturnWithRetEffect(const ReturnStmt *S,
             new CFRefLeakReport(*getLeakAtReturnBug(LOpts, GCEnabled),
                                 LOpts, GCEnabled, SummaryLog,
                                 N, Sym, C);
-          C.EmitReport(report);
+          C.emitReport(report);
         }
       }
     }
@@ -3370,7 +3351,7 @@ void RetainCountChecker::checkReturnWithRetEffect(const ReturnStmt *S,
             new CFRefReport(*returnNotOwnedForOwned,
                             C.getASTContext().getLangOpts(), 
                             C.isObjCGCEnabled(), SummaryLog, N, Sym);
-        C.EmitReport(report);
+        C.emitReport(report);
       }
     }
   }
@@ -3436,17 +3417,19 @@ ProgramStateRef RetainCountChecker::evalAssume(ProgramStateRef state,
   //  too bad since the number of symbols we will track in practice are
   //  probably small and evalAssume is only called at branches and a few
   //  other places.
-  RefBindings B = state->get<RefBindings>();
+  RefBindingsTy B = state->get<RefBindings>();
 
   if (B.isEmpty())
     return state;
 
   bool changed = false;
-  RefBindings::Factory &RefBFactory = state->get_context<RefBindings>();
+  RefBindingsTy::Factory &RefBFactory = state->get_context<RefBindings>();
 
-  for (RefBindings::iterator I = B.begin(), E = B.end(); I != E; ++I) {
+  for (RefBindingsTy::iterator I = B.begin(), E = B.end(); I != E; ++I) {
     // Check if the symbol is null stop tracking the symbol.
-    if (state->getConstraintManager().isNull(state, I.getKey()).isTrue()) {
+    ConstraintManager &CMgr = state->getConstraintManager();
+    ConditionTruthVal AllocFailed = CMgr.isNull(state, I.getKey());
+    if (AllocFailed.isConstrainedTrue()) {
       changed = true;
       B = RefBFactory.remove(B, I.getKey());
     }
@@ -3548,7 +3531,7 @@ RetainCountChecker::handleAutoreleaseCounts(ProgramStateRef state,
     CFRefReport *report =
       new CFRefReport(*overAutorelease, LOpts, /* GCEnabled = */ false,
                       SummaryLog, N, Sym, os.str());
-    Ctx.EmitReport(report);
+    Ctx.emitReport(report);
   }
 
   return std::make_pair((ExplodedNode *)0, (ProgramStateRef )0);
@@ -3594,7 +3577,7 @@ RetainCountChecker::processLeaks(ProgramStateRef state,
 
       CFRefLeakReport *report = new CFRefLeakReport(*BT, LOpts, GCEnabled, 
                                                     SummaryLog, N, *I, Ctx);
-      Ctx.EmitReport(report);
+      Ctx.emitReport(report);
     }
   }
 
@@ -3603,10 +3586,10 @@ RetainCountChecker::processLeaks(ProgramStateRef state,
 
 void RetainCountChecker::checkEndPath(CheckerContext &Ctx) const {
   ProgramStateRef state = Ctx.getState();
-  RefBindings B = state->get<RefBindings>();
+  RefBindingsTy B = state->get<RefBindings>();
   ExplodedNode *Pred = Ctx.getPredecessor();
 
-  for (RefBindings::iterator I = B.begin(), E = B.end(); I != E; ++I) {
+  for (RefBindingsTy::iterator I = B.begin(), E = B.end(); I != E; ++I) {
     llvm::tie(Pred, state) = handleAutoreleaseCounts(state, Pred, /*Tag=*/0,
                                                      Ctx, I->first, I->second);
     if (!state)
@@ -3623,7 +3606,7 @@ void RetainCountChecker::checkEndPath(CheckerContext &Ctx) const {
   B = state->get<RefBindings>();
   SmallVector<SymbolRef, 10> Leaked;
 
-  for (RefBindings::iterator I = B.begin(), E = B.end(); I != E; ++I)
+  for (RefBindingsTy::iterator I = B.begin(), E = B.end(); I != E; ++I)
     state = handleSymbolDeath(state, I->first, I->second, Leaked);
 
   processLeaks(state, Leaked, Ctx, Pred);
@@ -3647,7 +3630,7 @@ void RetainCountChecker::checkDeadSymbols(SymbolReaper &SymReaper,
   ExplodedNode *Pred = C.getPredecessor();
 
   ProgramStateRef state = C.getState();
-  RefBindings B = state->get<RefBindings>();
+  RefBindingsTy B = state->get<RefBindings>();
 
   // Update counts from autorelease pools
   for (SymbolReaper::dead_iterator I = SymReaper.dead_begin(),
@@ -3680,7 +3663,7 @@ void RetainCountChecker::checkDeadSymbols(SymbolReaper &SymReaper,
     return;
 
   // Now generate a new node that nukes the old bindings.
-  RefBindings::Factory &F = state->get_context<RefBindings>();
+  RefBindingsTy::Factory &F = state->get_context<RefBindings>();
 
   for (SymbolReaper::dead_iterator I = SymReaper.dead_begin(),
        E = SymReaper.dead_end(); I != E; ++I)
@@ -3693,12 +3676,12 @@ void RetainCountChecker::checkDeadSymbols(SymbolReaper &SymReaper,
 void RetainCountChecker::printState(raw_ostream &Out, ProgramStateRef State,
                                     const char *NL, const char *Sep) const {
 
-  RefBindings B = State->get<RefBindings>();
+  RefBindingsTy B = State->get<RefBindings>();
 
   if (!B.isEmpty())
     Out << Sep << NL;
 
-  for (RefBindings::iterator I = B.begin(), E = B.end(); I != E; ++I) {
+  for (RefBindingsTy::iterator I = B.begin(), E = B.end(); I != E; ++I) {
     Out << I->first << " : ";
     I->second.print(Out);
     Out << NL;

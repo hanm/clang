@@ -158,6 +158,22 @@ Decl *TemplateDeclInstantiator::InstantiateTypedefNameDecl(TypedefNameDecl *D,
     SemaRef.MarkDeclarationsReferencedInType(D->getLocation(), DI->getType());
   }
 
+  // HACK: g++ has a bug where it gets the value kind of ?: wrong.
+  // libstdc++ relies upon this bug in its implementation of common_type.
+  // If we happen to be processing that implementation, fake up the g++ ?:
+  // semantics. See LWG issue 2141 for more information on the bug.
+  const DecltypeType *DT = DI->getType()->getAs<DecltypeType>();
+  CXXRecordDecl *RD = dyn_cast<CXXRecordDecl>(D->getDeclContext());
+  if (DT && RD && isa<ConditionalOperator>(DT->getUnderlyingExpr()) &&
+      DT->isReferenceType() &&
+      RD->getEnclosingNamespaceContext() == SemaRef.getStdNamespace() &&
+      RD->getIdentifier() && RD->getIdentifier()->isStr("common_type") &&
+      D->getIdentifier() && D->getIdentifier()->isStr("type") &&
+      SemaRef.getSourceManager().isInSystemHeader(D->getLocStart()))
+    // Fold it to the (non-reference) type which g++ would have produced.
+    DI = SemaRef.Context.getTrivialTypeSourceInfo(
+      DI->getType().getNonReferenceType());
+
   // Create the new typedef
   TypedefNameDecl *Typedef;
   if (IsTypeAlias)
@@ -2053,7 +2069,7 @@ Decl * TemplateDeclInstantiator
   SS.Adopt(QualifierLoc);
 
   // Since NameInfo refers to a typename, it cannot be a C++ special name.
-  // Hence, no tranformation is required for it.
+  // Hence, no transformation is required for it.
   DeclarationNameInfo NameInfo(D->getDeclName(), D->getLocation());
   NamedDecl *UD =
     SemaRef.BuildUsingDeclaration(/*Scope*/ 0, D->getAccess(),

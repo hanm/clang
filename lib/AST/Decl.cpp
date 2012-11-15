@@ -213,12 +213,12 @@ static LinkageInfo getLVForNamespaceScopeDecl(const NamedDecl *D,
     if (Var->getStorageClass() == SC_Static)
       return LinkageInfo::internal();
 
-    // - an object or reference that is explicitly declared const
-    //   and neither explicitly declared extern nor previously
-    //   declared to have external linkage; or
-    // (there is no equivalent in C99)
+    // - a non-volatile object or reference that is explicitly declared const
+    //   or constexpr and neither explicitly declared extern nor previously
+    //   declared to have external linkage; or (there is no equivalent in C99)
     if (Context.getLangOpts().CPlusPlus &&
-        Var->getType().isConstant(Context) && 
+        Var->getType().isConstQualified() && 
+        !Var->getType().isVolatileQualified() &&
         Var->getStorageClass() != SC_Extern &&
         Var->getStorageClass() != SC_PrivateExtern) {
       bool FoundExtern = false;
@@ -236,8 +236,8 @@ static LinkageInfo getLVForNamespaceScopeDecl(const NamedDecl *D,
       for (; PrevVar; PrevVar = PrevVar->getPreviousDecl())
         if (PrevVar->getStorageClass() == SC_PrivateExtern)
           break;
-        if (PrevVar)
-          return PrevVar->getLinkageAndVisibility();
+      if (PrevVar)
+        return PrevVar->getLinkageAndVisibility();
     }
   } else if (isa<FunctionDecl>(D) || isa<FunctionTemplateDecl>(D)) {
     // C++ [temp]p4:
@@ -341,25 +341,9 @@ static LinkageInfo getLVForNamespaceScopeDecl(const NamedDecl *D,
     if (Var->getStorageClass() == SC_PrivateExtern)
       LV.mergeVisibility(HiddenVisibility, true);
 
-    if (!Context.getLangOpts().CPlusPlus &&
-        (Var->getStorageClass() == SC_Extern ||
-         Var->getStorageClass() == SC_PrivateExtern)) {
-
-      // C99 6.2.2p4:
-      //   For an identifier declared with the storage-class specifier
-      //   extern in a scope in which a prior declaration of that
-      //   identifier is visible, if the prior declaration specifies
-      //   internal or external linkage, the linkage of the identifier
-      //   at the later declaration is the same as the linkage
-      //   specified at the prior declaration. If no prior declaration
-      //   is visible, or if the prior declaration specifies no
-      //   linkage, then the identifier has external linkage.
-      if (const VarDecl *PrevVar = Var->getPreviousDecl()) {
-        LinkageInfo PrevLV = getLVForDecl(PrevVar, OnlyTemplate);
-        if (PrevLV.linkage()) LV.setLinkage(PrevLV.linkage());
-        LV.mergeVisibility(PrevLV);
-      }
-    }
+    // Note that Sema::MergeVarDecl already takes care of implementing
+    // C99 6.2.2p4 and propagating the visibility attribute, so we don't have
+    // to do it here.
 
   //     - a function, unless it has internal linkage; or
   } else if (const FunctionDecl *Function = dyn_cast<FunctionDecl>(D)) {
@@ -496,8 +480,7 @@ static LinkageInfo getLVForClassMember(const NamedDecl *D, bool OnlyTemplate) {
   if (!(isa<CXXMethodDecl>(D) ||
         isa<VarDecl>(D) ||
         isa<FieldDecl>(D) ||
-        (isa<TagDecl>(D) &&
-         (D->getDeclName() || cast<TagDecl>(D)->getTypedefNameForAnonDecl()))))
+        isa<TagDecl>(D)))
     return LinkageInfo::none();
 
   LinkageInfo LV;
@@ -672,8 +655,7 @@ LinkageInfo NamedDecl::getLinkageAndVisibility() const {
 llvm::Optional<Visibility> NamedDecl::getExplicitVisibility() const {
   // Use the most recent declaration of a variable.
   if (const VarDecl *Var = dyn_cast<VarDecl>(this)) {
-    if (llvm::Optional<Visibility> V =
-        getVisibilityOf(Var->getMostRecentDecl()))
+    if (llvm::Optional<Visibility> V = getVisibilityOf(Var))
       return V;
 
     if (Var->isStaticDataMember()) {
@@ -687,8 +669,7 @@ llvm::Optional<Visibility> NamedDecl::getExplicitVisibility() const {
   // Use the most recent declaration of a function, and also handle
   // function template specializations.
   if (const FunctionDecl *fn = dyn_cast<FunctionDecl>(this)) {
-    if (llvm::Optional<Visibility> V
-                            = getVisibilityOf(fn->getMostRecentDecl())) 
+    if (llvm::Optional<Visibility> V = getVisibilityOf(fn))
       return V;
 
     // If the function is a specialization of a template with an
@@ -841,13 +822,10 @@ static LinkageInfo getLVForDecl(const NamedDecl *D, bool OnlyTemplate) {
           if (llvm::Optional<Visibility> Vis = Var->getExplicitVisibility())
             LV.mergeVisibility(*Vis, true);
         }
-        
-        if (const VarDecl *Prev = Var->getPreviousDecl()) {
-          LinkageInfo PrevLV = getLVForDecl(Prev, OnlyTemplate);
-          if (PrevLV.linkage()) LV.setLinkage(PrevLV.linkage());
-          LV.mergeVisibility(PrevLV);
-        }
 
+        // Note that Sema::MergeVarDecl already takes care of implementing
+        // C99 6.2.2p4 and propagating the visibility attribute, so we don't
+        // have to do it here.
         return LV;
       }
   }
@@ -2517,7 +2495,7 @@ unsigned FieldDecl::getFieldIndex() const {
   unsigned Index = 0;
   const RecordDecl *RD = getParent();
   const FieldDecl *LastFD = 0;
-  bool IsMsStruct = RD->hasAttr<MsStructAttr>();
+  bool IsMsStruct = RD->isMsStruct(getASTContext());
 
   for (RecordDecl::field_iterator I = RD->field_begin(), E = RD->field_end();
        I != E; ++I, ++Index) {
@@ -2582,8 +2560,7 @@ void TagDecl::setTypedefNameForAnonDecl(TypedefNameDecl *TDD) {
 void TagDecl::startDefinition() {
   IsBeingDefined = true;
 
-  if (isa<CXXRecordDecl>(this)) {
-    CXXRecordDecl *D = cast<CXXRecordDecl>(this);
+  if (CXXRecordDecl *D = dyn_cast<CXXRecordDecl>(this)) {
     struct CXXRecordDecl::DefinitionData *Data = 
       new (getASTContext()) struct CXXRecordDecl::DefinitionData(D);
     for (redecl_iterator I = redecls_begin(), E = redecls_end(); I != E; ++I)
@@ -2763,6 +2740,13 @@ RecordDecl::field_iterator RecordDecl::field_begin() const {
 void RecordDecl::completeDefinition() {
   assert(!isCompleteDefinition() && "Cannot redefine record!");
   TagDecl::completeDefinition();
+}
+
+/// isMsStruct - Get whether or not this record uses ms_struct layout.
+/// This which can be turned on with an attribute, pragma, or the
+/// -mms-bitfields command-line option.
+bool RecordDecl::isMsStruct(const ASTContext &C) const {
+  return hasAttr<MsStructAttr>() || C.getLangOpts().MSBitfields == 1;
 }
 
 static bool isFieldOrIndirectField(Decl::Kind K) {

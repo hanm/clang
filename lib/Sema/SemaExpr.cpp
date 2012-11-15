@@ -1640,7 +1640,8 @@ bool Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
           Diag(R.getNameLoc(), diag::err_no_member_suggest)
             << Name << computeDeclContext(SS, false) << CorrectedQuotedStr
             << SS.getRange()
-            << FixItHint::CreateReplacement(R.getNameLoc(), CorrectedStr);
+            << FixItHint::CreateReplacement(Corrected.getCorrectionRange(),
+                                            CorrectedStr);
         if (ND)
           Diag(ND->getLocation(), diag::note_previous_decl)
             << CorrectedQuotedStr;
@@ -1894,9 +1895,10 @@ ExprResult Sema::ActOnIdExpression(Scope *S,
 /// this path.
 ExprResult
 Sema::BuildQualifiedDeclarationNameExpr(CXXScopeSpec &SS,
-                                        const DeclarationNameInfo &NameInfo) {
-  DeclContext *DC;
-  if (!(DC = computeDeclContext(SS, false)) || DC->isDependentContext())
+                                        const DeclarationNameInfo &NameInfo,
+                                        bool IsAddressOfOperand) {
+  DeclContext *DC = computeDeclContext(SS, false);
+  if (!DC)
     return BuildDependentDeclRefExpr(SS, /*TemplateKWLoc=*/SourceLocation(),
                                      NameInfo, /*TemplateArgs=*/0);
 
@@ -1909,13 +1911,26 @@ Sema::BuildQualifiedDeclarationNameExpr(CXXScopeSpec &SS,
   if (R.isAmbiguous())
     return ExprError();
 
+  if (R.getResultKind() == LookupResult::NotFoundInCurrentInstantiation)
+    return BuildDependentDeclRefExpr(SS, /*TemplateKWLoc=*/SourceLocation(),
+                                     NameInfo, /*TemplateArgs=*/0);
+
   if (R.empty()) {
     Diag(NameInfo.getLoc(), diag::err_no_member)
       << NameInfo.getName() << DC << SS.getRange();
     return ExprError();
   }
 
-  return BuildDeclarationNameExpr(SS, R, /*ADL*/ false);
+  // Defend against this resolving to an implicit member access. We usually
+  // won't get here if this might be a legitimate a class member (we end up in
+  // BuildMemberReferenceExpr instead), but this can be valid if we're forming
+  // a pointer-to-member or in an unevaluated context in C++11.
+  if (!R.empty() && (*R.begin())->isCXXClassMember() && !IsAddressOfOperand)
+    return BuildPossibleImplicitMemberExpr(SS,
+                                           /*TemplateKWLoc=*/SourceLocation(),
+                                           R, /*TemplateArgs=*/0);
+
+  return BuildDeclarationNameExpr(SS, R, /* ADL */ false);
 }
 
 /// LookupInObjCMethod - The parser has read a name in, and Sema has
@@ -3174,7 +3189,7 @@ Sema::CreateUnaryExprOrTypeTraitExpr(Expr *E, SourceLocation OpLoc,
     return ExprError();
 
   if (ExprKind == UETT_SizeOf && E->getType()->isVariableArrayType()) {
-    PE = TranformToPotentiallyEvaluated(E);
+    PE = TransformToPotentiallyEvaluated(E);
     if (PE.isInvalid()) return ExprError();
     E = PE.take();
   }
@@ -6768,7 +6783,7 @@ static void diagnoseFunctionPointerToVoidComparison(Sema &S, SourceLocation Loc,
 }
 
 static bool isObjCObjectLiteral(ExprResult &E) {
-  switch (E.get()->getStmtClass()) {
+  switch (E.get()->IgnoreParenImpCasts()->getStmtClass()) {
   case Stmt::ObjCArrayLiteralClass:
   case Stmt::ObjCDictionaryLiteralClass:
   case Stmt::ObjCStringLiteralClass:
@@ -6860,6 +6875,7 @@ static void diagnoseObjCLiteralComparison(Sema &S, SourceLocation Loc,
     LK_String
   } LiteralKind;
 
+  Literal = Literal->IgnoreParenImpCasts();
   switch (Literal->getStmtClass()) {
   case Stmt::ObjCStringLiteralClass:
     // "string literal"
@@ -8056,8 +8072,16 @@ static QualType CheckAddressOfOperand(Sema &S, ExprResult &OrigOp,
 
     // The method was named without a qualifier.
     } else if (!DRE->getQualifier()) {
-      S.Diag(OpLoc, diag::err_unqualified_pointer_member_function)
-        << op->getSourceRange();
+      if (MD->getParent()->getName().empty())
+        S.Diag(OpLoc, diag::err_unqualified_pointer_member_function)
+          << op->getSourceRange();
+      else {
+        SmallString<32> Str;
+        StringRef Qual = (MD->getParent()->getName() + "::").toStringRef(Str);
+        S.Diag(OpLoc, diag::err_unqualified_pointer_member_function)
+          << op->getSourceRange()
+          << FixItHint::CreateInsertion(op->getSourceRange().getBegin(), Qual);
+      }
     }
 
     return S.Context.getMemberPointerType(op->getType(),
@@ -8443,46 +8467,38 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
 static void DiagnoseBitwisePrecedence(Sema &Self, BinaryOperatorKind Opc,
                                       SourceLocation OpLoc, Expr *LHSExpr,
                                       Expr *RHSExpr) {
-  typedef BinaryOperator BinOp;
-  BinOp::Opcode LHSopc = static_cast<BinOp::Opcode>(-1),
-                RHSopc = static_cast<BinOp::Opcode>(-1);
-  if (BinOp *BO = dyn_cast<BinOp>(LHSExpr))
-    LHSopc = BO->getOpcode();
-  if (BinOp *BO = dyn_cast<BinOp>(RHSExpr))
-    RHSopc = BO->getOpcode();
+  BinaryOperator *LHSBO = dyn_cast<BinaryOperator>(LHSExpr);
+  BinaryOperator *RHSBO = dyn_cast<BinaryOperator>(RHSExpr);
 
-  // Subs are not binary operators.
-  if (LHSopc == -1 && RHSopc == -1)
+  // Check that one of the sides is a comparison operator.
+  bool isLeftComp = LHSBO && LHSBO->isComparisonOp();
+  bool isRightComp = RHSBO && RHSBO->isComparisonOp();
+  if (!isLeftComp && !isRightComp)
     return;
 
   // Bitwise operations are sometimes used as eager logical ops.
   // Don't diagnose this.
-  if ((BinOp::isComparisonOp(LHSopc) || BinOp::isBitwiseOp(LHSopc)) &&
-      (BinOp::isComparisonOp(RHSopc) || BinOp::isBitwiseOp(RHSopc)))
+  bool isLeftBitwise = LHSBO && LHSBO->isBitwiseOp();
+  bool isRightBitwise = RHSBO && RHSBO->isBitwiseOp();
+  if ((isLeftComp || isLeftBitwise) && (isRightComp || isRightBitwise))
     return;
-
-  bool isLeftComp = BinOp::isComparisonOp(LHSopc);
-  bool isRightComp = BinOp::isComparisonOp(RHSopc);
-  if (!isLeftComp && !isRightComp) return;
 
   SourceRange DiagRange = isLeftComp ? SourceRange(LHSExpr->getLocStart(),
                                                    OpLoc)
                                      : SourceRange(OpLoc, RHSExpr->getLocEnd());
-  StringRef OpStr = isLeftComp ? BinOp::getOpcodeStr(LHSopc)
-                               : BinOp::getOpcodeStr(RHSopc);
+  StringRef OpStr = isLeftComp ? LHSBO->getOpcodeStr() : RHSBO->getOpcodeStr();
   SourceRange ParensRange = isLeftComp ?
-      SourceRange(cast<BinOp>(LHSExpr)->getRHS()->getLocStart(),
-                  RHSExpr->getLocEnd())
-    : SourceRange(LHSExpr->getLocStart(),
-                  cast<BinOp>(RHSExpr)->getLHS()->getLocStart());
+      SourceRange(LHSBO->getRHS()->getLocStart(), RHSExpr->getLocEnd())
+    : SourceRange(LHSExpr->getLocStart(), RHSBO->getLHS()->getLocStart());
 
   Self.Diag(OpLoc, diag::warn_precedence_bitwise_rel)
-    << DiagRange << BinOp::getOpcodeStr(Opc) << OpStr;
+    << DiagRange << BinaryOperator::getOpcodeStr(Opc) << OpStr;
   SuggestParentheses(Self, OpLoc,
     Self.PDiag(diag::note_precedence_silence) << OpStr,
     (isLeftComp ? LHSExpr : RHSExpr)->getSourceRange());
   SuggestParentheses(Self, OpLoc,
-    Self.PDiag(diag::note_precedence_bitwise_first) << BinOp::getOpcodeStr(Opc),
+    Self.PDiag(diag::note_precedence_bitwise_first)
+      << BinaryOperator::getOpcodeStr(Opc),
     ParensRange);
 }
 
@@ -8577,12 +8593,12 @@ static void DiagnoseBitwiseAndInBitwiseOr(Sema &S, SourceLocation OpLoc,
 }
 
 static void DiagnoseAdditionInShift(Sema &S, SourceLocation OpLoc,
-                                    Expr *SubExpr, StringRef shift) {
+                                    Expr *SubExpr, StringRef Shift) {
   if (BinaryOperator *Bop = dyn_cast<BinaryOperator>(SubExpr)) {
     if (Bop->getOpcode() == BO_Add || Bop->getOpcode() == BO_Sub) {
       StringRef Op = Bop->getOpcodeStr();
       S.Diag(Bop->getOperatorLoc(), diag::warn_addition_in_bitshift)
-          << Bop->getSourceRange() << OpLoc << Op << shift;
+          << Bop->getSourceRange() << OpLoc << Shift << Op;
       SuggestParentheses(S, Bop->getOperatorLoc(),
           S.PDiag(diag::note_precedence_silence) << Op,
           Bop->getSourceRange());
@@ -8614,9 +8630,9 @@ static void DiagnoseBinOpPrecedence(Sema &Self, BinaryOperatorKind Opc,
 
   if ((Opc == BO_Shl && LHSExpr->getType()->isIntegralType(Self.getASTContext()))
       || Opc == BO_Shr) {
-    StringRef shift = BinaryOperator::getOpcodeStr(Opc);
-    DiagnoseAdditionInShift(Self, OpLoc, LHSExpr, shift);
-    DiagnoseAdditionInShift(Self, OpLoc, RHSExpr, shift);
+    StringRef Shift = BinaryOperator::getOpcodeStr(Opc);
+    DiagnoseAdditionInShift(Self, OpLoc, LHSExpr, Shift);
+    DiagnoseAdditionInShift(Self, OpLoc, RHSExpr, Shift);
   }
 }
 
@@ -9634,6 +9650,16 @@ ExprResult Sema::BuildVAArgExpr(SourceLocation BuiltinLoc,
     if (Result.isInvalid())
       return ExprError();
     E = Result.take();
+  } else if (VaListType->isRecordType() && getLangOpts().CPlusPlus) {
+    // If va_list is a record type and we are compiling in C++ mode,
+    // check the argument using reference binding.
+    InitializedEntity Entity
+      = InitializedEntity::InitializeParameter(Context,
+          Context.getLValueReferenceType(VaListType), false);
+    ExprResult Init = PerformCopyInitialization(Entity, SourceLocation(), E);
+    if (Init.isInvalid())
+      return ExprError();
+    E = Init.takeAs<Expr>();
   } else {
     // Otherwise, the va_list argument must be an l-value because
     // it is modified by va_arg.
@@ -10177,7 +10203,7 @@ namespace {
   };
 }
 
-ExprResult Sema::TranformToPotentiallyEvaluated(Expr *E) {
+ExprResult Sema::TransformToPotentiallyEvaluated(Expr *E) {
   assert(ExprEvalContexts.back().Context == Unevaluated &&
          "Should only transform unevaluated expressions");
   ExprEvalContexts.back().Context =
@@ -10268,7 +10294,7 @@ void Sema::DiscardCleanupsInEvaluationContext() {
 ExprResult Sema::HandleExprEvaluationContextForTypeof(Expr *E) {
   if (!E->getType()->isVariablyModifiedType())
     return E;
-  return TranformToPotentiallyEvaluated(E);
+  return TransformToPotentiallyEvaluated(E);
 }
 
 static bool IsPotentiallyEvaluatedContext(Sema &SemaRef) {
@@ -10307,15 +10333,44 @@ void Sema::MarkFunctionReferenced(SourceLocation Loc, FunctionDecl *Func) {
 
   Func->setReferenced();
 
-  // Don't mark this function as used multiple times, unless it's a constexpr
-  // function which we need to instantiate.
-  if (Func->isUsed(false) &&
-      !(Func->isConstexpr() && !Func->getBody() &&
-        Func->isImplicitlyInstantiable()))
-    return;
-
-  if (!IsPotentiallyEvaluatedContext(*this))
-    return;
+  // C++11 [basic.def.odr]p3:
+  //   A function whose name appears as a potentially-evaluated expression is
+  //   odr-used if it is the unique lookup result or the selected member of a
+  //   set of overloaded functions [...].
+  //
+  // We (incorrectly) mark overload resolution as an unevaluated context, so we
+  // can just check that here. Skip the rest of this function if we've already
+  // marked the function as used.
+  if (Func->isUsed(false) || !IsPotentiallyEvaluatedContext(*this)) {
+    // C++11 [temp.inst]p3:
+    //   Unless a function template specialization has been explicitly
+    //   instantiated or explicitly specialized, the function template
+    //   specialization is implicitly instantiated when the specialization is
+    //   referenced in a context that requires a function definition to exist.
+    //
+    // We consider constexpr function templates to be referenced in a context
+    // that requires a definition to exist whenever they are referenced.
+    //
+    // FIXME: This instantiates constexpr functions too frequently. If this is
+    // really an unevaluated context (and we're not just in the definition of a
+    // function template or overload resolution or other cases which we
+    // incorrectly consider to be unevaluated contexts), and we're not in a
+    // subexpression which we actually need to evaluate (for instance, a
+    // template argument, array bound or an expression in a braced-init-list),
+    // we are not permitted to instantiate this constexpr function definition.
+    //
+    // FIXME: This also implicitly defines special members too frequently. They
+    // are only supposed to be implicitly defined if they are odr-used, but they
+    // are not odr-used from constant expressions in unevaluated contexts.
+    // However, they cannot be referenced if they are deleted, and they are
+    // deleted whenever the implicit definition of the special member would
+    // fail.
+    if (!Func->isConstexpr() || Func->getBody())
+      return;
+    CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(Func);
+    if (!Func->isImplicitlyInstantiable() && (!MD || MD->isUserProvided()))
+      return;
+  }
 
   // Note that this declaration has been used.
   if (CXXConstructorDecl *Constructor = dyn_cast<CXXConstructorDecl>(Func)) {
@@ -11001,20 +11056,21 @@ static void DoMarkVarDeclReferenced(Sema &SemaRef, SourceLocation Loc,
     }
   }
 
-  // Per C++11 [basic.def.odr], a variable is odr-used "unless it is 
-  // an object that satisfies the requirements for appearing in a
-  // constant expression (5.19) and the lvalue-to-rvalue conversion (4.1)
+  // Per C++11 [basic.def.odr], a variable is odr-used "unless it satisfies
+  // the requirements for appearing in a constant expression (5.19) and, if
+  // it is an object, the lvalue-to-rvalue conversion (4.1)
   // is immediately applied."  We check the first part here, and
   // Sema::UpdateMarkingForLValueToRValue deals with the second part.
   // Note that we use the C++11 definition everywhere because nothing in
-  // C++03 depends on whether we get the C++03 version correct. This does not
-  // apply to references, since they are not objects.
+  // C++03 depends on whether we get the C++03 version correct. The second
+  // part does not apply to references, since they are not objects.
   const VarDecl *DefVD;
-  if (E && !isa<ParmVarDecl>(Var) && !Var->getType()->isReferenceType() &&
+  if (E && !isa<ParmVarDecl>(Var) &&
       Var->isUsableInConstantExpressions(SemaRef.Context) &&
-      Var->getAnyInitializer(DefVD) && DefVD->checkInitIsICE())
-    SemaRef.MaybeODRUseExprs.insert(E);
-  else
+      Var->getAnyInitializer(DefVD) && DefVD->checkInitIsICE()) {
+    if (!Var->getType()->isReferenceType())
+      SemaRef.MaybeODRUseExprs.insert(E);
+  } else
     MarkVarDeclODRUsed(SemaRef, Var, Loc);
 }
 
@@ -11786,6 +11842,22 @@ ExprResult Sema::forceUnknownAnyToType(Expr *E, QualType ToType) {
   return RebuildUnknownAnyExpr(*this, ToType).Visit(E);
 }
 
+QualType Sema::checkUnknownAnyArg(Expr *&arg) {
+  // Filter out placeholders.
+  ExprResult argR = CheckPlaceholderExpr(arg);
+  if (argR.isInvalid()) return QualType();
+  arg = argR.take();
+
+  // If the argument is an explicit cast, use that exact type as the
+  // effective parameter type.
+  if (ExplicitCastExpr *castArg = dyn_cast<ExplicitCastExpr>(arg)) {
+    return castArg->getTypeAsWritten();
+  }
+
+  // Otherwise, try to pass by value.
+  return arg->getType().getUnqualifiedType();
+}
+
 static ExprResult diagnoseUnknownAnyExpr(Sema &S, Expr *E) {
   Expr *orig = E;
   unsigned diagID = diag::err_uncasted_use_of_unknown_any;
@@ -11906,9 +11978,9 @@ Sema::ActOnObjCBoolLiteral(SourceLocation OpLoc, tok::TokenKind Kind) {
          "Unknown Objective-C Boolean value!");
   QualType BoolT = Context.ObjCBuiltinBoolTy;
   if (!Context.getBOOLDecl()) {
-    LookupResult Result(*this, &Context.Idents.get("BOOL"), SourceLocation(),
+    LookupResult Result(*this, &Context.Idents.get("BOOL"), OpLoc,
                         Sema::LookupOrdinaryName);
-    if (LookupName(Result, getCurScope())) {
+    if (LookupName(Result, getCurScope()) && Result.isSingleResult()) {
       NamedDecl *ND = Result.getFoundDecl();
       if (TypedefDecl *TD = dyn_cast<TypedefDecl>(ND)) 
         Context.setBOOLDecl(TD);

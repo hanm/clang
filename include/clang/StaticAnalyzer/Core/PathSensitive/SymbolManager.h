@@ -68,9 +68,6 @@ public:
   virtual QualType getType() const = 0;
   virtual void Profile(llvm::FoldingSetNodeID& profile) = 0;
 
-  // Implement isa<T> support.
-  static inline bool classof(const SymExpr*) { return true; }
-
   /// \brief Iterator over symbols that the current symbol depends on.
   ///
   /// For SymbolData, it's the symbol itself; for expressions, it's the
@@ -583,9 +580,11 @@ public:
   ///
   /// If the statement is NULL, everything is this and parent contexts is
   /// considered live.
-  SymbolReaper(const LocationContext *ctx, const Stmt *s, SymbolManager& symmgr,
+  /// If the stack frame context is NULL, everything on stack is considered
+  /// dead.
+  SymbolReaper(const StackFrameContext *Ctx, const Stmt *s, SymbolManager& symmgr,
                StoreManager &storeMgr)
-   : LCtx(ctx->getCurrentStackFrame()), Loc(s), SymMgr(symmgr),
+   : LCtx(Ctx), Loc(s), SymMgr(symmgr),
      reapedStore(0, storeMgr) {}
 
   ~SymbolReaper() {}

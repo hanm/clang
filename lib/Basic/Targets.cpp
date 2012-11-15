@@ -94,7 +94,7 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
   Builder.defineMacro("OBJC_NEW_PROPERTIES");
   // AddressSanitizer doesn't play well with source fortification, which is on
   // by default on Darwin.
-  if (Opts.AddressSanitizer) Builder.defineMacro("_FORTIFY_SOURCE", "0");
+  if (Opts.SanitizeAddress) Builder.defineMacro("_FORTIFY_SOURCE", "0");
 
   if (!Opts.ObjCAutoRefCount) {
     // __weak is always defined, for use in blocks and with objc pointers.
@@ -384,13 +384,13 @@ public:
         case llvm::Triple::x86:
         case llvm::Triple::x86_64:
         case llvm::Triple::arm:
-	case llvm::Triple::sparc:
+        case llvm::Triple::sparc:
           this->MCountName = "__mcount";
           break;
         case llvm::Triple::mips64:
         case llvm::Triple::mips64el:
         case llvm::Triple::ppc:
-	case llvm::Triple::sparcv9:
+        case llvm::Triple::sparcv9:
           this->MCountName = "_mcount";
           break;
       }
@@ -625,6 +625,11 @@ class NaClTargetInfo : public OSTargetInfo<Target> {
     this->LongDoubleFormat = &llvm::APFloat::IEEEdouble;
     this->DescriptionString = "e-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-"
                               "f32:32:32-f64:64:64-p:32:32:32-v128:32:32";
+  }
+  virtual typename Target::CallingConvCheckResult checkCallingConvention(
+      CallingConv CC) const {
+    return CC == CC_PnaclCall ? Target::CCCR_OK :
+        Target::checkCallingConvention(CC);
   }
 };
 } // end anonymous namespace.
@@ -1049,13 +1054,18 @@ public:
     IntMaxType = SignedLong;
     UIntMaxType = UnsignedLong;
     Int64Type = SignedLong;
-    DescriptionString = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
-                        "i64:64:64-f32:32:32-f64:64:64-v128:128:128-n32:64";
 
     if (getTriple().getOS() == llvm::Triple::FreeBSD) {
       LongDoubleWidth = LongDoubleAlign = 64;
       LongDoubleFormat = &llvm::APFloat::IEEEdouble;
-    }
+      DescriptionString = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
+                          "i64:64:64-f32:32:32-f64:64:64-f128:64:64-"
+                          "v128:128:128-n32:64";
+    } else
+      DescriptionString = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
+                          "i64:64:64-f32:32:32-f64:64:64-f128:128:128-"
+                          "v128:128:128-n32:64";
+    
   }
   virtual BuiltinVaListKind getBuiltinVaListKind() const {
     return TargetInfo::CharPtrBuiltinVaList;
@@ -1089,6 +1099,8 @@ public:
     : DarwinTargetInfo<PPC64TargetInfo>(triple) {
     HasAlignMac68kSupport = true;
     SuitableAlign = 128;
+    DescriptionString = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
+                        "i64:64:64-f32:32:32-f64:64:64-v128:128:128-n32:64";
   }
 };
 } // end anonymous namespace.
@@ -1212,6 +1224,71 @@ namespace {
   }
   };
 }
+
+namespace {
+
+static const unsigned R600AddrSpaceMap[] = {
+  1,    // opencl_global
+  3,    // opencl_local
+  2,    // opencl_constant
+  1,    // cuda_device
+  2,    // cuda_constant
+  3     // cuda_shared
+};
+
+class R600TargetInfo : public TargetInfo {
+public:
+  R600TargetInfo(const std::string& triple) : TargetInfo(triple) {
+    DescriptionString =
+          "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16"
+          "-i32:32:32-i64:64:64-f32:32:32-f64:64:64-f80:32:32"
+          "-v16:16:16-v24:32:32-v32:32:32-v48:64:64-v64:64:64"
+          "-v96:128:128-v128:128:128-v192:256:256-v256:256:256"
+          "-v512:512:512-v1024:1024:1024-v2048:2048:2048"
+          "-n8:16:32:64";
+    AddrSpaceMap = &R600AddrSpaceMap;
+  }
+
+  virtual const char * getClobbers() const {
+    return "";
+  }
+
+  virtual void getGCCRegNames(const char * const *&Names,
+                              unsigned &numNames) const  {
+    Names = NULL;
+    numNames = 0;
+  }
+
+  virtual void getGCCRegAliases(const GCCRegAlias *&Aliases,
+                                unsigned &NumAliases) const {
+    Aliases = NULL;
+    NumAliases = 0;
+  }
+
+  virtual bool validateAsmConstraint(const char *&Name,
+                                     TargetInfo::ConstraintInfo &info) const {
+    return true;
+  }
+
+  virtual void getTargetBuiltins(const Builtin::Info *&Records,
+                                 unsigned &NumRecords) const {
+    Records = NULL;
+    NumRecords = 0;
+  }
+
+
+  virtual void getTargetDefines(const LangOptions &Opts,
+                                MacroBuilder &Builder) const {
+    Builder.defineMacro("__R600__");
+  }
+
+  virtual BuiltinVaListKind getBuiltinVaListKind() const {
+    return TargetInfo::CharPtrBuiltinVaList;
+  }
+
+};
+
+} // end anonymous namespace
 
 namespace {
 // MBlaze abstract base class
@@ -1393,6 +1470,7 @@ class X86TargetInfo : public TargetInfo {
   bool HasBMI;
   bool HasBMI2;
   bool HasPOPCNT;
+  bool HasRTM;
   bool HasSSE4a;
   bool HasFMA4;
   bool HasFMA;
@@ -1543,9 +1621,9 @@ public:
   X86TargetInfo(const std::string& triple)
     : TargetInfo(triple), SSELevel(NoSSE), MMX3DNowLevel(NoMMX3DNow),
       HasAES(false), HasPCLMUL(false), HasLZCNT(false), HasRDRND(false),
-      HasBMI(false), HasBMI2(false), HasPOPCNT(false), HasSSE4a(false),
-      HasFMA4(false), HasFMA(false), HasXOP(false), HasF16C(false),
-      CPU(CK_Generic) {
+      HasBMI(false), HasBMI2(false), HasPOPCNT(false), HasRTM(false),
+      HasSSE4a(false), HasFMA4(false), HasFMA(false), HasXOP(false),
+      HasF16C(false), CPU(CK_Generic) {
     BigEndian = false;
     LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
   }
@@ -1569,7 +1647,7 @@ public:
     NumAliases = 0;
   }
   virtual void getGCCAddlRegNames(const AddlRegName *&Names,
-				  unsigned &NumNames) const {
+                                  unsigned &NumNames) const {
     Names = AddlRegNames;
     NumNames = llvm::array_lengthof(AddlRegNames);
   }
@@ -1749,6 +1827,7 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
   Features["bmi"] = false;
   Features["bmi2"] = false;
   Features["popcnt"] = false;
+  Features["rtm"] = false;
   Features["fma4"] = false;
   Features["fma"] = false;
   Features["xop"] = false;
@@ -1829,6 +1908,7 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     setFeatureEnabled(Features, "rdrnd", true);
     setFeatureEnabled(Features, "bmi", true);
     setFeatureEnabled(Features, "bmi2", true);
+    setFeatureEnabled(Features, "rtm", true);
     setFeatureEnabled(Features, "fma", true);
     break;
   case CK_K6:
@@ -1965,6 +2045,8 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["popcnt"] = true;
     else if (Name == "f16c")
       Features["f16c"] = true;
+    else if (Name == "rtm")
+      Features["rtm"] = true;
   } else {
     if (Name == "mmx")
       Features["mmx"] = Features["3dnow"] = Features["3dnowa"] = false;
@@ -2027,6 +2109,8 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["xop"] = false;
     else if (Name == "f16c")
       Features["f16c"] = false;
+    else if (Name == "rtm")
+      Features["rtm"] = false;
   }
 
   return true;
@@ -2075,6 +2159,11 @@ void X86TargetInfo::HandleTargetFeatures(std::vector<std::string> &Features) {
 
     if (Feature == "popcnt") {
       HasPOPCNT = true;
+      continue;
+    }
+
+    if (Feature == "rtm") {
+      HasRTM = true;
       continue;
     }
 
@@ -2299,6 +2388,9 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   if (HasPOPCNT)
     Builder.defineMacro("__POPCNT__");
 
+  if (HasRTM)
+    Builder.defineMacro("__RTM__");
+
   if (HasSSE4a)
     Builder.defineMacro("__SSE4A__");
 
@@ -2386,6 +2478,7 @@ bool X86TargetInfo::hasFeature(StringRef Feature) const {
       .Case("mmx", MMX3DNowLevel >= MMX)
       .Case("pclmul", HasPCLMUL)
       .Case("popcnt", HasPOPCNT)
+      .Case("rtm", HasRTM)
       .Case("sse", SSELevel >= SSE1)
       .Case("sse2", SSELevel >= SSE2)
       .Case("sse3", SSELevel >= SSE3)
@@ -2501,6 +2594,19 @@ public:
     if (RegNo == 0) return 0;
     if (RegNo == 1) return 2;
     return -1;
+  }
+  virtual bool validateInputSize(StringRef Constraint,
+                                 unsigned Size) const {
+    switch (Constraint[0]) {
+    default: break;
+    case 'a':
+    case 'b':
+    case 'c':
+    case 'd':
+      return Size <= 32;
+    }
+
+    return true;
   }
 };
 } // end anonymous namespace
@@ -2668,6 +2774,7 @@ public:
     IntPtrType = SignedLong;
     PtrDiffType = SignedLong;
     this->UserLabelPrefix = "";
+    this->TLSSupported = false;
   }
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
@@ -3007,7 +3114,7 @@ public:
       }
 
       // FIXME: Override "preferred align" for double and long long.
-    } else if (Name == "aapcs") {
+    } else if (Name == "aapcs" || Name == "aapcs-vfp") {
       IsAAPCS = true;
       // FIXME: Enumerated types are variable width in straight AAPCS.
     } else if (Name == "aapcs-linux") {
@@ -3142,11 +3249,13 @@ public:
     if ('5' <= CPUArch[0] && CPUArch[0] <= '7')
       Builder.defineMacro("__THUMB_INTERWORK__");
 
-    if (ABI == "aapcs" || ABI == "aapcs-linux") {
-      Builder.defineMacro("__ARM_EABI__");
+    if (ABI == "aapcs" || ABI == "aapcs-linux" || ABI == "aapcs-vfp") {
+      // M-class CPUs on Darwin follow AAPCS, but not EABI.
+      if (!(getTriple().isOSDarwin() && CPUProfile == "M"))
+        Builder.defineMacro("__ARM_EABI__");
       Builder.defineMacro("__ARM_PCS", "1");
 
-      if (!SoftFloat && !SoftFloatABI)
+      if ((!SoftFloat && !SoftFloatABI) || ABI == "aapcs-vfp")
         Builder.defineMacro("__ARM_PCS_VFP", "1");
     }
 
@@ -3216,11 +3325,11 @@ public:
       case 'v': // ...VFP load/store (reg+constant offset)
       case 'y': // ...iWMMXt load/store
       case 't': // address valid for load/store opaque types wider
-	        // than 128-bits
+                // than 128-bits
       case 'n': // valid address for Neon doubleword vector load/store
       case 'm': // valid address for Neon element and structure load/store
       case 's': // valid address for non-offset loads/stores of quad-word
-	        // values in four ARM registers
+                // values in four ARM registers
         Info.setAllowsMemory();
         Name++;
         return true;
@@ -3242,6 +3351,30 @@ public:
       return std::string(1, *Constraint);
     }
     return R;
+  }
+  virtual bool validateConstraintModifier(StringRef Constraint,
+                                          const char Modifier,
+                                          unsigned Size) const {
+    // Strip off constraint modifiers.
+    while (Constraint[0] == '=' ||
+           Constraint[0] == '+' ||
+           Constraint[0] == '&')
+      Constraint = Constraint.substr(1);
+
+    switch (Constraint[0]) {
+    default: break;
+    case 'r': {
+      switch (Modifier) {
+      default:
+        return Size == 32;
+      case 'q':
+        // A register of size 32 cannot fit a vector type.
+        return false;
+      }
+    }
+    }
+
+    return true;
   }
   virtual const char *getClobbers() const {
     // FIXME: Is this really right?
@@ -4426,6 +4559,9 @@ static TargetInfo *AllocateTarget(const std::string &T) {
   case llvm::Triple::mblaze:
     return new MBlazeTargetInfo(T);
 
+  case llvm::Triple::r600:
+    return new R600TargetInfo(T);
+
   case llvm::Triple::sparc:
     switch (os) {
     case llvm::Triple::Linux:
@@ -4443,10 +4579,6 @@ static TargetInfo *AllocateTarget(const std::string &T) {
     default:
       return new SparcV8TargetInfo(T);
     }
-
-  // FIXME: Need a real SPU target.
-  case llvm::Triple::cellspu:
-    return new PS3SPUTargetInfo<PPC64TargetInfo>(T);
 
   case llvm::Triple::tce:
     return new TCETargetInfo(T);
@@ -4535,6 +4667,7 @@ TargetInfo *TargetInfo::CreateTargetInfo(DiagnosticsEngine &Diags,
     Diags.Report(diag::err_target_unknown_triple) << Triple.str();
     return 0;
   }
+  Target->setTargetOpts(Opts);
 
   // Set the target CPU if specified.
   if (!Opts.CPU.empty() && !Target->setCPU(Opts.CPU)) {
@@ -4561,8 +4694,10 @@ TargetInfo *TargetInfo::CreateTargetInfo(DiagnosticsEngine &Diags,
 
   // Apply the user specified deltas.
   // First the enables.
-  for (std::vector<std::string>::const_iterator it = Opts.Features.begin(),
-         ie = Opts.Features.end(); it != ie; ++it) {
+  for (std::vector<std::string>::const_iterator 
+         it = Opts.FeaturesAsWritten.begin(),
+         ie = Opts.FeaturesAsWritten.end(); 
+       it != ie; ++it) {
     const char *Name = it->c_str();
 
     if (Name[0] != '+')
@@ -4576,8 +4711,10 @@ TargetInfo *TargetInfo::CreateTargetInfo(DiagnosticsEngine &Diags,
   }
 
   // Then the disables.
-  for (std::vector<std::string>::const_iterator it = Opts.Features.begin(),
-         ie = Opts.Features.end(); it != ie; ++it) {
+  for (std::vector<std::string>::const_iterator 
+         it = Opts.FeaturesAsWritten.begin(),
+         ie = Opts.FeaturesAsWritten.end(); 
+       it != ie; ++it) {
     const char *Name = it->c_str();
 
     if (Name[0] == '+')

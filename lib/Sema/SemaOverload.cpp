@@ -2923,8 +2923,6 @@ IsInitializerListConstructorConversion(Sema &S, Expr *From, QualType ToType,
   case OR_Success: {
     // Record the standard conversion we used and the conversion function.
     CXXConstructorDecl *Constructor = cast<CXXConstructorDecl>(Best->Function);
-    S.MarkFunctionReferenced(From->getLocStart(), Constructor);
-
     QualType ThisType = Constructor->getThisType(S.Context);
     // Initializer lists don't have conversions as such.
     User.Before.setAsIdentityConversion();
@@ -3105,8 +3103,6 @@ IsUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
     // Record the standard conversion we used and the conversion function.
     if (CXXConstructorDecl *Constructor
           = dyn_cast<CXXConstructorDecl>(Best->Function)) {
-      S.MarkFunctionReferenced(From->getLocStart(), Constructor);
-
       // C++ [over.ics.user]p1:
       //   If the user-defined conversion is specified by a
       //   constructor (12.3.1), the initial standard conversion
@@ -3135,8 +3131,6 @@ IsUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
     }
     if (CXXConversionDecl *Conversion
                  = dyn_cast<CXXConversionDecl>(Best->Function)) {
-      S.MarkFunctionReferenced(From->getLocStart(), Conversion);
-
       // C++ [over.ics.user]p1:
       //
       //   [...] If the user-defined conversion is specified by a
@@ -4049,8 +4043,6 @@ FindConversionForRefInit(Sema &S, ImplicitConversionSequence &ICS,
     if (!Best->FinalConversion.DirectBinding)
       return false;
 
-    if (Best->Function)
-      S.MarkFunctionReferenced(DeclLoc, Best->Function);
     ICS.setUserDefined();
     ICS.UserDefined.Before = Best->Conversions[0].Standard;
     ICS.UserDefined.After = Best->FinalConversion;
@@ -7678,8 +7670,7 @@ Sema::AddArgumentDependentLookupCandidates(DeclarationName Name,
                                            llvm::ArrayRef<Expr *> Args,
                                  TemplateArgumentListInfo *ExplicitTemplateArgs,
                                            OverloadCandidateSet& CandidateSet,
-                                           bool PartialOverloading,
-                                           bool StdNamespaceIsAssociated) {
+                                           bool PartialOverloading) {
   ADLResult Fns;
 
   // FIXME: This approach for uniquing ADL results (and removing
@@ -7690,8 +7681,7 @@ Sema::AddArgumentDependentLookupCandidates(DeclarationName Name,
   // we supposed to consider on ADL candidates, anyway?
 
   // FIXME: Pass in the explicit template arguments?
-  ArgumentDependentLookup(Name, Operator, Loc, Args, Fns,
-                          StdNamespaceIsAssociated);
+  ArgumentDependentLookup(Name, Operator, Loc, Args, Fns);
 
   // Erase all of the candidates we already knew about.
   for (OverloadCandidateSet::iterator Cand = CandidateSet.begin(),
@@ -8002,10 +7992,20 @@ void ImplicitConversionSequence::DiagnoseAmbiguousConversion(
                                  const PartialDiagnostic &PDiag) const {
   S.Diag(CaretLoc, PDiag)
     << Ambiguous.getFromType() << Ambiguous.getToType();
-  for (AmbiguousConversionSequence::const_iterator
-         I = Ambiguous.begin(), E = Ambiguous.end(); I != E; ++I) {
+  // FIXME: The note limiting machinery is borrowed from
+  // OverloadCandidateSet::NoteCandidates; there's an opportunity for
+  // refactoring here.
+  const OverloadsShown ShowOverloads = S.Diags.getShowOverloads();
+  unsigned CandsShown = 0;
+  AmbiguousConversionSequence::const_iterator I, E;
+  for (I = Ambiguous.begin(), E = Ambiguous.end(); I != E; ++I) {
+    if (CandsShown >= 4 && ShowOverloads == Ovl_Best)
+      break;
+    ++CandsShown;
     S.NoteOverloadCandidate(*I);
   }
+  if (I != E)
+    S.Diag(SourceLocation(), diag::note_ovl_too_many_candidates) << int(E - I);
 }
 
 namespace {
@@ -8834,8 +8834,7 @@ void OverloadCandidateSet::NoteCandidates(Sema &S,
   bool ReportedAmbiguousConversions = false;
 
   SmallVectorImpl<OverloadCandidate*>::iterator I, E;
-  const DiagnosticsEngine::OverloadsShown ShowOverloads = 
-      S.Diags.getShowOverloads();
+  const OverloadsShown ShowOverloads = S.Diags.getShowOverloads();
   unsigned CandsShown = 0;
   for (I = Cands.begin(), E = Cands.end(); I != E; ++I) {
     OverloadCandidate *Cand = *I;
@@ -8843,7 +8842,7 @@ void OverloadCandidateSet::NoteCandidates(Sema &S,
     // Set an arbitrary limit on the number of candidate functions we'll spam
     // the user with.  FIXME: This limit should depend on details of the
     // candidate list.
-    if (CandsShown >= 4 && ShowOverloads == DiagnosticsEngine::Ovl_Best) {
+    if (CandsShown >= 4 && ShowOverloads == Ovl_Best) {
       break;
     }
     ++CandsShown;
@@ -9228,7 +9227,6 @@ Sema::ResolveAddressOfOverloadedFunction(Expr *AddressOfExpr,
     Fn = Resolver.getMatchingFunctionDecl();
     assert(Fn);
     FoundResult = *Resolver.getMatchingFunctionAccessPair();
-    MarkFunctionReferenced(AddressOfExpr->getLocStart(), Fn);
     if (Complain)
       CheckAddressOfMemberAccess(AddressOfExpr, FoundResult);
   }
@@ -9484,8 +9482,7 @@ void Sema::AddOverloadedCallCandidates(UnresolvedLookupExpr *ULE,
     AddArgumentDependentLookupCandidates(ULE->getName(), /*Operator*/ false,
                                          ULE->getExprLoc(),
                                          Args, ExplicitTemplateArgs,
-                                         CandidateSet, PartialOverloading,
-                                         ULE->isStdAssociatedNamespace());
+                                         CandidateSet, PartialOverloading);
 }
 
 /// Attempt to recover from an ill-formed use of a non-dependent name in a
@@ -9539,18 +9536,16 @@ DiagnoseTwoPhaseLookup(Sema &SemaRef, SourceLocation FnLoc,
       SemaRef.FindAssociatedClassesAndNamespaces(FnLoc, Args,
                                                  AssociatedNamespaces,
                                                  AssociatedClasses);
-      // Never suggest declaring a function within namespace 'std'. 
+      // Never suggest declaring a function within namespace 'std'.
       Sema::AssociatedNamespaceSet SuggestedNamespaces;
-      if (DeclContext *Std = SemaRef.getStdNamespace()) {
-        for (Sema::AssociatedNamespaceSet::iterator
-               it = AssociatedNamespaces.begin(),
-               end = AssociatedNamespaces.end(); it != end; ++it) {
-          if (!Std->Encloses(*it))
-            SuggestedNamespaces.insert(*it);
-        }
-      } else {
-        // Lacking the 'std::' namespace, use all of the associated namespaces.
-        SuggestedNamespaces = AssociatedNamespaces;
+      DeclContext *Std = SemaRef.getStdNamespace();
+      for (Sema::AssociatedNamespaceSet::iterator
+             it = AssociatedNamespaces.begin(),
+             end = AssociatedNamespaces.end(); it != end; ++it) {
+        NamespaceDecl *Assoc = cast<NamespaceDecl>(*it);
+        if ((!Std || !Std->Encloses(Assoc)) &&
+            Assoc->getQualifiedNameAsString().find("__") == std::string::npos)
+          SuggestedNamespaces.insert(Assoc);
       }
 
       SemaRef.Diag(R.getNameLoc(), diag::err_not_found_by_two_phase_lookup)
@@ -9769,9 +9764,7 @@ bool Sema::buildOverloadedCallSet(Scope *S, Expr *Fn,
 
     // We don't perform ADL in C.
     assert(getLangOpts().CPlusPlus && "ADL enabled in C");
-  } else
-    assert(!ULE->isStdAssociatedNamespace() &&
-           "std is associated namespace but not doing ADL");
+  }
 #endif
 
   UnbridgedCastsSet UnbridgedCasts;
@@ -11002,6 +10995,11 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
   // that calls this method, using Object for the implicit object
   // parameter and passing along the remaining arguments.
   CXXMethodDecl *Method = cast<CXXMethodDecl>(Best->Function);
+
+  // An error diagnostic has already been printed when parsing the declaration.
+  if (Method->isInvalidDecl())
+    return ExprError();
+
   const FunctionProtoType *Proto =
     Method->getType()->getAs<FunctionProtoType>();
 
@@ -11337,14 +11335,11 @@ Sema::BuildForRangeBeginEndCall(Scope *S, SourceLocation Loc,
     }
   } else {
     UnresolvedSet<0> FoundNames;
-    // C++11 [stmt.ranged]p1: For the purposes of this name lookup, namespace
-    // std is an associated namespace.
     UnresolvedLookupExpr *Fn =
       UnresolvedLookupExpr::Create(Context, /*NamingClass=*/0,
                                    NestedNameSpecifierLoc(), NameInfo,
                                    /*NeedsADL=*/true, /*Overloaded=*/false,
-                                   FoundNames.begin(), FoundNames.end(),
-                                   /*LookInStdNamespace=*/true);
+                                   FoundNames.begin(), FoundNames.end());
 
     bool CandidateSetError = buildOverloadedCallSet(S, Fn, Fn, &Range, 1, Loc,
                                                     CandidateSet, CallExpr);
@@ -11534,6 +11529,7 @@ Expr *Sema::FixOverloadedFunctionReference(Expr *E, DeclAccessPair Found,
                                         TemplateArgs,
                                         type, valueKind, OK_Ordinary);
     ME->setHadMultipleCandidates(true);
+    MarkMemberReferenced(ME);
     return ME;
   }
 

@@ -103,14 +103,14 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
     createCUDARuntime();
 
   // Enable TBAA unless it's suppressed. ThreadSanitizer needs TBAA even at O0.
-  if (LangOpts.ThreadSanitizer ||
+  if (LangOpts.SanitizeThread ||
       (!CodeGenOpts.RelaxedAliasing && CodeGenOpts.OptimizationLevel > 0))
     TBAA = new CodeGenTBAA(Context, VMContext, CodeGenOpts, getLangOpts(),
                            ABI.getMangleContext());
 
   // If debug info or coverage generation is enabled, create the CGDebugInfo
   // object.
-  if (CodeGenOpts.DebugInfo != CodeGenOptions::NoDebugInfo ||
+  if (CodeGenOpts.getDebugInfo() != CodeGenOptions::NoDebugInfo ||
       CodeGenOpts.EmitGcovArcs ||
       CodeGenOpts.EmitGcovNotes)
     DebugInfo = new CGDebugInfo(*this);
@@ -293,7 +293,7 @@ void CodeGenModule::setTLSMode(llvm::GlobalVariable *GV,
   assert(D.isThreadSpecified() && "setting TLS mode on non-TLS var!");
 
   llvm::GlobalVariable::ThreadLocalMode TLM;
-  TLM = GetLLVMTLSModel(CodeGenOpts.DefaultTLSModel);
+  TLM = GetLLVMTLSModel(CodeGenOpts.getDefaultTLSModel());
 
   // Override the TLS model if it is explicitly specified.
   if (D.hasAttr<TLSModelAttr>()) {
@@ -353,9 +353,7 @@ void CodeGenModule::setTypeVisibility(llvm::GlobalValue *GV,
   // to deal with mixed-visibility symbols.
   case TSK_ExplicitSpecialization:
   case TSK_ImplicitInstantiation:
-    if (!CodeGenOpts.HiddenWeakTemplateVTables)
-      return;
-    break;
+    return;
   }
 
   // If there's a key function, there may be translation units
@@ -585,6 +583,9 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
   if (D->hasAttr<ColdAttr>())
     F->addFnAttr(llvm::Attributes::OptimizeForSize);
 
+  if (D->hasAttr<MinSizeAttr>())
+    F->addFnAttr(llvm::Attributes::MinSize);
+
   if (isa<CXXConstructorDecl>(D) || isa<CXXDestructorDecl>(D))
     F->setUnnamedAddr(true);
 
@@ -597,7 +598,7 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
   else if (LangOpts.getStackProtector() == LangOptions::SSPReq)
     F->addFnAttr(llvm::Attributes::StackProtectReq);
   
-  if (LangOpts.AddressSanitizer) {
+  if (LangOpts.SanitizeAddress) {
     // When AddressSanitizer is enabled, set AddressSafety attribute
     // unless __attribute__((no_address_safety_analysis)) is used.
     if (!D->hasAttr<NoAddressSafetyAnalysisAttr>())
@@ -646,7 +647,8 @@ void CodeGenModule::SetFunctionAttributes(GlobalDecl GD,
   if (unsigned IID = F->getIntrinsicID()) {
     // If this is an intrinsic function, set the function's attributes
     // to the intrinsic's attributes.
-    F->setAttributes(llvm::Intrinsic::getAttributes((llvm::Intrinsic::ID)IID));
+    F->setAttributes(llvm::Intrinsic::getAttributes(getLLVMContext(),
+                                                    (llvm::Intrinsic::ID)IID));
     return;
   }
 
@@ -883,6 +885,10 @@ llvm::Constant *CodeGenModule::GetWeakRefReference(const ValueDecl *VD) {
 
   // See if there is already something with the target's name in the module.
   llvm::GlobalValue *Entry = GetGlobalValue(AA->getAliasee());
+  if (Entry) {
+    unsigned AS = getContext().getTargetAddressSpace(VD->getType());
+    return llvm::ConstantExpr::getBitCast(Entry, DeclTy->getPointerTo(AS));
+  }
 
   llvm::Constant *Aliasee;
   if (isa<llvm::FunctionType>(DeclTy))
@@ -892,11 +898,10 @@ llvm::Constant *CodeGenModule::GetWeakRefReference(const ValueDecl *VD) {
   else
     Aliasee = GetOrCreateLLVMGlobal(AA->getAliasee(),
                                     llvm::PointerType::getUnqual(DeclTy), 0);
-  if (!Entry) {
-    llvm::GlobalValue* F = cast<llvm::GlobalValue>(Aliasee);
-    F->setLinkage(llvm::Function::ExternalWeakLinkage);    
-    WeakRefReferences.insert(F);
-  }
+
+  llvm::GlobalValue* F = cast<llvm::GlobalValue>(Aliasee);
+  F->setLinkage(llvm::Function::ExternalWeakLinkage);
+  WeakRefReferences.insert(F);
 
   return Aliasee;
 }
@@ -1138,7 +1143,7 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
   if (D.getDecl())
     SetFunctionAttributes(D, F, IsIncompleteFunction);
   if (ExtraAttrs.hasAttributes())
-    F->addAttribute(~0, ExtraAttrs);
+    F->addAttribute(llvm::AttrListPtr::FunctionIndex, ExtraAttrs);
 
   // This is the first use or definition of a mangled name.  If there is a
   // deferred decl with this name, remember that we need to emit it at the end
@@ -1734,7 +1739,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
 
   // If we are compiling with ASan, add metadata indicating dynamically
   // initialized globals.
-  if (LangOpts.AddressSanitizer && NeedsGlobalCtor) {
+  if (LangOpts.SanitizeAddress && NeedsGlobalCtor) {
     llvm::Module &M = getModule();
 
     llvm::NamedMDNode *DynamicInitializers =
@@ -1746,7 +1751,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
 
   // Emit global variable debug information.
   if (CGDebugInfo *DI = getModuleDebugInfo())
-    if (getCodeGenOpts().DebugInfo >= CodeGenOptions::LimitedDebugInfo)
+    if (getCodeGenOpts().getDebugInfo() >= CodeGenOptions::LimitedDebugInfo)
       DI->EmitGlobalVariable(GV, D);
 }
 
@@ -1820,8 +1825,10 @@ static void ReplaceUsesOfNonProtoTypeWithRealFunction(llvm::GlobalValue *Old,
     llvm::Attributes RAttrs = AttrList.getRetAttributes();
 
     // Add the return attributes.
-    if (RAttrs)
-      AttrVec.push_back(llvm::AttributeWithIndex::get(0, RAttrs));
+    if (RAttrs.hasAttributes())
+      AttrVec.push_back(llvm::
+                        AttributeWithIndex::get(llvm::AttrListPtr::ReturnIndex,
+                                                RAttrs));
 
     // If the function was passed too few arguments, don't transform.  If extra
     // arguments were passed, we silently drop them.  If any of the types
@@ -1837,14 +1844,18 @@ static void ReplaceUsesOfNonProtoTypeWithRealFunction(llvm::GlobalValue *Old,
       }
 
       // Add any parameter attributes.
-      if (llvm::Attributes PAttrs = AttrList.getParamAttributes(ArgNo + 1))
+      llvm::Attributes PAttrs = AttrList.getParamAttributes(ArgNo + 1);
+      if (PAttrs.hasAttributes())
         AttrVec.push_back(llvm::AttributeWithIndex::get(ArgNo + 1, PAttrs));
     }
     if (DontTransform)
       continue;
 
-    if (llvm::Attributes FnAttrs =  AttrList.getFnAttributes())
-      AttrVec.push_back(llvm::AttributeWithIndex::get(~0, FnAttrs));
+    llvm::Attributes FnAttrs =  AttrList.getFnAttributes();
+    if (FnAttrs.hasAttributes())
+      AttrVec.push_back(llvm::
+                       AttributeWithIndex::get(llvm::AttrListPtr::FunctionIndex,
+                                               FnAttrs));
 
     // Okay, we can transform this.  Create the new call instruction and copy
     // over the required information.
@@ -2531,7 +2542,7 @@ void CodeGenModule::EmitObjCIvarInitializations(ObjCImplementationDecl *D) {
                              /*isDefined=*/false, ObjCMethodDecl::Required);
     D->addInstanceMethod(DTORMethod);
     CodeGenFunction(*this).GenerateObjCCtorDtorMethod(D, DTORMethod, false);
-    D->setHasCXXStructors(true);
+    D->setHasDestructors(true);
   }
 
   // If the implementation doesn't have any ivar initializers, we don't need
@@ -2555,7 +2566,7 @@ void CodeGenModule::EmitObjCIvarInitializations(ObjCImplementationDecl *D) {
                                                 ObjCMethodDecl::Required);
   D->addInstanceMethod(CTORMethod);
   CodeGenFunction(*this).GenerateObjCCtorDtorMethod(D, CTORMethod, true);
-  D->setHasCXXStructors(true);
+  D->setHasNonZeroConstructors(true);
 }
 
 /// EmitNamespace - Emit all declarations in a namespace.
@@ -2574,8 +2585,17 @@ void CodeGenModule::EmitLinkageSpec(const LinkageSpecDecl *LSD) {
   }
 
   for (RecordDecl::decl_iterator I = LSD->decls_begin(), E = LSD->decls_end();
-       I != E; ++I)
+       I != E; ++I) {
+    // Meta-data for ObjC class includes references to implemented methods.
+    // Generate class's method definitions first.
+    if (ObjCImplDecl *OID = dyn_cast<ObjCImplDecl>(*I)) {
+      for (ObjCContainerDecl::method_iterator M = OID->meth_begin(),
+           MEnd = OID->meth_end();
+           M != MEnd; ++M)
+        EmitTopLevelDecl(*M);
+    }
     EmitTopLevelDecl(*I);
+  }
 }
 
 /// EmitTopLevelDecl - Emit code for a single top level declaration.
@@ -2814,16 +2834,7 @@ llvm::Constant *CodeGenModule::EmitUuidofInitializer(StringRef Uuid,
   llvm::APInt Field0(32, StringRef(Uuidstr     , 8), 16);
   llvm::APInt Field1(16, StringRef(Uuidstr +  9, 4), 16);
   llvm::APInt Field2(16, StringRef(Uuidstr + 14, 4), 16);
-  llvm::APInt Field3Values[] = {
-    llvm::APInt(8, StringRef(Uuidstr + 19, 2), 16),
-    llvm::APInt(8, StringRef(Uuidstr + 21, 2), 16),
-    llvm::APInt(8, StringRef(Uuidstr + 24, 2), 16),
-    llvm::APInt(8, StringRef(Uuidstr + 26, 2), 16),
-    llvm::APInt(8, StringRef(Uuidstr + 28, 2), 16),
-    llvm::APInt(8, StringRef(Uuidstr + 30, 2), 16),
-    llvm::APInt(8, StringRef(Uuidstr + 32, 2), 16),
-    llvm::APInt(8, StringRef(Uuidstr + 34, 2), 16),
-  };
+  static const int Field3ValueOffsets[] = { 19, 21, 24, 26, 28, 30, 32, 34 };
 
   APValue InitStruct(APValue::UninitStruct(), /*NumBases=*/0, /*NumFields=*/4);
   InitStruct.getStructField(0) = APValue(llvm::APSInt(Field0));
@@ -2832,7 +2843,8 @@ llvm::Constant *CodeGenModule::EmitUuidofInitializer(StringRef Uuid,
   APValue& Arr = InitStruct.getStructField(3);
   Arr = APValue(APValue::UninitArray(), 8, 8);
   for (int t = 0; t < 8; ++t)
-    Arr.getArrayInitializedElt(t) = APValue(llvm::APSInt(Field3Values[t]));
+    Arr.getArrayInitializedElt(t) = APValue(llvm::APSInt(
+          llvm::APInt(8, StringRef(Uuidstr + Field3ValueOffsets[t], 2), 16)));
 
   return EmitConstantValue(InitStruct, GuidType);
 }

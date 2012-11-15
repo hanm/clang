@@ -1196,6 +1196,19 @@ bool Sema::CheckMessageArgumentTypes(QualType ReceiverType,
         !param->hasAttr<CFConsumedAttr>())
       argExpr = stripARCUnbridgedCast(argExpr);
 
+    // If the parameter is __unknown_anytype, infer its type
+    // from the argument.
+    if (param->getType() == Context.UnknownAnyTy) {
+      QualType paramType = checkUnknownAnyArg(argExpr);
+      if (paramType.isNull()) {
+        IsError = true;
+        continue;
+      }
+
+      // Update the parameter type in-place.
+      param->setType(paramType);
+    }
+
     if (RequireCompleteType(argExpr->getSourceRange().getBegin(),
                             param->getType(),
                             diag::err_call_incomplete_argument, argExpr))
@@ -1772,20 +1785,10 @@ ExprResult Sema::ActOnSuperMessage(Scope *S,
 
   // We are in a method whose class has a superclass, so 'super'
   // is acting as a keyword.
-  if (Method->isInstanceMethod()) {
-    if (Sel.getMethodFamily() == OMF_dealloc)
-      getCurFunction()->ObjCShouldCallSuperDealloc = false;
-    else if (const ObjCMethodDecl *IMD =
-               Class->lookupMethod(Method->getSelector(), 
-                                   Method->isInstanceMethod()))
-          // Must check for name of message since the method could
-          // be another method with objc_requires_super attribute set.
-          if (IMD->hasAttr<ObjCRequiresSuperAttr>() && 
-              Sel == IMD->getSelector())
-            getCurFunction()->ObjCShouldCallSuperDealloc = false;
-    if (Sel.getMethodFamily() == OMF_finalize)
-      getCurFunction()->ObjCShouldCallSuperFinalize = false;
+  if (Method->getSelector() == Sel)
+    getCurFunction()->ObjCShouldCallSuper = false;
 
+  if (Method->isInstanceMethod()) {
     // Since we are in an instance method, this is an instance
     // message to the superclass instance.
     QualType SuperTy = Context.getObjCInterfaceType(Super);

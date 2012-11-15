@@ -1542,6 +1542,7 @@ StringRef FunctionType::getNameForCallConv(CallingConv CC) {
   case CC_X86Pascal: return "pascal";
   case CC_AAPCS: return "aapcs";
   case CC_AAPCS_VFP: return "aapcs-vfp";
+  case CC_PnaclCall: return "pnaclcall";
   }
 
   llvm_unreachable("Invalid calling convention.");
@@ -2294,26 +2295,4 @@ QualType::DestructionKind QualType::isDestructedTypeImpl(QualType type) {
     return DK_cxx_destructor;
 
   return DK_none;
-}
-
-bool QualType::hasTrivialAssignment(ASTContext &Context, bool Copying) const {
-  switch (getObjCLifetime()) {
-  case Qualifiers::OCL_None:
-    break;
-      
-  case Qualifiers::OCL_ExplicitNone:
-    return true;
-      
-  case Qualifiers::OCL_Autoreleasing:
-  case Qualifiers::OCL_Strong:
-  case Qualifiers::OCL_Weak:
-    return !Context.getLangOpts().ObjCAutoRefCount;
-  }
-  
-  if (const CXXRecordDecl *Record 
-            = getTypePtr()->getBaseElementTypeUnsafe()->getAsCXXRecordDecl())
-    return Copying ? Record->hasTrivialCopyAssignment() :
-                     Record->hasTrivialMoveAssignment();
-  
-  return true;
 }

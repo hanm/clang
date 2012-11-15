@@ -148,6 +148,9 @@ static CallingConv getCallingConventionForDecl(const Decl *D) {
   if (PcsAttr *PCS = D->getAttr<PcsAttr>())
     return (PCS->getPCS() == PcsAttr::AAPCS ? CC_AAPCS : CC_AAPCS_VFP);
 
+  if (D->hasAttr<PnaclCallAttr>())
+    return CC_PnaclCall;
+
   return CC_C;
 }
 
@@ -864,6 +867,10 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
          ie = FI.arg_end(); it != ie; ++it) {
     const ABIArgInfo &argAI = it->info;
 
+    // Insert a padding type to ensure proper alignment.
+    if (llvm::Type *PaddingType = argAI.getPaddingType())
+      argTypes.push_back(PaddingType);
+
     switch (argAI.getKind()) {
     case ABIArgInfo::Ignore:
       break;
@@ -877,9 +884,6 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
 
     case ABIArgInfo::Extend:
     case ABIArgInfo::Direct: {
-      // Insert a padding type to ensure proper alignment.
-      if (llvm::Type *PaddingType = argAI.getPaddingType())
-        argTypes.push_back(PaddingType);
       // If the coerce-to type is a first class aggregate, flatten it.  Either
       // way is semantically identical, but fast-isel and the optimizer
       // generally likes scalar values better than FCAs.
@@ -924,8 +928,8 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
                                            const Decl *TargetDecl,
                                            AttributeListType &PAL,
                                            unsigned &CallingConv) {
-  llvm::Attributes::Builder FuncAttrs;
-  llvm::Attributes::Builder RetAttrs;
+  llvm::AttrBuilder FuncAttrs;
+  llvm::AttrBuilder RetAttrs;
 
   CallingConv = FI.getEffectiveCallingConvention();
 
@@ -964,6 +968,8 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
 
   if (CodeGenOpts.OptimizeSize)
     FuncAttrs.addAttribute(llvm::Attributes::OptimizeForSize);
+  if (CodeGenOpts.OptimizeSize == 2)
+    FuncAttrs.addAttribute(llvm::Attributes::MinSize);
   if (CodeGenOpts.DisableRedZone)
     FuncAttrs.addAttribute(llvm::Attributes::NoRedZone);
   if (CodeGenOpts.NoImplicitFloat)
@@ -984,13 +990,14 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
     break;
 
   case ABIArgInfo::Indirect: {
-    llvm::Attributes::Builder SRETAttrs;
+    llvm::AttrBuilder SRETAttrs;
     SRETAttrs.addAttribute(llvm::Attributes::StructRet);
     if (RetAI.getInReg())
       SRETAttrs.addAttribute(llvm::Attributes::InReg);
     PAL.push_back(llvm::
                   AttributeWithIndex::get(Index,
-                                          llvm::Attributes::get(SRETAttrs)));
+                                         llvm::Attributes::get(getLLVMContext(),
+                                                               SRETAttrs)));
 
     ++Index;
     // sret disables readnone and readonly
@@ -1005,14 +1012,27 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
 
   if (RetAttrs.hasAttributes())
     PAL.push_back(llvm::
-                  AttributeWithIndex::get(0,
-                                          llvm::Attributes::get(RetAttrs)));
+                  AttributeWithIndex::get(llvm::AttrListPtr::ReturnIndex,
+                                         llvm::Attributes::get(getLLVMContext(),
+                                                               RetAttrs)));
 
   for (CGFunctionInfo::const_arg_iterator it = FI.arg_begin(),
          ie = FI.arg_end(); it != ie; ++it) {
     QualType ParamType = it->type;
     const ABIArgInfo &AI = it->info;
-    llvm::Attributes::Builder Attrs;
+    llvm::AttrBuilder Attrs;
+
+    if (AI.getPaddingType()) {
+      if (AI.getPaddingInReg()) {
+        llvm::AttrBuilder PadAttrs;
+        PadAttrs.addAttribute(llvm::Attributes::InReg);
+
+        llvm::Attributes A =llvm::Attributes::get(getLLVMContext(), PadAttrs);
+        PAL.push_back(llvm::AttributeWithIndex::get(Index, A));
+      }
+      // Increment Index if there is padding.
+      ++Index;
+    }
 
     // 'restrict' -> 'noalias' is done in EmitFunctionProlog when we
     // have the corresponding parameter variable.  It doesn't make
@@ -1030,21 +1050,22 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
 
       // FIXME: handle sseregparm someday...
 
-      // Increment Index if there is padding.
-      Index += (AI.getPaddingType() != 0);
-
       if (llvm::StructType *STy =
           dyn_cast<llvm::StructType>(AI.getCoerceToType())) {
         unsigned Extra = STy->getNumElements()-1;  // 1 will be added below.
         if (Attrs.hasAttributes())
           for (unsigned I = 0; I < Extra; ++I)
             PAL.push_back(llvm::AttributeWithIndex::get(Index + I,
-                                                 llvm::Attributes::get(Attrs)));
+                                         llvm::Attributes::get(getLLVMContext(),
+                                                               Attrs)));
         Index += Extra;
       }
       break;
 
     case ABIArgInfo::Indirect:
+      if (AI.getInReg())
+        Attrs.addAttribute(llvm::Attributes::InReg);
+
       if (AI.getIndirectByVal())
         Attrs.addAttribute(llvm::Attributes::ByVal);
 
@@ -1072,12 +1093,15 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
 
     if (Attrs.hasAttributes())
       PAL.push_back(llvm::AttributeWithIndex::get(Index,
-                                                 llvm::Attributes::get(Attrs)));
+                                         llvm::Attributes::get(getLLVMContext(),
+                                                               Attrs)));
     ++Index;
   }
   if (FuncAttrs.hasAttributes())
-    PAL.push_back(llvm::AttributeWithIndex::get(~0,
-                                             llvm::Attributes::get(FuncAttrs)));
+    PAL.push_back(llvm::
+                  AttributeWithIndex::get(llvm::AttrListPtr::FunctionIndex,
+                                         llvm::Attributes::get(getLLVMContext(),
+                                                               FuncAttrs)));
 }
 
 /// An argument came in as a promoted argument; demote it back to its
@@ -1125,9 +1149,8 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
   // Name the struct return argument.
   if (CGM.ReturnTypeUsesSRet(FI)) {
     AI->setName("agg.result");
-    llvm::Attributes::Builder B;
-    B.addAttribute(llvm::Attributes::NoAlias);
-    AI->addAttr(llvm::Attributes::get(B));
+    AI->addAttr(llvm::Attributes::get(getLLVMContext(),
+                                      llvm::Attributes::NoAlias));
     ++AI;
   }
 
@@ -1143,6 +1166,10 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
 
     bool isPromoted =
       isa<ParmVarDecl>(Arg) && cast<ParmVarDecl>(Arg)->isKNRPromoted();
+
+    // Skip the dummy padding argument.
+    if (ArgI.getPaddingType())
+      ++AI;
 
     switch (ArgI.getKind()) {
     case ABIArgInfo::Indirect: {
@@ -1185,9 +1212,6 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
 
     case ABIArgInfo::Extend:
     case ABIArgInfo::Direct: {
-      // Skip the dummy padding argument.
-      if (ArgI.getPaddingType())
-        ++AI;
 
       // If we have the trivial case, handle it with no muss and fuss.
       if (!isa<llvm::StructType>(ArgI.getCoerceToType()) &&
@@ -1196,11 +1220,9 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
         assert(AI != Fn->arg_end() && "Argument mismatch!");
         llvm::Value *V = AI;
 
-        if (Arg->getType().isRestrictQualified()) {
-          llvm::Attributes::Builder B;
-          B.addAttribute(llvm::Attributes::NoAlias);
-          AI->addAttr(llvm::Attributes::get(B));
-        }
+        if (Arg->getType().isRestrictQualified())
+          AI->addAttr(llvm::Attributes::get(getLLVMContext(),
+                                            llvm::Attributes::NoAlias));
 
         // Ensure the argument is the correct type.
         if (V->getType() != ArgI.getCoerceToType())
@@ -1779,7 +1801,7 @@ void CodeGenFunction::EmitCallArg(CallArgList &args, const Expr *E,
                                   QualType type) {
   if (const ObjCIndirectCopyRestoreExpr *CRE
         = dyn_cast<ObjCIndirectCopyRestoreExpr>(E)) {
-    assert(getContext().getLangOpts().ObjCAutoRefCount);
+    assert(getLangOpts().ObjCAutoRefCount);
     assert(getContext().hasSameType(E->getType(), type));
     return emitWritebackArg(*this, args, CRE);
   }
@@ -1967,6 +1989,13 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
 
     unsigned TypeAlign =
       getContext().getTypeAlignInChars(I->Ty).getQuantity();
+
+    // Insert a padding argument to ensure proper alignment.
+    if (llvm::Type *PaddingType = ArgInfo.getPaddingType()) {
+      Args.push_back(llvm::UndefValue::get(PaddingType));
+      ++IRArgNo;
+    }
+
     switch (ArgInfo.getKind()) {
     case ABIArgInfo::Indirect: {
       if (RV.isScalar() || RV.isComplex()) {
@@ -2022,12 +2051,6 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
 
     case ABIArgInfo::Extend:
     case ABIArgInfo::Direct: {
-      // Insert a padding argument to ensure proper alignment.
-      if (llvm::Type *PaddingType = ArgInfo.getPaddingType()) {
-        Args.push_back(llvm::UndefValue::get(PaddingType));
-        ++IRArgNo;
-      }
-
       if (!isa<llvm::StructType>(ArgInfo.getCoerceToType()) &&
           ArgInfo.getCoerceToType() == ConvertType(info_it->type) &&
           ArgInfo.getDirectOffset() == 0) {

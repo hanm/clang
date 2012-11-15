@@ -72,10 +72,11 @@ ExprEngine::ExprEngine(AnalysisManager &mgr, bool gcEnabled,
     ObjCGCEnabled(gcEnabled), BR(mgr, *this),
     VisitedCallees(VisitedCalleesIn)
 {
-    if (mgr.options.eagerlyTrimExplodedGraph) {
-      // Enable eager node reclaimation when constructing the ExplodedGraph.
-      G.enableNodeReclamation();
-    }
+  unsigned TrimInterval = mgr.options.getGraphTrimInterval();
+  if (TrimInterval != 0) {
+    // Enable eager node reclaimation when constructing the ExplodedGraph.
+    G.enableNodeReclamation(TrimInterval);
+  }
 }
 
 ExprEngine::~ExprEngine() {
@@ -161,6 +162,23 @@ ProgramStateRef ExprEngine::getInitialState(const LocationContext *InitLoc) {
   }
     
   return state;
+}
+
+/// If the value of the given expression is a NonLoc, copy it into a new
+/// temporary region, and replace the value of the expression with that.
+static ProgramStateRef createTemporaryRegionIfNeeded(ProgramStateRef State,
+                                                     const LocationContext *LC,
+                                                     const Expr *E) {
+  SVal V = State->getSVal(E, LC);
+
+  if (isa<NonLoc>(V)) {
+    MemRegionManager &MRMgr = State->getStateManager().getRegionManager();
+    const MemRegion *R  = MRMgr.getCXXTempObjectRegion(E, LC);
+    State = State->bindLoc(loc::MemRegionVal(R), V);
+    State = State->BindExpr(E, LC, loc::MemRegionVal(R));
+  }
+
+  return State;
 }
 
 //===----------------------------------------------------------------------===//
@@ -250,12 +268,12 @@ static bool shouldRemoveDeadBindings(AnalysisManager &AMgr,
 
 void ExprEngine::removeDead(ExplodedNode *Pred, ExplodedNodeSet &Out,
                             const Stmt *ReferenceStmt,
-                            const LocationContext *LC,
+                            const StackFrameContext *LC,
                             const Stmt *DiagnosticStmt,
                             ProgramPoint::Kind K) {
   assert((K == ProgramPoint::PreStmtPurgeDeadSymbolsKind ||
-          ReferenceStmt == 0) && "PreStmt is not generally supported by "
-                                 "the SymbolReaper yet");
+          ReferenceStmt == 0)
+          && "PostStmt is not generally supported by the SymbolReaper yet");
   NumRemoveDeadBindings++;
   CleanedState = Pred->getState();
   SymbolReaper SymReaper(LC, ReferenceStmt, SymMgr, getStoreManager());
@@ -328,7 +346,7 @@ void ExprEngine::ProcessStmt(const CFGStmt S,
   ExplodedNodeSet CleanedStates;
   if (shouldRemoveDeadBindings(AMgr, S, Pred, EntryNode->getLocationContext())){
     removeDead(EntryNode, CleanedStates, currStmt,
-               Pred->getLocationContext(), currStmt);
+               Pred->getStackFrame(), currStmt);
   } else
     CleanedStates.Add(EntryNode);
 
@@ -717,8 +735,26 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
       break;
     }
 
+    case Stmt::CXXOperatorCallExprClass: {
+      const CXXOperatorCallExpr *OCE = cast<CXXOperatorCallExpr>(S);
+
+      // For instance method operators, make sure the 'this' argument has a
+      // valid region.
+      const Decl *Callee = OCE->getCalleeDecl();
+      if (const CXXMethodDecl *MD = dyn_cast_or_null<CXXMethodDecl>(Callee)) {
+        if (MD->isInstance()) {
+          ProgramStateRef State = Pred->getState();
+          const LocationContext *LCtx = Pred->getLocationContext();
+          ProgramStateRef NewState =
+            createTemporaryRegionIfNeeded(State, LCtx, OCE->getArg(0));
+          if (NewState != State)
+            Pred = Bldr.generateNode(OCE, Pred, NewState, /*Tag=*/0,
+                                     ProgramPoint::PreStmtKind);
+        }
+      }
+      // FALLTHROUGH
+    }
     case Stmt::CallExprClass:
-    case Stmt::CXXOperatorCallExprClass:
     case Stmt::CXXMemberCallExprClass:
     case Stmt::UserDefinedLiteralClass: {
       Bldr.takeNodes(Pred);
@@ -1019,19 +1055,18 @@ bool ExprEngine::replayWithoutInlining(ExplodedNode *N,
 
 /// Block entrance.  (Update counters).
 void ExprEngine::processCFGBlockEntrance(const BlockEdge &L,
-                                         NodeBuilderWithSinks &nodeBuilder) {
+                                         NodeBuilderWithSinks &nodeBuilder, 
+                                         ExplodedNode *Pred) {
   
   // FIXME: Refactor this into a checker.
-  ExplodedNode *pred = nodeBuilder.getContext().getPred();
-  
   if (nodeBuilder.getContext().blockCount() >= AMgr.options.maxBlockVisitOnPath) {
     static SimpleProgramPointTag tag("ExprEngine : Block count exceeded");
     const ExplodedNode *Sink =
-                   nodeBuilder.generateSink(pred->getState(), pred, &tag);
+                   nodeBuilder.generateSink(Pred->getState(), Pred, &tag);
 
     // Check if we stopped at the top level function or not.
     // Root node should have the location context of the top most function.
-    const LocationContext *CalleeLC = pred->getLocation().getLocationContext();
+    const LocationContext *CalleeLC = Pred->getLocation().getLocationContext();
     const LocationContext *CalleeSF = CalleeLC->getCurrentStackFrame();
     const LocationContext *RootLC =
                         (*G.roots_begin())->getLocation().getLocationContext();
@@ -1043,7 +1078,7 @@ void ExprEngine::processCFGBlockEntrance(const BlockEdge &L,
       // the list. Replay should almost never fail. Use the stats to catch it
       // if it does.
       if ((!AMgr.options.NoRetryExhausted &&
-           replayWithoutInlining(pred, CalleeLC)))
+           replayWithoutInlining(Pred, CalleeLC)))
         return;
       NumMaxBlockCountReachedInInlined++;
     } else
@@ -1277,10 +1312,25 @@ void ExprEngine::processIndirectGoto(IndirectGotoNodeBuilder &builder) {
 
 /// ProcessEndPath - Called by CoreEngine.  Used to generate end-of-path
 ///  nodes when the control reaches the end of a function.
-void ExprEngine::processEndOfFunction(NodeBuilderContext& BC) {
-  StateMgr.EndPath(BC.Pred->getState());
+void ExprEngine::processEndOfFunction(NodeBuilderContext& BC,
+                                      ExplodedNode *Pred) {
+  StateMgr.EndPath(Pred->getState());
+
   ExplodedNodeSet Dst;
-  getCheckerManager().runCheckersForEndPath(BC, Dst, *this);
+  if (Pred->getLocationContext()->inTopFrame()) {
+    // Remove dead symbols.
+    ExplodedNodeSet AfterRemovedDead;
+    removeDeadOnEndOfFunction(BC, Pred, AfterRemovedDead);
+
+    // Notify checkers.
+    for (ExplodedNodeSet::iterator I = AfterRemovedDead.begin(),
+        E = AfterRemovedDead.end(); I != E; ++I) {
+      getCheckerManager().runCheckersForEndPath(BC, Dst, *I, *this);
+    }
+  } else {
+    getCheckerManager().runCheckersForEndPath(BC, Dst, Pred, *this);
+  }
+
   Engine.enqueueEndOfFunction(Dst);
 }
 
@@ -1476,50 +1526,38 @@ void ExprEngine::VisitMemberExpr(const MemberExpr *M, ExplodedNode *Pred,
 
   StmtNodeBuilder Bldr(Pred, TopDst, *currBldrCtx);
   ExplodedNodeSet Dst;
-  Decl *member = M->getMemberDecl();
+  ValueDecl *Member = M->getMemberDecl();
 
-  if (VarDecl *VD = dyn_cast<VarDecl>(member)) {
-    assert(M->isGLValue());
+  // Handle static member variables and enum constants accessed via
+  // member syntax.
+  if (isa<VarDecl>(Member) || isa<EnumConstantDecl>(Member)) {
     Bldr.takeNodes(Pred);
-    VisitCommonDeclRefExpr(M, VD, Pred, Dst);
+    VisitCommonDeclRefExpr(M, Member, Pred, Dst);
     Bldr.addNodes(Dst);
     return;
   }
 
+  ProgramStateRef state = Pred->getState();
+  const LocationContext *LCtx = Pred->getLocationContext();
+  Expr *BaseExpr = M->getBase();
+
   // Handle C++ method calls.
-  if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(member)) {
-    Bldr.takeNodes(Pred);
+  if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(Member)) {
+    if (MD->isInstance())
+      state = createTemporaryRegionIfNeeded(state, LCtx, BaseExpr);
+
     SVal MDVal = svalBuilder.getFunctionPointer(MD);
-    ProgramStateRef state =
-      Pred->getState()->BindExpr(M, Pred->getLocationContext(), MDVal);
+    state = state->BindExpr(M, LCtx, MDVal);
+
     Bldr.generateNode(M, Pred, state);
     return;
   }
 
+  // Handle regular struct fields / member variables.
+  state = createTemporaryRegionIfNeeded(state, LCtx, BaseExpr);
+  SVal baseExprVal = state->getSVal(BaseExpr, LCtx);
 
-  FieldDecl *field = dyn_cast<FieldDecl>(member);
-  if (!field) // FIXME: skipping member expressions for non-fields
-    return;
-
-  Expr *baseExpr = M->getBase()->IgnoreParens();
-  ProgramStateRef state = Pred->getState();
-  const LocationContext *LCtx = Pred->getLocationContext();
-  SVal baseExprVal = state->getSVal(baseExpr, Pred->getLocationContext());
-  if (isa<nonloc::LazyCompoundVal>(baseExprVal) ||
-      isa<nonloc::CompoundVal>(baseExprVal) ||
-      // FIXME: This can originate by conjuring a symbol for an unknown
-      // temporary struct object, see test/Analysis/fields.c:
-      // (p = getit()).x
-      isa<nonloc::SymbolVal>(baseExprVal)) {
-    Bldr.generateNode(M, Pred, state->BindExpr(M, LCtx, UnknownVal()));
-    return;
-  }
-
-  // FIXME: Should we insert some assumption logic in here to determine
-  // if "Base" is a valid piece of memory?  Before we put this assumption
-  // later when using FieldOffset lvals (which we no longer have).
-
-  // For all other cases, compute an lvalue.    
+  FieldDecl *field = cast<FieldDecl>(Member);
   SVal L = state->getLValue(field, baseExprVal);
   if (M->isGLValue()) {
     if (field->getType()->isReferenceType()) {

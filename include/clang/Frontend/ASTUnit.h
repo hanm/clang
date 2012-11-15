@@ -19,11 +19,13 @@
 #include "clang/Sema/CodeCompleteConsumer.h"
 #include "clang/Lex/ModuleLoader.h"
 #include "clang/Lex/PreprocessingRecord.h"
+#include "clang/Lex/HeaderSearchOptions.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/FileSystemOptions.h"
+#include "clang/Basic/TargetOptions.h"
 #include "clang-c/Index.h"
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include "llvm/ADT/OwningPtr.h"
@@ -62,14 +64,16 @@ class ASTDeserializationListener;
 ///
 class ASTUnit : public ModuleLoader {
 private:
-  IntrusiveRefCntPtr<LangOptions>       LangOpts;
-  IntrusiveRefCntPtr<DiagnosticsEngine> Diagnostics;
-  IntrusiveRefCntPtr<FileManager>       FileMgr;
-  IntrusiveRefCntPtr<SourceManager>     SourceMgr;
-  OwningPtr<HeaderSearch>               HeaderInfo;
-  IntrusiveRefCntPtr<TargetInfo>        Target;
-  IntrusiveRefCntPtr<Preprocessor>      PP;
-  IntrusiveRefCntPtr<ASTContext>        Ctx;
+  IntrusiveRefCntPtr<LangOptions>         LangOpts;
+  IntrusiveRefCntPtr<DiagnosticsEngine>   Diagnostics;
+  IntrusiveRefCntPtr<FileManager>         FileMgr;
+  IntrusiveRefCntPtr<SourceManager>       SourceMgr;
+  OwningPtr<HeaderSearch>                 HeaderInfo;
+  IntrusiveRefCntPtr<TargetInfo>          Target;
+  IntrusiveRefCntPtr<Preprocessor>        PP;
+  IntrusiveRefCntPtr<ASTContext>          Ctx;
+  IntrusiveRefCntPtr<TargetOptions>       TargetOpts;
+  IntrusiveRefCntPtr<HeaderSearchOptions> HSOpts;
   ASTReader *Reader;
 
   struct ASTWriterData;
@@ -88,13 +92,6 @@ private:
   /// Optional owned invocation, just used to make the invocation used in
   /// LoadFromCommandLine available.
   IntrusiveRefCntPtr<CompilerInvocation> Invocation;
-  
-  /// \brief The set of target features.
-  ///
-  /// FIXME: each time we reparse, we need to restore the set of target
-  /// features from this vector, because TargetInfo::CreateTargetInfo()
-  /// mangles the target options in place. Yuck!
-  std::vector<std::string> TargetFeatures;
   
   // OnlyLocalDecls - when true, walking this AST should only visit declarations
   // that come from the AST itself, not from included precompiled headers.
@@ -470,7 +467,9 @@ public:
 
   const FileSystemOptions &getFileSystemOpts() const { return FileSystemOpts; }
 
-  const std::string &getOriginalSourceFileName();
+  StringRef getOriginalSourceFileName() {
+    return OriginalSourceFile;
+  }
 
   ASTDeserializationListener *getDeserializationListener();
 

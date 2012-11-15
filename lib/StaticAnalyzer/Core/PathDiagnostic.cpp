@@ -586,8 +586,8 @@ PathDiagnosticLocation
     const CFGBlock *BSrc = BE->getSrc();
     S = BSrc->getTerminatorCondition();
   }
-  else if (const PostStmt *PS = dyn_cast<PostStmt>(&P)) {
-    S = PS->getStmt();
+  else if (const StmtPoint *SP = dyn_cast<StmtPoint>(&P)) {
+    S = SP->getStmt();
   }
   else if (const PostImplicitCall *PIE = dyn_cast<PostImplicitCall>(&P)) {
     return PathDiagnosticLocation(PIE->getLocation(), SMng);
@@ -601,6 +601,9 @@ PathDiagnosticLocation
     return getLocationForCaller(CEE->getCalleeContext(),
                                 CEE->getLocationContext(),
                                 SMng);
+  }
+  else {
+    llvm_unreachable("Unexpected ProgramPoint");
   }
 
   return PathDiagnosticLocation(S, SMng, P.getLocationContext());
@@ -787,11 +790,14 @@ PathDiagnosticCallPiece::getCallEnterEvent() const {
   StringRef msg = Out.str();
   if (msg.empty())
     return 0;
+  assert(callEnter.asLocation().isValid());
   return new PathDiagnosticEventPiece(callEnter, msg);
 }
 
 IntrusiveRefCntPtr<PathDiagnosticEventPiece>
 PathDiagnosticCallPiece::getCallEnterWithinCallerEvent() const {
+  if (!callEnterWithin.asLocation().isValid())
+    return 0;
   SmallString<256> buf;
   llvm::raw_svector_ostream Out(buf);
   if (const NamedDecl *ND = dyn_cast_or_null<NamedDecl>(Caller))
@@ -816,6 +822,7 @@ PathDiagnosticCallPiece::getCallExitEvent() const {
     Out << "Returning from '" << *ND << "'";
   else
     Out << "Returning to caller";
+  assert(callReturn.asLocation().isValid());
   return new PathDiagnosticEventPiece(callReturn, Out.str());
 }
 

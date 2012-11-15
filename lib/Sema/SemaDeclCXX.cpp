@@ -1018,6 +1018,41 @@ bool Sema::isCurrentClassName(const IdentifierInfo &II, Scope *,
     return false;
 }
 
+/// \brief Determine whether the given class is a base class of the given
+/// class, including looking at dependent bases.
+static bool findCircularInheritance(const CXXRecordDecl *Class,
+                                    const CXXRecordDecl *Current) {
+  SmallVector<const CXXRecordDecl*, 8> Queue;
+
+  Class = Class->getCanonicalDecl();
+  while (true) {
+    for (CXXRecordDecl::base_class_const_iterator I = Current->bases_begin(),
+                                                  E = Current->bases_end();
+         I != E; ++I) {
+      CXXRecordDecl *Base = I->getType()->getAsCXXRecordDecl();
+      if (!Base)
+        continue;
+
+      Base = Base->getDefinition();
+      if (!Base)
+        continue;
+
+      if (Base->getCanonicalDecl() == Class)
+        return true;
+
+      Queue.push_back(Base);
+    }
+
+    if (Queue.empty())
+      return false;
+
+    Current = Queue.back();
+    Queue.pop_back();
+  }
+
+  return false;
+}
+
 /// \brief Check the validity of a C++ base class specifier.
 ///
 /// \returns a new CXXBaseSpecifier if well-formed, emits diagnostics
@@ -1044,13 +1079,32 @@ Sema::CheckBaseSpecifier(CXXRecordDecl *Class,
       << TInfo->getTypeLoc().getSourceRange();
     EllipsisLoc = SourceLocation();
   }
-  
-  if (BaseType->isDependentType())
+
+  SourceLocation BaseLoc = TInfo->getTypeLoc().getBeginLoc();
+
+  if (BaseType->isDependentType()) {
+    // Make sure that we don't have circular inheritance among our dependent
+    // bases. For non-dependent bases, the check for completeness below handles
+    // this.
+    if (CXXRecordDecl *BaseDecl = BaseType->getAsCXXRecordDecl()) {
+      if (BaseDecl->getCanonicalDecl() == Class->getCanonicalDecl() ||
+          ((BaseDecl = BaseDecl->getDefinition()) &&
+           findCircularInheritance(Class, BaseDecl))) {
+        Diag(BaseLoc, diag::err_circular_inheritance)
+          << BaseType << Context.getTypeDeclType(Class);
+
+        if (BaseDecl->getCanonicalDecl() != Class->getCanonicalDecl())
+          Diag(BaseDecl->getLocation(), diag::note_previous_decl)
+            << BaseType;
+            
+        return 0;
+      }
+    }
+
     return new (Context) CXXBaseSpecifier(SpecifierRange, Virtual,
                                           Class->getTagKind() == TTK_Class,
                                           Access, TInfo, EllipsisLoc);
-
-  SourceLocation BaseLoc = TInfo->getTypeLoc().getBeginLoc();
+  }
 
   // Base specifiers must be record types.
   if (!BaseType->isRecordType()) {
@@ -1741,7 +1795,11 @@ namespace {
   public:
     typedef EvaluatedExprVisitor<UninitializedFieldVisitor> Inherited;
     UninitializedFieldVisitor(Sema &S, ValueDecl *VD) : Inherited(S.Context),
-                                                        S(S), VD(VD) {
+                                                        S(S) {
+      if (IndirectFieldDecl *IFD = dyn_cast<IndirectFieldDecl>(VD))
+        this->VD = IFD->getAnonField();
+      else
+        this->VD = VD;
     }
 
     void HandleExpr(Expr *E) {
@@ -1758,23 +1816,33 @@ namespace {
 
       if (MemberExpr *ME = dyn_cast<MemberExpr>(E)) {
         if (isa<EnumConstantDecl>(ME->getMemberDecl()))
-            return;
+          return;
+
+        // FieldME is the inner-most MemberExpr that is not an anonymous struct
+        // or union.
+        MemberExpr *FieldME = ME;
+
         Expr *Base = E;
         while (isa<MemberExpr>(Base)) {
-          ME = dyn_cast<MemberExpr>(Base);
-          if (VarDecl *VarD = dyn_cast<VarDecl>(ME->getMemberDecl()))
-            if (VarD->hasGlobalStorage())
-              return;
+          ME = cast<MemberExpr>(Base);
+
+          if (isa<VarDecl>(ME->getMemberDecl()))
+            return;
+
+          if (FieldDecl *FD = dyn_cast<FieldDecl>(ME->getMemberDecl()))
+            if (!FD->isAnonymousStructOrUnion())
+              FieldME = ME;
+
           Base = ME->getBase();
         }
 
-        if (VD == ME->getMemberDecl() && isa<CXXThisExpr>(Base)) {
+        if (VD == FieldME->getMemberDecl() && isa<CXXThisExpr>(Base)) {
           unsigned diag = VD->getType()->isReferenceType()
               ? diag::warn_reference_field_is_uninit
               : diag::warn_field_is_uninit;
-          S.Diag(ME->getExprLoc(), diag) << ME->getMemberNameInfo().getName();
-          return;
+          S.Diag(FieldME->getExprLoc(), diag) << VD;
         }
+        return;
       }
 
       if (ConditionalOperator *CO = dyn_cast<ConditionalOperator>(E)) {
@@ -4739,6 +4807,19 @@ namespace {
   };
 }
 
+/// \brief Check whether any most overriden method from MD in Methods
+static bool CheckMostOverridenMethods(const CXXMethodDecl *MD,
+                   const llvm::SmallPtrSet<const CXXMethodDecl *, 8>& Methods) {
+  if (MD->size_overridden_methods() == 0)
+    return Methods.count(MD->getCanonicalDecl());
+  for (CXXMethodDecl::method_iterator I = MD->begin_overridden_methods(),
+                                      E = MD->end_overridden_methods();
+       I != E; ++I)
+    if (CheckMostOverridenMethods(*I, Methods))
+      return true;
+  return false;
+}
+
 /// \brief Member lookup function that determines whether a given C++
 /// method overloads virtual methods in a base class without overriding any,
 /// to be used with CXXRecordDecl::lookupInBases().
@@ -4770,7 +4851,7 @@ static bool FindHiddenVirtualMethod(const CXXBaseSpecifier *Specifier,
       if (!Data.S->IsOverload(Data.Method, MD, false))
         return true;
       // Collect the overload only if its hidden.
-      if (!Data.OverridenAndUsingBaseMethods.count(MD))
+      if (!CheckMostOverridenMethods(MD, Data.OverridenAndUsingBaseMethods))
         overloadedMethods.push_back(MD);
     }
   }
@@ -4779,6 +4860,17 @@ static bool FindHiddenVirtualMethod(const CXXBaseSpecifier *Specifier,
     Data.OverloadedMethods.append(overloadedMethods.begin(),
                                    overloadedMethods.end());
   return foundSameNameMethod;
+}
+
+/// \brief Add the most overriden methods from MD to Methods
+static void AddMostOverridenMethods(const CXXMethodDecl *MD,
+                         llvm::SmallPtrSet<const CXXMethodDecl *, 8>& Methods) {
+  if (MD->size_overridden_methods() == 0)
+    Methods.insert(MD->getCanonicalDecl());
+  for (CXXMethodDecl::method_iterator I = MD->begin_overridden_methods(),
+                                      E = MD->end_overridden_methods();
+       I != E; ++I)
+    AddMostOverridenMethods(*I, Methods);
 }
 
 /// \brief See if a method overloads virtual methods in a base class without
@@ -4801,14 +4893,11 @@ void Sema::DiagnoseHiddenVirtualMethods(CXXRecordDecl *DC, CXXMethodDecl *MD) {
   // by 'using' in a set. A base method not in this set is hidden.
   for (DeclContext::lookup_result res = DC->lookup(MD->getDeclName());
        res.first != res.second; ++res.first) {
-    if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(*res.first))
-      for (CXXMethodDecl::method_iterator I = MD->begin_overridden_methods(),
-                                          E = MD->end_overridden_methods();
-           I != E; ++I)
-        Data.OverridenAndUsingBaseMethods.insert((*I)->getCanonicalDecl());
+    NamedDecl *ND = *res.first;
     if (UsingShadowDecl *shad = dyn_cast<UsingShadowDecl>(*res.first))
-      if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(shad->getTargetDecl()))
-        Data.OverridenAndUsingBaseMethods.insert(MD->getCanonicalDecl());
+      ND = shad->getTargetDecl();
+    if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(ND))
+      AddMostOverridenMethods(MD, Data.OverridenAndUsingBaseMethods);
   }
 
   if (DC->lookupInBases(&FindHiddenVirtualMethod, &Data, Paths) &&
@@ -5574,15 +5663,15 @@ Decl *Sema::ActOnStartNamespaceDef(Scope *NamespcScope,
 
     if (!PrevNS) {
       UsingDirectiveDecl* UD
-        = UsingDirectiveDecl::Create(Context, CurContext,
+        = UsingDirectiveDecl::Create(Context, Parent,
                                      /* 'using' */ LBrace,
                                      /* 'namespace' */ SourceLocation(),
                                      /* qualifier */ NestedNameSpecifierLoc(),
                                      /* identifier */ SourceLocation(),
                                      Namespc,
-                                     /* Ancestor */ CurContext);
+                                     /* Ancestor */ Parent);
       UD->setImplicit();
-      CurContext->addDecl(UD);
+      Parent->addDecl(UD);
     }
   }
 
@@ -5811,7 +5900,8 @@ static bool TryNamespaceTypoCorrection(Sema &S, LookupResult &R, Scope *Sc,
     if (DeclContext *DC = S.computeDeclContext(SS, false))
       S.Diag(IdentLoc, diag::err_using_directive_member_suggest)
         << Ident << DC << CorrectedQuotedStr << SS.getRange()
-        << FixItHint::CreateReplacement(IdentLoc, CorrectedStr);
+        << FixItHint::CreateReplacement(Corrected.getCorrectionRange(),
+                                        CorrectedStr);
     else
       S.Diag(IdentLoc, diag::err_using_directive_suggest)
         << Ident << CorrectedQuotedStr
@@ -6810,28 +6900,6 @@ Decl *Sema::ActOnNamespaceAliasDef(Scope *S,
   return AliasDecl;
 }
 
-namespace {
-  /// \brief Scoped object used to handle the state changes required in Sema
-  /// to implicitly define the body of a C++ member function;
-  class ImplicitlyDefinedFunctionScope {
-    Sema &S;
-    Sema::ContextRAII SavedContext;
-    
-  public:
-    ImplicitlyDefinedFunctionScope(Sema &S, CXXMethodDecl *Method)
-      : S(S), SavedContext(S, Method) 
-    {
-      S.PushFunctionScope();
-      S.PushExpressionEvaluationContext(Sema::PotentiallyEvaluated);
-    }
-    
-    ~ImplicitlyDefinedFunctionScope() {
-      S.PopExpressionEvaluationContext();
-      S.PopFunctionScopeInfo();
-    }
-  };
-}
-
 Sema::ImplicitExceptionSpecification
 Sema::ComputeDefaultedDefaultCtorExceptionSpec(SourceLocation Loc,
                                                CXXMethodDecl *MD) {
@@ -6975,7 +7043,7 @@ void Sema::DefineImplicitDefaultConstructor(SourceLocation CurrentLocation,
   CXXRecordDecl *ClassDecl = Constructor->getParent();
   assert(ClassDecl && "DefineImplicitDefaultConstructor - invalid constructor");
 
-  ImplicitlyDefinedFunctionScope Scope(*this, Constructor);
+  SynthesizedFunctionScope Scope(*this, Constructor);
   DiagnosticErrorTrap Trap(Diags);
   if (SetCtorInitializers(Constructor, 0, 0, /*AnyErrors=*/false) ||
       Trap.hasErrorOccurred()) {
@@ -7287,7 +7355,7 @@ void Sema::DefineImplicitDestructor(SourceLocation CurrentLocation,
   if (Destructor->isInvalidDecl())
     return;
 
-  ImplicitlyDefinedFunctionScope Scope(*this, Destructor);
+  SynthesizedFunctionScope Scope(*this, Destructor);
 
   DiagnosticErrorTrap Trap(Diags);
   MarkBaseAndMemberDestructorsReferenced(Destructor->getLocation(),
@@ -7358,6 +7426,60 @@ void Sema::AdjustDestructorExceptionSpec(CXXRecordDecl *ClassDecl,
   // needs to be done somewhere else.
 }
 
+/// When generating a defaulted copy or move assignment operator, if a field
+/// should be copied with __builtin_memcpy rather than via explicit assignments,
+/// do so. This optimization only applies for arrays of scalars, and for arrays
+/// of class type where the selected copy/move-assignment operator is trivial.
+static StmtResult
+buildMemcpyForAssignmentOp(Sema &S, SourceLocation Loc, QualType T,
+                           Expr *To, Expr *From) {
+  // Compute the size of the memory buffer to be copied.
+  QualType SizeType = S.Context.getSizeType();
+  llvm::APInt Size(S.Context.getTypeSize(SizeType),
+                   S.Context.getTypeSizeInChars(T).getQuantity());
+
+  // Take the address of the field references for "from" and "to". We
+  // directly construct UnaryOperators here because semantic analysis
+  // does not permit us to take the address of an xvalue.
+  From = new (S.Context) UnaryOperator(From, UO_AddrOf,
+                         S.Context.getPointerType(From->getType()),
+                         VK_RValue, OK_Ordinary, Loc);
+  To = new (S.Context) UnaryOperator(To, UO_AddrOf,
+                       S.Context.getPointerType(To->getType()),
+                       VK_RValue, OK_Ordinary, Loc);
+
+  const Type *E = T->getBaseElementTypeUnsafe();
+  bool NeedsCollectableMemCpy =
+    E->isRecordType() && E->getAs<RecordType>()->getDecl()->hasObjectMember();
+
+  // Create a reference to the __builtin_objc_memmove_collectable function
+  StringRef MemCpyName = NeedsCollectableMemCpy ?
+    "__builtin_objc_memmove_collectable" :
+    "__builtin_memcpy";
+  LookupResult R(S, &S.Context.Idents.get(MemCpyName), Loc,
+                 Sema::LookupOrdinaryName);
+  S.LookupName(R, S.TUScope, true);
+
+  FunctionDecl *MemCpy = R.getAsSingle<FunctionDecl>();
+  if (!MemCpy)
+    // Something went horribly wrong earlier, and we will have complained
+    // about it.
+    return StmtError();
+
+  ExprResult MemCpyRef = S.BuildDeclRefExpr(MemCpy, S.Context.BuiltinFnTy,
+                                            VK_RValue, Loc, 0);
+  assert(MemCpyRef.isUsable() && "Builtin reference cannot fail");
+
+  Expr *CallArgs[] = {
+    To, From, IntegerLiteral::Create(S.Context, Size, SizeType, Loc)
+  };
+  ExprResult Call = S.ActOnCallExpr(/*Scope=*/0, MemCpyRef.take(),
+                                    Loc, CallArgs, Loc);
+
+  assert(!Call.isInvalid() && "Call to __builtin_memcpy cannot fail!");
+  return S.Owned(Call.takeAs<Stmt>());
+}
+
 /// \brief Builds a statement that copies/moves the given entity from \p From to
 /// \c To.
 ///
@@ -7383,13 +7505,14 @@ void Sema::AdjustDestructorExceptionSpec(CXXRecordDecl *ClassDecl,
 ///
 /// \param Depth Internal parameter recording the depth of the recursion.
 ///
-/// \returns A statement or a loop that copies the expressions.
+/// \returns A statement or a loop that copies the expressions, or StmtResult(0)
+/// if a memcpy should be used instead.
 static StmtResult
-BuildSingleCopyAssign(Sema &S, SourceLocation Loc, QualType T, 
-                      Expr *To, Expr *From,
-                      bool CopyingBaseSubobject, bool Copying,
-                      unsigned Depth = 0) {
-  // C++0x [class.copy]p28:
+buildSingleCopyAssignRecursively(Sema &S, SourceLocation Loc, QualType T,
+                                 Expr *To, Expr *From,
+                                 bool CopyingBaseSubobject, bool Copying,
+                                 unsigned Depth = 0) {
+  // C++11 [class.copy]p28:
   //   Each subobject is assigned in the manner appropriate to its type:
   //
   //     - if the subobject is of class type, as if by a call to operator= with
@@ -7397,32 +7520,41 @@ BuildSingleCopyAssign(Sema &S, SourceLocation Loc, QualType T,
   //       subobject of x as a single function argument (as if by explicit
   //       qualification; that is, ignoring any possible virtual overriding
   //       functions in more derived classes);
+  //
+  // C++03 [class.copy]p13:
+  //     - if the subobject is of class type, the copy assignment operator for
+  //       the class is used (as if by explicit qualification; that is,
+  //       ignoring any possible virtual overriding functions in more derived
+  //       classes);
   if (const RecordType *RecordTy = T->getAs<RecordType>()) {
     CXXRecordDecl *ClassDecl = cast<CXXRecordDecl>(RecordTy->getDecl());
-    
+
     // Look for operator=.
     DeclarationName Name
       = S.Context.DeclarationNames.getCXXOperatorName(OO_Equal);
     LookupResult OpLookup(S, Name, Loc, Sema::LookupOrdinaryName);
     S.LookupQualifiedName(OpLookup, ClassDecl, false);
-    
-    // Filter out any result that isn't a copy/move-assignment operator.
-    LookupResult::Filter F = OpLookup.makeFilter();
-    while (F.hasNext()) {
-      NamedDecl *D = F.next();
-      if (CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(D))
-        if (Method->isCopyAssignmentOperator() ||
-            (!Copying && Method->isMoveAssignmentOperator()))
-          continue;
 
-      F.erase();
+    // Prior to C++11, filter out any result that isn't a copy/move-assignment
+    // operator.
+    if (!S.getLangOpts().CPlusPlus0x) {
+      LookupResult::Filter F = OpLookup.makeFilter();
+      while (F.hasNext()) {
+        NamedDecl *D = F.next();
+        if (CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(D))
+          if (Method->isCopyAssignmentOperator() ||
+              (!Copying && Method->isMoveAssignmentOperator()))
+            continue;
+
+        F.erase();
+      }
+      F.done();
     }
-    F.done();
-    
+
     // Suppress the protected check (C++ [class.protected]) for each of the
-    // assignment operators we found. This strange dance is required when 
+    // assignment operators we found. This strange dance is required when
     // we're assigning via a base classes's copy-assignment operator. To
-    // ensure that we're getting the right base class subobject (without 
+    // ensure that we're getting the right base class subobject (without
     // ambiguities), we need to cast "this" to that subobject type; to
     // ensure that we don't go through the virtual call mechanism, we need
     // to qualify the operator= name with the base class (see below). However,
@@ -7437,20 +7569,20 @@ BuildSingleCopyAssign(Sema &S, SourceLocation Loc, QualType T,
           L.setAccess(AS_public);
       }
     }
-    
+
     // Create the nested-name-specifier that will be used to qualify the
     // reference to operator=; this is required to suppress the virtual
     // call mechanism.
     CXXScopeSpec SS;
     const Type *CanonicalT = S.Context.getCanonicalType(T.getTypePtr());
-    SS.MakeTrivial(S.Context, 
-                   NestedNameSpecifier::Create(S.Context, 0, false, 
+    SS.MakeTrivial(S.Context,
+                   NestedNameSpecifier::Create(S.Context, 0, false,
                                                CanonicalT),
                    Loc);
-    
+
     // Create the reference to operator=.
     ExprResult OpEqualRef
-      = S.BuildMemberReferenceExpr(To, T, Loc, /*isArrow=*/false, SS, 
+      = S.BuildMemberReferenceExpr(To, T, Loc, /*isArrow=*/false, SS,
                                    /*TemplateKWLoc=*/SourceLocation(),
                                    /*FirstQualifierInScope=*/0,
                                    OpLookup,
@@ -7458,39 +7590,46 @@ BuildSingleCopyAssign(Sema &S, SourceLocation Loc, QualType T,
                                    /*SuppressQualifierCheck=*/true);
     if (OpEqualRef.isInvalid())
       return StmtError();
-    
+
     // Build the call to the assignment operator.
 
-    ExprResult Call = S.BuildCallToMemberFunction(/*Scope=*/0, 
+    ExprResult Call = S.BuildCallToMemberFunction(/*Scope=*/0,
                                                   OpEqualRef.takeAs<Expr>(),
                                                   Loc, &From, 1, Loc);
     if (Call.isInvalid())
       return StmtError();
-    
-    return S.Owned(Call.takeAs<Stmt>());
+
+    // If we built a call to a trivial 'operator=' while copying an array,
+    // bail out. We'll replace the whole shebang with a memcpy.
+    CXXMemberCallExpr *CE = dyn_cast<CXXMemberCallExpr>(Call.get());
+    if (CE && CE->getMethodDecl()->isTrivial() && Depth)
+      return StmtResult((Stmt*)0);
+
+    // Convert to an expression-statement, and clean up any produced
+    // temporaries.
+    return S.ActOnExprStmt(S.MakeFullExpr(Call.take(), Loc));
   }
 
-  //     - if the subobject is of scalar type, the built-in assignment 
+  //     - if the subobject is of scalar type, the built-in assignment
   //       operator is used.
-  const ConstantArrayType *ArrayTy = S.Context.getAsConstantArrayType(T);  
+  const ConstantArrayType *ArrayTy = S.Context.getAsConstantArrayType(T);
   if (!ArrayTy) {
     ExprResult Assignment = S.CreateBuiltinBinOp(Loc, BO_Assign, To, From);
     if (Assignment.isInvalid())
       return StmtError();
-    
-    return S.Owned(Assignment.takeAs<Stmt>());
+    return S.ActOnExprStmt(S.MakeFullExpr(Assignment.take(), Loc));
   }
-    
-  //     - if the subobject is an array, each element is assigned, in the 
+
+  //     - if the subobject is an array, each element is assigned, in the
   //       manner appropriate to the element type;
-  
+
   // Construct a loop over the array bounds, e.g.,
   //
   //   for (__SIZE_TYPE__ i0 = 0; i0 != array-size; ++i0)
   //
   // that will copy each of the array elements. 
   QualType SizeType = S.Context.getSizeType();
-  
+
   // Create the iteration variable.
   IdentifierInfo *IterationVarName = 0;
   {
@@ -7503,7 +7642,7 @@ BuildSingleCopyAssign(Sema &S, SourceLocation Loc, QualType T,
                                           IterationVarName, SizeType,
                             S.Context.getTrivialTypeSourceInfo(SizeType, Loc),
                                           SC_None, SC_None);
-  
+
   // Initialize the iteration variable to zero.
   llvm::APInt Zero(S.Context.getTypeSize(SizeType), 0);
   IterationVar->setInit(IntegerLiteral::Create(S.Context, Zero, SizeType, Loc));
@@ -7518,21 +7657,7 @@ BuildSingleCopyAssign(Sema &S, SourceLocation Loc, QualType T,
 
   // Create the DeclStmt that holds the iteration variable.
   Stmt *InitStmt = new (S.Context) DeclStmt(DeclGroupRef(IterationVar),Loc,Loc);
-  
-  // Create the comparison against the array bound.
-  llvm::APInt Upper
-    = ArrayTy->getSize().zextOrTrunc(S.Context.getTypeSize(SizeType));
-  Expr *Comparison
-    = new (S.Context) BinaryOperator(IterationVarRefRVal,
-                     IntegerLiteral::Create(S.Context, Upper, SizeType, Loc),
-                                     BO_NE, S.Context.BoolTy,
-                                     VK_RValue, OK_Ordinary, Loc, false);
-  
-  // Create the pre-increment of the iteration variable.
-  Expr *Increment
-    = new (S.Context) UnaryOperator(IterationVarRef, UO_PreInc, SizeType,
-                                    VK_LValue, OK_Ordinary, Loc);
-  
+
   // Subscript the "from" and "to" expressions with the iteration variable.
   From = AssertSuccess(S.CreateBuiltinArraySubscriptExpr(From, Loc,
                                                          IterationVarRefRVal,
@@ -7544,17 +7669,54 @@ BuildSingleCopyAssign(Sema &S, SourceLocation Loc, QualType T,
     From = CastForMoving(S, From);
 
   // Build the copy/move for an individual element of the array.
-  StmtResult Copy = BuildSingleCopyAssign(S, Loc, ArrayTy->getElementType(),
-                                          To, From, CopyingBaseSubobject,
-                                          Copying, Depth + 1);
-  if (Copy.isInvalid())
-    return StmtError();
-  
+  StmtResult Copy =
+    buildSingleCopyAssignRecursively(S, Loc, ArrayTy->getElementType(),
+                                     To, From, CopyingBaseSubobject,
+                                     Copying, Depth + 1);
+  // Bail out if copying fails or if we determined that we should use memcpy.
+  if (Copy.isInvalid() || !Copy.get())
+    return Copy;
+
+  // Create the comparison against the array bound.
+  llvm::APInt Upper
+    = ArrayTy->getSize().zextOrTrunc(S.Context.getTypeSize(SizeType));
+  Expr *Comparison
+    = new (S.Context) BinaryOperator(IterationVarRefRVal,
+                     IntegerLiteral::Create(S.Context, Upper, SizeType, Loc),
+                                     BO_NE, S.Context.BoolTy,
+                                     VK_RValue, OK_Ordinary, Loc, false);
+
+  // Create the pre-increment of the iteration variable.
+  Expr *Increment
+    = new (S.Context) UnaryOperator(IterationVarRef, UO_PreInc, SizeType,
+                                    VK_LValue, OK_Ordinary, Loc);
+
   // Construct the loop that copies all elements of this array.
   return S.ActOnForStmt(Loc, Loc, InitStmt, 
                         S.MakeFullExpr(Comparison),
                         0, S.MakeFullExpr(Increment),
                         Loc, Copy.take());
+}
+
+static StmtResult
+buildSingleCopyAssign(Sema &S, SourceLocation Loc, QualType T,
+                      Expr *To, Expr *From,
+                      bool CopyingBaseSubobject, bool Copying) {
+  // Maybe we should use a memcpy?
+  if (T->isArrayType() && !T.isConstQualified() && !T.isVolatileQualified() &&
+      T.isTriviallyCopyableType(S.Context))
+    return buildMemcpyForAssignmentOp(S, Loc, T, To, From);
+
+  StmtResult Result(buildSingleCopyAssignRecursively(S, Loc, T, To, From,
+                                                     CopyingBaseSubobject,
+                                                     Copying, 0));
+
+  // If we ended up picking a trivial assignment operator for an array of a
+  // non-trivially-copyable class type, just emit a memcpy.
+  if (!Result.isInvalid() && !Result.get())
+    return buildMemcpyForAssignmentOp(S, Loc, T, To, From);
+
+  return Result;
 }
 
 /// Determine whether an implicit copy assignment operator for ClassDecl has a
@@ -7768,7 +7930,7 @@ void Sema::DefineImplicitCopyAssignment(SourceLocation CurrentLocation,
   
   CopyAssignOperator->setUsed();
 
-  ImplicitlyDefinedFunctionScope Scope(*this, CopyAssignOperator);
+  SynthesizedFunctionScope Scope(*this, CopyAssignOperator);
   DiagnosticErrorTrap Trap(Diags);
 
   // C++0x [class.copy]p30:
@@ -7838,7 +8000,7 @@ void Sema::DefineImplicitCopyAssignment(SourceLocation CurrentLocation,
                            VK_LValue, &BasePath);
 
     // Build the copy.
-    StmtResult Copy = BuildSingleCopyAssign(*this, Loc, BaseType,
+    StmtResult Copy = buildSingleCopyAssign(*this, Loc, BaseType,
                                             To.get(), From,
                                             /*CopyingBaseSubobject=*/true,
                                             /*Copying=*/true);
@@ -7852,11 +8014,6 @@ void Sema::DefineImplicitCopyAssignment(SourceLocation CurrentLocation,
     // Success! Record the copy.
     Statements.push_back(Copy.takeAs<Expr>());
   }
-  
-  // \brief Reference to the __builtin_memcpy function.
-  Expr *BuiltinMemCpyRef = 0;
-  // \brief Reference to the __builtin_objc_memmove_collectable function.
-  Expr *CollectableMemCpyRef = 0;
   
   // Assign non-static members.
   for (CXXRecordDecl::field_iterator Field = ClassDecl->field_begin(),
@@ -7915,99 +8072,9 @@ void Sema::DefineImplicitCopyAssignment(SourceLocation CurrentLocation,
                                              MemberLookup, 0);
     assert(!From.isInvalid() && "Implicit field reference cannot fail");
     assert(!To.isInvalid() && "Implicit field reference cannot fail");
-    
-    // If the field should be copied with __builtin_memcpy rather than via
-    // explicit assignments, do so. This optimization only applies for arrays 
-    // of scalars and arrays of class type with trivial copy-assignment 
-    // operators.
-    if (FieldType->isArrayType() && !FieldType.isVolatileQualified()
-        && BaseType.hasTrivialAssignment(Context, /*Copying=*/true)) {
-      // Compute the size of the memory buffer to be copied.
-      QualType SizeType = Context.getSizeType();
-      llvm::APInt Size(Context.getTypeSize(SizeType), 
-                       Context.getTypeSizeInChars(BaseType).getQuantity());
-      for (const ConstantArrayType *Array
-              = Context.getAsConstantArrayType(FieldType);
-           Array; 
-           Array = Context.getAsConstantArrayType(Array->getElementType())) {
-        llvm::APInt ArraySize
-          = Array->getSize().zextOrTrunc(Size.getBitWidth());
-        Size *= ArraySize;
-      }
-          
-      // Take the address of the field references for "from" and "to".
-      From = CreateBuiltinUnaryOp(Loc, UO_AddrOf, From.get());
-      To = CreateBuiltinUnaryOp(Loc, UO_AddrOf, To.get());
-          
-      bool NeedsCollectableMemCpy = 
-          (BaseType->isRecordType() && 
-           BaseType->getAs<RecordType>()->getDecl()->hasObjectMember());
-          
-      if (NeedsCollectableMemCpy) {
-        if (!CollectableMemCpyRef) {
-          // Create a reference to the __builtin_objc_memmove_collectable function.
-          LookupResult R(*this, 
-                         &Context.Idents.get("__builtin_objc_memmove_collectable"), 
-                         Loc, LookupOrdinaryName);
-          LookupName(R, TUScope, true);
-        
-          FunctionDecl *CollectableMemCpy = R.getAsSingle<FunctionDecl>();
-          if (!CollectableMemCpy) {
-            // Something went horribly wrong earlier, and we will have 
-            // complained about it.
-            Invalid = true;
-            continue;
-          }
-        
-          CollectableMemCpyRef = BuildDeclRefExpr(CollectableMemCpy, 
-                                                  Context.BuiltinFnTy,
-                                                  VK_RValue, Loc, 0).take();
-          assert(CollectableMemCpyRef && "Builtin reference cannot fail");
-        }
-      }
-      // Create a reference to the __builtin_memcpy builtin function.
-      else if (!BuiltinMemCpyRef) {
-        LookupResult R(*this, &Context.Idents.get("__builtin_memcpy"), Loc,
-                       LookupOrdinaryName);
-        LookupName(R, TUScope, true);
-        
-        FunctionDecl *BuiltinMemCpy = R.getAsSingle<FunctionDecl>();
-        if (!BuiltinMemCpy) {
-          // Something went horribly wrong earlier, and we will have complained
-          // about it.
-          Invalid = true;
-          continue;
-        }
 
-        BuiltinMemCpyRef = BuildDeclRefExpr(BuiltinMemCpy, 
-                                            Context.BuiltinFnTy,
-                                            VK_RValue, Loc, 0).take();
-        assert(BuiltinMemCpyRef && "Builtin reference cannot fail");
-      }
-          
-      SmallVector<Expr*, 8> CallArgs;
-      CallArgs.push_back(To.takeAs<Expr>());
-      CallArgs.push_back(From.takeAs<Expr>());
-      CallArgs.push_back(IntegerLiteral::Create(Context, Size, SizeType, Loc));
-      ExprResult Call = ExprError();
-      if (NeedsCollectableMemCpy)
-        Call = ActOnCallExpr(/*Scope=*/0,
-                             CollectableMemCpyRef,
-                             Loc, CallArgs,
-                             Loc);
-      else
-        Call = ActOnCallExpr(/*Scope=*/0,
-                             BuiltinMemCpyRef,
-                             Loc, CallArgs,
-                             Loc);
-          
-      assert(!Call.isInvalid() && "Call to __builtin_memcpy cannot fail!");
-      Statements.push_back(Call.takeAs<Expr>());
-      continue;
-    }
-    
     // Build the copy of this field.
-    StmtResult Copy = BuildSingleCopyAssign(*this, Loc, FieldType, 
+    StmtResult Copy = buildSingleCopyAssign(*this, Loc, FieldType,
                                             To.get(), From.get(),
                                             /*CopyingBaseSubobject=*/false,
                                             /*Copying=*/true);
@@ -8309,7 +8376,7 @@ void Sema::DefineImplicitMoveAssignment(SourceLocation CurrentLocation,
   
   MoveAssignOperator->setUsed();
 
-  ImplicitlyDefinedFunctionScope Scope(*this, MoveAssignOperator);
+  SynthesizedFunctionScope Scope(*this, MoveAssignOperator);
   DiagnosticErrorTrap Trap(Diags);
 
   // C++0x [class.copy]p28:
@@ -8377,7 +8444,7 @@ void Sema::DefineImplicitMoveAssignment(SourceLocation CurrentLocation,
                            VK_LValue, &BasePath);
 
     // Build the move.
-    StmtResult Move = BuildSingleCopyAssign(*this, Loc, BaseType,
+    StmtResult Move = buildSingleCopyAssign(*this, Loc, BaseType,
                                             To.get(), From,
                                             /*CopyingBaseSubobject=*/true,
                                             /*Copying=*/false);
@@ -8391,11 +8458,6 @@ void Sema::DefineImplicitMoveAssignment(SourceLocation CurrentLocation,
     // Success! Record the move.
     Statements.push_back(Move.takeAs<Expr>());
   }
-
-  // \brief Reference to the __builtin_memcpy function.
-  Expr *BuiltinMemCpyRef = 0;
-  // \brief Reference to the __builtin_objc_memmove_collectable function.
-  Expr *CollectableMemCpyRef = 0;
 
   // Assign non-static members.
   for (CXXRecordDecl::field_iterator Field = ClassDecl->field_begin(),
@@ -8459,104 +8521,8 @@ void Sema::DefineImplicitMoveAssignment(SourceLocation CurrentLocation,
         "Member reference with rvalue base must be rvalue except for reference "
         "members, which aren't allowed for move assignment.");
 
-    // If the field should be copied with __builtin_memcpy rather than via
-    // explicit assignments, do so. This optimization only applies for arrays 
-    // of scalars and arrays of class type with trivial move-assignment 
-    // operators.
-    if (FieldType->isArrayType() && !FieldType.isVolatileQualified()
-        && BaseType.hasTrivialAssignment(Context, /*Copying=*/false)) {
-      // Compute the size of the memory buffer to be copied.
-      QualType SizeType = Context.getSizeType();
-      llvm::APInt Size(Context.getTypeSize(SizeType), 
-                       Context.getTypeSizeInChars(BaseType).getQuantity());
-      for (const ConstantArrayType *Array
-              = Context.getAsConstantArrayType(FieldType);
-           Array; 
-           Array = Context.getAsConstantArrayType(Array->getElementType())) {
-        llvm::APInt ArraySize
-          = Array->getSize().zextOrTrunc(Size.getBitWidth());
-        Size *= ArraySize;
-      }
-
-      // Take the address of the field references for "from" and "to". We
-      // directly construct UnaryOperators here because semantic analysis
-      // does not permit us to take the address of an xvalue.
-      From = new (Context) UnaryOperator(From.get(), UO_AddrOf,
-                             Context.getPointerType(From.get()->getType()),
-                             VK_RValue, OK_Ordinary, Loc);
-      To = new (Context) UnaryOperator(To.get(), UO_AddrOf,
-                           Context.getPointerType(To.get()->getType()),
-                           VK_RValue, OK_Ordinary, Loc);
-          
-      bool NeedsCollectableMemCpy = 
-          (BaseType->isRecordType() && 
-           BaseType->getAs<RecordType>()->getDecl()->hasObjectMember());
-          
-      if (NeedsCollectableMemCpy) {
-        if (!CollectableMemCpyRef) {
-          // Create a reference to the __builtin_objc_memmove_collectable function.
-          LookupResult R(*this, 
-                         &Context.Idents.get("__builtin_objc_memmove_collectable"), 
-                         Loc, LookupOrdinaryName);
-          LookupName(R, TUScope, true);
-        
-          FunctionDecl *CollectableMemCpy = R.getAsSingle<FunctionDecl>();
-          if (!CollectableMemCpy) {
-            // Something went horribly wrong earlier, and we will have 
-            // complained about it.
-            Invalid = true;
-            continue;
-          }
-        
-          CollectableMemCpyRef = BuildDeclRefExpr(CollectableMemCpy, 
-                                                  Context.BuiltinFnTy,
-                                                  VK_RValue, Loc, 0).take();
-          assert(CollectableMemCpyRef && "Builtin reference cannot fail");
-        }
-      }
-      // Create a reference to the __builtin_memcpy builtin function.
-      else if (!BuiltinMemCpyRef) {
-        LookupResult R(*this, &Context.Idents.get("__builtin_memcpy"), Loc,
-                       LookupOrdinaryName);
-        LookupName(R, TUScope, true);
-        
-        FunctionDecl *BuiltinMemCpy = R.getAsSingle<FunctionDecl>();
-        if (!BuiltinMemCpy) {
-          // Something went horribly wrong earlier, and we will have complained
-          // about it.
-          Invalid = true;
-          continue;
-        }
-
-        BuiltinMemCpyRef = BuildDeclRefExpr(BuiltinMemCpy, 
-                                            Context.BuiltinFnTy,
-                                            VK_RValue, Loc, 0).take();
-        assert(BuiltinMemCpyRef && "Builtin reference cannot fail");
-      }
-          
-      SmallVector<Expr*, 8> CallArgs;
-      CallArgs.push_back(To.takeAs<Expr>());
-      CallArgs.push_back(From.takeAs<Expr>());
-      CallArgs.push_back(IntegerLiteral::Create(Context, Size, SizeType, Loc));
-      ExprResult Call = ExprError();
-      if (NeedsCollectableMemCpy)
-        Call = ActOnCallExpr(/*Scope=*/0,
-                             CollectableMemCpyRef,
-                             Loc, CallArgs,
-                             Loc);
-      else
-        Call = ActOnCallExpr(/*Scope=*/0,
-                             BuiltinMemCpyRef,
-                             Loc, CallArgs,
-                             Loc);
-          
-      assert(!Call.isInvalid() && "Call to __builtin_memcpy cannot fail!");
-      Statements.push_back(Call.takeAs<Expr>());
-      continue;
-    }
-    
     // Build the move of this field.
-    StmtResult Move = BuildSingleCopyAssign(*this, Loc, FieldType, 
+    StmtResult Move = buildSingleCopyAssign(*this, Loc, FieldType,
                                             To.get(), From.get(),
                                             /*CopyingBaseSubobject=*/false,
                                             /*Copying=*/false);
@@ -8566,7 +8532,7 @@ void Sema::DefineImplicitMoveAssignment(SourceLocation CurrentLocation,
       MoveAssignOperator->setInvalidDecl();
       return;
     }
-    
+
     // Success! Record the copy.
     Statements.push_back(Move.takeAs<Stmt>());
   }
@@ -8805,7 +8771,7 @@ void Sema::DefineImplicitCopyConstructor(SourceLocation CurrentLocation,
   CXXRecordDecl *ClassDecl = CopyConstructor->getParent();
   assert(ClassDecl && "DefineImplicitCopyConstructor - invalid constructor");
 
-  ImplicitlyDefinedFunctionScope Scope(*this, CopyConstructor);
+  SynthesizedFunctionScope Scope(*this, CopyConstructor);
   DiagnosticErrorTrap Trap(Diags);
 
   if (SetCtorInitializers(CopyConstructor, 0, 0, /*AnyErrors=*/false) ||
@@ -8988,7 +8954,7 @@ void Sema::DefineImplicitMoveConstructor(SourceLocation CurrentLocation,
   CXXRecordDecl *ClassDecl = MoveConstructor->getParent();
   assert(ClassDecl && "DefineImplicitMoveConstructor - invalid constructor");
 
-  ImplicitlyDefinedFunctionScope Scope(*this, MoveConstructor);
+  SynthesizedFunctionScope Scope(*this, MoveConstructor);
   DiagnosticErrorTrap Trap(Diags);
 
   if (SetCtorInitializers(MoveConstructor, 0, 0, /*AnyErrors=*/false) ||
@@ -9040,7 +9006,7 @@ void Sema::DefineImplicitLambdaToFunctionPointerConversion(
   
   Conv->setUsed();
   
-  ImplicitlyDefinedFunctionScope Scope(*this, Conv);
+  SynthesizedFunctionScope Scope(*this, Conv);
   DiagnosticErrorTrap Trap(Diags);
   
   // Return the address of the __invoke function.
@@ -9073,7 +9039,7 @@ void Sema::DefineImplicitLambdaToBlockPointerConversion(
 {
   Conv->setUsed();
   
-  ImplicitlyDefinedFunctionScope Scope(*this, Conv);
+  SynthesizedFunctionScope Scope(*this, Conv);
   DiagnosticErrorTrap Trap(Diags);
   
   // Copy-initialize the lambda object as needed to capture it.
@@ -9379,7 +9345,7 @@ CheckOperatorNewDeclaration(Sema &SemaRef, const FunctionDecl *FnDecl) {
 }
 
 static bool
-CheckOperatorDeleteDeclaration(Sema &SemaRef, const FunctionDecl *FnDecl) {
+CheckOperatorDeleteDeclaration(Sema &SemaRef, FunctionDecl *FnDecl) {
   // C++ [basic.stc.dynamic.deallocation]p1:
   //   A program is ill-formed if deallocation functions are declared in a
   //   namespace scope other than global scope or declared static in global 

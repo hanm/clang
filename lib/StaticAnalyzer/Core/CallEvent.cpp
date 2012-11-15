@@ -14,6 +14,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 #include "clang/Analysis/ProgramPoint.h"
 #include "clang/AST/ParentMap.h"
 #include "llvm/ADT/SmallSet.h"
@@ -97,6 +98,14 @@ bool CallEvent::hasNonZeroCallbackArg() const {
   }
   
   return false;
+}
+
+bool CallEvent::isGlobalCFunction(StringRef FunctionName) const {
+  const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(getDecl());
+  if (!FD)
+    return false;
+
+  return CheckerContext::isCLibraryFunction(FD, FunctionName);
 }
 
 /// \brief Returns true if a type is a pointer-to-const or reference-to-const
@@ -223,6 +232,13 @@ SourceRange CallEvent::getArgSourceRange(unsigned Index) const {
   return ArgE->getSourceRange();
 }
 
+SVal CallEvent::getReturnValue() const {
+  const Expr *E = getOriginExpr();
+  if (!E)
+    return UndefinedVal();
+  return getSVal(E);
+}
+
 void CallEvent::dump() const {
   dump(llvm::errs());
 }
@@ -321,7 +337,7 @@ bool AnyFunctionCall::argumentsMayEscape() const {
 
   const IdentifierInfo *II = D->getIdentifier();
   if (!II)
-    return true;
+    return false;
 
   // This set of "escaping" APIs is 
 
@@ -401,15 +417,7 @@ SVal CXXInstanceCall::getCXXThisVal() const {
     return UnknownVal();
 
   SVal ThisVal = getSVal(Base);
-
-  // FIXME: This is only necessary because we can call member functions on
-  // struct rvalues, which do not have regions we can use for a 'this' pointer.
-  // Ideally this should eventually be changed to an assert, i.e. all
-  // non-Unknown, non-null 'this' values should be loc::MemRegionVals.
-  if (isa<DefinedSVal>(ThisVal))
-    if (!ThisVal.getAsRegion() && !ThisVal.isConstant())
-      return UnknownVal();
-
+  assert(ThisVal.isUnknownOrUndef() || isa<Loc>(ThisVal));
   return ThisVal;
 }
 

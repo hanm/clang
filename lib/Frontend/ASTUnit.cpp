@@ -27,6 +27,7 @@
 #include "clang/Serialization/ASTWriter.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Basic/TargetOptions.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/Diagnostic.h"
@@ -102,7 +103,7 @@ static llvm::sys::SmartMutex<false> &getOnDiskMutex() {
   return M;
 }
 
-static void cleanupOnDiskMapAtExit(void);
+static void cleanupOnDiskMapAtExit();
 
 typedef llvm::DenseMap<const ASTUnit *, OnDiskData *> OnDiskDataMap;
 static OnDiskDataMap &getOnDiskDataMap() {
@@ -115,7 +116,7 @@ static OnDiskDataMap &getOnDiskDataMap() {
   return M;
 }
 
-static void cleanupOnDiskMapAtExit(void) {
+static void cleanupOnDiskMapAtExit() {
   // Use the mutex because there can be an alive thread destroying an ASTUnit.
   llvm::MutexGuard Guard(getOnDiskMutex());
   OnDiskDataMap &M = getOnDiskDataMap();
@@ -503,8 +504,8 @@ class ASTInfoCollector : public ASTReaderListener {
   ASTContext &Context;
   LangOptions &LangOpt;
   HeaderSearch &HSI;
+  IntrusiveRefCntPtr<TargetOptions> &TargetOpts;
   IntrusiveRefCntPtr<TargetInfo> &Target;
-  std::string &Predefines;
   unsigned &Counter;
 
   unsigned NumHeaderInfos;
@@ -512,21 +513,20 @@ class ASTInfoCollector : public ASTReaderListener {
   bool InitializedLanguage;
 public:
   ASTInfoCollector(Preprocessor &PP, ASTContext &Context, LangOptions &LangOpt, 
-                   HeaderSearch &HSI,
+                   HeaderSearch &HSI, 
+                   IntrusiveRefCntPtr<TargetOptions> &TargetOpts,
                    IntrusiveRefCntPtr<TargetInfo> &Target,
-                   std::string &Predefines,
                    unsigned &Counter)
-    : PP(PP), Context(Context), LangOpt(LangOpt), HSI(HSI), Target(Target),
-      Predefines(Predefines), Counter(Counter), NumHeaderInfos(0),
+    : PP(PP), Context(Context), LangOpt(LangOpt), HSI(HSI), 
+      TargetOpts(TargetOpts), Target(Target),
+      Counter(Counter), NumHeaderInfos(0),
       InitializedLanguage(false) {}
 
-  virtual bool ReadLanguageOptions(const serialization::ModuleFile &M,
-                                   const LangOptions &LangOpts) {
+  virtual bool ReadLanguageOptions(const LangOptions &LangOpts,
+                                   bool Complain) {
     if (InitializedLanguage)
       return false;
     
-    assert(M.Kind == serialization::MK_MainFile);
-
     LangOpt = LangOpts;
     InitializedLanguage = true;
     
@@ -534,35 +534,17 @@ public:
     return false;
   }
 
-  virtual bool ReadTargetTriple(const serialization::ModuleFile &M,
-                                StringRef Triple) {
+  virtual bool ReadTargetOptions(const TargetOptions &TargetOpts,
+                                 bool Complain) {
     // If we've already initialized the target, don't do it again.
     if (Target)
       return false;
     
-    assert(M.Kind == serialization::MK_MainFile);
-
-    // FIXME: This is broken, we should store the TargetOptions in the AST file.
-    TargetOptions TargetOpts;
-    TargetOpts.ABI = "";
-    TargetOpts.CXXABI = "";
-    TargetOpts.CPU = "";
-    TargetOpts.Features.clear();
-    TargetOpts.Triple = Triple;
-    Target = TargetInfo::CreateTargetInfo(PP.getDiagnostics(), TargetOpts);
+    this->TargetOpts = new TargetOptions(TargetOpts);
+    Target = TargetInfo::CreateTargetInfo(PP.getDiagnostics(), 
+                                          *this->TargetOpts);
 
     updated();
-    return false;
-  }
-
-  virtual bool ReadPredefinesBuffer(const PCHPredefinesBlocks &Buffers,
-                                    StringRef OriginalFileName,
-                                    std::string &SuggestedPredefines,
-                                    FileManager &FileMgr) {
-    Predefines = Buffers[0].Data;
-    for (unsigned I = 1, N = Buffers.size(); I != N; ++I) {
-      Predefines += Buffers[I].Data;
-    }
     return false;
   }
 
@@ -650,10 +632,6 @@ void StoredDiagnosticConsumer::HandleDiagnostic(DiagnosticsEngine::Level Level,
   StoredDiags.push_back(StoredDiagnostic(Level, Info));
 }
 
-const std::string &ASTUnit::getOriginalSourceFileName() {
-  return OriginalSourceFile;
-}
-
 ASTDeserializationListener *ASTUnit::getDeserializationListener() {
   if (WriterData)
     return &WriterData->Writer;
@@ -673,11 +651,11 @@ void ASTUnit::ConfigureDiags(IntrusiveRefCntPtr<DiagnosticsEngine> &Diags,
   if (!Diags.getPtr()) {
     // No diagnostics engine was provided, so create our own diagnostics object
     // with the default options.
-    DiagnosticOptions DiagOpts;
     DiagnosticConsumer *Client = 0;
     if (CaptureDiagnostics)
       Client = new StoredDiagnosticConsumer(AST.StoredDiagnostics);
-    Diags = CompilerInstance::createDiagnostics(DiagOpts, ArgEnd-ArgBegin,
+    Diags = CompilerInstance::createDiagnostics(new DiagnosticOptions(),
+                                                ArgEnd-ArgBegin,
                                                 ArgBegin, Client,
                                                 /*ShouldOwnClient=*/true,
                                                 /*ShouldCloneClient=*/false);
@@ -714,7 +692,10 @@ ASTUnit *ASTUnit::LoadFromASTFile(const std::string &Filename,
   AST->SourceMgr = new SourceManager(AST->getDiagnostics(),
                                      AST->getFileManager(),
                                      UserFilesAreVolatile);
-  AST->HeaderInfo.reset(new HeaderSearch(AST->getFileManager(),
+  AST->HSOpts = new HeaderSearchOptions();
+  
+  AST->HeaderInfo.reset(new HeaderSearch(AST->HSOpts,
+                                         AST->getFileManager(),
                                          AST->getDiagnostics(),
                                          AST->ASTFileLangOpts,
                                          /*Target=*/0));
@@ -769,12 +750,12 @@ ASTUnit *ASTUnit::LoadFromASTFile(const std::string &Filename,
   // Gather Info for preprocessor construction later on.
 
   HeaderSearch &HeaderInfo = *AST->HeaderInfo.get();
-  std::string Predefines;
   unsigned Counter;
 
   OwningPtr<ASTReader> Reader;
 
-  AST->PP = new Preprocessor(AST->getDiagnostics(), AST->ASTFileLangOpts, 
+  AST->PP = new Preprocessor(new PreprocessorOptions(),
+                             AST->getDiagnostics(), AST->ASTFileLangOpts,
                              /*Target=*/0, AST->getSourceManager(), HeaderInfo, 
                              *AST, 
                              /*IILookup=*/0,
@@ -798,7 +779,6 @@ ASTUnit *ASTUnit::LoadFromASTFile(const std::string &Filename,
   Reader.reset(new ASTReader(PP, Context,
                              /*isysroot=*/"",
                              /*DisableValidation=*/disableValid,
-                             /*DisableStatCache=*/false,
                              AllowPCHWithCompilerErrors));
   
   // Recover resources if we crash before exiting this method.
@@ -807,21 +787,25 @@ ASTUnit *ASTUnit::LoadFromASTFile(const std::string &Filename,
 
   Reader->setListener(new ASTInfoCollector(*AST->PP, Context,
                                            AST->ASTFileLangOpts, HeaderInfo, 
-                                           AST->Target, Predefines, Counter));
+                                           AST->TargetOpts, AST->Target, 
+                                           Counter));
 
-  switch (Reader->ReadAST(Filename, serialization::MK_MainFile)) {
+  switch (Reader->ReadAST(Filename, serialization::MK_MainFile,
+                          ASTReader::ARR_None)) {
   case ASTReader::Success:
     break;
 
   case ASTReader::Failure:
-  case ASTReader::IgnorePCH:
+  case ASTReader::OutOfDate:
+  case ASTReader::VersionMismatch:
+  case ASTReader::ConfigurationMismatch:
+  case ASTReader::HadErrors:
     AST->getDiagnostics().Report(diag::err_fe_unable_to_load_pch);
     return NULL;
   }
 
   AST->OriginalSourceFile = Reader->getOriginalSourceFile();
 
-  PP.setPredefines(Reader->getSuggestedPredefines());
   PP.setCounterValue(Counter);
 
   // Attach the AST reader to the AST context as an external AST
@@ -1089,14 +1073,13 @@ bool ASTUnit::Parse(llvm::MemoryBuffer *OverrideMainBuffer) {
     CCInvocation(new CompilerInvocation(*Invocation));
 
   Clang->setInvocation(CCInvocation.getPtr());
-  OriginalSourceFile = Clang->getFrontendOpts().Inputs[0].File;
+  OriginalSourceFile = Clang->getFrontendOpts().Inputs[0].getFile();
     
   // Set up diagnostics, capturing any diagnostics that would
   // otherwise be dropped.
   Clang->setDiagnostics(&getDiagnostics());
   
   // Create the target instance.
-  Clang->getTargetOpts().Features = TargetFeatures;
   Clang->setTarget(TargetInfo::CreateTargetInfo(Clang->getDiagnostics(),
                    Clang->getTargetOpts()));
   if (!Clang->hasTarget()) {
@@ -1112,9 +1095,9 @@ bool ASTUnit::Parse(llvm::MemoryBuffer *OverrideMainBuffer) {
   
   assert(Clang->getFrontendOpts().Inputs.size() == 1 &&
          "Invocation must have exactly one source file!");
-  assert(Clang->getFrontendOpts().Inputs[0].Kind != IK_AST &&
+  assert(Clang->getFrontendOpts().Inputs[0].getKind() != IK_AST &&
          "FIXME: AST inputs not yet supported here!");
-  assert(Clang->getFrontendOpts().Inputs[0].Kind != IK_LLVM_IR &&
+  assert(Clang->getFrontendOpts().Inputs[0].getKind() != IK_LLVM_IR &&
          "IR inputs not support here!");
 
   // Configure the various subsystems.
@@ -1259,7 +1242,7 @@ ASTUnit::ComputePreamble(CompilerInvocation &Invocation,
   // command line (to another file) or directly through the compiler invocation
   // (to a memory buffer).
   llvm::MemoryBuffer *Buffer = 0;
-  llvm::sys::PathWithStatus MainFilePath(FrontendOpts.Inputs[0].File);
+  llvm::sys::PathWithStatus MainFilePath(FrontendOpts.Inputs[0].getFile());
   if (const llvm::sys::FileStatus *MainFileStatus = MainFilePath.getFileStatus()) {
     // Check whether there is a file-file remapping of the main file
     for (PreprocessorOptions::remapped_file_iterator
@@ -1309,7 +1292,7 @@ ASTUnit::ComputePreamble(CompilerInvocation &Invocation,
   
   // If the main source file was not remapped, load it now.
   if (!Buffer) {
-    Buffer = getBufferForFile(FrontendOpts.Inputs[0].File);
+    Buffer = getBufferForFile(FrontendOpts.Inputs[0].getFile());
     if (!Buffer)
       return std::make_pair((llvm::MemoryBuffer*)0, std::make_pair(0, true));    
     
@@ -1471,7 +1454,7 @@ llvm::MemoryBuffer *ASTUnit::getMainBufferWithPrecompiledPreamble(
         // buffer size we reserved when creating the preamble.
         return CreatePaddedMainFileBuffer(NewPreamble.first, 
                                           PreambleReservedSize,
-                                          FrontendOpts.Inputs[0].File);
+                                          FrontendOpts.Inputs[0].getFile());
       }
     }
 
@@ -1524,7 +1507,7 @@ llvm::MemoryBuffer *ASTUnit::getMainBufferWithPrecompiledPreamble(
 
   // Save the preamble text for later; we'll need to compare against it for
   // subsequent reparses.
-  StringRef MainFilename = PreambleInvocation->getFrontendOpts().Inputs[0].File;
+  StringRef MainFilename = PreambleInvocation->getFrontendOpts().Inputs[0].getFile();
   Preamble.assign(FileMgr->getFile(MainFilename),
                   NewPreamble.first->getBufferStart(), 
                   NewPreamble.first->getBufferStart() 
@@ -1534,7 +1517,7 @@ llvm::MemoryBuffer *ASTUnit::getMainBufferWithPrecompiledPreamble(
   delete PreambleBuffer;
   PreambleBuffer
     = llvm::MemoryBuffer::getNewUninitMemBuffer(PreambleReservedSize,
-                                                FrontendOpts.Inputs[0].File);
+                                                FrontendOpts.Inputs[0].getFile());
   memcpy(const_cast<char*>(PreambleBuffer->getBufferStart()), 
          NewPreamble.first->getBufferStart(), Preamble.size());
   memset(const_cast<char*>(PreambleBuffer->getBufferStart()) + Preamble.size(), 
@@ -1542,7 +1525,7 @@ llvm::MemoryBuffer *ASTUnit::getMainBufferWithPrecompiledPreamble(
   const_cast<char*>(PreambleBuffer->getBufferEnd())[-1] = '\n';  
   
   // Remap the main source file to the preamble buffer.
-  llvm::sys::PathWithStatus MainFilePath(FrontendOpts.Inputs[0].File);
+  llvm::sys::PathWithStatus MainFilePath(FrontendOpts.Inputs[0].getFile());
   PreprocessorOpts.addRemappedFile(MainFilePath.str(), PreambleBuffer);
   
   // Tell the compiler invocation to generate a temporary precompiled header.
@@ -1560,15 +1543,14 @@ llvm::MemoryBuffer *ASTUnit::getMainBufferWithPrecompiledPreamble(
     CICleanup(Clang.get());
 
   Clang->setInvocation(&*PreambleInvocation);
-  OriginalSourceFile = Clang->getFrontendOpts().Inputs[0].File;
+  OriginalSourceFile = Clang->getFrontendOpts().Inputs[0].getFile();
   
   // Set up diagnostics, capturing all of the diagnostics produced.
   Clang->setDiagnostics(&getDiagnostics());
   
   // Create the target instance.
-  Clang->getTargetOpts().Features = TargetFeatures;
   Clang->setTarget(TargetInfo::CreateTargetInfo(Clang->getDiagnostics(),
-                                               Clang->getTargetOpts()));
+                                                Clang->getTargetOpts()));
   if (!Clang->hasTarget()) {
     llvm::sys::Path(FrontendOpts.OutputFile).eraseFromDisk();
     Preamble.clear();
@@ -1586,9 +1568,9 @@ llvm::MemoryBuffer *ASTUnit::getMainBufferWithPrecompiledPreamble(
   
   assert(Clang->getFrontendOpts().Inputs.size() == 1 &&
          "Invocation must have exactly one source file!");
-  assert(Clang->getFrontendOpts().Inputs[0].Kind != IK_AST &&
+  assert(Clang->getFrontendOpts().Inputs[0].getKind() != IK_AST &&
          "FIXME: AST inputs not yet supported here!");
-  assert(Clang->getFrontendOpts().Inputs[0].Kind != IK_LLVM_IR &&
+  assert(Clang->getFrontendOpts().Inputs[0].getKind() != IK_LLVM_IR &&
          "IR inputs not support here!");
   
   // Clear out old caches and data.
@@ -1675,7 +1657,7 @@ llvm::MemoryBuffer *ASTUnit::getMainBufferWithPrecompiledPreamble(
   
   return CreatePaddedMainFileBuffer(NewPreamble.first, 
                                     PreambleReservedSize,
-                                    FrontendOpts.Inputs[0].File);
+                                    FrontendOpts.Inputs[0].getFile());
 }
 
 void ASTUnit::RealizeTopLevelDeclsFromPreamble() {
@@ -1706,7 +1688,7 @@ void ASTUnit::transferASTDataFromCompilerInstance(CompilerInstance &CI) {
 }
 
 StringRef ASTUnit::getMainFileName() const {
-  return Invocation->getFrontendOpts().Inputs[0].File;
+  return Invocation->getFrontendOpts().Inputs[0].getFile();
 }
 
 ASTUnit *ASTUnit::create(CompilerInvocation *CI,
@@ -1775,9 +1757,6 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(CompilerInvocation *CI,
   CI->getFrontendOpts().DisableFree = false;
   ProcessWarningOptions(AST->getDiagnostics(), CI->getDiagnosticOpts());
 
-  // Save the target features.
-  AST->TargetFeatures = CI->getTargetOpts().Features;
-
   // Create the compiler instance to use for building the AST.
   OwningPtr<CompilerInstance> Clang(new CompilerInstance());
 
@@ -1786,14 +1765,13 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(CompilerInvocation *CI,
     CICleanup(Clang.get());
 
   Clang->setInvocation(CI);
-  AST->OriginalSourceFile = Clang->getFrontendOpts().Inputs[0].File;
+  AST->OriginalSourceFile = Clang->getFrontendOpts().Inputs[0].getFile();
     
   // Set up diagnostics, capturing any diagnostics that would
   // otherwise be dropped.
   Clang->setDiagnostics(&AST->getDiagnostics());
   
   // Create the target instance.
-  Clang->getTargetOpts().Features = AST->TargetFeatures;
   Clang->setTarget(TargetInfo::CreateTargetInfo(Clang->getDiagnostics(),
                    Clang->getTargetOpts()));
   if (!Clang->hasTarget())
@@ -1807,9 +1785,9 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(CompilerInvocation *CI,
   
   assert(Clang->getFrontendOpts().Inputs.size() == 1 &&
          "Invocation must have exactly one source file!");
-  assert(Clang->getFrontendOpts().Inputs[0].Kind != IK_AST &&
+  assert(Clang->getFrontendOpts().Inputs[0].getKind() != IK_AST &&
          "FIXME: AST inputs not yet supported here!");
-  assert(Clang->getFrontendOpts().Inputs[0].Kind != IK_LLVM_IR &&
+  assert(Clang->getFrontendOpts().Inputs[0].getKind() != IK_LLVM_IR &&
          "IR inputs not supported here!");
 
   // Configure the various subsystems.
@@ -1882,9 +1860,6 @@ bool ASTUnit::LoadFromCompilerInvocation(bool PrecompilePreamble) {
   Invocation->getFrontendOpts().DisableFree = false;
   ProcessWarningOptions(getDiagnostics(), Invocation->getDiagnosticOpts());
 
-  // Save the target features.
-  TargetFeatures = Invocation->getTargetOpts().Features;
-  
   llvm::MemoryBuffer *OverrideMainBuffer = 0;
   if (PrecompilePreamble) {
     PreambleRebuildCounter = 2;
@@ -1956,8 +1931,8 @@ ASTUnit *ASTUnit::LoadFromCommandLine(const char **ArgBegin,
   if (!Diags.getPtr()) {
     // No diagnostics engine was provided, so create our own diagnostics object
     // with the default options.
-    DiagnosticOptions DiagOpts;
-    Diags = CompilerInstance::createDiagnostics(DiagOpts, ArgEnd - ArgBegin, 
+    Diags = CompilerInstance::createDiagnostics(new DiagnosticOptions(),
+                                                ArgEnd - ArgBegin,
                                                 ArgBegin);
   }
 
@@ -2047,7 +2022,6 @@ bool ASTUnit::Reparse(RemappedFile *RemappedFiles, unsigned NumRemappedFiles) {
 
   // Remap files.
   PreprocessorOptions &PPOpts = Invocation->getPreprocessorOpts();
-  PPOpts.DisableStatCache = true;
   for (PreprocessorOptions::remapped_file_buffer_iterator 
          R = PPOpts.remapped_file_buffer_begin(),
          REnd = PPOpts.remapped_file_buffer_end();
@@ -2384,7 +2358,7 @@ void ASTUnit::CodeComplete(StringRef File, unsigned Line, unsigned Column,
     CICleanup(Clang.get());
 
   Clang->setInvocation(&*CCInvocation);
-  OriginalSourceFile = Clang->getFrontendOpts().Inputs[0].File;
+  OriginalSourceFile = Clang->getFrontendOpts().Inputs[0].getFile();
     
   // Set up diagnostics, capturing any diagnostics produced.
   Clang->setDiagnostics(&Diag);
@@ -2394,7 +2368,6 @@ void ASTUnit::CodeComplete(StringRef File, unsigned Line, unsigned Column,
                                     StoredDiagnostics);
   
   // Create the target instance.
-  Clang->getTargetOpts().Features = TargetFeatures;
   Clang->setTarget(TargetInfo::CreateTargetInfo(Clang->getDiagnostics(),
                                                Clang->getTargetOpts()));
   if (!Clang->hasTarget()) {
@@ -2410,9 +2383,9 @@ void ASTUnit::CodeComplete(StringRef File, unsigned Line, unsigned Column,
   
   assert(Clang->getFrontendOpts().Inputs.size() == 1 &&
          "Invocation must have exactly one source file!");
-  assert(Clang->getFrontendOpts().Inputs[0].Kind != IK_AST &&
+  assert(Clang->getFrontendOpts().Inputs[0].getKind() != IK_AST &&
          "FIXME: AST inputs not yet supported here!");
-  assert(Clang->getFrontendOpts().Inputs[0].Kind != IK_LLVM_IR &&
+  assert(Clang->getFrontendOpts().Inputs[0].getKind() != IK_LLVM_IR &&
          "IR inputs not support here!");
 
   
@@ -2441,8 +2414,6 @@ void ASTUnit::CodeComplete(StringRef File, unsigned Line, unsigned Column,
     = new AugmentedCodeCompleteConsumer(*this, Consumer, CodeCompleteOpts);
   Clang->setCodeCompletionConsumer(AugmentedConsumer);
 
-  Clang->getFrontendOpts().SkipFunctionBodies = true;
-
   // If we have a precompiled preamble, try to use it. We only allow
   // the use of the precompiled preamble if we're if the completion
   // point is within the main file, after the end of the precompiled
@@ -2463,7 +2434,6 @@ void ASTUnit::CodeComplete(StringRef File, unsigned Line, unsigned Column,
 
   // If the main file has been overridden due to the use of a preamble,
   // make that override happen and introduce the preamble.
-  PreprocessorOpts.DisableStatCache = true;
   StoredDiagnostics.insert(StoredDiagnostics.end(),
                            stored_diag_begin(),
                            stored_diag_afterDriver_begin());
@@ -2481,8 +2451,9 @@ void ASTUnit::CodeComplete(StringRef File, unsigned Line, unsigned Column,
     PreprocessorOpts.PrecompiledPreambleBytes.second = false;
   }
 
-  // Disable the preprocessing record
-  PreprocessorOpts.DetailedRecord = false;
+  // Disable the preprocessing record if modules are not enabled.
+  if (!Clang->getLangOpts().Modules)
+    PreprocessorOpts.DetailedRecord = false;
   
   OwningPtr<SyntaxOnlyAction> Act;
   Act.reset(new SyntaxOnlyAction);
@@ -2536,7 +2507,7 @@ static bool serializeUnit(ASTWriter &Writer,
                           Sema &S,
                           bool hasErrors,
                           raw_ostream &OS) {
-  Writer.WriteAST(S, 0, std::string(), 0, "", hasErrors);
+  Writer.WriteAST(S, std::string(), 0, "", hasErrors);
 
   // Write the generated bitstream to "Out".
   if (!Buffer.empty())

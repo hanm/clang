@@ -237,6 +237,10 @@ void CodeGenFunction::SimplifyForwardingBlocks(llvm::BasicBlock *BB) {
   if (!BI || !BI->isUnconditional())
     return;
 
+  // Can only simplify empty blocks.
+  if (BI != BB->begin())
+    return;
+
   BB->replaceAllUsesWith(BI->getSuccessor(0));
   BI->eraseFromParent();
   BB->eraseFromParent();
@@ -1276,6 +1280,10 @@ SimplifyConstraint(const char *Constraint, const TargetInfo &Target,
     case '=': // Will see this and the following in mult-alt constraints.
     case '+':
       break;
+    case '#': // Ignore the rest of the constraint alternative.
+      while (Constraint[1] && Constraint[1] != ',')
+	Constraint++;
+      break;
     case ',':
       Result += "|";
       break;
@@ -1632,9 +1640,9 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
     llvm::InlineAsm::get(FTy, AsmString, Constraints, HasSideEffect,
                          /* IsAlignStack */ false, AsmDialect);
   llvm::CallInst *Result = Builder.CreateCall(IA, Args);
-  llvm::Attributes::Builder B;
-  B.addAttribute(llvm::Attributes::NoUnwind);
-  Result->addAttribute(~0, llvm::Attributes::get(B));
+  Result->addAttribute(llvm::AttrListPtr::FunctionIndex,
+                       llvm::Attributes::get(getLLVMContext(),
+                                             llvm::Attributes::NoUnwind));
 
   // Slap the source location of the inline asm into a !srcloc metadata on the
   // call.  FIXME: Handle metadata for MS-style inline asms.

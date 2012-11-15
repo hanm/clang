@@ -113,6 +113,7 @@ public:
   void EmitInstanceFunctionProlog(CodeGenFunction &CGF);
 
   StringRef GetPureVirtualCallName() { return "__cxa_pure_virtual"; }
+  StringRef GetDeletedVirtualCallName() { return "__cxa_deleted_virtual"; }
 
   CharUnits getArrayCookieSizeImpl(QualType elementType);
   llvm::Value *InitializeArrayCookie(CodeGenFunction &CGF,
@@ -303,7 +304,7 @@ llvm::Value *ItaniumCXXABI::EmitMemberDataPointerAddress(CodeGenFunction &CGF,
 
   CGBuilderTy &Builder = CGF.Builder;
 
-  unsigned AS = cast<llvm::PointerType>(Base->getType())->getAddressSpace();
+  unsigned AS = Base->getType()->getPointerAddressSpace();
 
   // Cast to char*.
   Base = Builder.CreateBitCast(Base, Builder.getInt8Ty()->getPointerTo(AS));
@@ -833,7 +834,7 @@ llvm::Value *ItaniumCXXABI::InitializeArrayCookie(CodeGenFunction &CGF,
                                                   QualType ElementType) {
   assert(requiresArrayCookie(expr));
 
-  unsigned AS = cast<llvm::PointerType>(NewPtr->getType())->getAddressSpace();
+  unsigned AS = NewPtr->getType()->getPointerAddressSpace();
 
   ASTContext &Ctx = getContext();
   QualType SizeTy = Ctx.getSizeType();
@@ -875,7 +876,7 @@ llvm::Value *ItaniumCXXABI::readArrayCookieImpl(CodeGenFunction &CGF,
       CGF.Builder.CreateConstInBoundsGEP1_64(numElementsPtr,
                                              numElementsOffset.getQuantity());
 
-  unsigned AS = cast<llvm::PointerType>(allocPtr->getType())->getAddressSpace();
+  unsigned AS = allocPtr->getType()->getPointerAddressSpace();
   numElementsPtr = 
     CGF.Builder.CreateBitCast(numElementsPtr, CGF.SizeTy->getPointerTo(AS));
   return CGF.Builder.CreateLoad(numElementsPtr);
@@ -901,7 +902,7 @@ llvm::Value *ARMCXXABI::InitializeArrayCookie(CodeGenFunction &CGF,
 
   // NewPtr is a char*.
 
-  unsigned AS = cast<llvm::PointerType>(NewPtr->getType())->getAddressSpace();
+  unsigned AS = NewPtr->getType()->getPointerAddressSpace();
 
   ASTContext &Ctx = getContext();
   CharUnits SizeSize = Ctx.getTypeSizeInChars(Ctx.getSizeType());
@@ -936,7 +937,7 @@ llvm::Value *ARMCXXABI::readArrayCookieImpl(CodeGenFunction &CGF,
   llvm::Value *numElementsPtr
     = CGF.Builder.CreateConstInBoundsGEP1_64(allocPtr, CGF.SizeSizeInBytes);
 
-  unsigned AS = cast<llvm::PointerType>(allocPtr->getType())->getAddressSpace();
+  unsigned AS = allocPtr->getType()->getPointerAddressSpace();
   numElementsPtr = 
     CGF.Builder.CreateBitCast(numElementsPtr, CGF.SizeTy->getPointerTo(AS));
   return CGF.Builder.CreateLoad(numElementsPtr);
@@ -950,10 +951,9 @@ static llvm::Constant *getGuardAcquireFn(CodeGenModule &CGM,
   llvm::FunctionType *FTy =
     llvm::FunctionType::get(CGM.getTypes().ConvertType(CGM.getContext().IntTy),
                             GuardPtrTy, /*isVarArg=*/false);
-  llvm::Attributes::Builder B;
-  B.addAttribute(llvm::Attributes::NoUnwind);
   return CGM.CreateRuntimeFunction(FTy, "__cxa_guard_acquire",
-                                   llvm::Attributes::get(B));
+                                   llvm::Attributes::get(CGM.getLLVMContext(),
+                                                 llvm::Attributes::NoUnwind));
 }
 
 static llvm::Constant *getGuardReleaseFn(CodeGenModule &CGM,
@@ -961,10 +961,9 @@ static llvm::Constant *getGuardReleaseFn(CodeGenModule &CGM,
   // void __cxa_guard_release(__guard *guard_object);
   llvm::FunctionType *FTy =
     llvm::FunctionType::get(CGM.VoidTy, GuardPtrTy, /*isVarArg=*/false);
-  llvm::Attributes::Builder B;
-  B.addAttribute(llvm::Attributes::NoUnwind);
   return CGM.CreateRuntimeFunction(FTy, "__cxa_guard_release",
-                                   llvm::Attributes::get(B));
+                                   llvm::Attributes::get(CGM.getLLVMContext(),
+                                                 llvm::Attributes::NoUnwind));
 }
 
 static llvm::Constant *getGuardAbortFn(CodeGenModule &CGM,
@@ -972,10 +971,9 @@ static llvm::Constant *getGuardAbortFn(CodeGenModule &CGM,
   // void __cxa_guard_abort(__guard *guard_object);
   llvm::FunctionType *FTy =
     llvm::FunctionType::get(CGM.VoidTy, GuardPtrTy, /*isVarArg=*/false);
-  llvm::Attributes::Builder B;
-  B.addAttribute(llvm::Attributes::NoUnwind);
   return CGM.CreateRuntimeFunction(FTy, "__cxa_guard_abort",
-                                   llvm::Attributes::get(B));
+                                   llvm::Attributes::get(CGM.getLLVMContext(),
+                                                 llvm::Attributes::NoUnwind));
 }
 
 namespace {
@@ -1175,7 +1173,7 @@ void ItaniumCXXABI::registerGlobalDtor(CodeGenFunction &CGF,
 
   // In Apple kexts, we want to add a global destructor entry.
   // FIXME: shouldn't this be guarded by some variable?
-  if (CGM.getContext().getLangOpts().AppleKext) {
+  if (CGM.getLangOpts().AppleKext) {
     // Generate a global destructor entry.
     return CGM.AddCXXDtorEntry(dtor, addr);
   }

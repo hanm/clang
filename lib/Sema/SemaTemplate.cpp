@@ -333,7 +333,8 @@ void Sema::LookupTemplateName(LookupResult &Found,
         if (LookupCtx)
           Diag(Found.getNameLoc(), diag::err_no_member_template_suggest)
             << Name << LookupCtx << CorrectedQuotedStr << SS.getRange()
-            << FixItHint::CreateReplacement(Found.getNameLoc(), CorrectedStr);
+            << FixItHint::CreateReplacement(Corrected.getCorrectionRange(),
+                                            CorrectedStr);
         else
           Diag(Found.getNameLoc(), diag::err_no_template_suggest)
             << Name << CorrectedQuotedStr
@@ -2386,7 +2387,7 @@ TemplateNameKind Sema::ActOnDependentTemplateName(Scope *S,
     // "template" keyword is now permitted). We follow the C++0x
     // rules, even in C++03 mode with a warning, retroactively applying the DR.
     bool MemberOfUnknownSpecialization;
-    TemplateNameKind TNK = isTemplateName(0, SS, TemplateKWLoc.isValid(), Name,
+    TemplateNameKind TNK = isTemplateName(S, SS, TemplateKWLoc.isValid(), Name,
                                           ObjectType, EnteringContext, Result,
                                           MemberOfUnknownSpecialization);
     if (TNK == TNK_Non_template && LookupCtx->isDependentContext() &&

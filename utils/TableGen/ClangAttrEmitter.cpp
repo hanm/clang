@@ -47,7 +47,7 @@ static std::string ReadPCHRecord(StringRef type) {
     .EndsWith("Decl *", "GetLocalDeclAs<" 
               + std::string(type, 0, type.size()-1) + ">(F, Record[Idx++])")
     .Case("QualType", "getLocalType(F, Record[Idx++])")
-    .Case("Expr *", "ReadSubExpr()")
+    .Case("Expr *", "ReadExpr(F)")
     .Case("IdentifierInfo *", "GetIdentifierInfo(F, Record, Idx)")
     .Case("SourceLocation", "ReadSourceLocation(F, Record, Idx)")
     .Default("Record[Idx++]");
@@ -743,8 +743,6 @@ void EmitClangAttrClass(RecordKeeper &Records, raw_ostream &OS) {
 
     OS << "  static bool classof(const Attr *A) { return A->getKind() == "
        << "attr::" << R.getName() << "; }\n";
-    OS << "  static bool classof(const " << R.getName()
-       << "Attr *) { return true; }\n";
 
     bool LateParsed = R.getValueAsBit("LateParsed");
     OS << "  virtual bool isLateParsed() const { return "

@@ -156,7 +156,8 @@ void DeclInfo::fill() {
     IsFilled = true;
     return;
   }
-
+  CurrentDecl = CommentDecl;
+  
   Decl::Kind K = CommentDecl->getKind();
   switch (K) {
   default:
@@ -302,6 +303,25 @@ void DeclInfo::fill() {
   }
 
   IsFilled = true;
+}
+
+StringRef ParamCommandComment::getParamName(const FullComment *FC) const {
+  assert(isParamIndexValid());
+  return FC->getThisDeclInfo()->ParamVars[getParamIndex()]->getName();
+}
+
+StringRef TParamCommandComment::getParamName(const FullComment *FC) const {
+  assert(isPositionValid());
+  const TemplateParameterList *TPL = FC->getThisDeclInfo()->TemplateParameters;
+  for (unsigned i = 0, e = getDepth(); i != e; ++i) {
+    if (i == e-1)
+      return TPL->getParam(getIndex(i))->getName();
+    const NamedDecl *Param = TPL->getParam(getIndex(i));
+    if (const TemplateTemplateParmDecl *TTP =
+          dyn_cast<TemplateTemplateParmDecl>(Param))
+      TPL = TTP->getTemplateParameters();
+  }
+  return "";
 }
 
 } // end namespace comments

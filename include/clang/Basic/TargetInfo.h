@@ -23,6 +23,7 @@
 #include "llvm/ADT/Triple.h"
 #include "llvm/Support/DataTypes.h"
 #include "clang/Basic/AddressSpaces.h"
+#include "clang/Basic/TargetOptions.h"
 #include "clang/Basic/VersionTuple.h"
 #include "clang/Basic/Specifiers.h"
 #include <cassert>
@@ -39,7 +40,6 @@ class LangOptions;
 class MacroBuilder;
 class SourceLocation;
 class SourceManager;
-class TargetOptions;
 
 namespace Builtin { struct Info; }
 
@@ -62,6 +62,7 @@ enum TargetCXXABI {
 /// \brief Exposes information about the current target.
 ///
 class TargetInfo : public RefCountedBase<TargetInfo> {
+  llvm::IntrusiveRefCntPtr<TargetOptions> TargetOpts;
   llvm::Triple Triple;
 protected:
   // Target values set by the ctor of the actual target implementation.  Default
@@ -111,6 +112,16 @@ public:
                                       TargetOptions &Opts);
 
   virtual ~TargetInfo();
+
+  /// \brief Retrieve the target options.
+  TargetOptions &getTargetOpts() const { 
+    assert(TargetOpts && "Missing target options");
+    return *TargetOpts; 
+  }
+
+  void setTargetOpts(TargetOptions &TargetOpts) {
+    this->TargetOpts = &TargetOpts;
+  }
 
   ///===---- Target Data Type Query Methods -------------------------------===//
   enum IntType {
@@ -506,6 +517,15 @@ public:
   bool validateInputConstraint(ConstraintInfo *OutputConstraints,
                                unsigned NumOutputs,
                                ConstraintInfo &info) const;
+  virtual bool validateInputSize(StringRef /*Constraint*/,
+                                 unsigned /*Size*/) const {
+    return true;
+  }
+  virtual bool validateConstraintModifier(StringRef /*Constraint*/,
+                                          const char /*Modifier*/,
+                                          unsigned /*Size*/) const {
+    return true;
+  }
   bool resolveSymbolicName(const char *&Name,
                            ConstraintInfo *OutputConstraints,
                            unsigned NumOutputs, unsigned &Index) const;

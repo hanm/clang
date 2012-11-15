@@ -87,11 +87,13 @@ void Preprocessor::addLoadedMacroInfo(IdentifierInfo *II, MacroInfo *MI,
     }
 
     // Find the end of the definition chain.
-    MacroInfo *Prev = StoredMI;
-    MacroInfo *PrevPrev;
+    MacroInfo *Prev;
+    MacroInfo *PrevPrev = StoredMI;
     bool Ambiguous = StoredMI->isAmbiguous();
     bool MatchedOther = false;
     do {
+      Prev = PrevPrev;
+
       // If the macros are not identical, we have an ambiguity.
       if (!Prev->isIdenticalTo(*MI, *this)) {
         if (!Ambiguous) {
@@ -125,25 +127,29 @@ void Preprocessor::addLoadedMacroInfo(IdentifierInfo *II, MacroInfo *MI,
 void Preprocessor::makeLoadedMacroInfoVisible(IdentifierInfo *II,
                                               MacroInfo *MI) {
   assert(MI->isFromAST() && "Macro must be from the AST");
-  assert(MI->isDefined() && "Macro is not visible");
 
   MacroInfo *&StoredMI = Macros[II];
   if (StoredMI == MI) {
     // Easy case: this is the first macro anyway.
-    II->setHasMacroDefinition(true);
+    II->setHasMacroDefinition(MI->isDefined());
     return;
   }
 
   // Go find the macro and pull it out of the list.
-  // FIXME: Yes, this is O(N), and making a pile of macros visible would be
-  // quadratic.
+  // FIXME: Yes, this is O(N), and making a pile of macros visible or hidden
+  // would be quadratic, but it's extremely rare.
   MacroInfo *Prev = StoredMI;
   while (Prev->getPreviousDefinition() != MI)
     Prev = Prev->getPreviousDefinition();
   Prev->setPreviousDefinition(MI->getPreviousDefinition());
+  MI->setPreviousDefinition(0);
 
   // Add the macro back to the list.
   addLoadedMacroInfo(II, MI);
+
+  II->setHasMacroDefinition(StoredMI->isDefined());
+  if (II->isFromAST())
+    II->setChangedSinceDeserialization();
 }
 
 /// \brief Undefine a macro for this identifier.
@@ -613,9 +619,14 @@ MacroArgs *Preprocessor::ReadFunctionLikeMacroArgs(Token &MacroName,
       // Varargs where the named vararg parameter is missing: OK as extension.
       //   #define A(x, ...)
       //   A("blah")
-      Diag(Tok, diag::ext_missing_varargs_arg);
-      Diag(MI->getDefinitionLoc(), diag::note_macro_here)
-        << MacroName.getIdentifierInfo();
+      //
+      // If the macro contains the comma pasting extension, the diagnostic
+      // is suppressed; we know we'll get another diagnostic later.
+      if (!MI->hasCommaPasting()) {
+        Diag(Tok, diag::ext_missing_varargs_arg);
+        Diag(MI->getDefinitionLoc(), diag::note_macro_here)
+          << MacroName.getIdentifierInfo();
+      }
 
       // Remember this occurred, allowing us to elide the comma when used for
       // cases like:
@@ -739,7 +750,7 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
     Feature = Feature.substr(2, Feature.size() - 4);
 
   return llvm::StringSwitch<bool>(Feature)
-           .Case("address_sanitizer", LangOpts.AddressSanitizer)
+           .Case("address_sanitizer", LangOpts.SanitizeAddress)
            .Case("attribute_analyzer_noreturn", true)
            .Case("attribute_availability", true)
            .Case("attribute_availability_with_message", true)
@@ -919,22 +930,30 @@ static bool HasAttribute(const IdentifierInfo *II) {
 static bool EvaluateHasIncludeCommon(Token &Tok,
                                      IdentifierInfo *II, Preprocessor &PP,
                                      const DirectoryLookup *LookupFrom) {
-  SourceLocation LParenLoc;
+  // Save the location of the current token.  If a '(' is later found, use
+  // that location.  If no, use the end of this location instead.
+  SourceLocation LParenLoc = Tok.getLocation();
 
   // Get '('.
   PP.LexNonComment(Tok);
 
   // Ensure we have a '('.
   if (Tok.isNot(tok::l_paren)) {
-    PP.Diag(Tok.getLocation(), diag::err_pp_missing_lparen) << II->getName();
-    return false;
+    // No '(', use end of last token.
+    LParenLoc = PP.getLocForEndOfToken(LParenLoc);
+    PP.Diag(LParenLoc, diag::err_pp_missing_lparen) << II->getName();
+    // If the next token looks like a filename or the start of one,
+    // assume it is and process it as such.
+    if (!Tok.is(tok::angle_string_literal) && !Tok.is(tok::string_literal) &&
+        !Tok.is(tok::less))
+      return false;
+  } else {
+    // Save '(' location for possible missing ')' message.
+    LParenLoc = Tok.getLocation();
+
+    // Get the file name.
+    PP.getCurrentLexer()->LexIncludeFilename(Tok);
   }
-
-  // Save '(' location for possible missing ')' message.
-  LParenLoc = Tok.getLocation();
-
-  // Get the file name.
-  PP.getCurrentLexer()->LexIncludeFilename(Tok);
 
   // Reserve a buffer to get the spelling.
   SmallString<128> FilenameBuffer;
@@ -959,8 +978,11 @@ static bool EvaluateHasIncludeCommon(Token &Tok,
     // This could be a <foo/bar.h> file coming from a macro expansion.  In this
     // case, glue the tokens together into FilenameBuffer and interpret those.
     FilenameBuffer.push_back('<');
-    if (PP.ConcatenateIncludeName(FilenameBuffer, EndLoc))
+    if (PP.ConcatenateIncludeName(FilenameBuffer, EndLoc)) {
+      // Let the caller know a <eod> was found by changing the Token kind.
+      Tok.setKind(tok::eod);
       return false;   // Found <eod> but no ">"?  Diagnostic already emitted.
+    }
     Filename = FilenameBuffer.str();
     break;
   default:
@@ -968,12 +990,15 @@ static bool EvaluateHasIncludeCommon(Token &Tok,
     return false;
   }
 
+  SourceLocation FilenameLoc = Tok.getLocation();
+
   // Get ')'.
   PP.LexNonComment(Tok);
 
   // Ensure we have a trailing ).
   if (Tok.isNot(tok::r_paren)) {
-    PP.Diag(Tok.getLocation(), diag::err_pp_missing_rparen) << II->getName();
+    PP.Diag(PP.getLocForEndOfToken(FilenameLoc), diag::err_pp_missing_rparen)
+        << II->getName();
     PP.Diag(LParenLoc, diag::note_matching) << "(";
     return false;
   }
@@ -1246,7 +1271,8 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
     else
       Value = EvaluateHasIncludeNext(Tok, II, *this);
     OS << (int)Value;
-    Tok.setKind(tok::numeric_constant);
+    if (Tok.is(tok::r_paren))
+      Tok.setKind(tok::numeric_constant);
   } else if (II == Ident__has_warning) {
     // The argument should be a parenthesized string literal.
     // The argument to these builtins should be a parenthesized identifier.
