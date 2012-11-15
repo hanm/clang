@@ -647,7 +647,7 @@ private:
     
     BugType *BT = new BugType(bugName, bugCategory);
     BugReport *R = new BugReport(*BT, bugStr, VDLoc);
-    BR.EmitReport(R);
+    BR.emitReport(R);
     //BR.EmitBasicReport(D, bugName, bugCategory,
     //                   bugStr, VDLoc, S->getSourceRange());
   }
