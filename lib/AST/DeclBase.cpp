@@ -86,6 +86,8 @@ const char *DeclContext::getDeclKindName() const {
   }
 }
 
+Decl::attr_reverse_iterator Decl::RNull;
+
 bool Decl::StatisticsEnabled = false;
 void Decl::EnableStatistics() {
   StatisticsEnabled = true;

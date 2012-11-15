@@ -415,7 +415,11 @@ public:
       setAttrs(AttrVec(1, A));
   }
 
-  typedef AttrVec::const_iterator attr_iterator;
+  typedef AttrVec::const_iterator         attr_iterator;
+  typedef AttrVec::const_reverse_iterator attr_reverse_iterator;
+
+  /// \brief A null equivalent for reverse iterators
+  static attr_reverse_iterator RNull;
 
   // FIXME: Do not rely on iterators having comparable singular values.
   //        Note that this should error out if they do not.
@@ -424,6 +428,14 @@ public:
   }
   attr_iterator attr_end() const {
     return hasAttrs() ? getAttrs().end() : 0;
+  }
+
+
+  attr_reverse_iterator attr_rbegin() const {
+    return hasAttrs() ? getAttrs().rbegin() : RNull;
+  }
+  attr_reverse_iterator attr_rend() const {
+    return hasAttrs() ? getAttrs().rend() : RNull ;
   }
 
   template <typename T>
@@ -445,6 +457,17 @@ public:
   specific_attr_iterator<T> specific_attr_end() const {
     return specific_attr_iterator<T>(attr_end());
   }
+
+#if 1
+  template <typename T>
+  specific_attr_reverse_iterator<T> specific_attr_rbegin() const {
+    return specific_attr_reverse_iterator<T>(attr_rbegin());
+  }
+  template <typename T>
+  specific_attr_reverse_iterator<T> specific_attr_rend() const {
+    return specific_attr_reverse_iterator<T>(attr_rend());
+  }
+#endif
 
   template<typename T> T *getAttr() const {
     return hasAttrs() ? getSpecificAttr<T>(getAttrs()) : 0;
