@@ -8,9 +8,9 @@ __attribute__ ((param("P")))
 __attribute__((arg("P:Money"))) // expected-warning {{attribute only applies to fields}}
 Coo {
 
-  int __attribute__((arg("P:Money")))
-      __attribute__ ((param("P")))  // expected-warning {{attribute only applies to classes and structs and functions}}
-      __attribute__((region("Honey"))) money; // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
+  int money __attribute__((arg("P:Money")))
+            __attribute__ ((param("P")))      // expected-warning {{attribute only applies to classes and structs and functions}}
+            __attribute__((region("Honey"))); // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
 
 public:
   Coo () __attribute__((no_effect)) 
@@ -42,8 +42,8 @@ public:
 
 __attribute__((region("Roo"))) 
 int main (void) {
-  Coo __attribute__((arg("Roo"))) c;
-  Coo __attribute__((arg("Rah"))) *d = new Coo __attribute__((arg("Root:Rah"))) (77);
+  Coo c __attribute__((arg("Roo")));
+  Coo *d __attribute__((arg("Rah"))) = new Coo __attribute__((arg("Root:Rah"))) (77);
   int five __attribute__((arg("Boo"))) = 4+1;
   int six  = 4+2;
   return 0;
@@ -58,9 +58,9 @@ class
 [[asap::arg("P:Money")]] // expected-warning {{attribute only applies to fields}}
 Coo {
 
-  int [[asap::arg("P:Money")]]
-      [[asap::param("P")]]  // expected-warning {{attribute only applies to classes and structs and functions}}
-      [[asap::region("Honey")]] money ; // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
+  int money [[asap::arg("P:Money")]]
+            [[asap::param("P")]]        // expected-warning {{attribute only applies to classes and structs and functions}}
+            [[asap::region("Honey")]] ; // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
 
 public:
   Coo () [[asap::no_effect]] 
@@ -92,8 +92,8 @@ public:
 
 [[asap::region("Roo")]] 
 int main (void) {
-  Coo [[asap::arg("Roo")]] c;
-  Coo [[asap::arg("Rah")]] *d = new Coo [[asap::arg("Root:Rah")]] (77);
+  Coo c [[asap::arg("Roo")]];
+  Coo *d [[asap::arg("Rah")]] = new Coo [[asap::arg("Root:Rah")]] (77);
   int five [[asap::arg("Boo")]] = 4+1;
   int six  = 4+2;
   return 0;

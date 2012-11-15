@@ -24,7 +24,7 @@ public:
 __attribute__((region("Roo")))  
 __attribute__((region("Raa")))
 int main (void) {
-  Coo __attribute__((arg("Roo"))) __attribute__((arg("Raa"))) c; // "syntactically" correct, semantically wrong
+  Coo c __attribute__((arg("Roo"))) __attribute__((arg("Raa"))); // "syntactically" correct, semantically wrong
   c.set_money(17);
   return 0; 
 }
@@ -53,7 +53,7 @@ public:
 [[asap::region("Roo")]] 
 [[asap::region("Raa")]]
 int main (void) {
-  Coo [[asap::arg("Roo")]] [[asap::arg("Raa")]] c; // "syntactically" correct, semantically wrong
+  Coo c [[asap::arg("Roo")]] [[asap::arg("Raa")]]; // "syntactically" correct, semantically wrong
   c.set_money(17);
   return 0; 
 }

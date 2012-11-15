@@ -2,6 +2,7 @@
 // RUN: %clang_cc1 -DASAP_CXX11_SYNTAX -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
 //
 
+
 #ifdef ASAP_GNU_SYNTAX
 namespace Shapes __attribute__((region("Pool"))) {
 
@@ -92,5 +93,6 @@ void do_reference_stuff() ;
 #endif
 
 #ifdef ASAP_CXX11_SYNTAX
+// expected-no-diagnostics
 
 #endif

@@ -7,7 +7,7 @@ class
 __attribute__ ((param)) // expected-error {{attribute takes one argument}}
 __attribute__((region)) // expected-error {{attribute takes one argument}}
 Coo {
-  int __attribute__((arg)) money; // expected-error {{attribute takes one argument}}
+  int money __attribute__((arg)); // expected-error {{attribute takes one argument}}
 
 public:
   Coo (): money(70) {}
@@ -25,7 +25,7 @@ class
 __attribute__ ((param("P", "P2")))  // expected-error {{attribute takes one argument}}
 __attribute__((region("Links", "Butter"))) // expected-error {{attribute takes one argument}}
 Gar {
-  int __attribute__((arg("P:Links", "Links:Butter"))) money; // expected-error {{attribute takes one argument}}
+  int money __attribute__((arg("P:Links", "Links:Butter"))); // expected-error {{attribute takes one argument}}
 
 public:
   Gar (): money(70) {}
@@ -44,8 +44,8 @@ public:
 __attribute__((region("Roo")))  
 __attribute__((region("Raa")))
 int main (void) {
-  Coo __attribute__((arg)) c; // expected-error {{attribute takes one argument}}
-  Gar __attribute__((arg("Roo", "Raa"))) g; // expected-error {{attribute takes one argument}}
+  Coo c __attribute__((arg)); // expected-error {{attribute takes one argument}}
+  Gar g __attribute__((arg("Roo", "Raa"))); // expected-error {{attribute takes one argument}}
   g.set_money(17);
   return 0; 
 }
@@ -58,7 +58,7 @@ class
 [[asap::param]] // expected-error {{attribute takes one argument}}
 [[asap::region]] // expected-error {{attribute takes one argument}}
 Coo {
-  int [[asap::arg]] money; // expected-error {{attribute takes one argument}}
+  int money [[asap::arg]]; // expected-error {{attribute takes one argument}}
 
 public:
   Coo (): money(70) {}
@@ -76,7 +76,7 @@ class
 [[asap::param("P", "P2")]]  // expected-error {{attribute takes one argument}}
 [[asap::region("Links", "Butter")]] // expected-error {{attribute takes one argument}}
 Gar {
-  int [[asap::arg("P:Links", "Links:Butter")]] money; // expected-error {{attribute takes one argument}}
+  int money [[asap::arg("P:Links", "Links:Butter")]]; // expected-error {{attribute takes one argument}}
 
 public:
   Gar (): money(70) {}
@@ -95,8 +95,8 @@ public:
 [[asap::region("Roo")]]  
 [[asap::region("Raa")]]
 int main (void) {
-  Coo [[asap::arg]] c; // expected-error {{attribute takes one argument}}
-  Gar [[asap::arg("Roo", "Raa")]] g; // expected-error {{attribute takes one argument}}
+  Coo c [[asap::arg]]; // expected-error {{attribute takes one argument}}
+  Gar g [[asap::arg("Roo", "Raa")]]; // expected-error {{attribute takes one argument}}
   g.set_money(17);
   return 0; 
 }

@@ -1,12 +1,14 @@
 // RUN: %clang_cc1 -DASAP_GNU_SYNTAX %s -verify
 // RUN: %clang_cc1 -DASAP_CXX11_SYNTAX -std=c++11 %s -verify
 
+// expected-no-diagnostics
+//
 #ifdef ASAP_GNU_SYNTAX
 class 
 __attribute__((region("Links")))
 __attribute__ ((param("P"))) 
 Coo {
-  int __attribute__((arg("Roo"))) money;
+  int money __attribute__((arg("Roo")));
 
 public:
   Coo (): money(70) {}
@@ -23,7 +25,7 @@ public:
 
 __attribute__((region("Roo"))) 
 int main (void) {
-  Coo __attribute__((arg("Roo"))) c;
+  Coo c __attribute__((arg("Roo")));
   c.set_money(42);
   return 0; 
 }
@@ -34,7 +36,7 @@ class
 [[asap::region("Links")]]
 [[asap::param("P")]]
 Coo {
-  int [[asap::arg("P:Links")]] money;
+  int money [[asap::arg("P:Links")]];
 
 public:
   Coo (): money(70) {}
@@ -50,7 +52,7 @@ public:
 
 [[asap::region("Roo")]]
 int main (void) {
-  Coo [[asap::arg("Roo")]] c; 
+  Coo c [[asap::arg("Roo")]]; 
   c.set_money(42);
   return 0; 
 }

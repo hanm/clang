@@ -8,7 +8,7 @@ __attribute__ ((param("P")))
 __attribute__ ((atomic_reads("Lala"))) // expected-warning {{attribute only applies to functions}}
 Coo {
 
-  int __attribute__((arg("P:Money"))) money;
+  int money __attribute__((arg("P:Money")));
 
 public:
   Coo () __attribute__((no_effect)) : money(0) {}
@@ -32,7 +32,7 @@ public:
 
 __attribute__((region("Roo"))) 
 int main (void) {
-  Coo __attribute__((arg("Roo"))) c __attribute__((no_effect)); // expected-warning {{attribute only applies to functions}}
+  Coo c __attribute__((arg("Roo"))) __attribute__((no_effect)); // expected-warning {{attribute only applies to functions}}
   int five __attribute__ ((reads("Roo"))) = 4+1; // expected-warning {{attribute only applies to functions}}
   int six __attribute__ ((no_effect)) = 4+2; // expected-warning {{attribute only applies to functions}}
   return 0; 
@@ -47,7 +47,7 @@ class
 [[asap::atomic_reads("Lala")]] // expected-warning {{attribute only applies to functions}}
 Coo {
 
-  int [[asap::arg("P:Money")]] money;
+  int money [[asap::arg("P:Money")]];
 
 public:
   Coo () [[asap::no_effect]] : money(0) {}
@@ -71,7 +71,7 @@ public:
 
 [[asap::region("Roo")]] 
 int main (void) {
-  Coo [[asap::arg("Roo")]] c [[asap::no_effect]]; // expected-warning {{attribute only applies to functions}}
+  Coo c [[asap::arg("Roo")]] [[asap::no_effect]]; // expected-warning {{attribute only applies to functions}}
   int five [[asap::reads("Roo")]] = 4+1; // expected-warning {{attribute only applies to functions}}
   int six [[asap::no_effect]] = 4+2; // expected-warning {{attribute only applies to functions}}
   return 0; 
