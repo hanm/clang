@@ -27,23 +27,26 @@ __attribute__((region("Links")))
 Rectangle {
 
 // Fields
-Point __attribute__((arg("Pr:R1"))) p1;
-Point __attribute__((arg("Pr:R2"))) p2;
+Point p1 __attribute__((arg("Pr:R1")));
+Point p2 __attribute__((arg("Pr:R2")));
 
-Point __attribute__((arg("Pool:*"))) 
-  * pp __attribute__((arg("Pr:Links"))),
-  **ppp __attribute__((arg("Links"), arg("Pr:Links")));
+Point 
+  * pp __attribute__((arg("Pr:Links"), arg("Pool:*"))),
+  **ppp __attribute__((arg("Links"), arg("Pr:Links"), arg("Pool:*")));
 
-Point __attribute__((arg("Pr:*"))) 
-  * ppstar __attribute__((arg("Pr:Links"))),
-  **pppstar __attribute__((arg("Links"), arg("Pr:*:Links")));
+Point
+  * ppstar __attribute__((arg("Pr:Links"), arg("Pr:*"))),
+  * ppstar1 __attribute__((arg("Pr:Links"), arg("Pr:*:R1"))),
+  **pppstar __attribute__((arg("Links"), arg("Pr:*:Links"),arg("Pr:*")));
 
-Rectangle __attribute__((arg("Pr:Next"))) 
-  * next __attribute__((arg("Pr:Links"))),
-  ** pnext __attribute((arg("Links"), arg("Pr:Links")));
+Rectangle
+  * loop __attribute__((arg("Pr:Links"), arg("*"))),
+  * next __attribute__((arg("Pr:Links"), arg("Pr:Next"))),
+  ** pnext __attribute((arg("Links"), arg("Pr:Links"), arg("Pr:Next")));
 
-Rectangle __attribute__((arg("Pr:*:Next"))) 
-  ** pnextstar __attribute((arg("Links"), arg("Pr:Links")));
+Rectangle ** pnextstar __attribute((arg("Links"), 
+                                    arg("Pr:Links"), 
+                                    arg("Pr:*:Next")));
 
 void do_pointer_stuff(int _x, int _y) 
   __attribute__((writes("Pr:R1:*")))
@@ -64,6 +67,12 @@ void do_pointer_stuff(int _x, int _y)
   *ppp = ppstar = &p2;         // reads Links, writes Pr:Links          expected-warning{{RHS region 'Pr:*' is not included in LHS region 'Pool:*' invalid assignment}}
   *pppstar = ppstar = &p2;         // reads Links, writes Pr:Links
   *pppstar = &p2;         // reads Links, writes Pr:Links
+  ppstar1 = &p1;
+  ppstar1 = &p2;      // expected-warning{{invalid assignment}}
+  pppstar = &ppstar1;
+
+  *pppstar = &p2;     // expected-warning{{invalid assignment}}
+
   *ppp = *&pp;        // reads Links, writes Pr:Links + reads Pr:Links
   *ppp = next->pp;    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
   *ppp = *&(next->pp);    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
@@ -71,9 +80,11 @@ void do_pointer_stuff(int _x, int _y)
   pppstar = &next->ppstar;        // writes Links + reads Pr:Links
   *ppp = *(*&next->ppp);  // reads Links, writes Pr:Links + reads Links, Pr:Links, Pr:Next:Links
   *ppp = &*pp;            // reads Links, writes Pr:Links + reads Pr:Links
-  //next = this;        // writes Pr:Links (the 'this' pointer is immutable, so 
+  next = this;        // writes Pr:Links (the 'this' pointer is immutable, so   expected-warning{{RHS region 'Pr' is not included in LHS region 'Pr:Next' invalid assignment}}
                       // write effects are not possible and read effects on it 
                       // can be discarded
+  loop = this;
+  loop = next;
 
   pnext = &next;              // writes Links 
   *pnext = next->next;        // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links         expected-warning{{invalid assignment}}
