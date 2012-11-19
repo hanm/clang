@@ -870,7 +870,7 @@ public:
         while(i!=e) {
           RegionArgAttr *arg = *i;
           Rpl *rpl = new Rpl(arg->getRpl());           
-          (*tmpRegions).push_back(rpl);
+          tmpRegions->push_back(rpl);
           os << "DEBUG:: adding RPL for typechecking ~~~~~~~~~~ " 
              << rpl->toString() << "\n";
           i++; 
@@ -1029,6 +1029,22 @@ public:
   void VisitCXXThisExpr(CXXThisExpr* E) {
     os << "DEBUG:: visiting 'this' expression\n";
     nDerefs = 0;
+    if (tmpRegions->empty() && !E->isImplicit()) {
+      // Add parameter as implicit argument
+      CXXRecordDecl* rd = const_cast<CXXRecordDecl*>(E->getBestDynamicClassType());
+      assert(rd);
+      if (!rd->getAttr<RegionArgAttr>()) {
+        const RegionParamAttr *param = rd->getAttr<RegionParamAttr>();
+        assert(param);
+        rd->addAttr(::new (rd->getASTContext()) 
+                    RegionArgAttr(param->getRange(), rd->getASTContext(), param->getName()));
+        
+      }
+      const RegionArgAttr* arg = rd->getAttr<RegionArgAttr>();
+      assert(arg);
+      Rpl *rpl = new Rpl(arg->getRpl());           
+      tmpRegions->push_back(rpl);
+    }
   }
 
   inline void helperVisitAssignment(BinaryOperator *E) {
