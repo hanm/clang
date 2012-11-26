@@ -99,6 +99,7 @@ namespace {
   }
   
   // TODO pass arg attr as parameter
+  /*
   inline bool hasValidRegionParamAttr(const Type* T) { 
     bool result = false;
     if (const TagType* tt = dyn_cast<TagType>(T)) {
@@ -111,7 +112,7 @@ namespace {
       result = true;
     } 
     return result;
-  }
+  }*/
 
   // FIXME
   inline const RegionParamAttr* getRegionParamAttr(const Type* T) { 
@@ -198,6 +199,101 @@ namespace {
   }
 
 ///-///////////////////////////////////////////////////////////////////////////
+/// RplElement Class
+
+class Rpl; 
+
+class RplElement {
+public:
+  bool isFullySpeficied() { return true; }
+
+};
+
+// Root & Local
+class SpecialRplElement : RplElement {
+  /// Fields
+  const StringRef name;
+
+public:
+  /// Constructor
+  SpecialRplElement(StringRef name) : name(name) {}
+
+  /// Methods
+  inline StringRef getName() { return name; }
+};
+
+
+static const SpecialRplElement* ROOT_RplElmt = new SpecialRplElement("Root");
+static const SpecialRplElement* LOCAL_RplElmt = new SpecialRplElement("Local");
+
+
+class StarRplElement : RplElement { 
+  // Private Constructors
+  StarRplElement()  {};
+  StarRplElement(StarRplElement* e) {};
+
+public:
+  /// Constructor 
+  static StarRplElement* Instance() {
+    static StarRplElement elmnt;
+    return &elmnt;
+  }
+  /// Methods
+  virtual bool isFullySpecified() { return false; }
+  inline StringRef getName() { return "*"; }
+};
+
+class NamedRplElement : public RplElement { 
+  /// Fields
+  const StringRef name;
+
+public:
+  /// Constructor
+  NamedRplElement(StringRef name) : name(name) {}
+
+  /// Methods
+  inline StringRef getName() { return name; }
+};
+
+class ParamRplElement : RplElement {
+  ///Fields
+  StringRef name;
+
+public:
+  /// Constructor
+
+  /// Methods
+  
+};
+
+class CaptureRplElement : RplElement { 
+  /// Fields
+  Rpl& includedIn;
+
+public:
+  /// Constructor
+  CaptureRplElement(Rpl& includedIn) : includedIn(includedIn) {}
+
+  /// Methods
+  Rpl& upperBound() { return includedIn; }
+
+};
+
+#ifndef RPL_ELEMENT_VECTOR_SIZE
+  #define RPL_ELEMENT_VECTOR_SIZE 8
+#endif  
+typedef llvm::SmallVector<RplElement*, 
+                          RPL_ELEMENT_VECTOR_SIZE> RplElementVector;
+
+void destroyRplElementVector(RplElementVector& rev) {
+  for (RplElementVector::const_iterator
+           it = rev.begin(),
+           end = rev.end();
+       it != end; it++) {
+    delete(*it);
+  }
+}
+///-///////////////////////////////////////////////////////////////////////////
 /// Rpl Class
 class Rpl {
   friend class Rpl;
@@ -211,8 +307,8 @@ public:
 private:
   /// Fields
   StringRef rpl;
-  typedef llvm::SmallVector<StringRef,8> ElementVector;
-  ElementVector rplElements;
+  RplElementVector rplElements;
+  bool fullySpecified;
 
   /// RplRef class
   // We use the RplRef class, friends with Rpl to efficiently perform 
@@ -247,10 +343,10 @@ private:
     }
 
     /// Getters
-    StringRef getFirstElement() {
+    RplElement* getFirstElement() {
       return rpl.rplElements[firstIdx];
     }
-    StringRef getLastElement() {
+    RplElement* getLastElement() {
       return rpl.rplElements[lastIdx];
     }
     
@@ -275,7 +371,7 @@ private:
       /// R <= R' <== R c= R'
       if (isIncludedIn(rhs)) return true;
       /// R:* <= R' <== R <= R'
-      if (!getLastElement().compare("*"))
+      if (isa<StarRplElement>(*getLastElement()))
         return stripLast().isUnder(rhs);
       /// R:r <= R' <==  R <= R'
       /// R:[i] <= R' <==  R <= R'
@@ -294,29 +390,35 @@ private:
         else /*!isEmpty()*/ return false;
       } else { /// rhs is not empty
         /// R c= R':* <==  R <= R'
-        if (!rhs.getLastElement().compare("*")) {
+        if (isa<StarRplElement>(rhs.getLastElement())) {
           osv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
           return isUnder(rhs.stripLast());
         }
         ///   R:r c= R':r    <==  R <= R'
         /// R:[i] c= R':[i]  <==  R <= R'
-        if (!isEmpty() && !getLastElement().compare(rhs.getLastElement()))
+        if (!isEmpty() && getLastElement() == rhs.getLastElement() )
           return stripLast().isIncludedIn(rhs.stripLast());
         // TODO : more rules (include Param, ...)
         return false;
       }
     }
   }; // end class RplRef
-  
+  ///////////////////////////////////////////////////////////////////////////  
+
 public:
+  static const char RPL_SPLIT_CHARACTER = ':';
+
   /// Constructors
   Rpl(StringRef rpl):rpl(rpl) {
-    //bool result = true;
+    fullySpecified = true;
     while(rpl.size() > 0) { /// for all RPL elements of the RPL
       // FIXME: '::' can appear as part of an RPL element. Splitting must
       // be done differently to account for that.
-      std::pair<StringRef,StringRef> pair = rpl.split(':');
-      rplElements.push_back(pair.first);
+      std::pair<StringRef,StringRef> pair = rpl.split(RPL_SPLIT_CHARACTER);
+      
+      rplElements.push_back(new NamedRplElement(pair.first));
+      if (isSpecialRplElement(pair.first))
+        fullySpecified = false;
       rpl = pair.second;
     }
   }
@@ -334,8 +436,8 @@ public:
   
   /// Printing
   void printElements(raw_ostream& os) const {
-    ElementVector::const_iterator I = rplElements.begin();
-    ElementVector::const_iterator E = rplElements.end();
+    RplElementVector::const_iterator I = rplElements.begin();
+    RplElementVector::const_iterator E = rplElements.end();
     for (; I < E-1; I++) {
       os << (*I) << ":";
     }
@@ -352,7 +454,7 @@ public:
   }
   
   /// Getters
-  inline const StringRef getLastElement() {
+  inline const RplElement* getLastElement() {
     return rplElements.back(); 
   }
   
@@ -387,7 +489,7 @@ public:
     printElements(os);
     os << "\n";
     /// 1. find all occurences of 'from'
-    for (ElementVector::iterator
+    for (RplElementVector::iterator
             it = rplElements.begin();
          it != rplElements.end(); it++) {
       if (!((*it).compare(from))) { 
@@ -583,7 +685,7 @@ public:
 }; // end class Effect
 
 typedef std::map<FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
-
+typedef std::map<Attr*, Rpl*> RplAttrMapTy;
 ///-///////////////////////////////////////////////////////////////////////////
 /// Stmt Visitor Classes
 
@@ -769,7 +871,7 @@ public:
 
     }
     /// 2. vd is a FieldDecl
-    /// Type_vd <args> vd in RPL
+    /// Type_vd <args> vd 
     const FieldDecl* fd  = dyn_cast<FieldDecl>(vd);    
     if (fd) {
       StringRef s;
@@ -796,16 +898,11 @@ public:
       assert(argit!=endit);
       if (isBase) {
         /// 2.1 Substitution
-        /// 2.1.1 Substitution of effects
-        //const RegionArgAttr* arg = *argit;
         const RegionArgAttr* substarg;
-        //QualType qt = fd->getType();
         QualType substqt = fd->getType();
         
         os << "DEBUG:: nDerefs = " << nDerefs << "\n";
         for (int i = nDerefs; i>0; i--) {
-          // FIXME only call effect collection after all the annotation 
-          // checks have passed
           assert(argit!=endit);
           argit++;
           substqt = substqt->getPointeeType();
@@ -828,6 +925,7 @@ public:
         StringRef to = substarg->getRpl();
         if (from.compare(to)) { // if (from != to) then substitute
           Rpl* rpl = new Rpl(to);
+          /// 2.1.1 Substitution of effects
           for (Effect::EffectVector::const_iterator
                   it = effectsTmp.begin(),
                   end = effectsTmp.end();
@@ -862,11 +960,13 @@ public:
           ndrfs--;
         }
 
-        assert(ndrfs==0 || ndrfs==-1);  
+        assert(ndrfs==0 || ndrfs==-1);
+
         if (ndrfs==0) { /// skip the 1st arg, then add the rest
           assert(i!=e);
           i++;
         }
+
         while(i!=e) {
           RegionArgAttr *arg = *i;
           Rpl *rpl = new Rpl(arg->getRpl());           
@@ -1050,7 +1150,7 @@ public:
   inline void helperVisitAssignment(BinaryOperator *E) {
     os << "DEBUG:: helperVisitAssignment (typecheck=" 
        << (typecheckAssignment?"true":"false") <<")\n";
-    bool saved_hws = this->hasWriteSemantics;
+    bool saved_hws = hasWriteSemantics;
     if (tmpRegions) {
       Rpl::destroyRplVector(*tmpRegions);
       delete tmpRegions;
@@ -1091,7 +1191,8 @@ public:
         }
         assert(rhsI==rhsE);
         assert(lhsI==lhsE);
-      } else if (!rhsRegions && lhsRegions) {
+      } else if (!rhsRegions && lhsRegions) { 
+        // TODO How is this path reached ?
         if (lhsRegions->begin()!=lhsRegions->end()) {
           helperEmitInvalidAssignmentWarning(E, *lhsRegions->begin(), 0);
         }
@@ -1410,6 +1511,7 @@ private:
    */
   bool checkRpl(Decl*D, Attr* attr, StringRef rpl) {
     bool result = true;
+    
     while(rpl.size() > 0) { /// for all RPL elements of the RPL
       // FIXME: '::' can appear as part of an RPL element. Splitting must
       // be done differently to account for that.

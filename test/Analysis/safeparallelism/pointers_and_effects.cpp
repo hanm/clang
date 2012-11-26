@@ -19,11 +19,7 @@ public:
 class
 //__attribute__((region_param("P, P<=Pool")))
 __attribute__((param("Pr")))
-__attribute__((region("R1")))
-__attribute__((region("R2")))
-__attribute__((region("Next")))
-__attribute__((region("Links")))
-//__attribute__((region("Pool")))
+__attribute__((region("R1"), region("R2"), region("Next"), region("Links") ))
 Rectangle {
 
 // Fields
@@ -37,7 +33,7 @@ Point
 Point
   * ppstar __attribute__((arg("Pr:Links"), arg("Pr:*"))),
   * ppstar1 __attribute__((arg("Pr:Links"), arg("Pr:*:R1"))),
-  **pppstar __attribute__((arg("Links"), arg("Pr:*:Links"),arg("Pr:*")));
+  **pppstar __attribute__((arg("Links"), arg("Pr:*:Links"), arg("Pr:*")));
 
 Rectangle
   * loop __attribute__((arg("Pr:Links"), arg("*"))),
@@ -60,6 +56,7 @@ void do_pointer_stuff(int _x, int _y)
   p1.y = _y;          // writes Pr:R1:Y
   p2.x = _x + 5;      // writes Pr:R2:X
   p2.y = _y + 5;      // writes Pr:R2:Y
+  p1.x = next->p1.x;
   pp = &*&p1;         // writes Pr:Links                                                              expected-warning{{invalid assignment}}
   ppstar = &*&p1;     // writes Pr:Links
   ppp = &(*&pp);      // writes Links
@@ -71,7 +68,7 @@ void do_pointer_stuff(int _x, int _y)
   ppstar1 = &p2;      // expected-warning{{invalid assignment}}
   pppstar = &ppstar1;
 
-  *pppstar = &p2;     // expected-warning{{invalid assignment}}
+  *pppstar = &p2;     // FIXME expected-warning{{invalid assignment}}
 
   *ppp = *&pp;        // reads Links, writes Pr:Links + reads Pr:Links
   *ppp = next->pp;    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
