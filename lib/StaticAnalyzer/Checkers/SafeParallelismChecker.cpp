@@ -20,13 +20,12 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/Support/Casting.h"
 
-
+#include <typeinfo>
 
 using namespace clang;
 using namespace ento;
-
-#define ASAP_DEBUG
 
 // The following definition selects code that uses the 
 // specific_attr_reverse_iterator functionality. This option is kept around
@@ -37,56 +36,26 @@ using namespace ento;
 // iterated' multiple times.
 #define ATTR_REVERSE_ITERATOR_SUPPORTED
 
+#define ASAP_DEBUG
+#define ASAP_DEBUG_VERBOSE2
+
 #ifdef ASAP_DEBUG
 static raw_ostream& os = llvm::errs();
-static raw_ostream& osv2 = llvm::nulls();
 #else
 static raw_ostream& os = llvm::nulls();
+#endif
+
+#ifdef ASAP_DEBUG_VERBOSE2
+static raw_ostream& osv2 = llvm::errs();
+#else
 static raw_ostream& osv2 = llvm::nulls();
 #endif
 
+/// FIXME temporarily just using pre-processor to concatenate code here... UGLY 
+#include "asap/asap-common.cpp"
+
 namespace {
   RegionParamAttr *BuiltinDefaulrRegionParam;
-  
-  /**
-   *  Return true when the input string is a special RPL element
-   *  (e.g., '*', '?', 'Root'.
-   */
-  // TODO (?): '?', 'Root'
-  bool isSpecialRplElement(const StringRef& s) {
-    if (!s.compare("*"))
-      return true;
-    else
-      return false;
-  }
-
-  /**
-   *  Return true when the input string is a valid region
-   *  name or region parameter declaration
-   */
-  bool isValidRegionName(const StringRef& s) {
-    // false if it is one of the Special Rpl Elements
-    // => it is not allowed to redeclare them
-    if (isSpecialRplElement(s)) return false;
-
-    // must start with [_a-zA-Z]
-    const char c = s.front();
-    if (c != '_' &&
-        !( c >= 'a' && c <= 'z') &&
-        !( c >= 'A' && c <= 'Z'))
-      return false;
-    // all remaining characters must be in [_a-zA-Z0-9]
-    for (size_t i=0; i < s.size(); i++) {
-      const char c = s[i];
-      if (c != '_' &&
-          !( c >= 'a' && c <= 'z') &&
-          !( c >= 'A' && c <= 'Z') &&
-          !( c >= '0' && c <= '9'))
-        return false;
-    }
-
-    return true;
-  }
 
   // FIXME
   inline bool isValidTypeForArg(const QualType qt, const RegionArgAttr* ra) {
@@ -148,13 +117,30 @@ namespace {
     return result;
   }
 
+  inline
+  RplElement* getRegionOrParamElement(const Attr* attr) {
+    RplElement* result = 0;
+    attr::Kind kind = attr->getKind();
+    switch(kind) {
+    case attr::Region:
+      result = new NamedRplElement(dyn_cast<RegionAttr>(attr)->getName()); 
+      break;
+    case attr::RegionParam:
+      result = new ParamRplElement(dyn_cast<RegionParamAttr>(attr)->getName());
+      break;
+    default:
+      result = 0;
+    }
+    return result;
+  }
+
   /**
    *  Return true if any of the attributes of type AttrType of the 
    *  declaration Decl* D have a region name or a param name that is 
-   *  the same as the name provided
+   *  the same as the 'name' provided as the second argument
    */
   template<typename AttrType>
-  bool scanAttributes(Decl* D, const StringRef& name)
+  bool scanAttributesForRegionDecl(Decl* D, const StringRef& name)
   {
     for (specific_attr_iterator<AttrType>
          i = D->specific_attr_begin<AttrType>(),
@@ -166,14 +152,33 @@ namespace {
   }
 
   /**
+   *  Return an RplElement if any of the attributes of type AttrType of the 
+   *  declaration Decl* D have a region name or a param name that is 
+   *  the same as the 'name' provided as the 2nd argument
+   */
+  template<typename AttrType>
+  RplElement* scanAttributes(Decl* D, const StringRef& name)
+  {
+    for (specific_attr_iterator<AttrType>
+         i = D->specific_attr_begin<AttrType>(),
+         e = D->specific_attr_end<AttrType>();
+         i != e; ++i) {
+      if (getRegionOrParamName(*i)==name) {
+        return getRegionOrParamElement(*i);
+      }
+    }
+    return 0;
+  }
+
+  /**
    *  Looks for 'name' in the declaration 'D' and its parent scopes
    */
-  bool findRegionName(Decl* D, StringRef name) {
-    if (!D) return false;
+  RplElement* findRegionName(Decl* D, StringRef name) {
+    if (!D) return 0;
     /// 1. try to find among regions or region parameters of function
-    if (scanAttributes<RegionAttr>(D,name) ||
-        scanAttributes<RegionParamAttr>(D,name))
-      return true;
+    RplElement* result = scanAttributes<RegionAttr>(D,name);
+    if (!result) result = scanAttributes<RegionParamAttr>(D,name);
+    if (result) return result;
 
     /// if not found, search parent DeclContexts
     DeclContext *dc = D->getDeclContext();
@@ -195,494 +200,11 @@ namespace {
         dc = dc->getParent();
       }
     }
-    return false;
+    return 0;
   }
 
-///-///////////////////////////////////////////////////////////////////////////
-/// RplElement Class
-
-class Rpl; 
-
-class RplElement {
-public:
-  bool isFullySpeficied() { return true; }
-
-};
-
-// Root & Local
-class SpecialRplElement : RplElement {
-  /// Fields
-  const StringRef name;
-
-public:
-  /// Constructor
-  SpecialRplElement(StringRef name) : name(name) {}
-
-  /// Methods
-  inline StringRef getName() { return name; }
-};
 
 
-static const SpecialRplElement* ROOT_RplElmt = new SpecialRplElement("Root");
-static const SpecialRplElement* LOCAL_RplElmt = new SpecialRplElement("Local");
-
-
-class StarRplElement : RplElement { 
-  // Private Constructors
-  StarRplElement()  {};
-  StarRplElement(StarRplElement* e) {};
-
-public:
-  /// Constructor 
-  static StarRplElement* Instance() {
-    static StarRplElement elmnt;
-    return &elmnt;
-  }
-  /// Methods
-  virtual bool isFullySpecified() { return false; }
-  inline StringRef getName() { return "*"; }
-};
-
-class NamedRplElement : public RplElement { 
-  /// Fields
-  const StringRef name;
-
-public:
-  /// Constructor
-  NamedRplElement(StringRef name) : name(name) {}
-
-  /// Methods
-  inline StringRef getName() { return name; }
-};
-
-class ParamRplElement : RplElement {
-  ///Fields
-  StringRef name;
-
-public:
-  /// Constructor
-
-  /// Methods
-  
-};
-
-class CaptureRplElement : RplElement { 
-  /// Fields
-  Rpl& includedIn;
-
-public:
-  /// Constructor
-  CaptureRplElement(Rpl& includedIn) : includedIn(includedIn) {}
-
-  /// Methods
-  Rpl& upperBound() { return includedIn; }
-
-};
-
-#ifndef RPL_ELEMENT_VECTOR_SIZE
-  #define RPL_ELEMENT_VECTOR_SIZE 8
-#endif  
-typedef llvm::SmallVector<RplElement*, 
-                          RPL_ELEMENT_VECTOR_SIZE> RplElementVector;
-
-void destroyRplElementVector(RplElementVector& rev) {
-  for (RplElementVector::const_iterator
-           it = rev.begin(),
-           end = rev.end();
-       it != end; it++) {
-    delete(*it);
-  }
-}
-///-///////////////////////////////////////////////////////////////////////////
-/// Rpl Class
-class Rpl {
-  friend class Rpl;
-public:
-  /// Types
-#ifndef RPL_VECTOR_SIZE
-  #define RPL_VECTOR_SIZE 4
-#endif  
-  typedef llvm::SmallVector<Rpl*, RPL_VECTOR_SIZE> RplVector;
-  
-private:
-  /// Fields
-  StringRef rpl;
-  RplElementVector rplElements;
-  bool fullySpecified;
-
-  /// RplRef class
-  // We use the RplRef class, friends with Rpl to efficiently perform 
-  // isIncluded and isUnder tests
-  class RplRef {
-    long firstIdx; 
-    long lastIdx;
-    const Rpl& rpl;
-  
-  public:
-    /// Constructor
-    RplRef(const Rpl& r) : rpl(r) {
-      firstIdx = 0;
-      lastIdx = rpl.rplElements.size()-1;
-    }
-    /// Printing
-    void printElements(raw_ostream& os) {
-      int i = firstIdx;
-      for (; i<lastIdx; i++) {
-        os << rpl.rplElements[i] << ":";
-      } 
-      // print last element
-      if (i==lastIdx)
-        os << rpl.rplElements[i];
-    }
-  
-    std::string toString() {
-      std::string sbuf;
-      llvm::raw_string_ostream os(sbuf);
-      printElements(os);
-      return std::string(os.str());
-    }
-
-    /// Getters
-    RplElement* getFirstElement() {
-      return rpl.rplElements[firstIdx];
-    }
-    RplElement* getLastElement() {
-      return rpl.rplElements[lastIdx];
-    }
-    
-    RplRef& stripLast() {
-      lastIdx--;
-      return *this;
-    }
-    inline bool isEmpty() {
-      //os  << "DEBUG:: isEmpty[RplRef] returned " 
-      //    << (lastIdx<firstIdx ? "true" : "false") << "\n";
-      return (lastIdx<firstIdx) ? true : false;
-    }
-    
-    bool isUnder(RplRef& rhs) {
-      osv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef](" 
-          << this->toString() << ", " << rhs.toString() << ")\n";
-      /// R <= Root
-      if (rhs.isEmpty())
-        return true;
-      if (isEmpty()) /// and rhs is not Empty
-        return false;
-      /// R <= R' <== R c= R'
-      if (isIncludedIn(rhs)) return true;
-      /// R:* <= R' <== R <= R'
-      if (isa<StarRplElement>(*getLastElement()))
-        return stripLast().isUnder(rhs);
-      /// R:r <= R' <==  R <= R'
-      /// R:[i] <= R' <==  R <= R'
-      return stripLast().isUnder(rhs);
-      // TODO z-regions 
-    }
-    
-    /// Inclusion: this c= rhs
-    bool isIncludedIn(RplRef& rhs) { 
-      osv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef](" 
-          << this->toString() << ", " << rhs.toString() << ")\n";
-      if (rhs.isEmpty()) {
-        /// Root c= Root    
-        if (isEmpty()) return true;
-        /// RPL c=? Root and RPL!=Root ==> not included      
-        else /*!isEmpty()*/ return false;
-      } else { /// rhs is not empty
-        /// R c= R':* <==  R <= R'
-        if (isa<StarRplElement>(rhs.getLastElement())) {
-          osv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
-          return isUnder(rhs.stripLast());
-        }
-        ///   R:r c= R':r    <==  R <= R'
-        /// R:[i] c= R':[i]  <==  R <= R'
-        if (!isEmpty() && getLastElement() == rhs.getLastElement() )
-          return stripLast().isIncludedIn(rhs.stripLast());
-        // TODO : more rules (include Param, ...)
-        return false;
-      }
-    }
-  }; // end class RplRef
-  ///////////////////////////////////////////////////////////////////////////  
-
-public:
-  static const char RPL_SPLIT_CHARACTER = ':';
-
-  /// Constructors
-  Rpl(StringRef rpl):rpl(rpl) {
-    fullySpecified = true;
-    while(rpl.size() > 0) { /// for all RPL elements of the RPL
-      // FIXME: '::' can appear as part of an RPL element. Splitting must
-      // be done differently to account for that.
-      std::pair<StringRef,StringRef> pair = rpl.split(RPL_SPLIT_CHARACTER);
-      
-      rplElements.push_back(new NamedRplElement(pair.first));
-      if (isSpecialRplElement(pair.first))
-        fullySpecified = false;
-      rpl = pair.second;
-    }
-  }
-  
-  /// Destructors
-  static void destroyRplVector(RplVector& ev) {
-    for (RplVector::const_iterator
-            it = ev.begin(),
-            end = ev.end();
-          it != end; it++) {
-      delete (*it);
-    }
-  }
-
-  
-  /// Printing
-  void printElements(raw_ostream& os) const {
-    RplElementVector::const_iterator I = rplElements.begin();
-    RplElementVector::const_iterator E = rplElements.end();
-    for (; I < E-1; I++) {
-      os << (*I) << ":";
-    }
-    // print last element
-    if (I==E-1)
-      os << (*I);
-  }
-  
-  std::string toString() const {
-    std::string sbuf;
-    llvm::raw_string_ostream os(sbuf);
-    printElements(os);
-    return std::string(os.str());
-  }
-  
-  /// Getters
-  inline const RplElement* getLastElement() {
-    return rplElements.back(); 
-  }
-  
-  inline size_t length() {
-    return rplElements.size();
-  }
-  
-  /// Nesting (Under)
-  bool isUnder(const Rpl& rhsRpl) const {
-    RplRef* lhs = new RplRef(*this);
-    RplRef* rhs = new RplRef(rhsRpl);
-    bool result = lhs->isIncludedIn(*rhs);
-    delete lhs; delete rhs;    
-    return result;
-  }
-  /// Inclusion
-  bool isIncludedIn(const Rpl& rhsRpl) const { 
-    RplRef* lhs = new RplRef(*this);
-    RplRef* rhs = new RplRef(rhsRpl);
-    bool result = lhs->isIncludedIn(*rhs);
-    delete lhs; delete rhs;
-    osv2 << "DEBUG:: ~~~~~ isIncludedIn[RPL](" << this->toString() << ", "
-        << rhsRpl.toString() << ")=" << (result ? "true" : "false") << "\n";
-    return result;
-  }
-  
-  /// Substitution
-  bool substitute(StringRef from, Rpl& to) {
-    os << "DEBUG:: before substitution(" << from << "<-";
-    to.printElements(os);
-    os <<"): ";
-    printElements(os);
-    os << "\n";
-    /// 1. find all occurences of 'from'
-    for (RplElementVector::iterator
-            it = rplElements.begin();
-         it != rplElements.end(); it++) {
-      if (!((*it).compare(from))) { 
-        osv2 << "DEBUG:: found '" << from 
-          << "' replaced with '" ;
-        to.printElements(osv2);
-        it = rplElements.erase(it);
-        it = rplElements.insert(it, to.rplElements.begin(), to.rplElements.end());
-        osv2 << "' == '";
-        printElements(osv2);
-        osv2 << "'\n";
-      }
-    }
-    os << "DEBUG:: after substitution(" << from << "<-";
-    to.printElements(os);
-    os << "): ";
-    printElements(os);
-    os << "\n";
-    return false;
-  }  
-  
-  /// Iterator
-}; // end class Rpl
-
-
-///-///////////////////////////////////////////////////////////////////////////
-/// Effect Class
-
-enum EffectKind {
-  /// pure = no effect
-  NoEffect,
-  /// reads effect
-  ReadsEffect,
-  /// atomic reads effect
-  AtomicReadsEffect,
-  /// writes effect
-  WritesEffect,
-  /// atomic writes effect
-  AtomicWritesEffect
-};
-
-
-class Effect {
-private:
-  /// Fields
-  EffectKind effectKind;
-  Rpl* rpl;
-  const Attr* attr; // used to get SourceLocation information
-
-  /// Sub-Effect Kind
-  inline bool isSubEffectKindOf(const Effect& e) const {
-    bool result = false;
-    if (effectKind == NoEffect) return true; // optimization
-    
-    if (!e.isAtomic() || this->isAtomic()) { 
-      /// if e.isAtomic ==> this->isAtomic() [[else return false]]
-      switch(e.getEffectKind()) {
-      case WritesEffect:
-        if (effectKind == WritesEffect) result = true;
-        // intentional fall through (lack of 'break')
-      case AtomicWritesEffect:
-        if (effectKind == AtomicWritesEffect) result = true;
-        // intentional fall through (lack of 'break')
-      case ReadsEffect:
-        if (effectKind == ReadsEffect) result = true;
-        // intentional fall through (lack of 'break')
-      case AtomicReadsEffect:
-        if (effectKind == AtomicReadsEffect) result = true;
-        // intentional fall through (lack of 'break')
-      case NoEffect:
-        if (effectKind == NoEffect) result = true;
-      }
-    }
-    return result;
-  }
-
-public:
-  /// Types
-#ifndef EFFECT_VECTOR_SIZE
-  #define EFFECT_VECTOR_SIZE 16
-#endif
-  typedef llvm::SmallVector<Effect*, EFFECT_VECTOR_SIZE> EffectVector;
-
-  /// Constructors
-  Effect(EffectKind ec, Rpl* r, const Attr* a) 
-        : effectKind(ec), rpl(r), attr(a) {}
-
-  /// Destructors
-  virtual ~Effect() { 
-    delete rpl;
-  }
-
-  static void destroyEffectVector(Effect::EffectVector& ev) {
-    for (Effect::EffectVector::const_iterator
-            it = ev.begin(),
-            end = ev.end();
-          it != end; it++) {
-      delete (*it);
-    }
-  }
-
-  /// Printing
-  inline bool printEffectKind(raw_ostream& os) const {
-    bool hasRpl = true;
-    switch(effectKind) {
-    case NoEffect: os << "Pure Effect"; hasRpl = false; break;
-    case ReadsEffect: os << "Reads Effect"; break;
-    case WritesEffect: os << "Writes Effect"; break;
-    case AtomicReadsEffect: os << "Atomic Reads Effect"; break;
-    case AtomicWritesEffect: os << "Atomic Writes Effect"; break;
-    }
-    return hasRpl;
-  }
-
-  void print(raw_ostream& os) const {
-    bool hasRpl = printEffectKind(os);
-    if (hasRpl) {
-      os << " on ";
-      assert(rpl && "NULL RPL in non-pure effect");
-      rpl->printElements(os);
-    }
-  }
-
-  static void printEffectSummary(Effect::EffectVector& ev, raw_ostream& os) {
-    for (Effect::EffectVector::const_iterator 
-            I = ev.begin(),
-            E = ev.end(); 
-            I != E; I++) {
-      (*I)->print(os);
-      os << "\n";
-    }    
-  }
-
-  /// Predicates
-  inline bool isNoEffect() const {
-    return (effectKind == NoEffect) ? true : false;
-  }
-  
-  inline bool hasRplArgument() const { return !isNoEffect(); }
-
-  std::string toString() const {
-    std::string sbuf;
-    llvm::raw_string_ostream os(sbuf);
-    print(os);
-    return std::string(os.str());
-  }
-  
-  inline bool isAtomic() const { 
-    return (effectKind==AtomicReadsEffect ||
-            effectKind==AtomicWritesEffect) ? true : false;
-  }
-
-  /// Getters
-  inline EffectKind getEffectKind() const { return effectKind; }
-  
-  inline const Rpl* getRpl() { return rpl; }
-
-  inline const Attr* getAttr() { return attr; }
-  inline SourceLocation getLocation() { return attr->getLocation();}
-  
-  /// Substitution
-  inline bool substitute(StringRef from, Rpl& to) {
-    if (rpl)
-      return rpl->substitute(from, to);
-    else 
-      return true;
-  }  
-  
-  /// SubEffect: true if this <= e
-  /** 
-   *  rpl1 c= rpl2   E1 c= E2
-   * ~~~~~~~~~~~~~~~~~~~~~~~~~
-   *    E1(rpl1) <= E2(rpl2) 
-   */
-  bool isSubEffectOf(const Effect& e) const {
-    bool result = (isNoEffect() ||
-            (isSubEffectKindOf(e) && rpl->isIncludedIn(*(e.rpl))));
-    osv2  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
-        << e.toString() << ")=" << (result ? "true" : "false") << "\n";
-    return result;
-  }
-  /// isCoveredBy
-  bool isCoveredBy(EffectVector effectSummary) {
-    for (EffectVector::const_iterator
-            I = effectSummary.begin(),
-            E = effectSummary.end();
-            I != E; I++) {
-      if (isSubEffectOf(*(*I))) return true;
-    }
-    return false;
-  }
-
-}; // end class Effect
 
 typedef std::map<FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
 typedef std::map<Attr*, Rpl*> RplAttrMapTy;
@@ -709,13 +231,31 @@ private:
   Effect::EffectVector effectsTmp;
   Effect::EffectVector effects;
   Effect::EffectVector& effectSummary;
-  EffectSummaryMapTy& effectSummaryMap;  
+  EffectSummaryMapTy& effectSummaryMap;
+  RplAttrMapTy& rplAttrMap;
   Rpl::RplVector *lhsRegions, *rhsRegions, *tmpRegions;
   bool isCoveredBySummary;
   
   /// Private Methods
   void helperEmitEffectNotCoveredWarning(Stmt* S, Decl* D, const StringRef& str) {
     StringRef bugName = "effect not covered by effect summary";
+    std::string description_std = "'";
+    description_std.append(str);
+    description_std.append("' ");
+    description_std.append(bugName);
+    
+    StringRef bugCategory = "Safe Parallelism";
+    StringRef bugStr = description_std;
+
+    PathDiagnosticLocation VDLoc =
+       PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
+
+    BR.EmitBasicReport(D, bugName, bugCategory,
+                       bugStr, VDLoc, S->getSourceRange());
+  }
+
+  void helperEmitInvalidAliasingModificationWarning(Stmt* S, Decl* D, const StringRef& str) {
+    StringRef bugName = "cannot modify aliasing through pointer to partly specified region";
     std::string description_std = "'";
     description_std.append(str);
     description_std.append("' ");
@@ -764,6 +304,7 @@ public:
     raw_ostream& os, 
     Effect::EffectVector& effectsummary, 
     EffectSummaryMapTy& effectSummaryMap,
+    RplAttrMapTy& rplAttrMap,
     Stmt* stmt
     ) : BR(BR),
         Ctx(Ctx), 
@@ -776,6 +317,7 @@ public:
         nDerefs(0),
         effectSummary(effectsummary), 
         effectSummaryMap(effectSummaryMap),
+        rplAttrMap(rplAttrMap),
         lhsRegions(0), rhsRegions(0), tmpRegions(0),
         isCoveredBySummary(true) 
   {
@@ -898,7 +440,7 @@ public:
       assert(argit!=endit);
       if (isBase) {
         /// 2.1 Substitution
-        const RegionArgAttr* substarg;
+        RegionArgAttr* substarg;
         QualType substqt = fd->getType();
         
         os << "DEBUG:: nDerefs = " << nDerefs << "\n";
@@ -921,16 +463,19 @@ public:
         assert(rpa);
         // TODO support multiple Parameters
         StringRef from = rpa->getName();
+        ParamRplElement* fromElmt = new ParamRplElement(from);
         // apply substitution to temp effects
         StringRef to = substarg->getRpl();
+        Rpl* toRpl = rplAttrMap[substarg];
+        assert(toRpl);
+        
         if (from.compare(to)) { // if (from != to) then substitute
-          Rpl* rpl = new Rpl(to);
           /// 2.1.1 Substitution of effects
           for (Effect::EffectVector::const_iterator
                   it = effectsTmp.begin(),
                   end = effectsTmp.end();
                 it != end; it++) {
-            (*it)->substitute(from, *rpl);
+            (*it)->substitute(*fromElmt, *toRpl);
           }
           /// 2.1.2 Substitution of Regions (for typechecking)
           if (typecheckAssignment) {
@@ -938,7 +483,7 @@ public:
                     it = tmpRegions->begin(),
                     end = tmpRegions->end();
                   it != end; it++) {
-              (*it)->substitute(from, *rpl);
+              (*it)->substitute(*fromElmt, *toRpl);
             }
           }
         }
@@ -964,13 +509,26 @@ public:
 
         if (ndrfs==0) { /// skip the 1st arg, then add the rest
           assert(i!=e);
+          Rpl *tmp = rplAttrMap[(*i)];
+          assert(tmp);
+          if (hasWriteSemantics && nDerefs > 0
+              && tmp->isFullySpecified() == false
+              /* FIXME: && (*i)->/isaPointerType/ )*/) {
+            /// emit capture error
+            std::string str = tmp->toString();
+            helperEmitInvalidAliasingModificationWarning(E,vd,str);
+          }
+          
           i++;
         }
-
+        
+        /// add rest of region types
         while(i!=e) {
           RegionArgAttr *arg = *i;
-          Rpl *rpl = new Rpl(arg->getRpl());           
-          tmpRegions->push_back(rpl);
+          Rpl *rpl = rplAttrMap[arg];
+          assert(rpl);
+          tmpRegions->push_back(new Rpl(rpl)); // make a copy because rpl may
+                                               // be modified by substitution.
           os << "DEBUG:: adding RPL for typechecking ~~~~~~~~~~ " 
              << rpl->toString() << "\n";
           i++; 
@@ -1000,7 +558,7 @@ public:
           /// TODO is this atomic or not? ignore atomic for now
           effectsTmp.push_back(
                   new Effect(ReadsEffect, 
-                             new Rpl((*argit)->getRpl()), 
+                             new Rpl(rplAttrMap[(*argit)]), 
                              *argit));
                   
           effectNr++;
@@ -1023,18 +581,10 @@ public:
             // TODO for each field add effect & i++
             /// Actually this translates into an implicit call to an 
             /// implicit copy function... treat it as a function call.
-            /*const RecordDecl *RD = dyn_cast<RecordDecl>(fd);
-            assert(fd);
-            for (RecordDecl::field_iterator 
-                    it = RD->field_begin(),
-                    end = RD->field_end();
-                 it != end; it++) {
-              FieldDecl *fd = *it; //TODO
-              
-            }*/
+            /// i.e., not here!
           } else {
             effectsTmp.push_back(
-                      new Effect(ec, new Rpl((*argit)->getRpl()), *argit));
+                      new Effect(ec, new Rpl(rplAttrMap[(*argit)]), *argit));
             effectNr++;
           }
         }
@@ -1129,20 +679,29 @@ public:
   void VisitCXXThisExpr(CXXThisExpr* E) {
     os << "DEBUG:: visiting 'this' expression\n";
     nDerefs = 0;
-    if (tmpRegions->empty() && !E->isImplicit()) {
+    if (tmpRegions && tmpRegions->empty() && !E->isImplicit()) {
       // Add parameter as implicit argument
       CXXRecordDecl* rd = const_cast<CXXRecordDecl*>(E->getBestDynamicClassType());
       assert(rd);
+      /// If the declaration does not yet have an implicit region argument
+      /// add it to the Declaration
       if (!rd->getAttr<RegionArgAttr>()) {
         const RegionParamAttr *param = rd->getAttr<RegionParamAttr>();
         assert(param);
-        rd->addAttr(::new (rd->getASTContext()) 
-                    RegionArgAttr(param->getRange(), rd->getASTContext(), param->getName()));
-        
+        RegionArgAttr *arg = 
+                  ::new (rd->getASTContext()) 
+                        RegionArgAttr(param->getRange(), 
+                                      rd->getASTContext(), param->getName());
+        rd->addAttr(arg);
+
+        /// also add it to rplAttrMap
+        rplAttrMap[arg] = new Rpl(new ParamRplElement(param->getName()));
       }
-      const RegionArgAttr* arg = rd->getAttr<RegionArgAttr>();
+      RegionArgAttr* arg = rd->getAttr<RegionArgAttr>();
       assert(arg);
-      Rpl *rpl = new Rpl(arg->getRpl());           
+      Rpl *tmp = rplAttrMap[arg];
+      assert(tmp);
+      Rpl *rpl = new Rpl(tmp);///FIXME
       tmpRegions->push_back(rpl);
     }
   }
@@ -1268,6 +827,7 @@ private:
   raw_ostream& os;
   bool fatalError;
   EffectSummaryMapTy& effectSummaryMap;
+  RplAttrMapTy& rplAttrMap;
   
 public:
 
@@ -1277,14 +837,15 @@ public:
   explicit ASaPEffectsCheckerTraverser(
     ento::BugReporter& BR, ASTContext& ctx, 
     AnalysisManager& mgr, AnalysisDeclContext* AC, raw_ostream& os,
-    EffectSummaryMapTy& esm
+    EffectSummaryMapTy& esm, RplAttrMapTy& rplAttrMap
     ) : BR(BR),
         Ctx(ctx),
         mgr(mgr),
         AC(AC),
         os(os),
         fatalError(false),
-        effectSummaryMap(esm)
+        effectSummaryMap(esm),
+        rplAttrMap(rplAttrMap)
   {}
 
   /// Visitors
@@ -1300,7 +861,7 @@ public:
       assert(ev);
       
       EffectCollectorVisitor ecv(BR, Ctx, mgr, AC, os, 
-                                 *ev, effectSummaryMap, st);
+                                 *ev, effectSummaryMap, rplAttrMap, st);
       os << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ "
          << "(END EffectCollectorVisitor)\n";
       
@@ -1322,7 +883,7 @@ private:
   raw_ostream& os;
   bool fatalError;
   EffectSummaryMapTy& effectSummaryMap;
-  
+  RplAttrMapTy& rplAttrMap;
 
   /// Private Methods
   /**
@@ -1480,7 +1041,7 @@ private:
    *  of Declaration D are valid.
    */
   template<typename AttrType>
-  bool checkRegionAndParamDecls(Decl* D) {
+  bool checkRegionOrParamDecls(Decl* D) {
     bool result = true;
     for (specific_attr_iterator<AttrType>
          i = D->specific_attr_begin<AttrType>(),
@@ -1509,23 +1070,36 @@ private:
    *  Check that the annotations of type AttrType of declaration D
    *  have RPLs whose elements have been declared
    */
-  bool checkRpl(Decl*D, Attr* attr, StringRef rpl) {
+  Rpl* checkRpl(Decl*D, Attr* attr, StringRef rpl_str) {
+    if (rplAttrMap[attr]) return rplAttrMap[attr];
+    /// else
     bool result = true;
+    Rpl *rpl = new Rpl();
     
-    while(rpl.size() > 0) { /// for all RPL elements of the RPL
+    while(rpl_str.size() > 0) { /// for all RPL elements of the RPL
       // FIXME: '::' can appear as part of an RPL element. Splitting must
       // be done differently to account for that.
-      std::pair<StringRef,StringRef> pair = rpl.split(':');
+      std::pair<StringRef,StringRef> pair = rpl_str.split(Rpl::RPL_SPLIT_CHARACTER);
       const StringRef& head = pair.first;
       /// head: is it a special RPL element? if not, is it declared?
-      if (!isSpecialRplElement(head) && !findRegionName(D, head)) {
+      const RplElement *rplEl = getSpecialRplElement(head);
+      if (!rplEl) rplEl = findRegionName(D,head);
+      if (!rplEl) {
         // Emit bug report!
         helperEmitUndeclaredRplElementWarning(D, attr, head);
         result = false;
+      } else {
+        rpl->appendElement(rplEl);
       }
-      rpl = pair.second;
+      rpl_str = pair.second;
     }
-    return result;
+    if (result == false) {
+      delete(rpl);
+      return 0;
+    } else {
+      rplAttrMap[attr] = rpl;
+      return rpl;
+    }
   }
 
 
@@ -1533,10 +1107,12 @@ private:
   template<typename AttrType>
   bool checkRpls(Decl* D) {
     bool result = true;
+    
     for (specific_attr_iterator<AttrType>
          i = D->specific_attr_begin<AttrType>(),
          e = D->specific_attr_end<AttrType>();
          i != e; ++i) {
+           
       if (!checkRpl(D, *i, (*i)->getRpl()))
         result = false;
     }
@@ -1570,13 +1146,14 @@ private:
       Rpl* rpl = 0; // TODO: I would like to be able to call this on 
                     // NoEffectAttr as well, but the compiler complains
                     // that such attributes don't have a getRpl method...
-      if (!dyn_cast<NoEffectAttr>(*i)) rpl = new Rpl((*i)->getRpl());
-      ev.push_back(new Effect(ec, rpl, *i));
+      if (Rpl* tmp = rplAttrMap[*i]) {        
+        rpl = new Rpl(tmp); // FIXME: Do we need to copy here?
+        ev.push_back(new Effect(ec, rpl, *i));
+      }
     }
   }
 
   void buildEffectSummary(Decl* D, Effect::EffectVector& ev) {   
-    //buildPartialEffectSummary<NoEffectAttr>(D, ev);
     buildPartialEffectSummary<ReadsEffectAttr>(D, ev);
     buildPartialEffectSummary<WritesEffectAttr>(D, ev);
     buildPartialEffectSummary<AtomicReadsEffectAttr>(D, ev);
@@ -1630,13 +1207,14 @@ public:
   explicit ASaPSemanticCheckerTraverser (
     ento::BugReporter& BR, ASTContext& ctx,
     AnalysisDeclContext* AC, raw_ostream& os,
-    EffectSummaryMapTy& esm
+    EffectSummaryMapTy& esm, RplAttrMapTy& rplAttrMap
     ) : BR(BR),
         Ctx(ctx),
         AC(AC),
         os(os),
         fatalError(false),
-        effectSummaryMap(esm)
+        effectSummaryMap(esm),
+        rplAttrMap(rplAttrMap)
   {}
 
   /// Getters & Setters
@@ -1671,8 +1249,8 @@ public:
 
     /// B. Check Annotations
     /// B.1 Check Regions & Params
-    checkRegionAndParamDecls<RegionAttr>(D);
-    checkRegionAndParamDecls<RegionParamAttr>(D);
+    checkRegionOrParamDecls<RegionAttr>(D);
+    checkRegionOrParamDecls<RegionParamAttr>(D);
     /// B.2 Check Effect RPLs
     checkRpls<ReadsEffectAttr>(D);
     checkRpls<WritesEffectAttr>(D);
@@ -1691,8 +1269,7 @@ public:
     checkEffectSummary(D, effectSummary);
     os << "Minimal Effect Summary:\n";
     Effect::printEffectSummary(effectSummary, os);
-    effectSummaryMap[D] = ev;
-    
+    effectSummaryMap[D] = ev;    
     return true;
   }
 
@@ -1705,8 +1282,8 @@ public:
     helperPrintAttributes<RegionParamAttr>(D);
 
     /// B. Check Region & Param Names
-    checkRegionAndParamDecls<RegionAttr>(D);
-    checkRegionAndParamDecls<RegionParamAttr>(D);
+    checkRegionOrParamDecls<RegionAttr>(D);
+    checkRegionOrParamDecls<RegionParamAttr>(D);
 
     return true;
   }
@@ -1803,23 +1380,25 @@ public:
         RegionParamAttr(D->getSourceRange(), D->getASTContext(), "P");
     /** initialize traverser */
     EffectSummaryMapTy esm;
+    RplAttrMapTy ram;
     ASaPSemanticCheckerTraverser 
       asapSemaChecker(BR, D->getASTContext(), 
-                    mgr.getAnalysisDeclContext(D), os, esm);
+                    mgr.getAnalysisDeclContext(D), os, esm, ram);
     /** run checker */
     asapSemaChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+    os << "##############################################\n";
+    os << "DEBUG:: done running ASaP Semantic Checker\n\n";
     
     if (!asapSemaChecker.encounteredFatalError()) {
       /// Check that Effect Summaries cover effects
       ASaPEffectsCheckerTraverser asapEffectChecker(BR, D->getASTContext(),
-                    mgr, mgr.getAnalysisDeclContext(D), os, esm);
+                    mgr, mgr.getAnalysisDeclContext(D), os, esm, ram);
       asapEffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     }
     
     // FIXME: deleting BuiltinDefaulrRegionParam below creates dangling 
     // pointers (i.e. there's some memory leak somewhere).
     //::delete BuiltinDefaulrRegionParam;
-    os << "DEBUG:: done running ASaP Semantic Checker\n\n";
   }
 };
 } // end unnamed namespace

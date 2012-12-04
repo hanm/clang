@@ -62,13 +62,12 @@ void do_pointer_stuff(int _x, int _y)
   ppp = &(*&pp);      // writes Links
   *ppp = pp = &p2;         // reads Links, writes Pr:Links              expected-warning{{RHS region 'Pr:R2' is not included in LHS region 'Pool:*' invalid assignment}}
   *ppp = ppstar = &p2;         // reads Links, writes Pr:Links          expected-warning{{RHS region 'Pr:*' is not included in LHS region 'Pool:*' invalid assignment}}
-  *pppstar = ppstar = &p2;         // reads Links, writes Pr:Links
-  *pppstar = &p2;         // reads Links, writes Pr:Links
+  ppstar = &p2;         // reads Links, writes Pr:Links
   ppstar1 = &p1;
   ppstar1 = &p2;      // expected-warning{{invalid assignment}}
   pppstar = &ppstar1;
 
-  *pppstar = &p2;     // FIXME expected-warning{{invalid assignment}}
+  *pppstar = &p2;     // reads Links, writes Pr:Links                   expected-warning{{cannot modify aliasing through pointer to partly specified region}}
 
   *ppp = *&pp;        // reads Links, writes Pr:Links + reads Pr:Links
   *ppp = next->pp;    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
