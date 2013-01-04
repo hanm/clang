@@ -20,6 +20,11 @@ def warn_variables_not_in_loop_body : Warning<
   "used in loop condition not modified in loop body">,
   InGroup<DiagGroup<"loop-analysis">>, DefaultIgnore;
 
+def warn_duplicate_enum_values : Warning<
+  "element %0 has been implicitly assigned %1 which another element has "
+  "been assigned">, InGroup<DiagGroup<"duplicate-enum">>, DefaultIgnore;
+def note_duplicate_element : Note<"element %0 also has value %1">;
+
 // Constant expressions
 def err_expr_not_ice : Error<
   "expression is not an %select{integer|integral}0 constant expression">;
@@ -609,7 +614,7 @@ def warn_objc_property_no_assignment_attribute : Warning<
   "'assign' is assumed">,
   InGroup<ObjCPropertyNoAttribute>;
 def warn_objc_isa_use : Warning<
-  "direct access to objective-c's isa is deprecated "
+  "direct access to Objective-C's isa is deprecated "
   "in favor of object_setClass() and object_getClass()">,
   InGroup<DiagGroup<"deprecated-objc-isa-usage">>;
 def warn_objc_property_default_assign_on_object : Warning<
@@ -684,6 +689,8 @@ def error_category_property : Error<
   "class implementation">;
 def note_property_declare : Note<
   "property declared here">;
+def note_property_synthesize : Note<
+  "property synthesized here">;
 def error_synthesize_category_decl : Error<
   "@synthesize not allowed in a category's implementation">;
 def error_reference_property : Error<
@@ -892,6 +899,8 @@ def err_distant_exception_spec : Error<
 def err_incomplete_in_exception_spec : Error<
   "%select{|pointer to |reference to }0incomplete type %1 is not allowed "
   "in exception specification">;
+def err_rref_in_exception_spec : Error<
+  "rvalue reference type %0 is not allowed in exception specification">;
 def err_mismatched_exception_spec : Error<
   "exception specification in declaration does not match previous declaration">;
 def warn_mismatched_exception_spec : ExtWarn<
@@ -1071,6 +1080,7 @@ def err_missing_default_ctor : Error<
   "%select{|implicit default }0constructor for %1 must explicitly initialize "
   "the %select{base class|member}2 %3 which does not have a default "
   "constructor">;
+
 def err_illegal_union_or_anon_struct_member : Error<
   "%select{anonymous struct|union}0 member %1 has a non-trivial "
   "%select{constructor|copy constructor|move constructor|copy assignment "
@@ -1080,16 +1090,40 @@ def warn_cxx98_compat_nontrivial_union_or_anon_struct_member : Warning<
   "%select{constructor|copy constructor|move constructor|copy assignment "
   "operator|move assignment operator|destructor}2 is incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
+
+def note_nontrivial_virtual_dtor : Note<
+  "destructor for %0 is not trivial because it is virtual">;
 def note_nontrivial_has_virtual : Note<
   "because type %0 has a virtual %select{member function|base class}1">;
-def note_nontrivial_has_nontrivial : Note<
-  "because type %0 has a %select{member|base class}1 with a non-trivial "
-  "%select{constructor|copy constructor|move constructor|copy assignment "
-  "operator|move assignment operator|destructor}2">;
-def note_nontrivial_user_defined : Note<
-  "because type %0 has a user-declared %select{constructor|copy constructor|"
-  "move constructor|copy assignment operator|move assignment operator|"
-  "destructor}1">;
+def note_nontrivial_no_def_ctor : Note<
+  "because %select{base class of |field of |}0type %1 has no "
+  "default constructor">;
+def note_user_declared_ctor : Note<
+  "implicit default constructor suppressed by user-declared constructor">;
+def note_nontrivial_no_copy : Note<
+  "because no %select{<<ERROR>>|constructor|constructor|assignment operator|"
+  "assignment operator|<<ERROR>>}2 can be used to "
+  "%select{<<ERROR>>|copy|move|copy|move|<<ERROR>>}2 "
+  "%select{base class|field|an object}0 of type %3">;
+def note_nontrivial_user_provided : Note<
+  "because %select{base class of |field of |}0type %1 has a user-provided "
+  "%select{default constructor|copy constructor|move constructor|"
+  "copy assignment operator|move assignment operator|destructor}2">;
+def note_nontrivial_in_class_init : Note<
+  "because field %0 has an initializer">;
+def note_nontrivial_param_type : Note<
+  "because its parameter is %diff{of type $, not $|of the wrong type}2,3">;
+def note_nontrivial_default_arg : Note<"because it has a default argument">;
+def note_nontrivial_variadic : Note<"because it is a variadic function">;
+def note_nontrivial_subobject : Note<
+  "because the function selected to %select{construct|copy|move|copy|move|"
+  "destroy}2 %select{base class|field}0 of type %1 is not trivial">;
+def note_nontrivial_user_declared_ctor : Note<
+  "because type %0 has a user-declared constructor">;
+def note_nontrivial_objc_ownership : Note<
+  "because type %0 has a member with %select{no|no|__strong|__weak|"
+  "__autoreleasing}1 ownership">;
+
 def err_static_data_member_not_allowed_in_anon_struct : Error<
   "static data member %0 not allowed in anonymous struct">;
 def ext_static_data_member_in_union : ExtWarn<
@@ -1108,6 +1142,10 @@ def err_different_return_type_for_overriding_virtual_function : Error<
   "than the function it overrides}1,2">;
 def note_overridden_virtual_function : Note<
   "overridden virtual function is here">;
+def err_conflicting_overriding_cc_attributes : Error<
+  "virtual function %0 has different calling convention attributes "
+  "%diff{($) than the function it overrides (which has calling convention $)|"
+  "than the function it overrides}1,2">;
 
 def err_covariant_return_inaccessible_base : Error<
   "invalid covariant return for virtual function: %1 is a "
@@ -1236,6 +1274,8 @@ def err_reference_var_requires_init : Error<
   "declaration of reference variable %0 requires an initializer">;
 def err_reference_without_init : Error<
   "reference to type %0 requires an initializer">;
+def note_value_initialization_here : Note<
+  "in value-initialization of type %0 here">;
 def err_reference_has_multiple_inits : Error<
   "reference cannot be initialized with multiple values">;
 def err_init_non_aggr_init_list : Error<
@@ -1509,7 +1549,7 @@ def err_constexpr_vla : Error<
   "%select{function|constructor}1">;
 def err_constexpr_var_declaration : Error<
   "variables cannot be declared in a constexpr %select{function|constructor}0">;
-def err_constexpr_function_never_constant_expr : ExtWarn<
+def ext_constexpr_function_never_constant_expr : ExtWarn<
   "constexpr %select{function|constructor}0 never produces a "
   "constant expression">, InGroup<DiagGroup<"invalid-constexpr">>, DefaultError;
 def err_constexpr_body_no_return : Error<
@@ -1949,6 +1989,10 @@ def warn_fun_requires_lock_precise : Warning<
   InGroup<ThreadSafetyPrecise>, DefaultIgnore;
 def note_found_mutex_near_match : Note<"found near match '%0'">;
 
+// Dummy warning that will trigger "beta" warnings from the analysis if enabled. 
+def warn_thread_safety_beta : Warning<
+  "Thread safety beta warning.">, InGroup<ThreadSafetyBeta>, DefaultIgnore;
+
 def warn_impcast_vector_scalar : Warning<
   "implicit conversion turns vector to scalar: %0 to %1">,
   InGroup<DiagGroup<"conversion">>, DefaultIgnore;
@@ -2171,13 +2215,9 @@ def err_uninitialized_member_for_assign : Error<
 def err_uninitialized_member_in_ctor : Error<
   "%select{|implicit default }0constructor for %1 must explicitly initialize "
   "the %select{reference|const}2 member %3">;
-def warn_default_arg_makes_ctor_special : Warning<
+def err_default_arg_makes_ctor_special : Error<
   "addition of default argument on redeclaration makes this constructor a "
-  "%select{default|copy|move}0 constructor">, InGroup<DefaultArgSpecialMember>;
-def note_previous_declaration_special : Note<
-  // The ERRORs are in hopes that if they occur, they'll get reported.
-  "previous declaration was %select{*ERROR*|a copy constructor|a move "
-  "constructor|*ERROR*|*ERROR*|*ERROR*|not a special member function}0">;
+  "%select{default|copy|move}0 constructor">;
 
 def err_use_of_default_argument_to_function_declared_later : Error<
   "use of default argument to function %0 that is declared later in class %1">;
@@ -2484,9 +2524,10 @@ def err_ovl_no_viable_oper : Error<"no viable overloaded '%0'">;
 def err_ovl_deleted_oper : Error<
   "overload resolution selected %select{unavailable|deleted}0 operator '%1'%2">;
 def err_ovl_deleted_special_oper : Error<
-  "overload resolution selected implicitly-deleted %select{default constructor|"
-  "copy constructor|move constructor|copy assignment operator|move assignment "
-  "operator|destructor|'%1'}0%2">;
+  "object of type %0 cannot be %select{constructed|copied|moved|assigned|"
+  "assigned|destroyed}1 because its %select{default constructor|"
+  "copy constructor|move constructor|copy assignment operator|"
+  "move assignment operator|destructor}1 is implicitly deleted">;
 def err_ovl_no_viable_subscript :
     Error<"no viable overloaded operator[] for type %0">;
 def err_ovl_no_oper :
@@ -2608,7 +2649,7 @@ def err_template_arg_must_be_type_suggest : Error<
 def err_template_arg_must_be_expr : Error<
   "template argument for non-type template parameter must be an expression">;
 def err_template_arg_nontype_ambig : Error<
-  "template argument for non-type template parameter is treated as type %0">;
+  "template argument for non-type template parameter is treated as function type %0">;
 def err_template_arg_must_be_template : Error<
   "template argument for template template parameter must be a class template%select{| or type alias template}0">;
 def ext_template_arg_local_type : ExtWarn<
@@ -3153,6 +3194,8 @@ def note_sentinel_here : Note<
 def warn_missing_prototype : Warning<
   "no previous prototype for function %0">,
   InGroup<DiagGroup<"missing-prototypes">>, DefaultIgnore;
+def note_declaration_not_a_prototype : Note<
+  "this declaration is not a prototype; add 'void' to make it a prototype for a zero-parameter function">; 
 def warn_missing_variable_declarations : Warning<
   "no previous extern declaration for non-static variable %0">,
   InGroup<DiagGroup<"missing-variable-declarations">>, DefaultIgnore;
@@ -3227,6 +3270,8 @@ def err_inline_declaration_block_scope : Error<
   "inline declaration of %0 not allowed in block scope">;
 def err_static_non_static : Error<
   "static declaration of %0 follows non-static declaration">;
+def err_different_language_linkage : Error<
+  "declaration of %0 has a different language linkage">;
 def warn_weak_import : Warning <
   "an already-declared variable is made a weak_import declaration %0">;
 def warn_static_non_static : ExtWarn<
@@ -3664,6 +3709,11 @@ def warn_arc_retained_property_assign : Warning<
   "assigning retained object to unsafe property"
   "; object will be released after assignment">,
   InGroup<ARCUnsafeRetainedAssign>;
+def warn_arc_literal_assign : Warning<
+  "assigning %select{array literal|dictionary literal|numeric literal|boxed expression|<should not happen>|block literal}0"
+  " to a weak %select{property|variable}1"
+  "; object will be released after assignment">,
+  InGroup<ARCUnsafeRetainedAssign>;
 def err_arc_new_array_without_ownership : Error<
   "'new' cannot allocate an array of %0 with no explicit ownership">;
 def err_arc_autoreleasing_var : Error<
@@ -3714,9 +3764,6 @@ def note_arc_retain_cycle_owner : Note<
 
 } // end "ARC Retain Cycle" category
 
-def note_nontrivial_objc_ownership : Note<
-  "because type %0 has %select{no|no|__strong|__weak|__autoreleasing}1 "
-  "ownership">;
 def warn_arc_object_memaccess : Warning<
   "%select{destination for|source of}0 this %1 call is a pointer to "
   "ownership-qualified type %2">, InGroup<ARCNonPodMemAccess>;
@@ -4196,7 +4243,7 @@ def err_property_not_found : Error<
 def err_invalid_property_name : Error<
   "%0 is not a valid property name (accessing an object of type %1)">;
 def err_getter_not_found : Error<
-  "expected getter method not found on object of type %0">;
+  "no getter method for read from property">;
 def err_objc_subscript_method_not_found : Error<
   "expected method to %select{read|write}1 %select{dictionary|array}2 element not "
   "found on object of type %0">;
@@ -5166,7 +5213,8 @@ let CategoryName = "Inline Assembly Issue" in {
     "accepted due to -fheinous-gnu-extensions, but clang may remove support "
     "for this in the future">;
   def warn_asm_mismatched_size_modifier : Warning<
-    "the size being stored is truncated, use a modifier to specify the size">,
+    "the value is truncated when put into register, "
+    "use a modifier to specify the size">,
     InGroup<ASMOperandWidths>;
 }
 
@@ -5416,6 +5464,9 @@ def warn_cxx98_compat_explicit_conversion_functions : Warning<
 def err_defaulted_special_member_params : Error<
   "an explicitly-defaulted %select{|copy |move }0constructor cannot "
   "have default arguments">;
+def err_defaulted_special_member_variadic : Error<
+  "an explicitly-defaulted %select{|copy |move }0constructor cannot "
+  "be variadic">;
 def err_defaulted_special_member_return_type : Error<
   "explicitly-defaulted %select{copy|move}0 assignment operator must "
   "return %1">;
@@ -5433,10 +5484,6 @@ def err_defaulted_special_member_copy_const_param : Error<
   "the parameter for this explicitly-defaulted copy "
   "%select{constructor|assignment operator}0 is const, but a member or base "
   "requires it to be non-const">;
-def err_defaulted_special_member_copy_non_const_param : Error<
-  "explicitly-defaulted copy %select{constructor|assignment operator}0 with "
-  "a non-const parameter must be defaulted outside the class, unless a base or "
-  "member requires the parameter to be non-const">;
 def err_defaulted_copy_assign_not_ref : Error<
   "the parameter for an explicitly-defaulted copy assignment operator must be an "
   "lvalue reference type">;
@@ -5883,6 +5930,8 @@ def err_c99_array_usage_cxx : Error<
   "feature, not permitted in C++">;
 def err_double_requires_fp64 : Error<
   "use of type 'double' requires cl_khr_fp64 extension to be enabled">;
+def err_int128_unsupported : Error<
+  "__int128 is not supported on this target">;
 def err_nsconsumed_attribute_mismatch : Error<
   "overriding method has mismatched ns_consumed attribute on its"
   " parameter">;

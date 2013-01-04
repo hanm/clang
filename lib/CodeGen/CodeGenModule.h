@@ -14,19 +14,19 @@
 #ifndef CLANG_CODEGEN_CODEGENMODULE_H
 #define CLANG_CODEGEN_CODEGENMODULE_H
 
-#include "clang/Basic/ABI.h"
-#include "clang/Basic/LangOptions.h"
+#include "CGVTables.h"
+#include "CodeGenTypes.h"
 #include "clang/AST/Attr.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/GlobalDecl.h"
 #include "clang/AST/Mangle.h"
-#include "CGVTables.h"
-#include "CodeGenTypes.h"
-#include "llvm/Module.h"
+#include "clang/Basic/ABI.h"
+#include "clang/Basic/LangOptions.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/StringMap.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/ValueHandle.h"
 
 namespace llvm {
@@ -711,8 +711,8 @@ public:
   /// type and name.
   llvm::Constant *CreateRuntimeFunction(llvm::FunctionType *Ty,
                                         StringRef Name,
-                                        llvm::Attributes ExtraAttrs =
-                                          llvm::Attributes());
+                                        llvm::Attribute ExtraAttrs =
+                                          llvm::Attribute());
   /// CreateRuntimeVariable - Create a new runtime global variable with the
   /// specified type and name.
   llvm::Constant *CreateRuntimeVariable(llvm::Type *Ty,
@@ -890,8 +890,8 @@ private:
                                           llvm::Type *Ty,
                                           GlobalDecl D,
                                           bool ForVTable,
-                                          llvm::Attributes ExtraAttrs =
-                                            llvm::Attributes());
+                                          llvm::Attribute ExtraAttrs =
+                                            llvm::Attribute());
   llvm::Constant *GetOrCreateLLVMGlobal(StringRef MangledName,
                                         llvm::PointerType *PTy,
                                         const VarDecl *D,

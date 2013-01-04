@@ -197,8 +197,6 @@ def mrelocation_model : Separate<["-"], "mrelocation-model">,
   HelpText<"The relocation model to use">;
 def munwind_tables : Flag<["-"], "munwind-tables">,
   HelpText<"Generate unwinding tables for all functions">;
-def fuse_init_array : Flag<["-"], "fuse-init-array">,
-  HelpText<"Use .init_array instead of .ctors">;
 def mconstructor_aliases : Flag<["-"], "mconstructor-aliases">,
   HelpText<"Emit complete constructors and destructors as aliases when possible">;
 def mlink_bitcode_file : Separate<["-"], "mlink-bitcode-file">,
@@ -406,6 +404,8 @@ def fobjc_dispatch_method_EQ : Joined<["-"], "fobjc-dispatch-method=">,
   HelpText<"Objective-C dispatch method to use">;
 def fobjc_default_synthesize_properties : Flag<["-"], "fobjc-default-synthesize-properties">,
   HelpText<"enable the default synthesis of Objective-C properties">;
+def fencode_extended_block_signature : Flag<["-"], "fencode-extended-block-signature">,
+  HelpText<"enable extended encoding of block type signature">;
 def pic_level : Separate<["-"], "pic-level">,
   HelpText<"Value for __PIC__">;
 def pie_level : Separate<["-"], "pie-level">,

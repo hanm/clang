@@ -8,18 +8,18 @@
 //===----------------------------------------------------------------------===//
 
 #include "Internals.h"
+#include "clang/AST/ASTConsumer.h"
+#include "clang/Basic/DiagnosticCategories.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendAction.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/Utils.h"
-#include "clang/AST/ASTConsumer.h"
+#include "clang/Lex/Preprocessor.h"
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "clang/Sema/SemaDiagnostic.h"
-#include "clang/Basic/DiagnosticCategories.h"
-#include "clang/Lex/Preprocessor.h"
-#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/Support/MemoryBuffer.h"
 using namespace clang;
 using namespace arcmt;
 
@@ -39,8 +39,9 @@ bool CapturedDiagList::clearDiagnostic(ArrayRef<unsigned> IDs,
            diagLoc.isBeforeInTranslationUnitThan(range.getEnd()))) {
       cleared = true;
       ListTy::iterator eraseS = I++;
-      while (I != List.end() && I->getLevel() == DiagnosticsEngine::Note)
-        ++I;
+      if (eraseS->getLevel() != DiagnosticsEngine::Note)
+        while (I != List.end() && I->getLevel() == DiagnosticsEngine::Note)
+          ++I;
       // Clear the diagnostic and any notes following it.
       I = List.erase(eraseS, I);
       continue;
@@ -130,7 +131,8 @@ public:
                                 const Diagnostic &Info) {
     if (DiagnosticIDs::isARCDiagnostic(Info.getID()) ||
         level >= DiagnosticsEngine::Error || level == DiagnosticsEngine::Note) {
-      CapturedDiags.push_back(StoredDiagnostic(level, Info));
+      if (Info.getLocation().isValid())
+        CapturedDiags.push_back(StoredDiagnostic(level, Info));
       return;
     }
 
@@ -295,7 +297,8 @@ bool arcmt::checkForManualIssues(CompilerInvocation &origCI,
   std::vector<SourceLocation> ARCMTMacroLocs;
 
   TransformActions testAct(*Diags, capturedDiags, Ctx, Unit->getPreprocessor());
-  MigrationPass pass(Ctx, OrigGCMode, Unit->getSema(), testAct, ARCMTMacroLocs);
+  MigrationPass pass(Ctx, OrigGCMode, Unit->getSema(), testAct, capturedDiags,
+                     ARCMTMacroLocs);
   pass.setNSAllocReallocError(NoNSAllocReallocError);
   pass.setNoFinalizeRemoval(NoFinalizeRemoval);
 
@@ -598,7 +601,7 @@ bool MigrationProcess::applyTransform(TransformFn trans,
   Rewriter rewriter(Ctx.getSourceManager(), Ctx.getLangOpts());
   TransformActions TA(*Diags, capturedDiags, Ctx, Unit->getPreprocessor());
   MigrationPass pass(Ctx, OrigCI.getLangOpts()->getGC(),
-                     Unit->getSema(), TA, ARCMTMacroLocs);
+                     Unit->getSema(), TA, capturedDiags, ARCMTMacroLocs);
 
   trans(pass);
 

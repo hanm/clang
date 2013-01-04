@@ -13,13 +13,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/AST/ASTContext.h"
-#include "clang/AST/StmtVisitor.h"
+#include "clang/AST/Attr.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/DeclTemplate.h"
-#include "clang/AST/PrettyPrinter.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
+#include "clang/AST/PrettyPrinter.h"
+#include "clang/AST/StmtVisitor.h"
 #include "llvm/ADT/SmallString.h"
 using namespace clang;
 
@@ -1486,6 +1487,9 @@ void StmtPrinter::VisitCXXPseudoDestructorExpr(CXXPseudoDestructorExpr *E) {
 }
 
 void StmtPrinter::VisitCXXConstructExpr(CXXConstructExpr *E) {
+  if (E->isListInitialization())
+    OS << "{ ";
+
   for (unsigned i = 0, e = E->getNumArgs(); i != e; ++i) {
     if (isa<CXXDefaultArgExpr>(E->getArg(i))) {
       // Don't print any defaulted arguments
@@ -1495,6 +1499,9 @@ void StmtPrinter::VisitCXXConstructExpr(CXXConstructExpr *E) {
     if (i) OS << ", ";
     PrintExpr(E->getArg(i));
   }
+
+  if (E->isListInitialization())
+    OS << " }";
 }
 
 void StmtPrinter::VisitExprWithCleanups(ExprWithCleanups *E) {
@@ -1837,6 +1844,7 @@ void StmtPrinter::VisitBlockExpr(BlockExpr *Node) {
     }
     OS << ')';
   }
+  OS << "{ }";
 }
 
 void StmtPrinter::VisitOpaqueValueExpr(OpaqueValueExpr *Node) { 
@@ -1864,11 +1872,6 @@ void Stmt::printPretty(raw_ostream &OS,
                        unsigned Indentation) const {
   if (this == 0) {
     OS << "<NULL>";
-    return;
-  }
-
-  if (Policy.DumpSourceManager) {
-    dump(OS, *Policy.DumpSourceManager);
     return;
   }
 

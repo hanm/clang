@@ -45,14 +45,17 @@ LANGOPT(C99               , 1, 0, "C99")
 LANGOPT(C11               , 1, 0, "C11")
 LANGOPT(MicrosoftExt      , 1, 0, "Microsoft extensions")
 LANGOPT(MicrosoftMode     , 1, 0, "Microsoft compatibility mode")
+LANGOPT(AsmBlocks         , 1, 0, "Microsoft inline asm blocks")
 LANGOPT(Borland           , 1, 0, "Borland extensions")
 LANGOPT(CPlusPlus         , 1, 0, "C++")
-LANGOPT(CPlusPlus0x       , 1, 0, "C++0x")
+LANGOPT(CPlusPlus11       , 1, 0, "C++0x")
 LANGOPT(CPlusPlus1y       , 1, 0, "C++1y")
 LANGOPT(ObjC1             , 1, 0, "Objective-C 1")
 LANGOPT(ObjC2             , 1, 0, "Objective-C 2")
 BENIGN_LANGOPT(ObjCDefaultSynthProperties , 1, 0, 
                "Objective-C auto-synthesized properties")
+BENIGN_LANGOPT(EncodeExtendedBlockSig , 1, 0, 
+               "Encoding extended block type signature")
 BENIGN_LANGOPT(ObjCInferRelatedResultType , 1, 1, 
                "Objective-C related result type inference")
 LANGOPT(Trigraphs         , 1, 0,"trigraphs")
@@ -104,7 +107,6 @@ LANGOPT(FastMath          , 1, 0, "__FAST_MATH__ predefined macro")
 LANGOPT(FiniteMathOnly    , 1, 0, "__FINITE_MATH_ONLY__ predefined macro")
 
 BENIGN_LANGOPT(ObjCGCBitmapPrint , 1, 0, "printing of GC's bitmap layout for __weak/__strong ivars")
-BENIGN_LANGOPT(ObjCExtendedBlockEncode , 1, 1, "Do extended encoding of block type signature")
 
 BENIGN_LANGOPT(AccessControl     , 1, 1, "C++ access control")
 LANGOPT(CharIsSigned      , 1, 1, "signed char")

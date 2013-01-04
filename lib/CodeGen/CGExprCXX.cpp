@@ -11,13 +11,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/Frontend/CodeGenOptions.h"
 #include "CodeGenFunction.h"
 #include "CGCUDARuntime.h"
 #include "CGCXXABI.h"
-#include "CGObjCRuntime.h"
 #include "CGDebugInfo.h"
-#include "llvm/Intrinsics.h"
+#include "CGObjCRuntime.h"
+#include "clang/Frontend/CodeGenOptions.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/CallSite.h"
 
 using namespace clang;

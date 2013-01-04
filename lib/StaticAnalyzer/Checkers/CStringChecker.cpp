@@ -14,14 +14,15 @@
 
 #include "ClangSACheckers.h"
 #include "InterCheckerAPI.h"
+#include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
-#include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramStateTrait.h"
-#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace clang;
 using namespace ento;
@@ -63,7 +64,7 @@ public:
 
   ProgramStateRef 
     checkRegionChanges(ProgramStateRef state,
-                       const StoreManager::InvalidatedSymbols *,
+                       const InvalidatedSymbols *,
                        ArrayRef<const MemRegion *> ExplicitRegions,
                        ArrayRef<const MemRegion *> Regions,
                        const CallEvent *Call) const;
@@ -815,7 +816,8 @@ ProgramStateRef CStringChecker::InvalidateBuffer(CheckerContext &C,
 
     // Invalidate this region.
     const LocationContext *LCtx = C.getPredecessor()->getLocationContext();
-    return state->invalidateRegions(R, E, C.blockCount(), LCtx);
+    return state->invalidateRegions(R, E, C.blockCount(), LCtx,
+                                    /*CausedByPointerEscape*/ false);
   }
 
   // If we have a non-region value by chance, just remove the binding.
@@ -1872,7 +1874,7 @@ bool CStringChecker::wantsRegionChangeUpdate(ProgramStateRef state) const {
 
 ProgramStateRef 
 CStringChecker::checkRegionChanges(ProgramStateRef state,
-                                   const StoreManager::InvalidatedSymbols *,
+                                   const InvalidatedSymbols *,
                                    ArrayRef<const MemRegion *> ExplicitRegions,
                                    ArrayRef<const MemRegion *> Regions,
                                    const CallEvent *Call) const {

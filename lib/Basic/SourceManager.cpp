@@ -12,20 +12,20 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Basic/SourceManager.h"
-#include "clang/Basic/SourceManagerInternals.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/FileManager.h"
-#include "llvm/ADT/StringSwitch.h"
+#include "clang/Basic/SourceManagerInternals.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringSwitch.h"
+#include "llvm/Support/Capacity.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Path.h"
-#include "llvm/Support/Capacity.h"
+#include "llvm/Support/raw_ostream.h"
 #include <algorithm>
-#include <string>
 #include <cstring>
+#include <string>
 #include <sys/stat.h>
 
 using namespace clang;
@@ -1032,7 +1032,8 @@ unsigned SourceManager::getColumnNumber(FileID FID, unsigned FilePos,
   // See if we just calculated the line number for this FilePos and can use
   // that to lookup the start of the line instead of searching for it.
   if (LastLineNoFileIDQuery == FID &&
-      LastLineNoContentCache->SourceLineCache != 0) {
+      LastLineNoContentCache->SourceLineCache != 0 &&
+      LastLineNoResult < LastLineNoContentCache->NumLines) {
     unsigned *SourceLineCache = LastLineNoContentCache->SourceLineCache;
     unsigned LineStart = SourceLineCache[LastLineNoResult - 1];
     unsigned LineEnd = SourceLineCache[LastLineNoResult];

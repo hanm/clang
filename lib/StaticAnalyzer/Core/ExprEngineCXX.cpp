@@ -11,13 +11,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/StaticAnalyzer/Core/CheckerManager.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngine.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/StmtCXX.h"
 #include "clang/Basic/PrettyStackTrace.h"
+#include "clang/StaticAnalyzer/Core/CheckerManager.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 
 using namespace clang;
 using namespace ento;
@@ -172,7 +172,8 @@ void ExprEngine::VisitCXXDestructor(QualType ObjectType,
   // FIXME: We need to run the same destructor on every element of the array.
   // This workaround will just run the first destructor (which will still
   // invalidate the entire array).
-  if (const ArrayType *AT = getContext().getAsArrayType(ObjectType)) {
+  // This is a loop because of multidimensional arrays.
+  while (const ArrayType *AT = getContext().getAsArrayType(ObjectType)) {
     ObjectType = AT->getElementType();
     Dest = State->getLValue(ObjectType, getSValBuilder().makeZeroArrayIndex(),
                             loc::MemRegionVal(Dest)).getAsRegion();

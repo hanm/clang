@@ -12,13 +12,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Sema/SemaInternal.h"
-#include "clang/Sema/DelayedDiagnostic.h"
-#include "clang/Sema/Initialization.h"
-#include "clang/Sema/Lookup.h"
-#include "clang/Sema/ScopeInfo.h"
-#include "clang/Sema/AnalysisBasedWarnings.h"
-#include "clang/AST/ASTContext.h"
+#include "TreeTransform.h"
 #include "clang/AST/ASTConsumer.h"
+#include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTMutationListener.h"
 #include "clang/AST/CXXInheritance.h"
 #include "clang/AST/DeclObjC.h"
@@ -34,14 +30,17 @@
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/LiteralSupport.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Sema/AnalysisBasedWarnings.h"
 #include "clang/Sema/DeclSpec.h"
+#include "clang/Sema/DelayedDiagnostic.h"
 #include "clang/Sema/Designator.h"
+#include "clang/Sema/Initialization.h"
+#include "clang/Sema/Lookup.h"
+#include "clang/Sema/ParsedTemplate.h"
 #include "clang/Sema/Scope.h"
 #include "clang/Sema/ScopeInfo.h"
-#include "clang/Sema/ParsedTemplate.h"
 #include "clang/Sema/SemaFixItUtils.h"
 #include "clang/Sema/Template.h"
-#include "TreeTransform.h"
 using namespace clang;
 using namespace sema;
 
@@ -288,12 +287,6 @@ bool Sema::DiagnoseUseOfDecl(NamedDecl *D, SourceLocation Loc,
 /// diagnostic complaining about the given function being deleted or
 /// unavailable.
 std::string Sema::getDeletedOrUnavailableSuffix(const FunctionDecl *FD) {
-  // FIXME: C++0x implicitly-deleted special member functions could be
-  // detected here so that we could improve diagnostics to say, e.g.,
-  // "base class 'A' had a deleted copy constructor".
-  if (FD->isDeleted())
-    return std::string();
-
   std::string Message;
   if (FD->getAvailability(&Message))
     return ": " + Message;
@@ -504,6 +497,12 @@ ExprResult Sema::DefaultLvalueConversion(Expr *E) {
     T = T.getUnqualifiedType();
 
   UpdateMarkingForLValueToRValue(E);
+  
+  // Loading a __weak object implicitly retains the value, so we need a cleanup to 
+  // balance that.
+  if (getLangOpts().ObjCAutoRefCount &&
+      E->getType().getObjCLifetime() == Qualifiers::OCL_Weak)
+    ExprNeedsCleanups = true;
 
   ExprResult Res = Owned(ImplicitCastExpr::Create(Context, T, CK_LValueToRValue,
                                                   E, 0, VK_RValue));
@@ -635,16 +634,16 @@ Sema::VarArgKind Sema::isValidVarArgType(const QualType &Ty) {
   if (Ty.isCXX98PODType(Context))
     return VAK_Valid;
 
-  // C++0x [expr.call]p7:
-  //   Passing a potentially-evaluated argument of class type (Clause 9) 
+  // C++11 [expr.call]p7:
+  //   Passing a potentially-evaluated argument of class type (Clause 9)
   //   having a non-trivial copy constructor, a non-trivial move constructor,
-  //   or a non-trivial destructor, with no corresponding parameter, 
+  //   or a non-trivial destructor, with no corresponding parameter,
   //   is conditionally-supported with implementation-defined semantics.
-  if (getLangOpts().CPlusPlus0x && !Ty->isDependentType())
+  if (getLangOpts().CPlusPlus11 && !Ty->isDependentType())
     if (CXXRecordDecl *Record = Ty->getAsCXXRecordDecl())
-      if (Record->hasTrivialCopyConstructor() &&
-          Record->hasTrivialMoveConstructor() &&
-          Record->hasTrivialDestructor())
+      if (!Record->hasNonTrivialCopyConstructor() &&
+          !Record->hasNonTrivialMoveConstructor() &&
+          !Record->hasNonTrivialDestructor())
         return VAK_ValidInCXX11;
 
   if (getLangOpts().ObjCAutoRefCount && Ty->isObjCLifetimeType())
@@ -673,7 +672,7 @@ bool Sema::variadicArgumentPODCheck(const Expr *E, VariadicCallType CT) {
 
     return DiagRuntimeBehavior(E->getLocStart(), 0,
                    PDiag(diag::warn_cannot_pass_non_pod_arg_to_vararg)
-                   << getLangOpts().CPlusPlus0x << Ty << CT);
+                   << getLangOpts().CPlusPlus11 << Ty << CT);
   }
   }
   // c++ rules are enforced elsewhere.
@@ -2565,8 +2564,14 @@ ExprResult Sema::ActOnPredefinedExpr(SourceLocation Loc, tok::TokenKind Kind) {
   // string.
 
   Decl *currentDecl = getCurFunctionOrMethodDecl();
-  if (!currentDecl && getCurBlock())
-    currentDecl = getCurBlock()->TheDecl;
+  // Blocks and lambdas can occur at global scope. Don't emit a warning.
+  if (!currentDecl) {
+    if (const BlockScopeInfo *BSI = getCurBlock())
+      currentDecl = BSI->TheDecl;
+    else if (const LambdaScopeInfo *LSI = getCurLambda())
+      currentDecl = LSI->CallOperator;
+  }
+
   if (!currentDecl) {
     Diag(Loc, diag::ext_predef_outside_function);
     currentDecl = Context.getTranslationUnitDecl();
@@ -2825,7 +2830,7 @@ ExprResult Sema::ActOnNumericConstant(const Token &Tok, Scope *UDLScope) {
     if (!getLangOpts().C99 && Literal.isLongLong) {
       if (getLangOpts().CPlusPlus)
         Diag(Tok.getLocation(),
-             getLangOpts().CPlusPlus0x ?
+             getLangOpts().CPlusPlus11 ?
              diag::warn_cxx98_compat_longlong : diag::ext_cxx11_longlong);
       else
         Diag(Tok.getLocation(), diag::ext_c99_longlong);
@@ -2835,7 +2840,10 @@ ExprResult Sema::ActOnNumericConstant(const Token &Tok, Scope *UDLScope) {
     unsigned MaxWidth = Context.getTargetInfo().getIntMaxTWidth();
     // The microsoft literal suffix extensions support 128-bit literals, which
     // may be wider than [u]intmax_t.
-    if (Literal.isMicrosoftInteger && MaxWidth < 128)
+    // FIXME: Actually, they don't. We seem to have accidentally invented the
+    //        i128 suffix.
+    if (Literal.isMicrosoftInteger && MaxWidth < 128 &&
+        PP.getTargetInfo().hasInt128Type())
       MaxWidth = 128;
     llvm::APInt ResultVal(MaxWidth, 0);
 
@@ -2905,7 +2913,8 @@ ExprResult Sema::ActOnNumericConstant(const Token &Tok, Scope *UDLScope) {
         
       // If it doesn't fit in unsigned long long, and we're using Microsoft
       // extensions, then its a 128-bit integer literal.
-      if (Ty.isNull() && Literal.isMicrosoftInteger) {
+      if (Ty.isNull() && Literal.isMicrosoftInteger &&
+          PP.getTargetInfo().hasInt128Type()) {
         if (Literal.isUnsigned)
           Ty = Context.UnsignedInt128Ty;
         else
@@ -3720,10 +3729,10 @@ bool Sema::GatherArgumentsForCall(SourceLocation CallLoc,
           (!Param || !Param->hasAttr<CFConsumedAttr>()))
         Arg = stripARCUnbridgedCast(Arg);
 
-      InitializedEntity Entity =
-        Param? InitializedEntity::InitializeParameter(Context, Param)
-             : InitializedEntity::InitializeParameter(Context, ProtoArgType,
-                                                      Proto->isArgConsumed(i));
+      InitializedEntity Entity = Param ?
+          InitializedEntity::InitializeParameter(Context, Param, ProtoArgType)
+        : InitializedEntity::InitializeParameter(Context, ProtoArgType,
+                                                 Proto->isArgConsumed(i));
       ExprResult ArgE = PerformCopyInitialization(Entity,
                                                   SourceLocation(),
                                                   Owned(Arg),
@@ -4681,7 +4690,6 @@ Sema::MaybeConvertParenListExprToParenExpr(Scope *S, Expr *OrigExpr) {
 ExprResult Sema::ActOnParenListExpr(SourceLocation L,
                                     SourceLocation R,
                                     MultiExprArg Val) {
-  assert(Val.data() != 0 && "ActOnParenOrParenListExpr() missing expr list");
   Expr *expr = new (Context) ParenListExpr(Context, L, Val, R);
   return Owned(expr);
 }
@@ -4720,7 +4728,7 @@ bool Sema::DiagnoseConditionalForNull(Expr *LHSExpr, Expr *RHSExpr,
       return false;
   }
 
-  int DiagType = (NullKind == Expr::NPCK_CXX0X_nullptr);
+  int DiagType = (NullKind == Expr::NPCK_CXX11_nullptr);
   Diag(QuestionLoc, diag::err_typecheck_cond_incompatible_operands_null)
       << NonPointerExpr->getType() << DiagType
       << NonPointerExpr->getSourceRange();
@@ -6846,6 +6854,48 @@ static bool hasIsEqualMethod(Sema &S, const Expr *LHS, const Expr *RHS) {
   return true;
 }
 
+Sema::ObjCLiteralKind Sema::CheckLiteralKind(Expr *FromE) {
+  FromE = FromE->IgnoreParenImpCasts();
+  switch (FromE->getStmtClass()) {
+    default:
+      break;
+    case Stmt::ObjCStringLiteralClass:
+      // "string literal"
+      return LK_String;
+    case Stmt::ObjCArrayLiteralClass:
+      // "array literal"
+      return LK_Array;
+    case Stmt::ObjCDictionaryLiteralClass:
+      // "dictionary literal"
+      return LK_Dictionary;
+    case Stmt::BlockExprClass:
+      return LK_Block;
+    case Stmt::ObjCBoxedExprClass: {
+      Expr *Inner = cast<ObjCBoxedExpr>(FromE)->getSubExpr()->IgnoreParens();
+      switch (Inner->getStmtClass()) {
+        case Stmt::IntegerLiteralClass:
+        case Stmt::FloatingLiteralClass:
+        case Stmt::CharacterLiteralClass:
+        case Stmt::ObjCBoolLiteralExprClass:
+        case Stmt::CXXBoolLiteralExprClass:
+          // "numeric literal"
+          return LK_Numeric;
+        case Stmt::ImplicitCastExprClass: {
+          CastKind CK = cast<CastExpr>(Inner)->getCastKind();
+          // Boolean literals can be represented by implicit casts.
+          if (CK == CK_IntegralToBoolean || CK == CK_IntegralCast)
+            return LK_Numeric;
+          break;
+        }
+        default:
+          break;
+      }
+      return LK_Boxed;
+    }
+  }
+  return LK_None;
+}
+
 static void diagnoseObjCLiteralComparison(Sema &S, SourceLocation Loc,
                                           ExprResult &LHS, ExprResult &RHS,
                                           BinaryOperator::Opcode Opc){
@@ -6866,61 +6916,15 @@ static void diagnoseObjCLiteralComparison(Sema &S, SourceLocation Loc,
     return;
 
   // This should be kept in sync with warn_objc_literal_comparison.
-  // LK_String should always be last, since it has its own warning flag.
-  enum {
-    LK_Array,
-    LK_Dictionary,
-    LK_Numeric,
-    LK_Boxed,
-    LK_String
-  } LiteralKind;
-
-  Literal = Literal->IgnoreParenImpCasts();
-  switch (Literal->getStmtClass()) {
-  case Stmt::ObjCStringLiteralClass:
-    // "string literal"
-    LiteralKind = LK_String;
-    break;
-  case Stmt::ObjCArrayLiteralClass:
-    // "array literal"
-    LiteralKind = LK_Array;
-    break;
-  case Stmt::ObjCDictionaryLiteralClass:
-    // "dictionary literal"
-    LiteralKind = LK_Dictionary;
-    break;
-  case Stmt::ObjCBoxedExprClass: {
-    Expr *Inner = cast<ObjCBoxedExpr>(Literal)->getSubExpr();
-    switch (Inner->getStmtClass()) {
-    case Stmt::IntegerLiteralClass:
-    case Stmt::FloatingLiteralClass:
-    case Stmt::CharacterLiteralClass:
-    case Stmt::ObjCBoolLiteralExprClass:
-    case Stmt::CXXBoolLiteralExprClass:
-      // "numeric literal"
-      LiteralKind = LK_Numeric;
-      break;
-    case Stmt::ImplicitCastExprClass: {
-      CastKind CK = cast<CastExpr>(Inner)->getCastKind();
-      // Boolean literals can be represented by implicit casts.
-      if (CK == CK_IntegralToBoolean || CK == CK_IntegralCast) {
-        LiteralKind = LK_Numeric;
-        break;
-      }
-      // FALLTHROUGH
-    }
-    default:
-      // "boxed expression"
-      LiteralKind = LK_Boxed;
-      break;
-    }
-    break;
-  }
-  default:
+  // LK_String should always be after the other literals, since it has its own
+  // warning flag.
+  Sema::ObjCLiteralKind LiteralKind = S.CheckLiteralKind(Literal);
+  assert(LiteralKind != Sema::LK_Block);
+  if (LiteralKind == Sema::LK_None) {
     llvm_unreachable("Unknown Objective-C object literal kind");
   }
 
-  if (LiteralKind == LK_String)
+  if (LiteralKind == Sema::LK_String)
     S.Diag(Loc, diag::warn_objc_string_literal_comparison)
       << Literal->getSourceRange();
   else
@@ -8312,7 +8316,7 @@ static void DiagnoseSelfAssignment(Sema &S, Expr *LHSExpr, Expr *RHSExpr,
 ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
                                     BinaryOperatorKind Opc,
                                     Expr *LHSExpr, Expr *RHSExpr) {
-  if (getLangOpts().CPlusPlus0x && isa<InitListExpr>(RHSExpr)) {
+  if (getLangOpts().CPlusPlus11 && isa<InitListExpr>(RHSExpr)) {
     // The syntax only allows initializer lists on the RHS of assignment,
     // so we don't need to worry about accepting invalid code for
     // non-assignment operators.
@@ -9202,9 +9206,9 @@ ExprResult Sema::BuildBuiltinOffsetOf(SourceLocation BuiltinLoc,
     //   If type is not a standard-layout class (Clause 9), the results are
     //   undefined.
     if (CXXRecordDecl *CRD = dyn_cast<CXXRecordDecl>(RD)) {
-      bool IsSafe = LangOpts.CPlusPlus0x? CRD->isStandardLayout() : CRD->isPOD();
+      bool IsSafe = LangOpts.CPlusPlus11? CRD->isStandardLayout() : CRD->isPOD();
       unsigned DiagID =
-        LangOpts.CPlusPlus0x? diag::warn_offsetof_non_standardlayout_type
+        LangOpts.CPlusPlus11? diag::warn_offsetof_non_standardlayout_type
                             : diag::warn_offsetof_non_pod_type;
 
       if (!IsSafe && !DidWarnAboutNonPOD &&
@@ -9972,7 +9976,7 @@ Sema::VerifyIntegerConstantExpression(Expr *E, llvm::APSInt *Result,
                                       bool AllowFold) {
   SourceLocation DiagLoc = E->getLocStart();
 
-  if (getLangOpts().CPlusPlus0x) {
+  if (getLangOpts().CPlusPlus11) {
     // C++11 [expr.const]p5:
     //   If an expression of literal class type is used in a context where an
     //   integral constant expression is required, then that class type shall
@@ -10099,7 +10103,7 @@ Sema::VerifyIntegerConstantExpression(Expr *E, llvm::APSInt *Result,
 
   // Circumvent ICE checking in C++11 to avoid evaluating the expression twice
   // in the non-ICE case.
-  if (!getLangOpts().CPlusPlus0x && E->isIntegerConstantExpr(Context)) {
+  if (!getLangOpts().CPlusPlus11 && E->isIntegerConstantExpr(Context)) {
     if (Result)
       *Result = E->EvaluateKnownConstInt(Context);
     return Owned(E);
@@ -10117,7 +10121,7 @@ Sema::VerifyIntegerConstantExpression(Expr *E, llvm::APSInt *Result,
   // In C++11, we can rely on diagnostics being produced for any expression
   // which is not a constant expression. If no diagnostics were produced, then
   // this is a constant expression.
-  if (Folded && getLangOpts().CPlusPlus0x && Notes.empty()) {
+  if (Folded && getLangOpts().CPlusPlus11 && Notes.empty()) {
     if (Result)
       *Result = EvalResult.Val.getInt();
     return Owned(E);
@@ -10822,13 +10826,14 @@ bool Sema::tryCaptureVariable(VarDecl *Var, SourceLocation Loc,
             // actually requires the destructor.
             if (isa<ParmVarDecl>(Var))
               FinalizeVarWithDestructor(Var, Record);
-            
+
             // According to the blocks spec, the capture of a variable from
             // the stack requires a const copy constructor.  This is not true
             // of the copy/move done to move a __block variable to the heap.
-            Expr *DeclRef = new (Context) DeclRefExpr(Var, false,
+            Expr *DeclRef = new (Context) DeclRefExpr(Var, Nested,
                                                       DeclRefType.withConst(), 
                                                       VK_LValue, Loc);
+            
             ExprResult Result
               = PerformCopyInitialization(
                   InitializedEntity::InitializeBlock(Var->getLocation(),
@@ -10913,7 +10918,7 @@ bool Sema::tryCaptureVariable(VarDecl *Var, SourceLocation Loc,
     if (BuildAndDiagnose) {
       ExprResult Result = captureInLambda(*this, LSI, Var, CaptureType,
                                           DeclRefType, Loc,
-                                          I == N-1);
+                                          Nested);
       if (!Result.isInvalid())
         CopyExpr = Result.take();
     }

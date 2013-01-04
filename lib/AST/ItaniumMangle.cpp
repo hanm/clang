@@ -16,6 +16,7 @@
 //===----------------------------------------------------------------------===//
 #include "clang/AST/Mangle.h"
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/Attr.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclObjC.h"
@@ -27,8 +28,8 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "llvm/ADT/StringExtras.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/raw_ostream.h"
 
 #define MANGLE_CHECKER 0
 
@@ -1879,6 +1880,12 @@ void CXXNameMangler::mangleType(const BuiltinType *T) {
   case BuiltinType::ObjCId: Out << "11objc_object"; break;
   case BuiltinType::ObjCClass: Out << "10objc_class"; break;
   case BuiltinType::ObjCSel: Out << "13objc_selector"; break;
+  case BuiltinType::OCLImage1d: Out << "11ocl_image1d"; break;
+  case BuiltinType::OCLImage1dArray: Out << "16ocl_image1darray"; break;
+  case BuiltinType::OCLImage1dBuffer: Out << "17ocl_image1dbuffer"; break;
+  case BuiltinType::OCLImage2d: Out << "11ocl_image2d"; break;
+  case BuiltinType::OCLImage2dArray: Out << "16ocl_image2darray"; break;
+  case BuiltinType::OCLImage3d: Out << "11ocl_image3d"; break;
   }
 }
 

@@ -15,12 +15,12 @@
 #ifndef LLVM_CLANG_ANALYZEROPTIONS_H
 #define LLVM_CLANG_ANALYZEROPTIONS_H
 
+#include "clang/Basic/LLVM.h"
+#include "llvm/ADT/IntrusiveRefCntPtr.h"
+#include "llvm/ADT/Optional.h"
+#include "llvm/ADT/StringMap.h"
 #include <string>
 #include <vector>
-#include "clang/Basic/LLVM.h"
-#include "llvm/ADT/Optional.h"
-#include "llvm/ADT/IntrusiveRefCntPtr.h"
-#include "llvm/ADT/StringMap.h"
 
 namespace clang {
 class ASTConsumer;
@@ -193,6 +193,9 @@ private:
   /// \sa getGraphTrimInterval
   llvm::Optional<unsigned> GraphTrimInterval;
 
+  /// \sa getMaxTimesInlineLarge
+  llvm::Optional<unsigned> MaxTimesInlineLarge;
+
   /// Interprets an option's string value as a boolean.
   ///
   /// Accepts the strings "true" and "false".
@@ -275,6 +278,11 @@ public:
   /// This is controlled by the 'graph-trim-interval' config option. To disable
   /// node reclamation, set the option to "0".
   unsigned getGraphTrimInterval();
+
+  /// Returns the maximum times a large function could be inlined.
+  ///
+  /// This is controlled by the 'max-times-inline-large' config option.
+  unsigned getMaxTimesInlineLarge();
 
 public:
   AnalyzerOptions() : CXXMemberInliningMode() {

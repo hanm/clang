@@ -12,12 +12,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/StringSwitch.h"
-#include "clang/AST/ASTContext.h"
-#include "clang/AST/Expr.h"
-#include "clang/AST/Decl.h"
-#include "clang/AST/ExprObjC.h"
 #include "BodyFarm.h"
+#include "clang/AST/ASTContext.h"
+#include "clang/AST/Decl.h"
+#include "clang/AST/Expr.h"
+#include "clang/AST/ExprObjC.h"
+#include "llvm/ADT/StringSwitch.h"
 
 using namespace clang;
 
@@ -103,9 +103,7 @@ BinaryOperator *ASTMaker::makeComparison(const Expr *LHS, const Expr *RHS,
 }
 
 CompoundStmt *ASTMaker::makeCompound(ArrayRef<Stmt *> Stmts) {
-  return new (C) CompoundStmt(C, const_cast<Stmt**>(Stmts.data()),
-                              Stmts.size(),
-                              SourceLocation(), SourceLocation());
+  return new (C) CompoundStmt(C, Stmts, SourceLocation(), SourceLocation());
 }
 
 DeclRefExpr *ASTMaker::makeDeclRefExpr(const VarDecl *D) {

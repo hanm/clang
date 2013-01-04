@@ -13,8 +13,9 @@
 
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/ASTContext.h"
-#include "clang/AST/Stmt.h"
 #include "clang/AST/ASTMutationListener.h"
+#include "clang/AST/Attr.h"
+#include "clang/AST/Stmt.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 using namespace clang;
@@ -53,8 +54,9 @@ void ObjCContainerDecl::anchor() { }
 ///
 ObjCIvarDecl *
 ObjCContainerDecl::getIvarDecl(IdentifierInfo *Id) const {
-  lookup_const_iterator Ivar, IvarEnd;
-  for (llvm::tie(Ivar, IvarEnd) = lookup(Id); Ivar != IvarEnd; ++Ivar) {
+  lookup_const_result R = lookup(Id);
+  for (lookup_const_iterator Ivar = R.begin(), IvarEnd = R.end();
+       Ivar != IvarEnd; ++Ivar) {
     if (ObjCIvarDecl *ivar = dyn_cast<ObjCIvarDecl>(*Ivar))
       return ivar;
   }
@@ -72,8 +74,9 @@ ObjCContainerDecl::getMethod(Selector Sel, bool isInstance) const {
   // + (float) class_method;
   // @end
   //
-  lookup_const_iterator Meth, MethEnd;
-  for (llvm::tie(Meth, MethEnd) = lookup(Sel); Meth != MethEnd; ++Meth) {
+  lookup_const_result R = lookup(Sel);
+  for (lookup_const_iterator Meth = R.begin(), MethEnd = R.end();
+       Meth != MethEnd; ++Meth) {
     ObjCMethodDecl *MD = dyn_cast<ObjCMethodDecl>(*Meth);
     if (MD && MD->isInstanceMethod() == isInstance)
       return MD;
@@ -85,9 +88,9 @@ ObjCPropertyDecl *
 ObjCPropertyDecl::findPropertyDecl(const DeclContext *DC,
                                    IdentifierInfo *propertyID) {
 
-  DeclContext::lookup_const_iterator I, E;
-  llvm::tie(I, E) = DC->lookup(propertyID);
-  for ( ; I != E; ++I)
+  DeclContext::lookup_const_result R = DC->lookup(propertyID);
+  for (DeclContext::lookup_const_iterator I = R.begin(), E = R.end(); I != E;
+       ++I)
     if (ObjCPropertyDecl *PD = dyn_cast<ObjCPropertyDecl>(*I))
       return PD;
 
@@ -203,6 +206,26 @@ void ObjCInterfaceDecl::collectPropertiesToImplement(PropertyMap &PM) const {
   // Note, the properties declared only in class extensions are still copied
   // into the main @interface's property list, and therefore we don't
   // explicitly, have to search class extension properties.
+}
+
+bool ObjCInterfaceDecl::isArcWeakrefUnavailable() const {
+  const ObjCInterfaceDecl *Class = this;
+  while (Class) {
+    if (Class->hasAttr<ArcWeakrefUnavailableAttr>())
+      return true;
+    Class = Class->getSuperClass();
+  }
+  return false;
+}
+
+const ObjCInterfaceDecl *ObjCInterfaceDecl::isObjCRequiresPropertyDefs() const {
+  const ObjCInterfaceDecl *Class = this;
+  while (Class) {
+    if (Class->hasAttr<ObjCRequiresPropertyDefsAttr>())
+      return Class;
+    Class = Class->getSuperClass();
+  }
+  return 0;
 }
 
 void ObjCInterfaceDecl::mergeClassExtensionProtocolList(

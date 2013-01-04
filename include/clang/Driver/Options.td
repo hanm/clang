@@ -152,7 +152,8 @@ def E : Flag<["-"], "E">, Flags<[DriverOption,CC1Option]>, Group<Action_Group>,
   HelpText<"Only run the preprocessor">;
 def F : JoinedOrSeparate<["-"], "F">, Flags<[RenderJoined,CC1Option]>,
     HelpText<"Add directory to framework include search path">;
-def G : Separate<["-"], "G">, Flags<[DriverOption]>;
+def G : JoinedOrSeparate<["-"], "G">, Flags<[DriverOption]>;
+def G_EQ : Joined<["-"], "G=">, Flags<[DriverOption]>;
 def H : Flag<["-"], "H">, Flags<[CC1Option]>,
     HelpText<"Show header includes and nesting depth">;
 def I_ : Flag<["-"], "I-">, Group<I_Group>;
@@ -300,7 +301,7 @@ def fthread_sanitizer : Flag<["-"], "fthread-sanitizer">, Group<f_Group>;
 def fno_thread_sanitizer : Flag<["-"], "fno-thread-sanitizer">, Group<f_Group>;
 def fasm : Flag<["-"], "fasm">, Group<f_Group>;
 
-def fasm_blocks : Flag<["-"], "fasm-blocks">, Group<f_Group>;
+def fasm_blocks : Flag<["-"], "fasm-blocks">, Group<f_Group>, Flags<[CC1Option]>;
 def fno_asm_blocks : Flag<["-"], "fno-asm-blocks">, Group<f_Group>;
 
 def fassume_sane_operator_new : Flag<["-"], "fassume-sane-operator-new">, Group<f_Group>;
@@ -391,6 +392,23 @@ def fsanitize_EQ : CommaJoined<["-"], "fsanitize=">, Group<f_clang_Group>,
                             "address (memory errors) | thread (race detection) | "
                             "undefined (miscellaneous undefined behavior)">;
 def fno_sanitize_EQ : CommaJoined<["-"], "fno-sanitize=">, Group<f_clang_Group>;
+def fsanitize_blacklist : Joined<["-"], "fsanitize-blacklist=">,
+                          Group<f_clang_Group>, Flags<[CC1Option]>,
+                          HelpText<"Path to blacklist file for sanitizers">;
+def fno_sanitize_blacklist : Flag<["-"], "fno-sanitize-blacklist">,
+                             Group<f_clang_Group>,
+                             HelpText<"Don't use blacklist file for sanitizers">;
+def fsanitize_memory_track_origins : Flag<["-"], "fsanitize-memory-track-origins">,
+                                     Group<f_clang_Group>, Flags<[CC1Option]>,
+                                     HelpText<"Enable origins tracking in MemorySanitizer">;
+def fno_sanitize_memory_track_origins : Flag<["-"], "fno-sanitize-memory-track-origins">,
+                                        Group<f_clang_Group>,
+                                        HelpText<"Disable origins tracking in MemorySanitizer">;
+def fsanitize_recover : Flag<["-"], "fsanitize-recover">,
+                        Group<f_clang_Group>;
+def fno_sanitize_recover : Flag<["-"], "fno-sanitize-recover">,
+                           Group<f_clang_Group>, Flags<[CC1Option]>,
+                           HelpText<"Disable sanitizer check recovery">;
 def funsafe_math_optimizations : Flag<["-"], "funsafe-math-optimizations">,
   Group<f_Group>;
 def fno_unsafe_math_optimizations : Flag<["-"], "fno-unsafe-math-optimizations">,
@@ -547,6 +565,8 @@ def fno_threadsafe_statics : Flag<["-"], "fno-threadsafe-statics">, Group<f_Grou
   Flags<[CC1Option]>, HelpText<"Do not emit code to make initialization of local statics thread safe">;
 def fno_use_cxa_atexit : Flag<["-"], "fno-use-cxa-atexit">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Don't use __cxa_atexit for calling destructors">;
+def fno_use_init_array : Flag<["-"], "fno-use-init-array">, Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Don't use .init_array instead of .ctors">;
 def fno_unit_at_a_time : Flag<["-"], "fno-unit-at-a-time">, Group<f_Group>;
 def fno_unwind_tables : Flag<["-"], "fno-unwind-tables">, Group<f_Group>;
 def fno_verbose_asm : Flag<["-"], "fno-verbose-asm">, Group<f_Group>;
@@ -641,6 +661,16 @@ def ftemplate_depth_ : Joined<["-"], "ftemplate-depth-">, Group<f_Group>;
 def ftemplate_backtrace_limit_EQ : Joined<["-"], "ftemplate-backtrace-limit=">,
                                    Group<f_Group>;
 def ftest_coverage : Flag<["-"], "ftest-coverage">, Group<f_Group>;
+def fvectorize : Flag<["-"], "fvectorize">, Group<f_Group>,
+  HelpText<"Enable the loop vectorization passes">;
+def fno_vectorize : Flag<["-"], "fno-vectorize">, Group<f_Group>;
+def ftree_vectorize : Flag<["-"], "ftree-vectorize">, Alias<fvectorize>;
+def fno_tree_vectorize : Flag<["-"], "fno-tree-vectorize">, Alias<fno_vectorize>;
+def fslp_vectorize : Flag<["-"], "fslp-vectorize">, Group<f_Group>,
+  HelpText<"Enable the superword-level parallelism vectorization passes">;
+def fno_slp_vectorize : Flag<["-"], "fno-slp-vectorize">, Group<f_Group>;
+def ftree_slp_vectorize : Flag<["-"], "ftree-slp-vectorize">, Alias<fslp_vectorize>;
+def fno_tree_slp_vectorize : Flag<["-"], "fno-tree-slp-vectorize">, Alias<fno_slp_vectorize>;
 def Wlarge_by_value_copy_def : Flag<["-"], "Wlarge-by-value-copy">,
   HelpText<"Warn if a function definition returns or accepts an object larger "
            "in bytes than a given value">, Flags<[HelpHidden]>;
@@ -672,6 +702,8 @@ def funsigned_bitfields : Flag<["-"], "funsigned-bitfields">, Group<f_Group>;
 def funsigned_char : Flag<["-"], "funsigned-char">, Group<f_Group>;
 def funwind_tables : Flag<["-"], "funwind-tables">, Group<f_Group>;
 def fuse_cxa_atexit : Flag<["-"], "fuse-cxa-atexit">, Group<f_Group>;
+def fuse_init_array : Flag<["-"], "fuse-init-array">, Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Use .init_array instead of .ctors">;
 def fverbose_asm : Flag<["-"], "fverbose-asm">, Group<f_Group>;
 def fvisibility_EQ : Joined<["-"], "fvisibility=">, Group<f_Group>;
 def fvisibility_inlines_hidden : Flag<["-"], "fvisibility-inlines-hidden">, Group<f_Group>,
@@ -835,6 +867,7 @@ def mno_warn_nonportable_cfstrings : Flag<["-"], "mno-warn-nonportable-cfstrings
 def mno_omit_leaf_frame_pointer : Flag<["-"], "mno-omit-leaf-frame-pointer">, Group<m_Group>;
 def momit_leaf_frame_pointer : Flag<["-"], "momit-leaf-frame-pointer">, Group<m_Group>,
   HelpText<"Omit frame pointer setup for leaf functions">, Flags<[CC1Option]>;
+def moslib_EQ : Joined<["-"], "moslib=">, Group<m_Group>;
 def mpascal_strings : Flag<["-"], "mpascal-strings">, Group<m_Group>;
 def mred_zone : Flag<["-"], "mred-zone">, Group<m_Group>;
 def mregparm_EQ : Joined<["-"], "mregparm=">, Group<m_Group>;
@@ -871,6 +904,8 @@ def mf16c : Flag<["-"], "mf16c">, Group<m_x86_Features_Group>;
 def mrtm : Flag<["-"], "mrtm">, Group<m_x86_Features_Group>;
 def mips16 : Flag<["-"], "mips16">, Group<m_Group>;
 def mno_mips16 : Flag<["-"], "mno-mips16">, Group<m_Group>;
+def mxgot : Flag<["-"], "mxgot">, Group<m_Group>;
+def mno_xgot : Flag<["-"], "mno-xgot">, Group<m_Group>;
 def mdsp : Flag<["-"], "mdsp">, Group<m_Group>;
 def mno_dsp : Flag<["-"], "mno-dsp">, Group<m_Group>;
 def mdspr2 : Flag<["-"], "mdspr2">, Group<m_Group>;
@@ -929,8 +964,6 @@ def print_file_name_EQ : Joined<["-", "--"], "print-file-name=">,
   HelpText<"Print the full library path of <file>">, MetaVarName<"<file>">;
 def print_ivar_layout : Flag<["-"], "print-ivar-layout">, Flags<[CC1Option]>,
   HelpText<"Enable Objective-C Ivar layout bitmap print trace">;
-def encode_extended_block_sig : Flag<["-"], "encode-extended-block-signature">, Flags<[CC1Option]>,
-  HelpText<"Enable encoding of the extended block type signature">;
 def print_libgcc_file_name : Flag<["-", "--"], "print-libgcc-file-name">,
   HelpText<"Print the library path for \"libgcc.a\"">;
 def print_multi_directory : Flag<["-", "--"], "print-multi-directory">;

@@ -11,17 +11,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/Basic/Version.h"
 #include "clang/Frontend/Utils.h"
+#include "clang/Basic/FileManager.h"
 #include "clang/Basic/MacroBuilder.h"
+#include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
+#include "clang/Basic/Version.h"
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/FrontendOptions.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Lex/PreprocessorOptions.h"
-#include "clang/Basic/FileManager.h"
-#include "clang/Basic/SourceManager.h"
 #include "clang/Serialization/ASTReader.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/Support/FileSystem.h"
@@ -307,7 +307,7 @@ static void InitializeStandardPredefinedMacros(const TargetInfo &TI,
     // C++11 [cpp.predefined]p1:
     //   The name __cplusplus is defined to the value 201103L when compiling a
     //   C++ translation unit.
-    if (LangOpts.CPlusPlus0x)
+    if (LangOpts.CPlusPlus11)
       Builder.defineMacro("__cplusplus", "201103L");
     // C++03 [cpp.predefined]p1:
     //   The name __cplusplus is defined to the value 199711L when compiling a
@@ -377,7 +377,7 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   if (!LangOpts.GNUMode)
     Builder.defineMacro("__STRICT_ANSI__");
 
-  if (LangOpts.CPlusPlus0x)
+  if (LangOpts.CPlusPlus11)
     Builder.defineMacro("__GXX_EXPERIMENTAL_CXX0X__");
 
   if (LangOpts.ObjC1) {
@@ -507,6 +507,8 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
                    TI.getTypeWidth(TI.getWCharType()), TI, Builder);
   DefineTypeSizeof("__SIZEOF_WINT_T__",
                    TI.getTypeWidth(TI.getWIntType()), TI, Builder);
+  if (TI.hasInt128Type())
+    DefineTypeSizeof("__SIZEOF_INT128__", 128, TI, Builder);
 
   DefineType("__INTMAX_TYPE__", TI.getIntMaxType(), Builder);
   DefineType("__UINTMAX_TYPE__", TI.getUIntMaxType(), Builder);

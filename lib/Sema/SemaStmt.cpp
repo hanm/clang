@@ -12,21 +12,21 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Sema/SemaInternal.h"
-#include "clang/Sema/Scope.h"
-#include "clang/Sema/ScopeInfo.h"
-#include "clang/Sema/Initialization.h"
-#include "clang/Sema/Lookup.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/CharUnits.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/EvaluatedExprVisitor.h"
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/ExprObjC.h"
-#include "clang/AST/StmtObjC.h"
 #include "clang/AST/StmtCXX.h"
+#include "clang/AST/StmtObjC.h"
 #include "clang/AST/TypeLoc.h"
-#include "clang/Lex/Preprocessor.h"
 #include "clang/Basic/TargetInfo.h"
+#include "clang/Lex/Preprocessor.h"
+#include "clang/Sema/Initialization.h"
+#include "clang/Sema/Lookup.h"
+#include "clang/Sema/Scope.h"
+#include "clang/Sema/ScopeInfo.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -298,7 +298,9 @@ Sema::ActOnCompoundStmt(SourceLocation L, SourceLocation R,
       DiagnoseEmptyLoopBody(Elts[i], Elts[i + 1]);
   }
 
-  return Owned(new (Context) CompoundStmt(Context, Elts, NumElts, L, R));
+  return Owned(new (Context) CompoundStmt(Context,
+                                          llvm::makeArrayRef(Elts, NumElts),
+                                          L, R));
 }
 
 StmtResult
@@ -312,7 +314,7 @@ Sema::ActOnCaseStmt(SourceLocation CaseLoc, Expr *LHSVal,
     return StmtError();
   }
 
-  if (!getLangOpts().CPlusPlus0x) {
+  if (!getLangOpts().CPlusPlus11) {
     // C99 6.8.4.2p3: The expression shall be an integer constant.
     // However, GCC allows any evaluatable integer expression.
     if (!LHSVal->isTypeDependent() && !LHSVal->isValueDependent()) {
@@ -710,7 +712,7 @@ Sema::ActOnFinishSwitchStmt(SourceLocation SwitchLoc, Stmt *Switch,
 
       llvm::APSInt LoVal;
 
-      if (getLangOpts().CPlusPlus0x) {
+      if (getLangOpts().CPlusPlus11) {
         // C++11 [stmt.switch]p2: the constant-expression shall be a converted
         // constant expression of the promoted type of the switch condition.
         ExprResult ConvLo =
@@ -830,7 +832,7 @@ Sema::ActOnFinishSwitchStmt(SourceLocation SwitchLoc, Stmt *Switch,
         Expr *Hi = CR->getRHS();
         llvm::APSInt HiVal;
 
-        if (getLangOpts().CPlusPlus0x) {
+        if (getLangOpts().CPlusPlus11) {
           // C++11 [stmt.switch]p2: the constant-expression shall be a converted
           // constant expression of the promoted type of the switch condition.
           ExprResult ConvHi =
@@ -1149,7 +1151,7 @@ Sema::ActOnDoStmt(SourceLocation DoLoc, Stmt *Body,
   assert(Cond && "ActOnDoStmt(): missing expression");
 
   ExprResult CondResult = CheckBooleanCondition(Cond, DoLoc);
-  if (CondResult.isInvalid() || CondResult.isInvalid())
+  if (CondResult.isInvalid())
     return StmtError();
   Cond = CondResult.take();
 
@@ -1937,8 +1939,7 @@ Sema::BuildCXXForRangeStmt(SourceLocation ForLoc, SourceLocation ColonLoc,
         Expr *Range = BEFFailure ? EndRangeRef.get() : BeginRangeRef.get();
         Diag(Range->getLocStart(), diag::err_for_range_invalid)
             << RangeLoc << Range->getType() << BEFFailure;
-        CandidateSet.NoteCandidates(*this, OCD_AllCandidates,
-                                    llvm::makeArrayRef(&Range, /*NumArgs=*/1));
+        CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Range);
       }
       // Return an error if no fix was discovered.
       if (RangeStatus != FRS_Success)
@@ -2756,7 +2757,7 @@ Sema::ActOnCXXTryBlock(SourceLocation TryLoc, Stmt *TryBlock,
   // and warns.
 
   return Owned(CXXTryStmt::Create(Context, TryLoc, TryBlock,
-                                  Handlers, NumHandlers));
+                                  llvm::makeArrayRef(Handlers, NumHandlers)));
 }
 
 StmtResult

@@ -11,24 +11,24 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/Frontend/CodeGenOptions.h"
 #include "CodeGenFunction.h"
 #include "CGCXXABI.h"
+#include "CGDebugInfo.h"
 #include "CGObjCRuntime.h"
 #include "CodeGenModule.h"
-#include "CGDebugInfo.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Basic/TargetInfo.h"
-#include "llvm/Constants.h"
-#include "llvm/Function.h"
-#include "llvm/GlobalVariable.h"
-#include "llvm/Intrinsics.h"
-#include "llvm/Module.h"
+#include "clang/Frontend/CodeGenOptions.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/CFG.h"
-#include "llvm/DataLayout.h"
 #include <cstdarg>
 
 using namespace clang;
@@ -266,7 +266,7 @@ public:
   Value *VisitInitListExpr(InitListExpr *E);
 
   Value *VisitImplicitValueInitExpr(const ImplicitValueInitExpr *E) {
-    return CGF.CGM.EmitNullConstant(E->getType());
+    return EmitNullValue(E->getType());
   }
   Value *VisitExplicitCastExpr(ExplicitCastExpr *E) {
     if (E->getType()->isVariablyModifiedType())
@@ -413,6 +413,10 @@ public:
         return EmitOverflowCheckedBinOp(Ops);
       }
     }
+
+    if (Ops.Ty->isUnsignedIntegerType() &&
+        CGF.getLangOpts().SanitizeUnsignedIntegerOverflow)
+      return EmitOverflowCheckedBinOp(Ops);
 
     if (Ops.LHS->getType()->isFPOrFPVectorTy())
       return Builder.CreateFMul(Ops.LHS, Ops.RHS, "mul");
@@ -641,7 +645,8 @@ void ScalarExprEmitter::EmitFloatConversionCheck(Value *OrigSrc,
     CGF.EmitCheckTypeDescriptor(OrigSrcType),
     CGF.EmitCheckTypeDescriptor(DstType)
   };
-  CGF.EmitCheck(Check, "float_cast_overflow", StaticArgs, OrigSrc);
+  CGF.EmitCheck(Check, "float_cast_overflow", StaticArgs, OrigSrc,
+                CodeGenFunction::CRK_Recoverable);
 }
 
 /// EmitScalarConversion - Emit a conversion from the specified type to the
@@ -707,17 +712,9 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     QualType EltTy = DstType->getAs<ExtVectorType>()->getElementType();
     llvm::Value *Elt = EmitScalarConversion(Src, SrcType, EltTy);
 
-    // Insert the element in element zero of an undef vector
-    llvm::Value *UnV = llvm::UndefValue::get(DstTy);
-    llvm::Value *Idx = Builder.getInt32(0);
-    UnV = Builder.CreateInsertElement(UnV, Elt, Idx);
-
     // Splat the element across to all elements
     unsigned NumElements = cast<llvm::VectorType>(DstTy)->getNumElements();
-    llvm::Constant *Mask = llvm::ConstantVector::getSplat(NumElements,
-                                                          Builder.getInt32(0));
-    llvm::Value *Yay = Builder.CreateShuffleVector(UnV, UnV, Mask, "splat");
-    return Yay;
+    return Builder.CreateVectorSplat(NumElements, Elt, "splat");
   }
 
   // Allow bitcast from vector to integer/fp of the same size.
@@ -795,10 +792,7 @@ EmitComplexToScalarConversion(CodeGenFunction::ComplexPairTy Src,
 }
 
 Value *ScalarExprEmitter::EmitNullValue(QualType Ty) {
-  if (const MemberPointerType *MPT = Ty->getAs<MemberPointerType>())
-    return CGF.CGM.getCXXABI().EmitNullMemberPointer(MPT);
-
-  return llvm::Constant::getNullValue(ConvertType(Ty));
+  return CGF.EmitFromMemory(CGF.CGM.EmitNullConstant(Ty), Ty);
 }
 
 /// \brief Emit a sanitization check for the given "binary" operation (which
@@ -846,7 +840,8 @@ void ScalarExprEmitter::EmitBinOpCheck(Value *Check, const BinOpInfo &Info) {
     DynamicData.push_back(Info.RHS);
   }
 
-  CGF.EmitCheck(Check, CheckName, StaticData, DynamicData);
+  CGF.EmitCheck(Check, CheckName, StaticData, DynamicData,
+                CodeGenFunction::CRK_Recoverable);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1352,17 +1347,9 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     Elt = EmitScalarConversion(Elt, E->getType(),
                                DestTy->getAs<VectorType>()->getElementType());
 
-    // Insert the element in element zero of an undef vector
-    llvm::Value *UnV = llvm::UndefValue::get(DstTy);
-    llvm::Value *Idx = Builder.getInt32(0);
-    UnV = Builder.CreateInsertElement(UnV, Elt, Idx);
-
     // Splat the element across to all elements
     unsigned NumElements = cast<llvm::VectorType>(DstTy)->getNumElements();
-    llvm::Constant *Zero = Builder.getInt32(0);
-    llvm::Constant *Mask = llvm::ConstantVector::getSplat(NumElements, Zero);
-    llvm::Value *Yay = Builder.CreateShuffleVector(UnV, UnV, Mask, "splat");
-    return Yay;
+    return Builder.CreateVectorSplat(NumElements, Elt, "splat");;
   }
 
   case CK_IntegralCast:
@@ -1472,11 +1459,23 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
 
     // Note that signed integer inc/dec with width less than int can't
     // overflow because of promotion rules; we're just eliding a few steps here.
-    if (type->isSignedIntegerOrEnumerationType() &&
-        value->getType()->getPrimitiveSizeInBits() >=
-            CGF.IntTy->getBitWidth())
+    if (value->getType()->getPrimitiveSizeInBits() >=
+            CGF.IntTy->getBitWidth() &&
+        type->isSignedIntegerOrEnumerationType()) {
       value = EmitAddConsiderOverflowBehavior(E, value, amt, isInc);
-    else
+    } else if (value->getType()->getPrimitiveSizeInBits() >=
+               CGF.IntTy->getBitWidth() &&
+               type->isUnsignedIntegerType() &&
+               CGF.getLangOpts().SanitizeUnsignedIntegerOverflow) {
+      BinOpInfo BinOp;
+      BinOp.LHS = value;
+      BinOp.RHS = llvm::ConstantInt::get(value->getType(), 1, false);
+      BinOp.Ty = E->getType();
+      BinOp.Opcode = isInc ? BO_Add : BO_Sub;
+      BinOp.FPContractable = false;
+      BinOp.E = E;
+      value = EmitOverflowCheckedBinOp(BinOp);
+    } else
       value = Builder.CreateAdd(value, amt, isInc ? "inc" : "dec");
   
   // Next most common: pointer increment.
@@ -1926,7 +1925,7 @@ void ScalarExprEmitter::EmitUndefinedBehaviorIntegerDivAndRemCheck(
     const BinOpInfo &Ops, llvm::Value *Zero, bool isDiv) {
   llvm::Value *Cond = 0;
 
-  if (CGF.getLangOpts().SanitizeDivideByZero)
+  if (CGF.getLangOpts().SanitizeIntegerDivideByZero)
     Cond = Builder.CreateICmpNE(Ops.RHS, Zero);
 
   if (CGF.getLangOpts().SanitizeSignedIntegerOverflow &&
@@ -1948,16 +1947,17 @@ void ScalarExprEmitter::EmitUndefinedBehaviorIntegerDivAndRemCheck(
 }
 
 Value *ScalarExprEmitter::EmitDiv(const BinOpInfo &Ops) {
-  if (CGF.getLangOpts().SanitizeDivideByZero ||
-      CGF.getLangOpts().SanitizeSignedIntegerOverflow) {
+  if ((CGF.getLangOpts().SanitizeIntegerDivideByZero ||
+      CGF.getLangOpts().SanitizeSignedIntegerOverflow) &&
+      Ops.Ty->isIntegerType()) {
     llvm::Value *Zero = llvm::Constant::getNullValue(ConvertType(Ops.Ty));
-
-    if (Ops.Ty->isIntegerType())
-      EmitUndefinedBehaviorIntegerDivAndRemCheck(Ops, Zero, true);
-    else if (CGF.getLangOpts().SanitizeDivideByZero &&
-             Ops.Ty->isRealFloatingType())
-      EmitBinOpCheck(Builder.CreateFCmpUNE(Ops.RHS, Zero), Ops);
+    EmitUndefinedBehaviorIntegerDivAndRemCheck(Ops, Zero, true);
+  } else if (CGF.getLangOpts().SanitizeFloatDivideByZero &&
+             Ops.Ty->isRealFloatingType()) {
+    llvm::Value *Zero = llvm::Constant::getNullValue(ConvertType(Ops.Ty));
+    EmitBinOpCheck(Builder.CreateFCmpUNE(Ops.RHS, Zero), Ops);
   }
+
   if (Ops.LHS->getType()->isFPOrFPVectorTy()) {
     llvm::Value *Val = Builder.CreateFDiv(Ops.LHS, Ops.RHS, "div");
     if (CGF.getLangOpts().OpenCL) {
@@ -1978,10 +1978,10 @@ Value *ScalarExprEmitter::EmitDiv(const BinOpInfo &Ops) {
 
 Value *ScalarExprEmitter::EmitRem(const BinOpInfo &Ops) {
   // Rem in C can't be a floating point type: C99 6.5.5p2.
-  if (CGF.getLangOpts().SanitizeDivideByZero) {
+  if (CGF.getLangOpts().SanitizeIntegerDivideByZero) {
     llvm::Value *Zero = llvm::Constant::getNullValue(ConvertType(Ops.Ty));
 
-    if (Ops.Ty->isIntegerType()) 
+    if (Ops.Ty->isIntegerType())
       EmitUndefinedBehaviorIntegerDivAndRemCheck(Ops, Zero, false);
   }
 
@@ -1995,27 +1995,32 @@ Value *ScalarExprEmitter::EmitOverflowCheckedBinOp(const BinOpInfo &Ops) {
   unsigned IID;
   unsigned OpID = 0;
 
+  bool isSigned = Ops.Ty->isSignedIntegerOrEnumerationType();
   switch (Ops.Opcode) {
   case BO_Add:
   case BO_AddAssign:
     OpID = 1;
-    IID = llvm::Intrinsic::sadd_with_overflow;
+    IID = isSigned ? llvm::Intrinsic::sadd_with_overflow :
+                     llvm::Intrinsic::uadd_with_overflow;
     break;
   case BO_Sub:
   case BO_SubAssign:
     OpID = 2;
-    IID = llvm::Intrinsic::ssub_with_overflow;
+    IID = isSigned ? llvm::Intrinsic::ssub_with_overflow :
+                     llvm::Intrinsic::usub_with_overflow;
     break;
   case BO_Mul:
   case BO_MulAssign:
     OpID = 3;
-    IID = llvm::Intrinsic::smul_with_overflow;
+    IID = isSigned ? llvm::Intrinsic::smul_with_overflow :
+                     llvm::Intrinsic::umul_with_overflow;
     break;
   default:
     llvm_unreachable("Unsupported operation for overflow detection");
   }
   OpID <<= 1;
-  OpID |= 1;
+  if (isSigned)
+    OpID |= 1;
 
   llvm::Type *opTy = CGF.CGM.getTypes().ConvertType(Ops.Ty);
 
@@ -2031,7 +2036,7 @@ Value *ScalarExprEmitter::EmitOverflowCheckedBinOp(const BinOpInfo &Ops) {
   if (handlerName->empty()) {
     // If the signed-integer-overflow sanitizer is enabled, emit a call to its
     // runtime. Otherwise, this is a -ftrapv check, so just emit a trap.
-    if (CGF.getLangOpts().SanitizeSignedIntegerOverflow)
+    if (!isSigned || CGF.getLangOpts().SanitizeSignedIntegerOverflow)
       EmitBinOpCheck(Builder.CreateNot(overflow), Ops);
     else
       CGF.EmitTrapvCheck(Builder.CreateNot(overflow));
@@ -2256,7 +2261,11 @@ Value *ScalarExprEmitter::EmitAdd(const BinOpInfo &op) {
       return EmitOverflowCheckedBinOp(op);
     }
   }
-    
+
+  if (op.Ty->isUnsignedIntegerType() &&
+      CGF.getLangOpts().SanitizeUnsignedIntegerOverflow)
+    return EmitOverflowCheckedBinOp(op);
+
   if (op.LHS->getType()->isFPOrFPVectorTy()) {
     // Try to form an fmuladd.
     if (Value *FMulAdd = tryEmitFMulAdd(op, CGF, Builder))
@@ -2283,7 +2292,11 @@ Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
         return EmitOverflowCheckedBinOp(op);
       }
     }
-    
+
+    if (op.Ty->isUnsignedIntegerType() &&
+        CGF.getLangOpts().SanitizeUnsignedIntegerOverflow)
+      return EmitOverflowCheckedBinOp(op);
+
     if (op.LHS->getType()->isFPOrFPVectorTy()) {
       // Try to form an fmuladd.
       if (Value *FMulAdd = tryEmitFMulAdd(op, CGF, Builder, true))

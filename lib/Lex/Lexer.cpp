@@ -25,12 +25,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Lex/Lexer.h"
-#include "clang/Lex/Preprocessor.h"
-#include "clang/Lex/LexDiagnostic.h"
-#include "clang/Lex/CodeCompletionHandler.h"
 #include "clang/Basic/SourceManager.h"
-#include "llvm/ADT/StringSwitch.h"
+#include "clang/Lex/CodeCompletionHandler.h"
+#include "clang/Lex/LexDiagnostic.h"
+#include "clang/Lex/Preprocessor.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <cstring>
@@ -233,16 +233,67 @@ void Lexer::Stringify(SmallVectorImpl<char> &Str) {
 // Token Spelling
 //===----------------------------------------------------------------------===//
 
+/// \brief Slow case of getSpelling. Extract the characters comprising the
+/// spelling of this token from the provided input buffer.
+static size_t getSpellingSlow(const Token &Tok, const char *BufPtr,
+                              const LangOptions &LangOpts, char *Spelling) {
+  assert(Tok.needsCleaning() && "getSpellingSlow called on simple token");
+
+  size_t Length = 0;
+  const char *BufEnd = BufPtr + Tok.getLength();
+
+  if (Tok.is(tok::string_literal)) {
+    // Munch the encoding-prefix and opening double-quote.
+    while (BufPtr < BufEnd) {
+      unsigned Size;
+      Spelling[Length++] = Lexer::getCharAndSizeNoWarn(BufPtr, Size, LangOpts);
+      BufPtr += Size;
+
+      if (Spelling[Length - 1] == '"')
+        break;
+    }
+
+    // Raw string literals need special handling; trigraph expansion and line
+    // splicing do not occur within their d-char-sequence nor within their
+    // r-char-sequence.
+    if (Length >= 2 &&
+        Spelling[Length - 2] == 'R' && Spelling[Length - 1] == '"') {
+      // Search backwards from the end of the token to find the matching closing
+      // quote.
+      const char *RawEnd = BufEnd;
+      do --RawEnd; while (*RawEnd != '"');
+      size_t RawLength = RawEnd - BufPtr + 1;
+
+      // Everything between the quotes is included verbatim in the spelling.
+      memcpy(Spelling + Length, BufPtr, RawLength);
+      Length += RawLength;
+      BufPtr += RawLength;
+
+      // The rest of the token is lexed normally.
+    }
+  }
+
+  while (BufPtr < BufEnd) {
+    unsigned Size;
+    Spelling[Length++] = Lexer::getCharAndSizeNoWarn(BufPtr, Size, LangOpts);
+    BufPtr += Size;
+  }
+
+  assert(Length < Tok.getLength() &&
+         "NeedsCleaning flag set on token that didn't need cleaning!");
+  return Length;
+}
+
 /// getSpelling() - Return the 'spelling' of this token.  The spelling of a
 /// token are the characters used to represent the token in the source file
 /// after trigraph expansion and escaped-newline folding.  In particular, this
 /// wants to get the true, uncanonicalized, spelling of things like digraphs
 /// UCNs, etc.
 StringRef Lexer::getSpelling(SourceLocation loc,
-                                   SmallVectorImpl<char> &buffer,
-                                   const SourceManager &SM,
-                                   const LangOptions &options,
-                                   bool *invalid) {
+                             SmallVectorImpl<char> &buffer,
+                             const SourceManager &SM,
+                             const LangOptions &options,
+                             bool *invalid) {
   // Break down the source location.
   std::pair<FileID, unsigned> locInfo = SM.getDecomposedLoc(loc);
 
@@ -267,17 +318,10 @@ StringRef Lexer::getSpelling(SourceLocation loc,
   // Common case:  no need for cleaning.
   if (!token.needsCleaning())
     return StringRef(tokenBegin, length);
-  
-  // Hard case, we need to relex the characters into the string.
-  buffer.clear();
-  buffer.reserve(length);
-  
-  for (const char *ti = tokenBegin, *te = ti + length; ti != te; ) {
-    unsigned charSize;
-    buffer.push_back(Lexer::getCharAndSizeNoWarn(ti, charSize, options));
-    ti += charSize;
-  }
 
+  // Hard case, we need to relex the characters into the string.
+  buffer.resize(length);
+  buffer.resize(getSpellingSlow(token, tokenBegin, options, buffer.data()));
   return StringRef(buffer.data(), buffer.size());
 }
 
@@ -289,31 +333,22 @@ StringRef Lexer::getSpelling(SourceLocation loc,
 std::string Lexer::getSpelling(const Token &Tok, const SourceManager &SourceMgr,
                                const LangOptions &LangOpts, bool *Invalid) {
   assert((int)Tok.getLength() >= 0 && "Token character range is bogus!");
-  
-  // If this token contains nothing interesting, return it directly.
+
   bool CharDataInvalid = false;
-  const char* TokStart = SourceMgr.getCharacterData(Tok.getLocation(), 
+  const char *TokStart = SourceMgr.getCharacterData(Tok.getLocation(),
                                                     &CharDataInvalid);
   if (Invalid)
     *Invalid = CharDataInvalid;
   if (CharDataInvalid)
     return std::string();
-  
+
+  // If this token contains nothing interesting, return it directly.
   if (!Tok.needsCleaning())
-    return std::string(TokStart, TokStart+Tok.getLength());
-  
+    return std::string(TokStart, TokStart + Tok.getLength());
+
   std::string Result;
-  Result.reserve(Tok.getLength());
-  
-  // Otherwise, hard case, relex the characters into the string.
-  for (const char *Ptr = TokStart, *End = TokStart+Tok.getLength();
-       Ptr != End; ) {
-    unsigned CharSize;
-    Result.push_back(Lexer::getCharAndSizeNoWarn(Ptr, CharSize, LangOpts));
-    Ptr += CharSize;
-  }
-  assert(Result.size() != unsigned(Tok.getLength()) &&
-         "NeedsCleaning flag set on something that didn't need cleaning!");
+  Result.resize(Tok.getLength());
+  Result.resize(getSpellingSlow(Tok, TokStart, LangOpts, &*Result.begin()));
   return Result;
 }
 
@@ -365,17 +400,7 @@ unsigned Lexer::getSpelling(const Token &Tok, const char *&Buffer,
   }
 
   // Otherwise, hard case, relex the characters into the string.
-  char *OutBuf = const_cast<char*>(Buffer);
-  for (const char *Ptr = TokStart, *End = TokStart+Tok.getLength();
-       Ptr != End; ) {
-    unsigned CharSize;
-    *OutBuf++ = Lexer::getCharAndSizeNoWarn(Ptr, CharSize, LangOpts);
-    Ptr += CharSize;
-  }
-  assert(unsigned(OutBuf-Buffer) != Tok.getLength() &&
-         "NeedsCleaning flag set on something that didn't need cleaning!");
-
-  return OutBuf-Buffer;
+  return getSpellingSlow(Tok, TokStart, LangOpts, const_cast<char*>(Buffer));
 }
 
 
@@ -1605,7 +1630,7 @@ const char *Lexer::LexUDSuffix(Token &Result, const char *CurPtr) {
   unsigned Size;
   char C = getCharAndSize(CurPtr, Size);
   if (isIdentifierHead(C)) {
-    if (!getLangOpts().CPlusPlus0x) {
+    if (!getLangOpts().CPlusPlus11) {
       if (!isLexingRawMode())
         Diag(CurPtr,
              C == '_' ? diag::warn_cxx11_compat_user_defined_literal
@@ -1823,16 +1848,18 @@ void Lexer::LexCharConstant(Token &Result, const char *CurPtr,
 
   while (C != '\'') {
     // Skip escaped characters.
-    if (C == '\\') {
-      // Skip the escaped character.
-      getAndAdvanceChar(CurPtr, Result);
-    } else if (C == '\n' || C == '\r' ||             // Newline.
-               (C == 0 && CurPtr-1 == BufferEnd)) {  // End of file.
+    if (C == '\\')
+      C = getAndAdvanceChar(CurPtr, Result);
+
+    if (C == '\n' || C == '\r' ||             // Newline.
+        (C == 0 && CurPtr-1 == BufferEnd)) {  // End of file.
       if (!isLexingRawMode() && !LangOpts.AsmPreprocessor)
         Diag(BufferPtr, diag::ext_unterminated_char);
       FormTokenWithChars(Result, CurPtr-1, tok::unknown);
       return;
-    } else if (C == 0) {
+    }
+
+    if (C == 0) {
       if (isCodeCompletionPoint(CurPtr-1)) {
         PP->CodeCompleteNaturalLanguage();
         FormTokenWithChars(Result, CurPtr-1, tok::unknown);
@@ -2398,7 +2425,7 @@ bool Lexer::LexEndOfFile(Token &Result, const char *CurPtr) {
   // C99 5.1.1.2p2: If the file is non-empty and didn't end in a newline, issue
   // a pedwarn.
   if (CurPtr != BufferStart && (CurPtr[-1] != '\n' && CurPtr[-1] != '\r'))
-    Diag(BufferEnd, LangOpts.CPlusPlus0x ? // C++11 [lex.phases] 2.2 p2
+    Diag(BufferEnd, LangOpts.CPlusPlus11 ? // C++11 [lex.phases] 2.2 p2
          diag::warn_cxx98_compat_no_newline_eof : diag::ext_no_newline_eof)
     << FixItHint::CreateInsertion(getSourceLocation(BufferEnd), "\n");
 
@@ -2704,7 +2731,7 @@ LexNextToken:
     // Notify MIOpt that we read a non-whitespace/non-comment token.
     MIOpt.ReadToken();
 
-    if (LangOpts.CPlusPlus0x) {
+    if (LangOpts.CPlusPlus11) {
       Char = getCharAndSize(CurPtr, SizeTmp);
 
       // UTF-16 string literal
@@ -2756,7 +2783,7 @@ LexNextToken:
     // Notify MIOpt that we read a non-whitespace/non-comment token.
     MIOpt.ReadToken();
 
-    if (LangOpts.CPlusPlus0x) {
+    if (LangOpts.CPlusPlus11) {
       Char = getCharAndSize(CurPtr, SizeTmp);
 
       // UTF-32 string literal
@@ -2784,7 +2811,7 @@ LexNextToken:
     // Notify MIOpt that we read a non-whitespace/non-comment token.
     MIOpt.ReadToken();
 
-    if (LangOpts.CPlusPlus0x) {
+    if (LangOpts.CPlusPlus11) {
       Char = getCharAndSize(CurPtr, SizeTmp);
 
       if (Char == '"')
@@ -2807,7 +2834,7 @@ LexNextToken:
                               tok::wide_string_literal);
 
     // Wide raw string literal.
-    if (LangOpts.CPlusPlus0x && Char == 'R' &&
+    if (LangOpts.CPlusPlus11 && Char == 'R' &&
         getCharAndSize(CurPtr + SizeTmp, SizeTmp2) == '"')
       return LexRawStringLiteral(Result,
                                ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result),
@@ -3064,7 +3091,7 @@ LexNextToken:
       CurPtr = ConsumeChar(CurPtr, SizeTmp, Result);
       Kind = tok::lessequal;
     } else if (LangOpts.Digraphs && Char == ':') {     // '<:' -> '['
-      if (LangOpts.CPlusPlus0x &&
+      if (LangOpts.CPlusPlus11 &&
           getCharAndSize(CurPtr + SizeTmp, SizeTmp2) == ':') {
         // C++0x [lex.pptoken]p3:
         //  Otherwise, if the next three characters are <:: and the subsequent

@@ -13,40 +13,39 @@
 //===----------------------------------------------------------------------===//
 
 #include "CIndexer.h"
+#include "CIndexDiagnostic.h"
 #include "CXComment.h"
 #include "CXCursor.h"
-#include "CXTranslationUnit.h"
-#include "CXString.h"
-#include "CXType.h"
 #include "CXSourceLocation.h"
-#include "CIndexDiagnostic.h"
+#include "CXString.h"
+#include "CXTranslationUnit.h"
+#include "CXType.h"
 #include "CursorVisitor.h"
-
-#include "clang/Basic/Version.h"
-
+#include "SimpleFormatContext.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Basic/Diagnostic.h"
+#include "clang/Basic/Version.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendDiagnostic.h"
-#include "clang/Lex/Lexer.h"
 #include "clang/Lex/HeaderSearch.h"
+#include "clang/Lex/Lexer.h"
 #include "clang/Lex/PreprocessingRecord.h"
 #include "clang/Lex/Preprocessor.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Optional.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringSwitch.h"
-#include "llvm/Support/SaveAndRestore.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/Support/CrashRecoveryContext.h"
-#include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/Timer.h"
 #include "llvm/Support/Mutex.h"
+#include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Program.h"
+#include "llvm/Support/SaveAndRestore.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/Threading.h"
-#include "llvm/Support/Compiler.h"
+#include "llvm/Support/Timer.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace clang;
 using namespace clang::cxcursor;
@@ -63,6 +62,8 @@ CXTranslationUnit cxtu::MakeCXTranslationUnit(CIndexer *CIdx, ASTUnit *TU) {
   D->StringPool = createCXStringPool();
   D->Diagnostics = 0;
   D->OverridenCursorsPool = createOverridenCXCursorsPool();
+  D->FormatContext = 0;
+  D->FormatInMemoryUniqueId = 0;
   return D;
 }
 
@@ -1369,6 +1370,12 @@ bool CursorVisitor::VisitBuiltinTypeLoc(BuiltinTypeLoc TL) {
   case BuiltinType::Void:
   case BuiltinType::NullPtr:
   case BuiltinType::Dependent:
+  case BuiltinType::OCLImage1d:
+  case BuiltinType::OCLImage1dArray:
+  case BuiltinType::OCLImage1dBuffer:
+  case BuiltinType::OCLImage2d:
+  case BuiltinType::OCLImage2dArray:
+  case BuiltinType::OCLImage3d:
 #define BUILTIN_TYPE(Id, SingletonId)
 #define SIGNED_TYPE(Id, SingletonId) case BuiltinType::Id:
 #define UNSIGNED_TYPE(Id, SingletonId) case BuiltinType::Id:
@@ -2486,7 +2493,6 @@ CXTranslationUnit clang_createTranslationUnit(CXIndex CIdx,
 
   CIndexer *CXXIdx = static_cast<CIndexer *>(CIdx);
   FileSystemOptions FileSystemOpts;
-  FileSystemOpts.WorkingDir = CXXIdx->getWorkingDirectory();
 
   IntrusiveRefCntPtr<DiagnosticsEngine> Diags;
   ASTUnit *TU = ASTUnit::LoadFromASTFile(ast_filename, Diags, FileSystemOpts,
@@ -2776,6 +2782,7 @@ void clang_disposeTranslationUnit(CXTranslationUnit CTUnit) {
     disposeCXStringPool(CTUnit->StringPool);
     delete static_cast<CXDiagnosticSetImpl *>(CTUnit->Diagnostics);
     disposeOverridenCXCursorsPool(CTUnit->OverridenCursorsPool);
+    delete static_cast<SimpleFormatContext*>(CTUnit->FormatContext);
     delete CTUnit;
   }
 }
@@ -4938,9 +4945,7 @@ void AnnotateTokensWorker::AnnotateTokens() {
 
   for (unsigned I = 0 ; I < TokIdx ; ++I) {
     AnnotateTokensData::iterator Pos = Annotated.find(Tokens[I].int_data[1]);
-    if (Pos != Annotated.end() && 
-        (clang_isInvalid(Cursors[I].kind) ||
-         Pos->second.kind != CXCursor_PreprocessingDirective))
+    if (Pos != Annotated.end() && !clang_isPreprocessing(Cursors[I].kind))
       Cursors[I] = Pos->second;
   }
 
@@ -5070,13 +5075,6 @@ AnnotateTokensWorker::Visit(CXCursor cursor, CXCursor parent) {
   }
   
   if (clang_isPreprocessing(cursor.kind)) {    
-    // For macro expansions, just note where the beginning of the macro
-    // expansion occurs.
-    if (cursor.kind == CXCursor_MacroExpansion) {
-      Annotated[Loc.int_data] = cursor;
-      return CXChildVisit_Recurse;
-    }
-    
     // Items in the preprocessing record are kept separate from items in
     // declarations, so we keep a separate token index.
     unsigned SavedTokIdx = TokIdx;
@@ -5110,6 +5108,10 @@ AnnotateTokensWorker::Visit(CXCursor cursor, CXCursor parent) {
       case RangeOverlap:
         Cursors[I] = cursor;
         AdvanceToken();
+        // For macro expansions, just note where the beginning of the macro
+        // expansion occurs.
+        if (cursor.kind == CXCursor_MacroExpansion)
+          break;
         continue;
       }
       break;

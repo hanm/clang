@@ -11,13 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/Sema/SemaInternal.h"
-#include "clang/Sema/Lookup.h"
-#include "clang/Sema/Initialization.h"
-#include "clang/Sema/Template.h"
-#include "clang/Sema/TemplateDeduction.h"
-#include "clang/Basic/Diagnostic.h"
-#include "clang/Lex/Preprocessor.h"
+#include "clang/Sema/Overload.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/CXXInheritance.h"
 #include "clang/AST/DeclObjC.h"
@@ -25,11 +19,18 @@
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/ExprObjC.h"
 #include "clang/AST/TypeOrdering.h"
+#include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/PartialDiagnostic.h"
+#include "clang/Lex/Preprocessor.h"
+#include "clang/Sema/Initialization.h"
+#include "clang/Sema/Lookup.h"
+#include "clang/Sema/SemaInternal.h"
+#include "clang/Sema/Template.h"
+#include "clang/Sema/TemplateDeduction.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallString.h"
-#include "llvm/ADT/STLExtras.h"
 #include <algorithm>
 
 namespace clang {
@@ -929,11 +930,19 @@ Sema::CheckOverload(Scope *S, FunctionDecl *New, const LookupResult &Old,
   return Ovl_Overload;
 }
 
+static bool canBeOverloaded(const FunctionDecl &D) {
+  if (D.getAttr<OverloadableAttr>())
+    return true;
+  if (D.hasCLanguageLinkage())
+    return false;
+  return true;
+}
+
 bool Sema::IsOverload(FunctionDecl *New, FunctionDecl *Old,
                       bool UseUsingDeclRules) {
   // If both of the functions are extern "C", then they are not
   // overloads.
-  if (Old->isExternC() && New->isExternC())
+  if (!canBeOverloaded(*Old) && !canBeOverloaded(*New))
     return false;
 
   FunctionTemplateDecl *OldTemplate = Old->getDescribedFunctionTemplate();
@@ -2880,8 +2889,8 @@ IsInitializerListConstructorConversion(Sema &S, Expr *From, QualType ToType,
                                        UserDefinedConversionSequence &User,
                                        OverloadCandidateSet &CandidateSet,
                                        bool AllowExplicit) {
-  DeclContext::lookup_iterator Con, ConEnd;
-  for (llvm::tie(Con, ConEnd) = S.LookupConstructors(To);
+  DeclContext::lookup_result R = S.LookupConstructors(To);
+  for (DeclContext::lookup_iterator Con = R.begin(), ConEnd = R.end();
        Con != ConEnd; ++Con) {
     NamedDecl *D = *Con;
     DeclAccessPair FoundDecl = DeclAccessPair::make(D, D->getAccess());
@@ -2980,7 +2989,7 @@ IsUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
          S.IsDerivedFrom(From->getType(), ToType)))
       ConstructorsOnly = true;
 
-    S.RequireCompleteType(From->getLocStart(), ToType, 0);
+    S.RequireCompleteType(From->getExprLoc(), ToType, 0);
     // RequireCompleteType may have returned true due to some invalid decl
     // during template instantiation, but ToType may be complete enough now
     // to try to recover.
@@ -3008,8 +3017,8 @@ IsUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
         ListInitializing = true;
       }
 
-      DeclContext::lookup_iterator Con, ConEnd;
-      for (llvm::tie(Con, ConEnd) = S.LookupConstructors(ToRecordDecl);
+      DeclContext::lookup_result R = S.LookupConstructors(ToRecordDecl);
+      for (DeclContext::lookup_iterator Con = R.begin(), ConEnd = R.end();
            Con != ConEnd; ++Con) {
         NamedDecl *D = *Con;
         DeclAccessPair FoundDecl = DeclAccessPair::make(D, D->getAccess());
@@ -3065,10 +3074,11 @@ IsUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
     if (CXXRecordDecl *FromRecordDecl
          = dyn_cast<CXXRecordDecl>(FromRecordType->getDecl())) {
       // Add all of the conversion functions as candidates.
-      const UnresolvedSetImpl *Conversions
-        = FromRecordDecl->getVisibleConversionFunctions();
-      for (UnresolvedSetImpl::iterator I = Conversions->begin(),
-             E = Conversions->end(); I != E; ++I) {
+      std::pair<CXXRecordDecl::conversion_iterator,
+                CXXRecordDecl::conversion_iterator>
+        Conversions = FromRecordDecl->getVisibleConversionFunctions();
+      for (CXXRecordDecl::conversion_iterator
+             I = Conversions.first, E = Conversions.second; I != E; ++I) {
         DeclAccessPair FoundDecl = I.getPair();
         NamedDecl *D = FoundDecl.getDecl();
         CXXRecordDecl *ActingContext = cast<CXXRecordDecl>(D->getDeclContext());
@@ -3198,7 +3208,7 @@ static ImplicitConversionSequence::CompareKind
 compareConversionFunctions(Sema &S,
                            FunctionDecl *Function1,
                            FunctionDecl *Function2) {
-  if (!S.getLangOpts().ObjC1 || !S.getLangOpts().CPlusPlus0x)
+  if (!S.getLangOpts().ObjC1 || !S.getLangOpts().CPlusPlus11)
     return ImplicitConversionSequence::Indistinguishable;
   
   // Objective-C++:
@@ -3959,10 +3969,11 @@ FindConversionForRefInit(Sema &S, ImplicitConversionSequence &ICS,
     = dyn_cast<CXXRecordDecl>(T2->getAs<RecordType>()->getDecl());
 
   OverloadCandidateSet CandidateSet(DeclLoc);
-  const UnresolvedSetImpl *Conversions
-    = T2RecordDecl->getVisibleConversionFunctions();
-  for (UnresolvedSetImpl::iterator I = Conversions->begin(),
-         E = Conversions->end(); I != E; ++I) {
+  std::pair<CXXRecordDecl::conversion_iterator,
+            CXXRecordDecl::conversion_iterator>
+    Conversions = T2RecordDecl->getVisibleConversionFunctions();
+  for (CXXRecordDecl::conversion_iterator
+         I = Conversions.first, E = Conversions.second; I != E; ++I) {
     NamedDecl *D = *I;
     CXXRecordDecl *ActingDC = cast<CXXRecordDecl>(D->getDeclContext());
     if (isa<UsingShadowDecl>(D))
@@ -4213,7 +4224,7 @@ TryReferenceInit(Sema &S, Expr *Init, QualType DeclType,
     // allow the use of rvalue references in C++98/03 for the benefit of
     // standard library implementors; therefore, we need the xvalue check here.
     ICS.Standard.DirectBinding =
-      S.getLangOpts().CPlusPlus0x ||
+      S.getLangOpts().CPlusPlus11 ||
       (InitCategory.isPRValue() && !T2->isRecordType());
     ICS.Standard.IsLvalueReference = !isRValRef;
     ICS.Standard.BindsToFunctionLvalue = T2->isFunctionType();
@@ -4374,7 +4385,7 @@ TryListConversion(Sema &S, InitListExpr *From, QualType ToType,
   bool toStdInitializerList = false;
   QualType X;
   if (ToType->isArrayType())
-    X = S.Context.getBaseElementType(ToType);
+    X = S.Context.getAsArrayType(ToType)->getElementType();
   else
     toStdInitializerList = S.isStdInitializerList(ToType, &X);
   if (!X.isNull()) {
@@ -4857,7 +4868,7 @@ static bool CheckConvertedConstantConversions(Sema &S,
 ExprResult Sema::CheckConvertedConstantExpression(Expr *From, QualType T,
                                                   llvm::APSInt &Value,
                                                   CCEKind CCE) {
-  assert(LangOpts.CPlusPlus0x && "converted constant expression outside C++11");
+  assert(LangOpts.CPlusPlus11 && "converted constant expression outside C++11");
   assert(T->isIntegralOrEnumerationType() && "unexpected converted const type");
 
   if (checkPlaceholderForOverload(*this, From))
@@ -5104,15 +5115,15 @@ Sema::ConvertToIntegralOrEnumerationType(SourceLocation Loc, Expr *From,
   // Look for a conversion to an integral or enumeration type.
   UnresolvedSet<4> ViableConversions;
   UnresolvedSet<4> ExplicitConversions;
-  const UnresolvedSetImpl *Conversions
+  std::pair<CXXRecordDecl::conversion_iterator,
+            CXXRecordDecl::conversion_iterator> Conversions
     = cast<CXXRecordDecl>(RecordTy->getDecl())->getVisibleConversionFunctions();
 
-  bool HadMultipleCandidates = (Conversions->size() > 1);
+  bool HadMultipleCandidates
+    = (std::distance(Conversions.first, Conversions.second) > 1);
 
-  for (UnresolvedSetImpl::iterator I = Conversions->begin(),
-                                   E = Conversions->end();
-       I != E;
-       ++I) {
+  for (CXXRecordDecl::conversion_iterator
+         I = Conversions.first, E = Conversions.second; I != E; ++I) {
     if (CXXConversionDecl *Conversion
           = dyn_cast<CXXConversionDecl>((*I)->getUnderlyingDecl())) {
       if (isIntegralOrEnumerationType(
@@ -6286,10 +6297,11 @@ BuiltinCandidateTypeSet::AddTypesConvertedFrom(QualType Ty,
       return;
 
     CXXRecordDecl *ClassDecl = cast<CXXRecordDecl>(TyRec->getDecl());
-    const UnresolvedSetImpl *Conversions
-      = ClassDecl->getVisibleConversionFunctions();
-    for (UnresolvedSetImpl::iterator I = Conversions->begin(),
-           E = Conversions->end(); I != E; ++I) {
+    std::pair<CXXRecordDecl::conversion_iterator,
+              CXXRecordDecl::conversion_iterator>
+      Conversions = ClassDecl->getVisibleConversionFunctions();
+    for (CXXRecordDecl::conversion_iterator
+           I = Conversions.first, E = Conversions.second; I != E; ++I) {
       NamedDecl *D = I.getDecl();
       if (isa<UsingShadowDecl>(D))
         D = cast<UsingShadowDecl>(D)->getTargetDecl();
@@ -6355,11 +6367,12 @@ static  Qualifiers CollectVRQualifiers(ASTContext &Context, Expr* ArgExpr) {
     if (!ClassDecl->hasDefinition())
       return VRQuals;
 
-    const UnresolvedSetImpl *Conversions =
-      ClassDecl->getVisibleConversionFunctions();
+    std::pair<CXXRecordDecl::conversion_iterator,
+              CXXRecordDecl::conversion_iterator>
+      Conversions = ClassDecl->getVisibleConversionFunctions();
 
-    for (UnresolvedSetImpl::iterator I = Conversions->begin(),
-           E = Conversions->end(); I != E; ++I) {
+    for (CXXRecordDecl::conversion_iterator
+           I = Conversions.first, E = Conversions.second; I != E; ++I) {
       NamedDecl *D = I.getDecl();
       if (isa<UsingShadowDecl>(D))
         D = cast<UsingShadowDecl>(D)->getTargetDecl();
@@ -7449,7 +7462,7 @@ public:
         S.AddBuiltinCandidate(*MemPtr, ParamTypes, Args, 2, CandidateSet);
       }
 
-      if (S.getLangOpts().CPlusPlus0x) {
+      if (S.getLangOpts().CPlusPlus11) {
         for (BuiltinCandidateTypeSet::iterator
                   Enum = CandidateTypes[ArgIdx].enumeration_begin(),
                EnumEnd = CandidateTypes[ArgIdx].enumeration_end();
@@ -9536,16 +9549,23 @@ DiagnoseTwoPhaseLookup(Sema &SemaRef, SourceLocation FnLoc,
       SemaRef.FindAssociatedClassesAndNamespaces(FnLoc, Args,
                                                  AssociatedNamespaces,
                                                  AssociatedClasses);
-      // Never suggest declaring a function within namespace 'std'.
       Sema::AssociatedNamespaceSet SuggestedNamespaces;
       DeclContext *Std = SemaRef.getStdNamespace();
       for (Sema::AssociatedNamespaceSet::iterator
              it = AssociatedNamespaces.begin(),
              end = AssociatedNamespaces.end(); it != end; ++it) {
-        NamespaceDecl *Assoc = cast<NamespaceDecl>(*it);
-        if ((!Std || !Std->Encloses(Assoc)) &&
-            Assoc->getQualifiedNameAsString().find("__") == std::string::npos)
-          SuggestedNamespaces.insert(Assoc);
+        // Never suggest declaring a function within namespace 'std'.
+        if (Std && Std->Encloses(*it))
+          continue;
+        
+        // Never suggest declaring a function within a namespace with a reserved
+        // name, like __gnu_cxx.
+        NamespaceDecl *NS = dyn_cast<NamespaceDecl>(*it);
+        if (NS &&
+            NS->getQualifiedNameAsString().find("__") != std::string::npos)
+          continue;
+
+        SuggestedNamespaces.insert(*it);
       }
 
       SemaRef.Diag(R.getNameLoc(), diag::err_not_found_by_two_phase_lookup)
@@ -10374,16 +10394,13 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
       if (isImplicitlyDeleted(Best->Function)) {
         CXXMethodDecl *Method = cast<CXXMethodDecl>(Best->Function);
         Diag(OpLoc, diag::err_ovl_deleted_special_oper)
-          << getSpecialMember(Method)
-          << BinaryOperator::getOpcodeStr(Opc)
-          << getDeletedOrUnavailableSuffix(Best->Function);
+          << Context.getRecordType(Method->getParent())
+          << getSpecialMember(Method);
 
-        if (getSpecialMember(Method) != CXXInvalid) {
-          // The user probably meant to call this special member. Just
-          // explain why it's deleted.
-          NoteDeletedFunction(Method);
-          return ExprError();
-        }
+        // The user probably meant to call this special member. Just
+        // explain why it's deleted.
+        NoteDeletedFunction(Method);
+        return ExprError();
       } else {
         Diag(OpLoc, diag::err_ovl_deleted_oper)
           << Best->Function->isDeleted()
@@ -10878,10 +10895,11 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
   //   functions for each conversion function declared in an
   //   accessible base class provided the function is not hidden
   //   within T by another intervening declaration.
-  const UnresolvedSetImpl *Conversions
+  std::pair<CXXRecordDecl::conversion_iterator,
+            CXXRecordDecl::conversion_iterator> Conversions
     = cast<CXXRecordDecl>(Record->getDecl())->getVisibleConversionFunctions();
-  for (UnresolvedSetImpl::iterator I = Conversions->begin(),
-         E = Conversions->end(); I != E; ++I) {
+  for (CXXRecordDecl::conversion_iterator
+         I = Conversions.first, E = Conversions.second; I != E; ++I) {
     NamedDecl *D = *I;
     CXXRecordDecl *ActingContext = cast<CXXRecordDecl>(D->getDeclContext());
     if (isa<UsingShadowDecl>(D))

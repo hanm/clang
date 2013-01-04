@@ -13,21 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Sema/SemaInternal.h"
-#include "clang/Sema/DelayedDiagnostic.h"
 #include "TargetAttributesSema.h"
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallSet.h"
-#include "llvm/ADT/APFloat.h"
-#include "llvm/Support/CrashRecoveryContext.h"
-#include "clang/Sema/CXXFieldCollector.h"
-#include "clang/Sema/TemplateDeduction.h"
-#include "clang/Sema/ExternalSemaSource.h"
-#include "clang/Sema/MultiplexExternalSemaSource.h"
-#include "clang/Sema/ObjCMethodList.h"
-#include "clang/Sema/PrettyDeclStackTrace.h"
-#include "clang/Sema/Scope.h"
-#include "clang/Sema/ScopeInfo.h"
-#include "clang/Sema/SemaConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTDiagnostic.h"
 #include "clang/AST/DeclCXX.h"
@@ -36,11 +22,25 @@
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/StmtCXX.h"
-#include "clang/Lex/HeaderSearch.h"
-#include "clang/Lex/Preprocessor.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/TargetInfo.h"
+#include "clang/Lex/HeaderSearch.h"
+#include "clang/Lex/Preprocessor.h"
+#include "clang/Sema/CXXFieldCollector.h"
+#include "clang/Sema/DelayedDiagnostic.h"
+#include "clang/Sema/ExternalSemaSource.h"
+#include "clang/Sema/MultiplexExternalSemaSource.h"
+#include "clang/Sema/ObjCMethodList.h"
+#include "clang/Sema/PrettyDeclStackTrace.h"
+#include "clang/Sema/Scope.h"
+#include "clang/Sema/ScopeInfo.h"
+#include "clang/Sema/SemaConsumer.h"
+#include "clang/Sema/TemplateDeduction.h"
+#include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/SmallSet.h"
+#include "llvm/Support/CrashRecoveryContext.h"
 using namespace clang;
 using namespace sema;
 
@@ -128,7 +128,7 @@ void Sema::Initialize() {
     ExternalSema->InitializeSema(*this);
 
   // Initialize predefined 128-bit integer types, if needed.
-  if (PP.getTargetInfo().getPointerWidth(0) >= 64) {
+  if (PP.getTargetInfo().hasInt128Type()) {
     // If either of the 128-bit integer types are unavailable to name lookup,
     // define them now.
     DeclarationName Int128 = &Context.Idents.get("__int128_t");
@@ -328,7 +328,11 @@ CastKind Sema::ScalarTypeToBooleanCastKind(QualType ScalarTy) {
 
 /// \brief Used to prune the decls of Sema's UnusedFileScopedDecls vector.
 static bool ShouldRemoveFromUnused(Sema *SemaRef, const DeclaratorDecl *D) {
-  if (D->isUsed())
+  // Template instantiation can happen at the end of the translation unit
+  // and it sets the canonical (first) decl to used. Normal uses set the last
+  // decl at the time to used and subsequent decl inherit the flag. The net
+  // result is that we need to check both ends of the decl chain.
+  if (D->isUsed() || D->getMostRecentDecl()->isUsed())
     return true;
 
   if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
@@ -358,6 +362,9 @@ static bool ShouldRemoveFromUnused(Sema *SemaRef, const DeclaratorDecl *D) {
     if (DeclToCheck != VD)
       return !SemaRef->ShouldWarnIfUnusedFileScopedDecl(DeclToCheck);
   }
+
+  if (D->getLinkage() == ExternalLinkage)
+    return true;
 
   return false;
 }
@@ -389,6 +396,9 @@ static void checkUndefinedInternals(Sema &S) {
 
     // Ignore attributes that have become invalid.
     if (decl->isInvalidDecl()) continue;
+
+    // If we found out that the decl is external, don't warn.
+    if (decl->getLinkage() == ExternalLinkage) continue;
 
     // __attribute__((weakref)) is basically a definition.
     if (decl->hasAttr<WeakRefAttr>()) continue;
@@ -673,7 +683,7 @@ void Sema::ActOnEndOfTranslationUnit() {
 
   }
 
-  if (LangOpts.CPlusPlus0x &&
+  if (LangOpts.CPlusPlus11 &&
       Diags.getDiagnosticLevel(diag::warn_delegating_ctor_cycle,
                                SourceLocation())
         != DiagnosticsEngine::Ignored)
@@ -838,7 +848,7 @@ void Sema::EmitCurrentDiagnostic(unsigned DiagID) {
       // Additionally, the AccessCheckingSFINAE flag can be used to temporarily
       // make access control a part of SFINAE for the purposes of checking
       // type traits.
-      if (!AccessCheckingSFINAE && !getLangOpts().CPlusPlus0x)
+      if (!AccessCheckingSFINAE && !getLangOpts().CPlusPlus11)
         break;
 
       SourceLocation Loc = Diags.getCurrentDiagLoc();

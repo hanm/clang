@@ -23,14 +23,14 @@
 #ifndef LLVM_CLANG_SEMA_DECLSPEC_H
 #define LLVM_CLANG_SEMA_DECLSPEC_H
 
-#include "clang/Sema/AttributeList.h"
-#include "clang/Sema/Ownership.h"
 #include "clang/AST/NestedNameSpecifier.h"
-#include "clang/Lex/Token.h"
 #include "clang/Basic/ExceptionSpecificationType.h"
 #include "clang/Basic/Lambda.h"
 #include "clang/Basic/OperatorKinds.h"
 #include "clang/Basic/Specifiers.h"
+#include "clang/Lex/Token.h"
+#include "clang/Sema/AttributeList.h"
+#include "clang/Sema/Ownership.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -276,6 +276,12 @@ public:
   static const TST TST_auto = clang::TST_auto;
   static const TST TST_unknown_anytype = clang::TST_unknown_anytype;
   static const TST TST_atomic = clang::TST_atomic;
+  static const TST TST_image1d_t = clang::TST_image1d_t;
+  static const TST TST_image1d_array_t = clang::TST_image1d_array_t;
+  static const TST TST_image1d_buffer_t = clang::TST_image1d_buffer_t;
+  static const TST TST_image2d_t = clang::TST_image2d_t;
+  static const TST TST_image2d_array_t = clang::TST_image2d_array_t;
+  static const TST TST_image3d_t = clang::TST_image3d_t;
   static const TST TST_error = clang::TST_error;
 
   // type-qualifiers
@@ -306,7 +312,7 @@ private:
   /*TSW*/unsigned TypeSpecWidth : 2;
   /*TSC*/unsigned TypeSpecComplex : 2;
   /*TSS*/unsigned TypeSpecSign : 2;
-  /*TST*/unsigned TypeSpecType : 5;
+  /*TST*/unsigned TypeSpecType : 6;
   unsigned TypeAltiVecVector : 1;
   unsigned TypeAltiVecPixel : 1;
   unsigned TypeAltiVecBool : 1;
@@ -602,12 +608,9 @@ public:
   bool SetTypeQual(TQ T, SourceLocation Loc, const char *&PrevSpec,
                    unsigned &DiagID, const LangOptions &Lang);
 
-  bool SetFunctionSpecInline(SourceLocation Loc, const char *&PrevSpec,
-                             unsigned &DiagID);
-  bool SetFunctionSpecVirtual(SourceLocation Loc, const char *&PrevSpec,
-                              unsigned &DiagID);
-  bool SetFunctionSpecExplicit(SourceLocation Loc, const char *&PrevSpec,
-                               unsigned &DiagID);
+  bool setFunctionSpecInline(SourceLocation Loc);
+  bool setFunctionSpecVirtual(SourceLocation Loc);
+  bool setFunctionSpecExplicit(SourceLocation Loc);
 
   bool SetFriendSpec(SourceLocation Loc, const char *&PrevSpec,
                      unsigned &DiagID);
@@ -1895,6 +1898,17 @@ public:
       if (getTypeObject(i).getAttrs())
         return true;
     return false;
+  }
+
+  /// \brief Return a source range list of C++11 attributes associated
+  /// with the declarator.
+  void getCXX11AttributeRanges(SmallVector<SourceRange, 4> &Ranges) {
+    AttributeList *AttrList = Attrs.getList();
+    while (AttrList) {
+      if (AttrList->isCXX11Attribute())
+        Ranges.push_back(AttrList->getRange());
+      AttrList = AttrList->getNext();
+    }
   }
 
   void setAsmLabel(Expr *E) { AsmLabel = E; }

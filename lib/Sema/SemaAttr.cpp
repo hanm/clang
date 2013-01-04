@@ -13,11 +13,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Sema/SemaInternal.h"
-#include "clang/Sema/Lookup.h"
 #include "clang/AST/Attr.h"
 #include "clang/AST/Expr.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Sema/Lookup.h"
 using namespace clang;
 
 //===----------------------------------------------------------------------===//
@@ -309,7 +309,8 @@ void Sema::AddPushedVisibilityAttribute(Decl *D) {
   if (!VisContext)
     return;
 
-  if (isa<NamedDecl>(D) && cast<NamedDecl>(D)->getExplicitVisibility())
+  NamedDecl *ND = dyn_cast<NamedDecl>(D);
+  if (ND && ND->getExplicitVisibility())
     return;
 
   VisStack *Stack = static_cast<VisStack*>(VisContext);
@@ -320,6 +321,7 @@ void Sema::AddPushedVisibilityAttribute(Decl *D) {
     = (VisibilityAttr::VisibilityType) rawType;
   SourceLocation loc = Stack->back().second;
 
+  ND->ClearLVCache();
   D->addAttr(::new (Context) VisibilityAttr(loc, Context, type));
 }
 

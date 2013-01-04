@@ -13,8 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/StaticAnalyzer/Core/AnalyzerOptions.h"
-#include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace clang;
@@ -131,6 +131,12 @@ unsigned AnalyzerOptions::getGraphTrimInterval() {
   if (!GraphTrimInterval.hasValue())
     GraphTrimInterval = getOptionAsInteger("graph-trim-interval", 1000);
   return GraphTrimInterval.getValue();
+}
+
+unsigned AnalyzerOptions::getMaxTimesInlineLarge() {
+  if (!MaxTimesInlineLarge.hasValue())
+    MaxTimesInlineLarge = getOptionAsInteger("max-times-inline-large", 32);
+  return MaxTimesInlineLarge.getValue();
 }
 
 bool AnalyzerOptions::shouldSynthesizeBodies() {

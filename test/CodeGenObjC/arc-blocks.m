@@ -16,7 +16,7 @@ int (^test1(int x))(void) {
   // CHECK-NEXT: [[T2:%.*]] = call i8* @objc_retainBlock(i8* [[T1]]) nounwind
   // CHECK-NEXT: [[T3:%.*]] = bitcast i8* [[T2]] to i32 ()*
   // CHECK-NEXT: [[T4:%.*]] = bitcast i32 ()* [[T3]] to i8*
-  // CHECK-NEXT: [[T5:%.*]] = call i8* @objc_autoreleaseReturnValue(i8* [[T4]]) nounwind
+  // CHECK-NEXT: [[T5:%.*]] = tail call i8* @objc_autoreleaseReturnValue(i8* [[T4]]) nounwind
   // CHECK-NEXT: [[T6:%.*]] = bitcast i8* [[T5]] to i32 ()*
   // CHECK-NEXT: ret i32 ()* [[T6]]
   return ^{ return x; };
@@ -250,7 +250,7 @@ void test7(void) {
   // 0x42800000 - has signature, copy/dispose helpers, as well as BLOCK_HAS_EXTENDED_LAYOUT
   // CHECK:      store i32 -1040187392,
   // CHECK:      [[SLOT:%.*]] = getelementptr inbounds [[BLOCK_T]]* [[BLOCK]], i32 0, i32 5
-  // CHECK-NEXT: [[T0:%.*]] = call i8* @objc_loadWeak(i8** [[VAR]])
+  // CHECK-NEXT: [[T0:%.*]] = call i8* @objc_loadWeakRetained(i8** [[VAR]])
   // CHECK-NEXT: call i8* @objc_initWeak(i8** [[SLOT]], i8* [[T0]])
   // CHECK:      call void @test7_helper(
   // CHECK-NEXT: call void @objc_destroyWeak(i8** {{%.*}})
@@ -259,8 +259,9 @@ void test7(void) {
 
   // CHECK:    define internal void @__test7_block_invoke
   // CHECK:      [[SLOT:%.*]] = getelementptr inbounds [[BLOCK_T]]* {{%.*}}, i32 0, i32 5
-  // CHECK-NEXT: [[T0:%.*]] = call i8* @objc_loadWeak(i8** [[SLOT]])
+  // CHECK-NEXT: [[T0:%.*]] = call i8* @objc_loadWeakRetained(i8** [[SLOT]])
   // CHECK-NEXT: call void @test7_consume(i8* [[T0]])
+  // CHECK-NEXT: call void @objc_release(i8* [[T0]])
   // CHECK-NEXT: ret void
 
   // CHECK:    define internal void @__copy_helper_block_
@@ -313,7 +314,7 @@ id test9(void) {
 // CHECK:      load i8** getelementptr
 // CHECK-NEXT: bitcast i8*
 // CHECK-NEXT: call i8* 
-// CHECK-NEXT: call i8* @objc_autoreleaseReturnValue
+// CHECK-NEXT: tail call i8* @objc_autoreleaseReturnValue
 // CHECK-NEXT: ret i8*
 
 // CHECK:      call i8* @test9_produce()

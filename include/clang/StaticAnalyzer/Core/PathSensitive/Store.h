@@ -14,9 +14,9 @@
 #ifndef LLVM_CLANG_GR_STORE_H
 #define LLVM_CLANG_GR_STORE_H
 
-#include "clang/StaticAnalyzer/Core/PathSensitive/StoreRef.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/MemRegion.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SValBuilder.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/StoreRef.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/Optional.h"
 
@@ -34,6 +34,8 @@ class CallEvent;
 class ProgramState;
 class ProgramStateManager;
 class ScanReachableSymbols;
+
+typedef llvm::DenseSet<SymbolRef> InvalidatedSymbols;
 
 class StoreManager {
 protected:
@@ -168,7 +170,6 @@ public:
   /// associated with the object is recycled.
   virtual void decrementReferenceCount(Store store) {}
 
-  typedef llvm::DenseSet<SymbolRef> InvalidatedSymbols;
   typedef SmallVector<const MemRegion *, 8> InvalidatedRegions;
 
   /// invalidateRegions - Clears out the specified regions from the store,

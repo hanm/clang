@@ -12,13 +12,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Serialization/ASTReader.h"
-#include "clang/Serialization/ASTDeserializationListener.h"
-#include "clang/Serialization/ModuleManager.h"
-#include "clang/Serialization/SerializationDiagnostic.h"
 #include "ASTCommon.h"
 #include "ASTReaderInternals.h"
-#include "clang/Sema/Sema.h"
-#include "clang/Sema/Scope.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclTemplate.h"
@@ -27,33 +22,37 @@
 #include "clang/AST/NestedNameSpecifier.h"
 #include "clang/AST/Type.h"
 #include "clang/AST/TypeLocVisitor.h"
-#include "clang/Lex/MacroInfo.h"
-#include "clang/Lex/PreprocessingRecord.h"
-#include "clang/Lex/Preprocessor.h"
-#include "clang/Lex/PreprocessorOptions.h"
-#include "clang/Lex/HeaderSearch.h"
-#include "clang/Lex/HeaderSearchOptions.h"
+#include "clang/Basic/FileManager.h"
+#include "clang/Basic/FileSystemStatCache.h"
 #include "clang/Basic/OnDiskHashTable.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/SourceManagerInternals.h"
-#include "clang/Basic/FileManager.h"
-#include "clang/Basic/FileSystemStatCache.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/TargetOptions.h"
 #include "clang/Basic/Version.h"
 #include "clang/Basic/VersionTuple.h"
+#include "clang/Lex/HeaderSearch.h"
+#include "clang/Lex/HeaderSearchOptions.h"
+#include "clang/Lex/MacroInfo.h"
+#include "clang/Lex/PreprocessingRecord.h"
+#include "clang/Lex/Preprocessor.h"
+#include "clang/Lex/PreprocessorOptions.h"
+#include "clang/Sema/Scope.h"
+#include "clang/Sema/Sema.h"
+#include "clang/Serialization/ASTDeserializationListener.h"
+#include "clang/Serialization/ModuleManager.h"
+#include "clang/Serialization/SerializationDiagnostic.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Bitcode/BitstreamReader.h"
-#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/SaveAndRestore.h"
 #include "llvm/Support/system_error.h"
 #include <algorithm>
-#include <iterator>
 #include <cstdio>
-#include <sys/stat.h>
+#include <iterator>
 
 using namespace clang;
 using namespace clang::serialization;
@@ -964,6 +963,9 @@ bool ASTReader::ReadSLocEntry(int ID) {
     SrcMgr::CharacteristicKind
       FileCharacter = (SrcMgr::CharacteristicKind)Record[2];
     SourceLocation IncludeLoc = ReadSourceLocation(*F, Record[1]);
+    if (IncludeLoc.isInvalid() && F->Kind == MK_Module) {
+      IncludeLoc = getImportLocation(F);
+    }
     unsigned Code = SLocEntryCursor.ReadCode();
     Record.clear();
     unsigned RecCode
@@ -995,6 +997,25 @@ bool ASTReader::ReadSLocEntry(int ID) {
   }
 
   return false;
+}
+
+std::pair<SourceLocation, StringRef> ASTReader::getModuleImportLoc(int ID) {
+  if (ID == 0)
+    return std::make_pair(SourceLocation(), "");
+
+  if (unsigned(-ID) - 2 >= getTotalNumSLocs() || ID > 0) {
+    Error("source location entry ID out-of-range for AST file");
+    return std::make_pair(SourceLocation(), "");
+  }
+
+  // Find which module file this entry lands in.
+  ModuleFile *M = GlobalSLocEntryMap.find(-ID)->second;
+  if (M->Kind != MK_Module)
+    return std::make_pair(SourceLocation(), "");
+
+  // FIXME: Can we map this down to a particular submodule? That would be
+  // ideal.
+  return std::make_pair(M->ImportLoc, llvm::sys::path::stem(M->FileName));
 }
 
 /// \brief Find the location where the module F is imported.
@@ -1538,20 +1559,12 @@ ASTReader::getInputFile(ModuleFile &F, unsigned ID, bool Complain) {
     if (Overridden)
       return InputFile(File, Overridden);
 
-    // The stat info from the FileEntry came from the cached stat
-    // info of the PCH, so we cannot trust it.
-    struct stat StatBuf;
-    if (::stat(File->getName(), &StatBuf) != 0) {
-      StatBuf.st_size = File->getSize();
-      StatBuf.st_mtime = File->getModificationTime();
-    }
-
-    if ((StoredSize != StatBuf.st_size
+    if ((StoredSize != File->getSize()
 #if !defined(LLVM_ON_WIN32)
          // In our regression testing, the Windows file system seems to
          // have inconsistent modification times that sometimes
          // erroneously trigger this error-handling path.
-         || StoredTime != StatBuf.st_mtime
+         || StoredTime != File->getModificationTime()
 #endif
          )) {
       if (Complain)
@@ -1611,7 +1624,7 @@ void ASTReader::MaybeAddSystemRootToFilename(ModuleFile &M,
 
 ASTReader::ASTReadResult
 ASTReader::ReadControlBlock(ModuleFile &F,
-                            llvm::SmallVectorImpl<ModuleFile *> &Loaded,
+                            llvm::SmallVectorImpl<ImportedModule> &Loaded,
                             unsigned ClientLoadCapabilities) {
   llvm::BitstreamCursor &Stream = F.Stream;
 
@@ -1706,13 +1719,18 @@ ASTReader::ReadControlBlock(ModuleFile &F,
       while (Idx < N) {
         // Read information about the AST file.
         ModuleKind ImportedKind = (ModuleKind)Record[Idx++];
+        // The import location will be the local one for now; we will adjust
+        // all import locations of module imports after the global source
+        // location info are setup.
+        SourceLocation ImportLoc =
+            SourceLocation::getFromRawEncoding(Record[Idx++]);
         unsigned Length = Record[Idx++];
         SmallString<128> ImportedFile(Record.begin() + Idx,
                                       Record.begin() + Idx + Length);
         Idx += Length;
 
         // Load the AST file.
-        switch(ReadASTCore(ImportedFile, ImportedKind, &F, Loaded,
+        switch(ReadASTCore(ImportedFile, ImportedKind, ImportLoc, &F, Loaded,
                            ClientLoadCapabilities)) {
         case Failure: return Failure;
           // If we have to ignore the dependency, we'll have to ignore this too.
@@ -1786,6 +1804,10 @@ ASTReader::ReadControlBlock(ModuleFile &F,
       F.ActualOriginalSourceFileName.assign(BlobStart, BlobLen);
       F.OriginalSourceFileName = F.ActualOriginalSourceFileName;
       MaybeAddSystemRootToFilename(F, F.OriginalSourceFileName);
+      break;
+
+    case ORIGINAL_FILE_ID:
+      F.OriginalSourceFileID = FileID::get(Record[0]);
       break;
 
     case ORIGINAL_PCH_DIR:
@@ -1876,7 +1898,7 @@ bool ASTReader::ReadASTBlock(ModuleFile &F) {
           = F.PreprocessorDetailCursor.GetCurrentBitNo();
           
         if (!PP.getPreprocessingRecord())
-          PP.createPreprocessingRecord(/*RecordConditionalDirectives=*/false);
+          PP.createPreprocessingRecord();
         if (!PP.getPreprocessingRecord()->getExternalSource())
           PP.getPreprocessingRecord()->SetExternalSource(*this);
         break;
@@ -2334,7 +2356,7 @@ bool ASTReader::ReadASTBlock(ModuleFile &F) {
       
       unsigned StartingID;
       if (!PP.getPreprocessingRecord())
-        PP.createPreprocessingRecord(/*RecordConditionalDirectives=*/false);
+        PP.createPreprocessingRecord();
       if (!PP.getPreprocessingRecord()->getExternalSource())
         PP.getPreprocessingRecord()->SetExternalSource(*this);
       StartingID 
@@ -2675,13 +2697,14 @@ void ASTReader::makeModuleVisible(Module *Mod,
 
 ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
                                             ModuleKind Type,
+                                            SourceLocation ImportLoc,
                                             unsigned ClientLoadCapabilities) {
   // Bump the generation number.
   unsigned PreviousGeneration = CurrentGeneration++;
 
   unsigned NumModules = ModuleMgr.size();
-  llvm::SmallVector<ModuleFile *, 4> Loaded;
-  switch(ASTReadResult ReadResult = ReadASTCore(FileName, Type,
+  llvm::SmallVector<ImportedModule, 4> Loaded;
+  switch(ASTReadResult ReadResult = ReadASTCore(FileName, Type, ImportLoc,
                                                 /*ImportedBy=*/0, Loaded,
                                                 ClientLoadCapabilities)) {
   case Failure:
@@ -2699,10 +2722,10 @@ ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
   // Here comes stuff that we only do once the entire chain is loaded.
 
   // Load the AST blocks of all of the modules that we loaded.
-  for (llvm::SmallVectorImpl<ModuleFile *>::iterator M = Loaded.begin(),
+  for (llvm::SmallVectorImpl<ImportedModule>::iterator M = Loaded.begin(),
                                                   MEnd = Loaded.end();
        M != MEnd; ++M) {
-    ModuleFile &F = **M;
+    ModuleFile &F = *M->Mod;
 
     // Read the AST block.
     if (ReadASTBlock(F))
@@ -2723,6 +2746,18 @@ ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
       // SourceManager.
       SourceMgr.getLoadedSLocEntryByID(Index);
     }
+  }
+
+  // Setup the import locations.
+  for (llvm::SmallVectorImpl<ImportedModule>::iterator M = Loaded.begin(),
+                                                    MEnd = Loaded.end();
+       M != MEnd; ++M) {
+    ModuleFile &F = *M->Mod;
+    if (!M->ImportedBy)
+      F.ImportLoc = M->ImportLoc;
+    else
+      F.ImportLoc = ReadSourceLocation(*M->ImportedBy,
+                                       M->ImportLoc.getRawEncoding());
   }
 
   // Mark all of the identifiers in the identifier table as being out of date,
@@ -2786,14 +2821,16 @@ ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
 ASTReader::ASTReadResult
 ASTReader::ReadASTCore(StringRef FileName,
                        ModuleKind Type,
+                       SourceLocation ImportLoc,
                        ModuleFile *ImportedBy,
-                       llvm::SmallVectorImpl<ModuleFile *> &Loaded,
+                       llvm::SmallVectorImpl<ImportedModule> &Loaded,
                        unsigned ClientLoadCapabilities) {
   ModuleFile *M;
   bool NewModule;
   std::string ErrorStr;
-  llvm::tie(M, NewModule) = ModuleMgr.addModule(FileName, Type, ImportedBy,
-                                                CurrentGeneration, ErrorStr);
+  llvm::tie(M, NewModule) = ModuleMgr.addModule(FileName, Type, ImportLoc,
+                                                ImportedBy, CurrentGeneration,
+                                                ErrorStr);
 
   if (!M) {
     // We couldn't load the module.
@@ -2829,6 +2866,9 @@ ASTReader::ReadASTCore(StringRef FileName,
     return Failure;
   }
 
+  // This is used for compatibility with older PCH formats.
+  bool HaveReadControlBlock = false;
+
   while (!Stream.AtEndOfStream()) {
     unsigned Code = Stream.ReadCode();
 
@@ -2848,6 +2888,7 @@ ASTReader::ReadASTCore(StringRef FileName,
       }
       break;
     case CONTROL_BLOCK_ID:
+      HaveReadControlBlock = true;
       switch (ReadControlBlock(F, Loaded, ClientLoadCapabilities)) {
       case Success:
         break;
@@ -2860,8 +2901,14 @@ ASTReader::ReadASTCore(StringRef FileName,
       }
       break;
     case AST_BLOCK_ID:
+      if (!HaveReadControlBlock) {
+        if ((ClientLoadCapabilities & ARR_VersionMismatch) == 0)
+          Diag(diag::warn_pch_version_too_old);
+        return VersionMismatch;
+      }
+
       // Record that we've loaded this module.
-      Loaded.push_back(M);
+      Loaded.push_back(ImportedModule(M, ImportedBy, ImportLoc));
       return Success;
 
     default:
@@ -4836,6 +4883,12 @@ QualType ASTReader::GetType(TypeID ID) {
     case PREDEF_TYPE_OBJC_ID:       T = Context.ObjCBuiltinIdTy;    break;
     case PREDEF_TYPE_OBJC_CLASS:    T = Context.ObjCBuiltinClassTy; break;
     case PREDEF_TYPE_OBJC_SEL:      T = Context.ObjCBuiltinSelTy;   break;
+    case PREDEF_TYPE_IMAGE1D_ID:    T = Context.OCLImage1dTy;       break;
+    case PREDEF_TYPE_IMAGE1D_ARR_ID: T = Context.OCLImage1dArrayTy; break;
+    case PREDEF_TYPE_IMAGE1D_BUFF_ID: T = Context.OCLImage1dBufferTy; break;
+    case PREDEF_TYPE_IMAGE2D_ID:    T = Context.OCLImage2dTy;       break;
+    case PREDEF_TYPE_IMAGE2D_ARR_ID: T = Context.OCLImage2dArrayTy; break;
+    case PREDEF_TYPE_IMAGE3D_ID:    T = Context.OCLImage3dTy;       break;
     case PREDEF_TYPE_AUTO_DEDUCT:   T = Context.getAutoDeductType(); break;
         
     case PREDEF_TYPE_AUTO_RREF_DEDUCT: 
@@ -5376,13 +5429,15 @@ namespace {
     ASTReader &Reader;
     llvm::SmallVectorImpl<const DeclContext *> &Contexts;
     llvm::DenseMap<DeclarationName, SmallVector<NamedDecl *, 8> > &Decls;
+    bool VisitAll;
 
   public:
     DeclContextAllNamesVisitor(ASTReader &Reader,
                                SmallVectorImpl<const DeclContext *> &Contexts,
                                llvm::DenseMap<DeclarationName,
-                                           SmallVector<NamedDecl *, 8> > &Decls)
-      : Reader(Reader), Contexts(Contexts), Decls(Decls) { }
+                                           SmallVector<NamedDecl *, 8> > &Decls,
+                                bool VisitAll)
+      : Reader(Reader), Contexts(Contexts), Decls(Decls), VisitAll(VisitAll) { }
 
     static bool visit(ModuleFile &M, void *UserData) {
       DeclContextAllNamesVisitor *This
@@ -5423,7 +5478,7 @@ namespace {
         }
       }
 
-      return FoundAnything;
+      return FoundAnything && !This->VisitAll;
     }
   };
 }
@@ -5449,7 +5504,8 @@ void ASTReader::completeVisibleDeclsMap(const DeclContext *DC) {
     }
   }
 
-  DeclContextAllNamesVisitor Visitor(*this, Contexts, Decls);
+  DeclContextAllNamesVisitor Visitor(*this, Contexts, Decls,
+                                     /*VisitAll=*/DC->isFileContext());
   ModuleMgr.visit(&DeclContextAllNamesVisitor::visit, &Visitor);
   ++NumVisibleDeclContextsRead;
 
@@ -6422,13 +6478,14 @@ ReadTemplateArgumentList(SmallVector<TemplateArgument, 8> &TemplArgs,
 }
 
 /// \brief Read a UnresolvedSet structure.
-void ASTReader::ReadUnresolvedSet(ModuleFile &F, UnresolvedSetImpl &Set,
+void ASTReader::ReadUnresolvedSet(ModuleFile &F, ASTUnresolvedSet &Set,
                                   const RecordData &Record, unsigned &Idx) {
   unsigned NumDecls = Record[Idx++];
+  Set.reserve(Context, NumDecls);
   while (NumDecls--) {
     NamedDecl *D = ReadDeclAs<NamedDecl>(F, Record, Idx);
     AccessSpecifier AS = (AccessSpecifier)Record[Idx++];
-    Set.addDecl(D, AS);
+    Set.addDecl(Context, D, AS);
   }
 }
 

@@ -15,12 +15,11 @@
 
 #ifndef CLANG_CODEGEN_OBCJRUNTIME_H
 #define CLANG_CODEGEN_OBCJRUNTIME_H
-#include "clang/Basic/IdentifierTable.h" // Selector
-#include "clang/AST/DeclObjC.h"
-
 #include "CGBuilder.h"
 #include "CGCall.h"
 #include "CGValue.h"
+#include "clang/AST/DeclObjC.h"
+#include "clang/Basic/IdentifierTable.h" // Selector
 
 namespace llvm {
   class Constant;
@@ -210,9 +209,12 @@ public:
   virtual llvm::Constant *GetGetStructFunction() = 0;
   // API for atomic copying of qualified aggregates in setter.
   virtual llvm::Constant *GetSetStructFunction() = 0;
-  // API for atomic copying of qualified aggregates with non-trivial copy
-  // assignment (c++) in setter/getter.
-  virtual llvm::Constant *GetCppAtomicObjectFunction() = 0;
+  /// API for atomic copying of qualified aggregates with non-trivial copy
+  /// assignment (c++) in setter.
+  virtual llvm::Constant *GetCppAtomicObjectSetFunction() = 0;
+  /// API for atomic copying of qualified aggregates with non-trivial copy
+  /// assignment (c++) in getter.
+  virtual llvm::Constant *GetCppAtomicObjectGetFunction() = 0;
   
   /// GetClass - Return a reference to the class for the given
   /// interface decl.

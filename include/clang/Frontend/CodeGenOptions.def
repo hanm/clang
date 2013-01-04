@@ -61,6 +61,8 @@ CODEGENOPT(InstrumentFunctions , 1, 0) ///< Set when -finstrument-functions is
 CODEGENOPT(InstrumentForProfiling , 1, 0) ///< Set when -pg is enabled.
 CODEGENOPT(LessPreciseFPMAD  , 1, 0) ///< Enable less precise MAD instructions to
                                      ///< be generated.
+CODEGENOPT(MemorySanitizerTrackOrigins , 1, 0) ///< Enable tracking origins in
+                                               ///< MemorySanitizer
 CODEGENOPT(MergeAllConstants , 1, 1) ///< Merge identical constants.
 CODEGENOPT(NoCommon          , 1, 0) ///< Set when -fno-common or C++ is enabled.
 CODEGENOPT(NoDwarf2CFIAsm    , 1, 0) ///< Set when -fno-dwarf2-cfi-asm is enabled.
@@ -113,9 +115,6 @@ CODEGENOPT(DebugColumnInfo, 1, 0) ///< Whether or not to use column information
 /// or 0 if unspecified.
 VALUE_CODEGENOPT(NumRegisterParameters, 32, 0)
 
-/// The run-time penalty for bounds checking, or 0 to disable.
-VALUE_CODEGENOPT(BoundsChecking, 8, 0)
-
 /// The lower bound for a buffer to be considered for stack protection.
 VALUE_CODEGENOPT(SSPBufferSize, 32, 0)
 
@@ -127,6 +126,9 @@ ENUM_CODEGENOPT(Inlining, InliningMethod, 2, NoInlining)
 
 /// The default TLS model to use.
 ENUM_CODEGENOPT(DefaultTLSModel, TLSModel, 2, GeneralDynamicTLSModel)
+
+CODEGENOPT(SanitizeRecover, 1, 1) ///< Attempt to recover from sanitizer checks
+                                  ///< by continuing execution when possible
 
 #undef CODEGENOPT
 #undef ENUM_CODEGENOPT

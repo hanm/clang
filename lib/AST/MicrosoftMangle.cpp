@@ -13,6 +13,7 @@
 
 #include "clang/AST/Mangle.h"
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/Attr.h"
 #include "clang/AST/CharUnits.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
@@ -21,7 +22,6 @@
 #include "clang/AST/ExprCXX.h"
 #include "clang/Basic/ABI.h"
 #include "clang/Basic/DiagnosticOptions.h"
-
 #include <map>
 
 using namespace clang;
@@ -373,7 +373,7 @@ isTemplate(const NamedDecl *ND,
       dyn_cast<ClassTemplateSpecializationDecl>(ND)) {
     TypeSourceInfo *TSI = Spec->getTypeAsWritten();
     if (TSI) {
-      TemplateSpecializationTypeLoc &TSTL =
+      TemplateSpecializationTypeLoc TSTL =
         cast<TemplateSpecializationTypeLoc>(TSI->getTypeLoc());
       TemplateArgumentListInfo LI(TSTL.getLAngleLoc(), TSTL.getRAngleLoc());
       for (unsigned i = 0, e = TSTL.getNumArgs(); i != e; ++i)
@@ -453,7 +453,7 @@ MicrosoftCXXNameMangler::mangleUnqualifiedName(const NamedDecl *ND,
       
       if (const NamespaceDecl *NS = dyn_cast<NamespaceDecl>(ND)) {
         if (NS->isAnonymousNamespace()) {
-          Out << "?A";
+          Out << "?A@";
           break;
         }
       }
@@ -742,13 +742,17 @@ void MicrosoftCXXNameMangler::mangleTemplateInstantiationName(
   // Always start with the unqualified name.
 
   // Templates have their own context for back references.
-  BackRefMap TemplateContext;
-  NameBackReferences.swap(TemplateContext);
+  ArgBackRefMap OuterArgsContext;
+  BackRefMap OuterTemplateContext;
+  NameBackReferences.swap(OuterTemplateContext);
+  TypeBackReferences.swap(OuterArgsContext);
 
   mangleUnscopedTemplateName(TD);
   mangleTemplateArgs(TemplateArgs);
 
-  NameBackReferences.swap(TemplateContext);
+  // Restore the previous back reference contexts.
+  NameBackReferences.swap(OuterTemplateContext);
+  TypeBackReferences.swap(OuterArgsContext);
 }
 
 void
@@ -1049,6 +1053,13 @@ void MicrosoftCXXNameMangler::mangleType(const BuiltinType *T,
   case BuiltinType::ObjCId: Out << "PAUobjc_object@@"; break;
   case BuiltinType::ObjCClass: Out << "PAUobjc_class@@"; break;
   case BuiltinType::ObjCSel: Out << "PAUobjc_selector@@"; break;
+
+  case BuiltinType::OCLImage1d: Out << "PAUocl_image1d@@"; break;
+  case BuiltinType::OCLImage1dArray: Out << "PAUocl_image1darray@@"; break;
+  case BuiltinType::OCLImage1dBuffer: Out << "PAUocl_image1dbuffer@@"; break;
+  case BuiltinType::OCLImage2d: Out << "PAUocl_image2d@@"; break;
+  case BuiltinType::OCLImage2dArray: Out << "PAUocl_image2darray@@"; break;
+  case BuiltinType::OCLImage3d: Out << "PAUocl_image3d@@"; break;
  
   case BuiltinType::NullPtr: Out << "$$T"; break;
 

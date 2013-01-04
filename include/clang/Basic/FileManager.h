@@ -18,10 +18,10 @@
 #include "clang/Basic/FileSystemOptions.h"
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
+#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/Support/Allocator.h"
 // FIXME: Enhance libsystem to support inode and other fields in stat.
 #include <sys/types.h>
@@ -164,7 +164,7 @@ class FileManager : public RefCountedBase<FileManager> {
   OwningPtr<FileSystemStatCache> StatCache;
 
   bool getStatValue(const char *Path, struct stat &StatBuf,
-                    int *FileDescriptor);
+                    bool isFile, int *FileDescriptor);
 
   /// Add all ancestors of the given path (pointing to either a file
   /// or a directory) as virtual directories.

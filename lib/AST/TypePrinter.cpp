@@ -11,19 +11,19 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/AST/PrettyPrinter.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/DeclTemplate.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/Type.h"
-#include "clang/AST/PrettyPrinter.h"
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/SourceManager.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/SaveAndRestore.h"
+#include "llvm/Support/raw_ostream.h"
 using namespace clang;
 
 namespace {
@@ -647,6 +647,9 @@ void TypePrinter::printFunctionProtoAfter(const FunctionProtoType *T,
   case CC_PnaclCall:
     OS << " __attribute__((pnaclcall))";
     break;
+  case CC_IntelOclBicc:
+    OS << " __attribute__((intel_ocl_bicc))";
+    break;
   }
   if (Info.getNoReturn())
     OS << " __attribute__((noreturn))";
@@ -1168,6 +1171,7 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
    break;
   }
   case AttributedType::attr_pnaclcall: OS << "pnaclcall"; break;
+  case AttributedType::attr_inteloclbicc: OS << "inteloclbicc"; break;
   }
   OS << "))";
 }
