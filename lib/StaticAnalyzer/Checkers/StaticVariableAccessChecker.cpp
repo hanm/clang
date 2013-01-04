@@ -429,6 +429,11 @@ public:
       if (VD->hasLocalStorage()) {
         return;
       }
+
+			// We only need to check static variable that has function scope
+			// (required by Richard Latham)
+			if (!VD->isStaticLocal())
+				return;
     }
     else {
       assert(
@@ -444,6 +449,15 @@ public:
     }
 
     if (CurrentLValueBases.count(D)) {
+			// We should not report on static variables in functions that
+			// are marked as no effect. This is required by Richard Latham too.
+			// FIXME: use a better attribute type.
+			DeclContext *Ctx = D->getDeclContext();
+			if (FunctionDecl *Function = dyn_cast<FunctionDecl>(Ctx)) {
+				if (Function->hasAttr<NoEffectAttr>())
+					return;
+			}
+			
       // report bug
       SourceRange SR = 
         SourceRangeOverride.getBegin().isValid() ? 
