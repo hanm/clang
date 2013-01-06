@@ -93,7 +93,7 @@ public:
 [[asap::region("Roo")]] 
 int main (void) {
   Coo c [[asap::arg("Roo")]];
-  Coo *d [[asap::arg("Rah")]] = new Coo [[asap::arg("Root:Rah")]] (77);
+  // Coo *d [[asap::arg("Rah")]] = new Coo [[asap::arg("Root:Rah")]] (77);
   int five [[asap::arg("Boo")]] = 4+1;
   int six  = 4+2;
   return 0;
