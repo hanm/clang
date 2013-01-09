@@ -156,11 +156,9 @@ namespace {
     return false;
   }
 
-  /**
-   *  Return an RplElement if any of the attributes of type AttrType of the
-   *  declaration Decl* D have a region name or a param name that is
-   *  the same as the 'name' provided as the 2nd argument
-   */
+  /// \brief  Return an RplElement if any of the attributes of type AttrType
+  /// of the declaration Decl* D have a region name or a param name that is
+  /// the same as the 'name' provided as the 2nd argument.
   template<typename AttrType>
   RplElement* scanAttributes(Decl* D, const StringRef &Name)
   {
@@ -176,9 +174,7 @@ namespace {
     return 0;
   }
 
-  /**
-   *  Looks for 'name' in the declaration 'D' and its parent scopes
-   */
+  /// \brief Looks for 'name' in the declaration 'D' and its parent scopes.
   RplElement *findRegionName(Decl *D, StringRef Name) {
     if (!D)
       return 0;
@@ -263,7 +259,7 @@ private:
   }
 
   void helperEmitInvalidAliasingModificationWarning(Stmt *S, Decl *D,
-                                                    const StringRef& Str) {
+                                                    const StringRef &Str) {
     StringRef BugName =
       "cannot modify aliasing through pointer to partly specified region";
     std::string description_std = "'";
@@ -359,9 +355,9 @@ public:
     VisitChildren(S);
   }
 
-  void VisitMemberExpr(MemberExpr* E) {
+  void VisitMemberExpr(MemberExpr *Expr) {
     os << "DEBUG:: VisitMemberExpr: ";
-    E->printPretty(os, 0, Ctx.getPrintingPolicy());
+    Expr->printPretty(os, 0, Ctx.getPrintingPolicy());
     os << "\n";
     /*os << "Rvalue=" << E->isRValue()
        << ", Lvalue=" << E->isLValue()
@@ -372,24 +368,24 @@ public:
       os << "LV_Valid\n";
     else
       os << "not LV_Valid\n";*/
-    ValueDecl* vd = E->getMemberDecl();
-    vd->print(os, Ctx.getPrintingPolicy());
+    ValueDecl* VD = Expr->getMemberDecl();
+    VD->print(os, Ctx.getPrintingPolicy());
     os << "\n";
 
-    /// 1. vd is a FunctionDecl
-    const FunctionDecl* fund = dyn_cast<FunctionDecl>(vd);
-    if (fund) {
+    /// 1. VD is a FunctionDecl
+    const FunctionDecl *FD = dyn_cast<FunctionDecl>(VD);
+    if (FD) {
       // TODO
-      Effect* e = 0; // TODO here we may have a long list of effects
+      Effect *E = 0; // TODO here we may have a long list of effects
 
-      /// find declaration -> find parameter(s) -> 
+      /// find declaration -> find parameter(s) ->
       /// find argument(s) -> substitute
-      const RegionParamAttr* param = fund->getAttr<RegionParamAttr>();
-      if (param) { 
-        /// if function has region params, find the region args on 
+      const RegionParamAttr* Param = FD->getAttr<RegionParamAttr>();
+      if (Param) { 
+        /// if function has region params, find the region args on
         /// the invokation
         os << "DEBUG:: found function param";
-        param->printPretty(os, Ctx.getPrintingPolicy());
+        Param->printPretty(os, Ctx.getPrintingPolicy());
         os << "\n";
       } else {
         /// no params
@@ -397,23 +393,23 @@ public:
       }
 
       /// parameters read after substitution, invoke effects after substitution
-      /// 
+      ///
       /// return type
       /// TODO Merge with FieldDecl (Duplicate code)
       /// 2.3. Visit Base with read semantics, then restore write semantics
       bool hws = hasWriteSemantics;
       hasWriteSemantics = false;
-      Visit(E->getBase());
+      Visit(Expr->getBase());
       hasWriteSemantics = hws;
 
-      /// Post-Visit Actions: check that effects (after substitution) 
+      /// Post-Visit Actions: check that effects (after substitution)
       /// are covered by effect summary
-      if (e) {
-        e = effectsTmp.pop_back_val();
-        os << "### "; e->print(os); os << "\n";
-        if (!e->isCoveredBy(effectSummary)) {
-          std::string str = e->toString();
-          helperEmitEffectNotCoveredWarning(E, vd, str);
+      if (E) {
+        E = effectsTmp.pop_back_val();
+        os << "### "; E->print(os); os << "\n";
+        if (!E->isCoveredBy(effectSummary)) {
+          std::string Str = E->toString();
+          helperEmitEffectNotCoveredWarning(Expr, VD, Str);
           isCoveredBySummary = false;
         }
       }
@@ -421,35 +417,36 @@ public:
 
     /// 2. vd is a FieldDecl
     /// Type_vd <args> vd
-    const FieldDecl* fd  = dyn_cast<FieldDecl>(vd);
-    if (fd) {
-      StringRef s;
-      int effectNr = 0;
+    const FieldDecl* FieldD  = dyn_cast<FieldDecl>(VD);
+    if (FieldD) {
+      StringRef S;
+      int EffectNr = 0;
 #ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
       specific_attr_reverse_iterator<RegionArgAttr>
-        argit = fd->specific_attr_rbegin<RegionArgAttr>(),
-        endit = fd->specific_attr_rend<RegionArgAttr>();
+        argit = FieldD->specific_attr_rbegin<RegionArgAttr>(),
+        endit = FieldD->specific_attr_rend<RegionArgAttr>();
 #else
       /// Build a reverse iterator over RegionArgAttr
       llvm::SmallVector<RegionArgAttr*, 8> argv;
-      for (specific_attr_iterator<RegionArgAttr>
-              i = fd->specific_attr_begin<RegionArgAttr>(),
-              e = fd->specific_attr_end<RegionArgAttr>();
-          i!=e; i++){
-          argv.push_back(*i);
+      for (specific_attr_iterator<RegionArgAttr> I =
+           FieldD->specific_attr_begin<RegionArgAttr>(),
+           E = FieldD->specific_attr_end<RegionArgAttr>();
+           I != E; ++ I) {
+          argv.push_back(*I);
       }
-      llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator
-        argit = argv.rbegin(),
-        endit = argv.rend();
+
+      llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator argit =
+        argv.rbegin(), endit = argv.rend();
+
       // Done preparing reverse iterator
 #endif
       // TODO if (!arg) arg = some default
-      assert(argit!=endit);
+      assert(argit != endit);
       if (isBase) {
         /// 2.1 Substitution
         RegionArgAttr* substarg;
-        QualType substqt = fd->getType();
-    
+        QualType substqt = FieldD->getType();
+
         os << "DEBUG:: nDerefs = " << nDerefs << "\n";
         for (int i = nDerefs; i>0; i--) {
           assert(argit!=endit);
@@ -494,50 +491,51 @@ public:
             }
           }
         }
-      } else if (typecheckAssignment) { // isBase == false ==> init regions
+      } else if (typecheckAssignment) {
+        // isBase == false ==> init regions
 #ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
-        specific_attr_reverse_iterator<RegionArgAttr>
-            i = fd->specific_attr_rbegin<RegionArgAttr>(),
-            e = fd->specific_attr_rend<RegionArgAttr>();
+        specific_attr_reverse_iterator<RegionArgAttr> I =
+          FieldD->specific_attr_rbegin<RegionArgAttr>(),
+          E = FieldD->specific_attr_rend<RegionArgAttr>();
 #else
-        llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator 
-            i = argv.rbegin(),
-            e = argv.rend();
+        llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator I =
+          argv.rbegin(), E = argv.rend();
 #endif
 
         /// 2.1.2.1 drop region args that are sidestepped by dereferrences.
         int ndrfs = nDerefs;
-        while (ndrfs>0 && i != e) {
-          i++;
+        while (ndrfs>0 && I != E) {
+          I ++;
           ndrfs--;
         }
 
-        assert(ndrfs==0 || ndrfs==-1);
+        assert(ndrfs == 0 || ndrfs == -1);
 
         if (ndrfs==0) { /// skip the 1st arg, then add the rest
-          assert(i!=e);
-          Rpl *tmp = rplAttrMap[(*i)];
+          assert(I != E);
+          Rpl *tmp = rplAttrMap[(*I)];
           assert(tmp);
           if (hasWriteSemantics && nDerefs > 0
               && tmp->isFullySpecified() == false
               /* FIXME: && (*i)->/isaPointerType/ )*/) {
             /// emit capture error
-            std::string str = tmp->toString();
-            helperEmitInvalidAliasingModificationWarning(E,vd,str);
+            std::string Str = tmp->toString();
+            helperEmitInvalidAliasingModificationWarning(Expr, VD, Str);
           }
-          i++;
+
+          I++;
         }
 
         /// add rest of region types
-        while(i!=e) {
-          RegionArgAttr *arg = *i;
+        while(I != E) {
+          RegionArgAttr *arg = *I;
           Rpl *rpl = rplAttrMap[arg];
           assert(rpl);
           tmpRegions->push_back(new Rpl(rpl)); // make a copy because rpl may
                                                // be modified by substitution.
           os << "DEBUG:: adding RPL for typechecking ~~~~~~~~~~ "
              << rpl->toString() << "\n";
-          i++;
+          I ++;
         }
       }
 
@@ -548,28 +546,28 @@ public:
       } else { // nDeref >=0
         /// 2.2.1. Take care of dereferences first
 #ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
-        specific_attr_reverse_iterator<RegionArgAttr>
-            argit = fd->specific_attr_rbegin<RegionArgAttr>(),
-            endit = fd->specific_attr_rend<RegionArgAttr>();
+        specific_attr_reverse_iterator<RegionArgAttr> argit =
+          FieldD->specific_attr_rbegin<RegionArgAttr>(),
+          endit = FieldD->specific_attr_rend<RegionArgAttr>();
 #else
-        llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator
-                argit = argv.rbegin(),
-                endit = argv.rend();
+        llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator argit =
+          argv.rbegin(), endit = argv.rend();
 #endif
-        QualType qt = fd->getType();
+        QualType QT = FieldD->getType();
 
-        for (int i = nDerefs; i>0; i--) {
-          assert(qt->isPointerType());
+        for (int i = nDerefs; i > 0; i --) {
+          assert(QT->isPointerType());
           assert(argit!=endit);
           /// TODO is this atomic or not? ignore atomic for now
           effectsTmp.push_back(
-                  new Effect(ReadsEffect,
-                             new Rpl(rplAttrMap[(*argit)]),
-                             *argit));
-          effectNr++;
-          qt = qt->getPointeeType();
+            new Effect(ReadsEffect,
+                       new Rpl(rplAttrMap[(*argit)]),
+                       *argit));
+          EffectNr++;
+          QT = QT->getPointeeType();
           argit++;
         }
+
         /// 2.2.2 Take care of the destination of dereferrences, unless this
         /// is the base of a member expression. In that case, the '.' operator
         /// describes the offset from the base, and the substitution performed
@@ -581,15 +579,15 @@ public:
           // if it is an aggregate type we have to capture all the copy effects
           // at most one of isAddrOf and isDeref can be true
           // last type to work on
-          if (fd->getType()->isStructureOrClassType()) {
+          if (FieldD->getType()->isStructureOrClassType()) {
             // TODO for each field add effect & i++
             /// Actually this translates into an implicit call to an 
             /// implicit copy function... treat it as a function call.
             /// i.e., not here!
           } else {
             effectsTmp.push_back(
-                      new Effect(ec, new Rpl(rplAttrMap[(*argit)]), *argit));
-            effectNr++;
+              new Effect(ec, new Rpl(rplAttrMap[(*argit)]), *argit));
+            EffectNr++;
           }
         }
       }
@@ -597,38 +595,39 @@ public:
       /// 2.3. Visit Base with read semantics, then restore write semantics
       bool saved_hws = hasWriteSemantics;
       bool saved_isBase = isBase; // probably not needed to save
- 
-      nDerefs = E->isArrow() ? 1 : 0;
+
+      nDerefs = Expr->isArrow() ? 1 : 0;
       hasWriteSemantics = false;
       isBase = true;
-      Visit(E->getBase());
+      Visit(Expr->getBase());
 
       /// Post visitation checking
       hasWriteSemantics = saved_hws;
       isBase = saved_isBase;
       /// Post-Visit Actions: check that effects (after substitutions) 
       /// are covered by effect summary
-      while (effectNr) {
+      while (EffectNr) {
         Effect* e = effectsTmp.pop_back_val();
         os << "### "; e->print(os); os << "\n";
         if (!e->isCoveredBy(effectSummary)) {
-          std::string str = e->toString();
-          helperEmitEffectNotCoveredWarning(E, vd, str);
+          std::string Str = e->toString();
+          helperEmitEffectNotCoveredWarning(Expr, VD, Str);
           isCoveredBySummary = false;
         }
-        effectNr--;
+
+        EffectNr --;
       }
     } // end if FieldDecl
   } // end VisitMemberExpr
 
-  void VisitUnaryAddrOf(UnaryOperator* E)  {
+  void VisitUnaryAddrOf(UnaryOperator *E)  {
     assert(nDerefs>=0);
     nDerefs--;
     os << "DEBUG:: Visit Unary: AddrOf (nDerefs=" << nDerefs << ")\n";
     Visit(E->getSubExpr());
   }
 
-  void VisitUnaryDeref(UnaryOperator* E) {
+  void VisitUnaryDeref(UnaryOperator *E) {
     nDerefs++;
     os << "DEBUG:: Visit Unary: Deref (nDerefs=" << nDerefs << ")\n";
     Visit(E->getSubExpr());
@@ -644,21 +643,21 @@ public:
   void VisitUnaryPostInc(UnaryOperator *E) {
     VisitPrePostIncDec(E);
   }
-  
+
   void VisitUnaryPostDec(UnaryOperator *E) {
     VisitPrePostIncDec(E);
   }
-  
+
   void VisitUnaryPreInc(UnaryOperator *E) {
     VisitPrePostIncDec(E);
   }
-  
+
   void VisitUnaryPreDec(UnaryOperator *E) {
     VisitPrePostIncDec(E);
   }
-  
+
   // TODO collect effects
-  void VisitDeclRefExpr(DeclRefExpr* E) {
+  void VisitDeclRefExpr(DeclRefExpr *E) {
     os << "DEBUG:: VisitDeclRefExpr --- whatever that is!: ";
     E->printPretty(os, 0, Ctx.getPrintingPolicy());
     os << "\n";
@@ -677,8 +676,8 @@ public:
     vd->print(os, Ctx.getPrintingPolicy());
     os << "\n";*/
   }
-  
-  void VisitCXXThisExpr(CXXThisExpr* E) {
+
+  void VisitCXXThisExpr(CXXThisExpr *E) {
     os << "DEBUG:: visiting 'this' expression\n";
     nDerefs = 0;
     if (tmpRegions && tmpRegions->empty() && !E->isImplicit()) {
@@ -759,7 +758,7 @@ public:
         }
       }
     }
-  
+
     /// Cleanup
     hasWriteSemantics = saved_hws;
     //delete lhsRegions;
@@ -768,8 +767,8 @@ public:
     delete rhsRegions;
     rhsRegions = 0;
   }
-  
-  void VisitCompoundAssignOperator(CompoundAssignOperator* E) {
+
+  void VisitCompoundAssignOperator(CompoundAssignOperator *E) {
     os << "DEBUG:: !!!!!!!!!!! Mother of compound Assign!!!!!!!!!!!!!\n";
     E->printPretty(os, 0, Ctx.getPrintingPolicy());
     os << "\n";
@@ -788,8 +787,8 @@ public:
     helperVisitAssignment(E);
     typecheckAssignment = saved_tca;
   }
-  
-  void VisitCallExpr(CallExpr* E) { 
+
+  void VisitCallExpr(CallExpr *E) {
     os << "DEBUG:: VisitCallExpr\n";
   }
 
@@ -830,14 +829,14 @@ private:
   bool fatalError;
   EffectSummaryMapTy& effectSummaryMap;
   RplAttrMapTy& rplAttrMap;
-  
+
 public:
 
   typedef RecursiveASTVisitor<ASaPEffectsCheckerTraverser> BaseClass;
 
   /// Constructor
   explicit ASaPEffectsCheckerTraverser(
-    ento::BugReporter& BR, ASTContext& ctx, 
+    ento::BugReporter& BR, ASTContext& ctx,
     AnalysisManager& mgr, AnalysisDeclContext* AC, raw_ostream& os,
     EffectSummaryMapTy& esm, RplAttrMapTy& rplAttrMap
     ) : BR(BR),
@@ -860,7 +859,7 @@ public:
       ///  Check that Effect Summary covers method effects
       Effect::EffectVector *ev = effectSummaryMap[D];
       assert(ev);
-      EffectCollectorVisitor ecv(BR, Ctx, mgr, AC, os, 
+      EffectCollectorVisitor ecv(BR, Ctx, mgr, AC, os,
                                  *ev, effectSummaryMap, rplAttrMap, st);
       os << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ "
          << "(END EffectCollectorVisitor)\n";
@@ -872,7 +871,7 @@ public:
 
 class ASaPSemanticCheckerTraverser :
   public RecursiveASTVisitor<ASaPSemanticCheckerTraverser> {
-    
+
 private:
   /// Private Fields
   ento::BugReporter& BR;
