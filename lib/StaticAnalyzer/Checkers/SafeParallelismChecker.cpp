@@ -1370,32 +1370,30 @@ class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
 
 public:
-  void checkASTDecl(const TranslationUnitDecl* D, AnalysisManager& mgr,
+  void checkASTDecl(const TranslationUnitDecl *D, AnalysisManager &Mgr,
                     BugReporter &BR) const {
     os << "DEBUG:: starting ASaP Semantic Checker\n";
     BuiltinDefaulrRegionParam = ::new(D->getASTContext())
-        RegionParamAttr(D->getSourceRange(), D->getASTContext(), "P");
+      RegionParamAttr(D->getSourceRange(), D->getASTContext(), "P");
+
     /** initialize traverser */
-    EffectSummaryMapTy esm;
-    RplAttrMapTy ram;
-    ASaPSemanticCheckerTraverser asapSemaChecker(BR, D->getASTContext(),
-                                                 mgr.getAnalysisDeclContext(D),
-                                                 os, esm, ram);
+    EffectSummaryMapTy EffectsMap;
+    RplAttrMapTy RplMap;
+    ASaPSemanticCheckerTraverser SemanticChecker(BR, D->getASTContext(),
+                                                 Mgr.getAnalysisDeclContext(D),
+                                                 os, EffectsMap, RplMap);
     /** run checker */
-    asapSemaChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+    SemanticChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     os << "##############################################\n";
     os << "DEBUG:: done running ASaP Semantic Checker\n\n";
 
-    if (!asapSemaChecker.encounteredFatalError()) {
+    if (!SemanticChecker.encounteredFatalError()) {
       /// Check that Effect Summaries cover effects
-      ASaPEffectsCheckerTraverser asapEffectChecker(BR, D->getASTContext(),
-                    mgr, mgr.getAnalysisDeclContext(D), os, esm, ram);
-      asapEffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+      ASaPEffectsCheckerTraverser EffectChecker(BR, D->getASTContext(), Mgr,
+                                                Mgr.getAnalysisDeclContext(D),
+                                                os, EffectsMap, RplMap);
+      EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     }
-
-    // FIXME: deleting BuiltinDefaulrRegionParam below creates dangling 
-    // pointers (i.e. there's some memory leak somewhere).
-    //::delete BuiltinDefaulrRegionParam;
   }
 };
 } // end unnamed namespace
