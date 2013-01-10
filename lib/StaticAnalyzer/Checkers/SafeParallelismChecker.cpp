@@ -121,7 +121,7 @@ namespace {
     return Result;
   }
 
-  inline RplElement *getRegionOrParamElement(const Attr *Attribute) {
+  inline RplElement *createRegionOrParamElement(const Attr *Attribute) {
     RplElement* Result = 0;
     switch(Attribute->getKind()) {
     case attr::Region:
@@ -167,7 +167,7 @@ namespace {
          E = D->specific_attr_end<AttrType>();
          I != E; ++ I) {
       if (getRegionOrParamName(*I) == Name) {
-        return getRegionOrParamElement(*I);
+        return createRegionOrParamElement(*I);
       }
     }
 
