@@ -1568,6 +1568,40 @@ NamedDecl *Sema::LazilyCreateBuiltin(IdentifierInfo *II, unsigned bid,
   return New;
 }
 
+/// \brief Filter out any previous declarations that the given declaration
+/// should not consider because they are not permitted to conflict, e.g.,
+/// because they come from hidden sub-modules and do not refer to the same
+/// entity.
+static void filterNonConflictingPreviousDecls(ASTContext &context,
+                                              NamedDecl *decl,
+                                              LookupResult &previous){
+  // This is only interesting when modules are enabled.
+  if (!context.getLangOpts().Modules)
+    return;
+
+  // Empty sets are uninteresting.
+  if (previous.empty())
+    return;
+
+  // If this declaration has external
+  bool hasExternalLinkage = (decl->getLinkage() == ExternalLinkage);
+
+  LookupResult::Filter filter = previous.makeFilter();
+  while (filter.hasNext()) {
+    NamedDecl *old = filter.next();
+
+    // Non-hidden declarations are never ignored.
+    if (!old->isHidden())
+      continue;
+
+    // If either has no-external linkage, ignore the old declaration.
+    if (!hasExternalLinkage || old->getLinkage() != ExternalLinkage)
+      filter.erase();
+  }
+
+  filter.done();
+}
+
 bool Sema::isIncompatibleTypedef(TypeDecl *Old, TypedefNameDecl *New) {
   QualType OldType;
   if (TypedefNameDecl *OldTypedef = dyn_cast<TypedefNameDecl>(Old))
@@ -1788,19 +1822,19 @@ DeclHasAttr(const Decl *D, const Attr *A) {
   return false;
 }
 
-bool Sema::mergeDeclAttribute(Decl *D, InheritableAttr *Attr) {
+bool Sema::mergeDeclAttribute(NamedDecl *D, InheritableAttr *Attr) {
   InheritableAttr *NewAttr = NULL;
-  if (AvailabilityAttr *AA = dyn_cast<AvailabilityAttr>(Attr))
+  if (AvailabilityAttr *AA = dyn_cast<AvailabilityAttr>(Attr)) {
     NewAttr = mergeAvailabilityAttr(D, AA->getRange(), AA->getPlatform(),
                                     AA->getIntroduced(), AA->getDeprecated(),
                                     AA->getObsoleted(), AA->getUnavailable(),
                                     AA->getMessage());
-  else if (VisibilityAttr *VA = dyn_cast<VisibilityAttr>(Attr)) {
+    if (NewAttr)
+      D->ClearLVCache();
+  } else if (VisibilityAttr *VA = dyn_cast<VisibilityAttr>(Attr)) {
     NewAttr = mergeVisibilityAttr(D, VA->getRange(), VA->getVisibility());
-    if (NewAttr) {
-      NamedDecl *ND = cast<NamedDecl>(D);
-      ND->ClearLVCache();
-    }
+    if (NewAttr)
+      D->ClearLVCache();
   } else if (DLLImportAttr *ImportA = dyn_cast<DLLImportAttr>(Attr))
     NewAttr = mergeDLLImportAttr(D, ImportA->getRange());
   else if (DLLExportAttr *ExportA = dyn_cast<DLLExportAttr>(Attr))
@@ -1871,7 +1905,7 @@ static void checkNewAttributesAfterDef(Sema &S, Decl *New, const Decl *Old) {
 }
 
 /// mergeDeclAttributes - Copy attributes from the Old decl to the New one.
-void Sema::mergeDeclAttributes(Decl *New, Decl *Old,
+void Sema::mergeDeclAttributes(NamedDecl *New, Decl *Old,
                                bool MergeDeprecation) {
   // attributes declared post-definition are currently ignored
   checkNewAttributesAfterDef(*this, New, Old);
@@ -3658,8 +3692,8 @@ bool Sema::diagnoseQualifiedDeclaration(CXXScopeSpec &SS, DeclContext *DC,
   return false;
 }
 
-Decl *Sema::HandleDeclarator(Scope *S, Declarator &D,
-                             MultiTemplateParamsArg TemplateParamLists) {
+NamedDecl *Sema::HandleDeclarator(Scope *S, Declarator &D,
+                                  MultiTemplateParamsArg TemplateParamLists) {
   // TODO: consider using NameInfo for diagnostic.
   DeclarationNameInfo NameInfo = GetNameForDeclarator(D);
   DeclarationName Name = NameInfo.getName();
@@ -4139,6 +4173,7 @@ Sema::ActOnTypedefNameDecl(Scope *S, DeclContext *DC, TypedefNameDecl *NewTD,
   // in an outer scope, it isn't the same thing.
   FilterLookupForScope(Previous, DC, S, /*ConsiderLinkage*/ false,
                        /*ExplicitInstantiationOrSpecialization=*/false);
+  filterNonConflictingPreviousDecls(Context, NewTD, Previous);
   if (!Previous.empty()) {
     Redeclaration = true;
     MergeTypedefNameDecl(NewTD, Previous);
@@ -4767,6 +4802,9 @@ bool Sema::CheckVariableDeclaration(VarDecl *NewVD,
     if (Pos != LocallyScopedExternalDecls.end())
       Previous.addDecl(Pos->second);
   }
+
+  // Filter out any non-conflicting previous declarations.
+  filterNonConflictingPreviousDecls(Context, NewVD, Previous);
 
   if (T->isVoidType() && !NewVD->hasExternalStorage()) {
     Diag(NewVD->getLocation(), diag::err_typecheck_decl_incomplete_type)
@@ -6118,6 +6156,9 @@ bool Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
       Previous.addDecl(Pos->second);
   }
 
+  // Filter out any non-conflicting previous declarations.
+  filterNonConflictingPreviousDecls(Context, NewFD, Previous);
+
   bool Redeclaration = false;
 
   // Merge or overload the declaration with an existing declaration of
@@ -6273,6 +6314,7 @@ bool Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
     // declaration against the expected type for the builtin. 
     if (unsigned BuiltinID = NewFD->getBuiltinID()) {
       ASTContext::GetBuiltinTypeError Error;
+      LookupPredefedObjCSuperType(*this, S, NewFD->getIdentifier());
       QualType T = Context.GetBuiltinType(BuiltinID, Error);
       if (!T.isNull() && !Context.hasSameType(T, NewFD->getType())) {
         // The type of this function differs from the type of the builtin,

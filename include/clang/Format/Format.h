@@ -52,6 +52,9 @@ struct FormatStyle {
   /// When false, use the same indentation level as for the switch statement.
   /// Switch statement body is always indented one level more than case labels.
   bool IndentCaseLabels;
+
+  /// \brief The number of spaces to before trailing line comments.
+  unsigned SpacesBeforeTrailingComments;
 };
 
 /// \brief Returns a format style complying with the LLVM coding standards:
@@ -75,7 +78,10 @@ tooling::Replacements reformat(const FormatStyle &Style, Lexer &Lex,
                                SourceManager &SourceMgr,
                                std::vector<CharSourceRange> Ranges);
 
-}  // end namespace format
-}  // end namespace clang
+/// \brief Returns the \c LangOpts that the formatter expects you to set.
+LangOptions getFormattingLangOpts();
 
-#endif  // LLVM_CLANG_FORMAT_FORMAT_H
+} // end namespace format
+} // end namespace clang
+
+#endif // LLVM_CLANG_FORMAT_FORMAT_H

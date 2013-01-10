@@ -233,10 +233,6 @@ public:
 
   // Parsing methods.
 
-  /// ParseTranslationUnit - All in one method that initializes parses, and
-  /// shuts down the parser.
-  void ParseTranslationUnit();
-
   /// Initialize - Warm up the parser.
   ///
   void Initialize();
@@ -1056,7 +1052,8 @@ private:
   void DeallocateParsedClasses(ParsingClass *Class);
   void PopParsingClass(Sema::ParsingClassState);
 
-  Decl *ParseCXXInlineMethodDef(AccessSpecifier AS, AttributeList *AccessAttrs,
+  NamedDecl *ParseCXXInlineMethodDef(AccessSpecifier AS,
+                                AttributeList *AccessAttrs,
                                 ParsingDeclarator &D,
                                 const ParsedTemplateInfo &TemplateInfo,
                                 const VirtSpecifiers& VS,
@@ -2060,7 +2057,10 @@ private:
                            AccessSpecifier AS, bool EnteringContext,
                            DeclSpecContext DSC, 
                            ParsedAttributesWithRange &Attributes);
-  void ParseCXXMemberSpecification(SourceLocation StartLoc, unsigned TagType,
+  void ParseCXXMemberSpecification(SourceLocation StartLoc,
+                                   SourceLocation AttrFixitLoc,
+                                   ParsedAttributes &Attrs,
+                                   unsigned TagType,
                                    Decl *TagDecl);
   ExprResult ParseCXXMemberInitializer(Decl *D, bool IsFunction,
                                        SourceLocation &EqualLoc);

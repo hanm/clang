@@ -1565,6 +1565,13 @@ public:
     llvm::Value *null =
       llvm::ConstantPointerNull::get(cast<llvm::PointerType>(value->getType()));
 
+    if (CGF.CGM.getCodeGenOpts().OptimizationLevel == 0) {
+      llvm::StoreInst *store = CGF.Builder.CreateStore(null, destField);
+      store->setAlignment(Alignment.getQuantity());
+      CGF.EmitARCStoreStrongCall(destField, value, /*ignored*/ true);
+      CGF.EmitARCStoreStrongCall(srcField, null, /*ignored*/ true);
+      return;
+    }
     llvm::StoreInst *store = CGF.Builder.CreateStore(value, destField);
     store->setAlignment(Alignment.getQuantity());
 

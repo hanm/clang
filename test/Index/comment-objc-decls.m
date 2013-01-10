@@ -32,7 +32,7 @@
 @end
 // CHECK: <Declaration>@protocol MyProto\n@end</Declaration>
 // CHECK: <Declaration>- (unsigned int)MethodMyProto:(id)anObject inRange:(unsigned int)range;</Declaration>
-// CHECK: <Declaration>@optional\n    @property(readwrite, copy, atomic) id PropertyMyProto;</Declaration>
+// CHECK: <Declaration>@optional\n@property(readwrite, copy, atomic) id PropertyMyProto;</Declaration>
 // CHECK: <Declaration>+ (id)ClassMethodMyProto;</Declaration>
 
 /**
@@ -172,4 +172,4 @@
 */
 @implementation NSObject
 @end
-// CHECK: <Declaration>@implementation NSObject@end</Declaration>
+// CHECK: <Declaration>@implementation NSObject\n@end</Declaration>

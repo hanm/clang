@@ -4708,9 +4708,14 @@ bool DataRecursiveIntBinOpEvaluator::
       return Success(E->getOpcode() == BO_Rem ? LHS % RHS : LHS / RHS, E,
                      Result);
     case BO_Shl: {
-      // During constant-folding, a negative shift is an opposite shift. Such
-      // a shift is not a constant expression.
-      if (RHS.isSigned() && RHS.isNegative()) {
+      if (Info.getLangOpts().OpenCL)
+        // OpenCL 6.3j: shift values are effectively % word size of LHS.
+        RHS &= APSInt(llvm::APInt(LHS.getBitWidth(),
+                      static_cast<uint64_t>(LHS.getBitWidth() - 1)),
+                      RHS.isUnsigned());
+      else if (RHS.isSigned() && RHS.isNegative()) {
+        // During constant-folding, a negative shift is an opposite shift. Such
+        // a shift is not a constant expression.
         CCEDiag(E, diag::note_constexpr_negative_shift) << RHS;
         RHS = -RHS;
         goto shift_right;
@@ -4735,9 +4740,14 @@ bool DataRecursiveIntBinOpEvaluator::
       return Success(LHS << SA, E, Result);
     }
     case BO_Shr: {
-      // During constant-folding, a negative shift is an opposite shift. Such a
-      // shift is not a constant expression.
-      if (RHS.isSigned() && RHS.isNegative()) {
+      if (Info.getLangOpts().OpenCL)
+        // OpenCL 6.3j: shift values are effectively % word size of LHS.
+        RHS &= APSInt(llvm::APInt(LHS.getBitWidth(),
+                      static_cast<uint64_t>(LHS.getBitWidth() - 1)),
+                      RHS.isUnsigned());
+      else if (RHS.isSigned() && RHS.isNegative()) {
+        // During constant-folding, a negative shift is an opposite shift. Such a
+        // shift is not a constant expression.
         CCEDiag(E, diag::note_constexpr_negative_shift) << RHS;
         RHS = -RHS;
         goto shift_left;
@@ -6354,8 +6364,10 @@ bool Expr::isEvaluatable(const ASTContext &Ctx) const {
   return EvaluateAsRValue(Result, Ctx) && !Result.HasSideEffects;
 }
 
-APSInt Expr::EvaluateKnownConstInt(const ASTContext &Ctx) const {
+APSInt Expr::EvaluateKnownConstInt(const ASTContext &Ctx,
+               llvm::SmallVectorImpl<PartialDiagnosticAt> *Diag) const {
   EvalResult EvalResult;
+  EvalResult.Diag = Diag;
   bool Result = EvaluateAsRValue(EvalResult, Ctx);
   (void)Result;
   assert(Result && "Could not evaluate expression");
