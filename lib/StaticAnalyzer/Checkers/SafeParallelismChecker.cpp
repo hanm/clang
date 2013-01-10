@@ -873,7 +873,6 @@ class ASaPSemanticCheckerTraverser :
   public RecursiveASTVisitor<ASaPSemanticCheckerTraverser> {
 
 private:
-  /// Private Fields
   ento::BugReporter& BR;
   ASTContext& Ctx;
   AnalysisDeclContext* AC;
@@ -882,12 +881,9 @@ private:
   EffectSummaryMapTy& effectSummaryMap;
   RplAttrMapTy& rplAttrMap;
 
-  /// Private Methods
-  /**
-   *  Issues Warning: '<str>' <bugName> on Declaration
-   */
-  void helperEmitDeclarationWarning(const Decl* D,
-                                    const StringRef& str, std::string bugName) {
+  /// \brief Issues Warning: '<str>' <bugName> on Declaration
+  void helperEmitDeclarationWarning(const Decl *D,
+                                    const StringRef &str, std::string bugName) {
 
     std::string description_std = "'";
     description_std.append(str);
@@ -902,12 +898,10 @@ private:
 
   }
 
-  /**
-   *  Issues Warning: '<str>' <bugName> on Attribute
-   */
-  void helperEmitAttributeWarning(const Decl* D,
-                                  const Attr* attr,
-                                  const StringRef& str, std::string bugName) {
+  /// \brief Issues Warning: '<str>' <bugName> on Attribute
+  void helperEmitAttributeWarning(const Decl *D,
+                                  const Attr *attr,
+                                  const StringRef &str, std::string bugName) {
 
     std::string description_std = "'";
     description_std.append(str);
@@ -921,22 +915,17 @@ private:
                        bugStr, VDLoc, attr->getRange());
   }
 
-  /**
-   *  Emit a Warning when the input string (which is assumed to be an RPL
-   *  element) is not declared.
-   */
-  void helperEmitUndeclaredRplElementWarning(
-                        const Decl* D,
-                        const Attr* attr,
-                        const StringRef& str) {
-    StringRef bugName = "RPL element was not declared";
-    helperEmitAttributeWarning(D,attr,str, bugName);
+  /// \brief Emit a Warning when the input string (which is assumed to be an
+  /// RPL element) is not declared.
+  void helperEmitUndeclaredRplElementWarning(const Decl *D,
+                                             const Attr *Attr,
+                                             const StringRef &Str) {
+    StringRef BugName = "RPL element was not declared";
+    helperEmitAttributeWarning(D, Attr, Str, BugName);
   }
 
-  /**
-   *  Declaration D is missing region argument(s)
-   */
-  void helperEmitMissingRegionArgs(Decl* D) {
+  /// \brief  Declaration D is missing region argument(s)
+  void helperEmitMissingRegionArgs(Decl *D) {
     std::string bugName = "missing region argument(s)";
 
     std::string sbuf;
@@ -946,10 +935,8 @@ private:
     helperEmitDeclarationWarning(D, strbuf.str(), bugName);
   }
 
-  /**
-   *  Region argument A on declaration D is superfluous for type of D
-   */
-  void helperEmitSuperfluousRegionArg(Decl* D, RegionArgAttr* A) {
+  /// \brief Region argument A on declaration D is superfluous for type of D.
+  void helperEmitSuperfluousRegionArg(Decl *D, RegionArgAttr *A) {
     std::string bugName = "superfluous region argument";
 
     std::string sbuf;
@@ -959,16 +946,16 @@ private:
     helperEmitAttributeWarning(D, A, strbuf.str(), bugName);
   }
 
-  void checkIsValidTypeForArg(Decl* D, QualType qt, RegionArgAttr* attr) {
-    if (!isValidTypeForArg(qt, attr)) {
+  void checkIsValidTypeForArg(Decl *D, QualType QT, RegionArgAttr *Attr) {
+    if (!isValidTypeForArg(QT, Attr)) {
       // Emit Warning: Incompatible arg annotation TODO
-      std::string bugName = "wrong number of region parameter arguments";
+      std::string BugName = "wrong number of region parameter arguments";
 
       std::string sbuf;
       llvm::raw_string_ostream strbuf(sbuf);
-      attr->printPretty(strbuf, Ctx.getPrintingPolicy());
+      Attr->printPretty(strbuf, Ctx.getPrintingPolicy());
 
-      helperEmitAttributeWarning(D, attr, strbuf.str(), bugName);
+      helperEmitAttributeWarning(D, Attr, strbuf.str(), BugName);
     }
   }
 
@@ -979,13 +966,13 @@ private:
    *  2. Incompatible arg annotation for type (invalid #of RPLs)
    *  3. Not enough arg annotations for type
    */
-  void checkTypeRegionArgs(ValueDecl* D) {
-    QualType qt = D->getType();
+  void checkTypeRegionArgs(ValueDecl *D) {
+    QualType QT = D->getType();
     // here we need a reverse iterator over RegionArgAttr
 #ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
     specific_attr_reverse_iterator<RegionArgAttr>
-      i = D->specific_attr_rbegin<RegionArgAttr>(),
-      e = D->specific_attr_rend<RegionArgAttr>();
+      I = D->specific_attr_rbegin<RegionArgAttr>(),
+      E = D->specific_attr_rend<RegionArgAttr>();
 #else
     llvm::SmallVector<RegionArgAttr*, 8> argv;
     for (specific_attr_iterator<RegionArgAttr>
@@ -999,24 +986,25 @@ private:
       i = argv.rbegin(),
       e = argv.rend();
 #endif
-    while (i!=e && qt->isPointerType()) {
-      checkIsValidTypeForArg(D, qt, *i);
-      i++;
-      qt = qt->getPointeeType();
+    while (I != E && QT->isPointerType()) {
+      checkIsValidTypeForArg(D, QT, *I);
+      I ++;
+      QT = QT->getPointeeType();
     }
-    if (i==e) {
+
+    if (I == E) {
       // TODO attach default annotations
       //helperEmitMissingRegionArgs(D);
     } else {
-      checkIsValidTypeForArg(D, qt, *i);
-      i++;
+      checkIsValidTypeForArg(D, QT, *I);
+      I ++;
     }
 
     // check if there are annotations left
-    while (i!=e) {
-      helperEmitSuperfluousRegionArg(D, *i);
+    while (I != E) {
+      helperEmitSuperfluousRegionArg(D, *I);
       fatalError = true;
-      i++;
+      I ++;
     }
   }
 
@@ -1024,7 +1012,7 @@ private:
    *  Print to the debug output stream (os) the attribute
    */
   template<typename AttrType>
-  inline void helperPrintAttributes(Decl* D) {
+  inline void helperPrintAttributes(Decl *D) {
     for (specific_attr_iterator<AttrType>
          i = D->specific_attr_begin<AttrType>(),
          e = D->specific_attr_end<AttrType>();
