@@ -64,11 +64,11 @@ class
   [[asap::region("Links")]]
     C2 {
 
-  int data;
-  C2 *left [[asap::arg("P:L")]];
-  C2 *right [[asap::arg("P:R")]];
-  C2 **last_visited_link [[asap::arg("P:*")]];
-  int *last_visited_data [[asap::arg("P:*")]];
+  int data; // expected-warning{{missing region argument(s)}}
+  C2 *left [[asap::arg("P:L")]]; // expected-warning{{missing region argument(s)}}
+  C2 *right [[asap::arg("P:R")]]; // expected-warning{{missing region argument(s)}}
+  C2 **last_visited_link [[asap::arg("P:*")]]; // expected-warning{{missing region argument(s)}}
+  int *last_visited_data [[asap::arg("P:*")]]; // expected-warning{{missing region argument(s)}}
 
 };
 #endif
@@ -133,17 +133,17 @@ class
 // Too few arg annotations (the rest of them will use the defaults
 // or will be inferred)
 class 
-  __attribute__((param("P")))
+  __attribute__((param("P"))) 
   __attribute__((region("R")))
   __attribute__((region("L")))
   __attribute__((region("Links")))
     C2 {
 
-  int data;
-  C2 __attribute__((arg("P:L"))) * left;
-  C2 __attribute__((arg("P:R"))) * right;
-  C2 __attribute__((arg("P:*"))) ** last_visited_link;
-  int __attribute__((arg("P:*"))) *last_visited_data;
+  int data; // expected-warning{{missing region argument(s)}}
+  C2 __attribute__((arg("P:L"))) * left; // expected-warning{{missing region argument(s)}}
+  C2 __attribute__((arg("P:R"))) * right; // expected-warning{{missing region argument(s)}}
+  C2 __attribute__((arg("P:*"))) ** last_visited_link; // expected-warning{{missing region argument(s)}}
+  int __attribute__((arg("P:*"))) *last_visited_data; // expected-warning{{missing region argument(s)}}
 
 };
 

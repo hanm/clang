@@ -17,8 +17,6 @@ class
 [[asap::region("R3")]]
 [[asap::param("P1")]]
 C1 { 
-  // TODO: check that money is not annotated with an arg annotation
-  int money0 [[asap::arg("P1:R1")]]; // expected-warning {{RPL element was not declared}} 
   int money [[asap::arg("P1:R3")]]; 
   C1 *next [[asap::arg("P1"), asap::arg("P1:R2")]];
 
@@ -83,17 +81,13 @@ public:
     !cash ? (cash = money) : money++;   // writes P1:R3 or reads P1:R3
     cash ? money++ : (cash = money = 42);   // writes P1:R3 or reads P1:R3
   }
+
   [[asap::region("R3")]]
   void add_money(int cash) {
     money += cash; // expected-warning {{effect not covered by effect summary}}
   }
-  void subtract_money(int cash) [[asap::reads("P1:R1")]] { // expected-warning {{RPL element was not declared}}  
-    money -= (cash) ? cash+3 : cash=3;  // expected-warning{{effect not covered by effect summary}}
-    money -= cash;                      // expected-warning{{effect not covered by effect summary}}
-  }
 
-  bool insured [[asap::arg("P1:R1")]];// expected-warning {{RPL element was not declared}} 
-  char* name [[asap::arg("P1")]];
+  char* name [[asap::arg("P1"), asap::arg("P1")]];
 };
 #endif
 
@@ -113,7 +107,6 @@ __attribute__((region("R3")))
 __attribute__((param("P1")))
 C1 { 
   // TODO: check that money is not annotated with an arg annotation
-  int money0 __attribute__((arg("P1:R1"))); // expected-warning {{RPL element was not declared}} 
   int money __attribute__((arg("P1:R3"))); 
   C1 __attribute__((arg("P1:R2"))) * __attribute__((arg("P1"))) next;
 
@@ -178,17 +171,13 @@ public:
     !cash ? (cash = money) : money++;   // writes P1:R3 or reads P1:R3
     cash ? money++ : (cash = money = 42);   // writes P1:R3 or reads P1:R3
   }
+
   __attribute__((region("R3")))
   void add_money(int cash) {
     money += cash; // expected-warning {{effect not covered by effect summary}}
   }
-  void subtract_money(int cash) __attribute__((reads("P1:R1"))) { // expected-warning {{RPL element was not declared}}  
-    money -= (cash) ? cash+3 : cash=3;  // expected-warning{{effect not covered by effect summary}}
-    money -= cash;                      // expected-warning{{effect not covered by effect summary}}
-  }
 
-  bool insured __attribute__((arg("P1:R1")));// expected-warning {{RPL element was not declared}} 
-  char* name __attribute__((arg("P1")));
+  char* name __attribute__((arg("P1"), arg("P1")));
 };
 #endif
 
