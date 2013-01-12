@@ -210,14 +210,17 @@ public:
 typedef llvm::SmallVector<const RplElement*, 
                           RPL_ELEMENT_VECTOR_SIZE> RplElementVector;
 
-void destroyRplElementVector(RplElementVector& rev) {
-  for (RplElementVector::const_iterator
-           it = rev.begin(),
-           end = rev.end();
-       it != end; it++) {
-    delete(*it);
+namespace ASaP { 
+  template<typename T>
+  void destroyVector(T &V) {
+    for (typename T::const_iterator
+             I = V.begin(),
+             E = V.end();
+         I != E; ++I) {
+      delete(*I);
+    }
   }
-}
+} /// end namespace ASaP
 
 ///-///////////////////////////////////////////////////////////////////////////
 /// Rpl Class
@@ -233,6 +236,7 @@ public:
 private:
   /// Fields
   StringRef RplString;
+  /// Note: RplElements are owned by Rpl class. They are destroyed with the Rpl
   RplElementVector RplElements;
   bool FullySpecified;
 
@@ -358,7 +362,7 @@ public:
     RplElements.push_back(Elm);
   }
   
-  /// Copy Constructor -- deep clone
+  /// Copy Constructor 
   Rpl(Rpl* That) :
       RplString(That->RplString),
       FullySpecified(That->FullySpecified)  
@@ -372,24 +376,9 @@ public:
     }*/
   }
   /// Destructors
-  static void destroyRplVector(RplVector& Rv) {
-    for (RplVector::const_iterator
-            I = Rv.begin(),
-            E = Rv.end();
-          I != E; ++I) {
-      delete (*I);
-    }
+  void destroyElements() {
+    ASaP::destroyVector(RplElements);
   }
-
-  /*
-  virtual ~Rpl() {
-    for (RplElementVector::const_iterator
-             it = RplElements.begin(),
-             end = RplElements.end();
-          it != end; it++) {
-      delete(*it);
-    }
-  }*/
   
   /// Printing
   void printElements(raw_ostream& os) const {
@@ -519,54 +508,8 @@ public:
 ///-///////////////////////////////////////////////////////////////////////////
 /// Effect Class
 
-enum EffectKind {
-  /// pure = no effect
-  EK_NoEffect,
-  /// reads effect
-  EK_ReadsEffect,
-  /// atomic reads effect
-  EK_AtomicReadsEffect,
-  /// writes effect
-  EK_WritesEffect,
-  /// atomic writes effect
-  EK_AtomicWritesEffect
-};
-
 
 class Effect {
-private:
-  /// Fields
-  EffectKind effectKind;
-  Rpl* rpl;
-  const Attr* attr; // used to get SourceLocation information
-
-  /// Sub-Effect Kind
-  inline bool isSubEffectKindOf(const Effect& e) const {
-    bool result = false;
-    if (effectKind == EK_NoEffect) return true; // optimization
-    
-    if (!e.isAtomic() || this->isAtomic()) { 
-      /// if e.isAtomic ==> this->isAtomic() [[else return false]]
-      switch(e.getEffectKind()) {
-      case EK_WritesEffect:
-        if (effectKind == EK_WritesEffect) result = true;
-        // intentional fall through (lack of 'break')
-      case EK_AtomicWritesEffect:
-        if (effectKind == EK_AtomicWritesEffect) result = true;
-        // intentional fall through (lack of 'break')
-      case EK_ReadsEffect:
-        if (effectKind == EK_ReadsEffect) result = true;
-        // intentional fall through (lack of 'break')
-      case EK_AtomicReadsEffect:
-        if (effectKind == EK_AtomicReadsEffect) result = true;
-        // intentional fall through (lack of 'break')
-      case EK_NoEffect:
-        if (effectKind == EK_NoEffect) result = true;
-      }
-    }
-    return result;
-  }
-
 public:
   /// Types
 #ifndef EFFECT_VECTOR_SIZE
@@ -574,87 +517,130 @@ public:
 #endif
   typedef llvm::SmallVector<Effect*, EFFECT_VECTOR_SIZE> EffectVector;
 
+  enum EffectKind {
+    /// pure = no effect
+    EK_NoEffect,
+    /// reads effect
+    EK_ReadsEffect,
+    /// atomic reads effect
+    EK_AtomicReadsEffect,
+    /// writes effect
+    EK_WritesEffect,
+    /// atomic writes effect
+    EK_AtomicWritesEffect
+  };
+  
+private:
+  /// Fields
+  EffectKind Kind;
+  Rpl* R;
+  const Attr* A; // used to get SourceLocation information
+
+  /// \brief returns true if this is a subeffect kind of E.
+  /// This method only looks at effect kinds, not their Rpls.
+  /// E.g. NoEffect is a subeffect kind of all other effects,
+  /// Read is a subeffect of Write. Atomic-X is a subeffect of X.
+  /// The Subeffect relation is transitive.
+  inline bool isSubEffectKindOf(const Effect &E) const {
+    if (Kind == EK_NoEffect) return true; // optimization
+    
+    bool Result = false;
+    if (!E.isAtomic() || this->isAtomic()) { 
+      /// if e.isAtomic ==> this->isAtomic [[else return false]]
+      switch(E.getEffectKind()) {
+      case EK_WritesEffect:
+        if (Kind == EK_WritesEffect) Result = true;
+        // intentional fall through (lack of 'break')
+      case EK_AtomicWritesEffect:
+        if (Kind == EK_AtomicWritesEffect) Result = true;
+        // intentional fall through (lack of 'break')
+      case EK_ReadsEffect:
+        if (Kind == EK_ReadsEffect) Result = true;
+        // intentional fall through (lack of 'break')
+      case EK_AtomicReadsEffect:
+        if (Kind == EK_AtomicReadsEffect) Result = true;
+        // intentional fall through (lack of 'break')
+      case EK_NoEffect:
+        if (Kind == EK_NoEffect) Result = true;
+      }
+    }
+    return Result;
+  }
+
+public:
   /// Constructors
-  Effect(EffectKind ec, Rpl* r, const Attr* a) 
-        : effectKind(ec), rpl(r), attr(a) {}
+  Effect(EffectKind EK, Rpl* R, const Attr* A) 
+        : Kind(EK), R(R), A(A) {}
 
   /// Destructors
   virtual ~Effect() { 
-    delete rpl;
-  }
-
-  static void destroyEffectVector(Effect::EffectVector& ev) {
-    for (Effect::EffectVector::const_iterator
-            it = ev.begin(),
-            end = ev.end();
-          it != end; it++) {
-      delete (*it);
-    }
+    delete R;
   }
 
   /// Printing
-  inline bool printEffectKind(raw_ostream& os) const {
-    bool hasRpl = true;
-    switch(effectKind) {
-    case EK_NoEffect: os << "Pure Effect"; hasRpl = false; break;
-    case EK_ReadsEffect: os << "Reads Effect"; break;
-    case EK_WritesEffect: os << "Writes Effect"; break;
-    case EK_AtomicReadsEffect: os << "Atomic Reads Effect"; break;
-    case EK_AtomicWritesEffect: os << "Atomic Writes Effect"; break;
+  inline bool printEffectKind(raw_ostream& OS) const {
+    bool HasRpl = true;
+    switch(Kind) {
+    case EK_NoEffect: OS << "Pure Effect"; HasRpl = false; break;
+    case EK_ReadsEffect: OS << "Reads Effect"; break;
+    case EK_WritesEffect: OS << "Writes Effect"; break;
+    case EK_AtomicReadsEffect: OS << "Atomic Reads Effect"; break;
+    case EK_AtomicWritesEffect: OS << "Atomic Writes Effect"; break;
     }
-    return hasRpl;
+    return HasRpl;
   }
 
-  void print(raw_ostream& os) const {
-    bool hasRpl = printEffectKind(os);
-    if (hasRpl) {
-      os << " on ";
-      assert(rpl && "NULL RPL in non-pure effect");
-      rpl->printElements(os);
+  void print(raw_ostream& OS) const {
+    bool HasRpl = printEffectKind(OS);
+    if (HasRpl) {
+      OS << " on ";
+      assert(R && "NULL RPL in non-pure effect");
+      R->printElements(OS);
     }
   }
 
-  static void printEffectSummary(Effect::EffectVector& ev, raw_ostream& os) {
+  static void printEffectSummary(Effect::EffectVector& EV, raw_ostream& OS) {
     for (Effect::EffectVector::const_iterator 
-            I = ev.begin(),
-            E = ev.end(); 
+            I = EV.begin(),
+            E = EV.end(); 
             I != E; I++) {
-      (*I)->print(os);
-      os << "\n";
+      (*I)->print(OS);
+      OS << "\n";
     }    
   }
 
   std::string toString() const {
-    std::string sbuf;
-    llvm::raw_string_ostream os(sbuf);
-    print(os);
-    return std::string(os.str());
+    std::string SBuf;
+    llvm::raw_string_ostream OS(SBuf);
+    print(OS);
+    return std::string(OS.str());
   }
   
   /// Predicates
   inline bool isNoEffect() const {
-    return (effectKind == EK_NoEffect) ? true : false;
+    return (Kind == EK_NoEffect) ? true : false;
   }
   
   inline bool hasRplArgument() const { return !isNoEffect(); }
 
   inline bool isAtomic() const { 
-    return (effectKind==EK_AtomicReadsEffect ||
-            effectKind==EK_AtomicWritesEffect) ? true : false;
+    return (Kind==EK_AtomicReadsEffect ||
+            Kind==EK_AtomicWritesEffect) ? true : false;
   }
 
   /// Getters
-  inline EffectKind getEffectKind() const { return effectKind; }
+  inline EffectKind getEffectKind() const { return Kind; }
   
-  inline const Rpl* getRpl() { return rpl; }
+  inline const Rpl* getRpl() { return R; }
 
-  inline const Attr* getAttr() { return attr; }
-  inline SourceLocation getLocation() { return attr->getLocation();}
+  inline const Attr* getAttr() { return A; }
+  
+  inline SourceLocation getLocation() { return A->getLocation();}
   
   /// Substitution
-  inline bool substitute(const RplElement &from, const Rpl &to) {
-    if (rpl)
-      return rpl->substitute(from, to);
+  inline bool substitute(const RplElement &FromElm, const Rpl &ToRpl) {
+    if (R)
+      return R->substitute(FromElm, ToRpl);
     else 
       return true;
   }  
@@ -665,18 +651,18 @@ public:
    * ~~~~~~~~~~~~~~~~~~~~~~~~~
    *    E1(rpl1) <= E2(rpl2) 
    */
-  bool isSubEffectOf(const Effect& e) const {
-    bool result = (isNoEffect() ||
-            (isSubEffectKindOf(e) && rpl->isIncludedIn(*(e.rpl))));
+  bool isSubEffectOf(const Effect& E) const {
+    bool Result = (isNoEffect() ||
+            (isSubEffectKindOf(E) && R->isIncludedIn(*(E.R))));
     osv2  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
-        << e.toString() << ")=" << (result ? "true" : "false") << "\n";
-    return result;
+        << E.toString() << ")=" << (Result ? "true" : "false") << "\n";
+    return Result;
   }
   /// isCoveredBy
-  bool isCoveredBy(EffectVector effectSummary) {
+  bool isCoveredBy(EffectVector EffectSummary) {
     for (EffectVector::const_iterator
-            I = effectSummary.begin(),
-            E = effectSummary.end();
+            I = EffectSummary.begin(),
+            E = EffectSummary.end();
             I != E; I++) {
       if (isSubEffectOf(*(*I))) return true;
     }

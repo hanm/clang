@@ -59,17 +59,6 @@ static raw_ostream& osv2 = llvm::nulls();
 namespace {
   RegionParamAttr *BuiltinDefaulrRegionParam;
 
-  // FIXME
-  inline bool isValidTypeForArg(const QualType Qt,
-                                const RegionArgAttr *RegionArg) {
-    bool Result = true;
-    // TODO what about function pointers, incomplete types, ...
-    if (Qt->isAggregateType()) {
-      // TODO is the number of args the same as that of the params on the decl.
-    }
-
-    return Result;
-  }
   
   // TODO pass arg attr as parameter
   /*
@@ -174,44 +163,33 @@ namespace {
     return 0;
   }
 
-  /// \brief Looks for 'Name' in the declaration 'D' and its parent scopes.
-  RplElement *findRegionOrParamName(Decl *D, StringRef Name) {
-    if (!D)
-      return 0;
-    /// 1. try to find among regions or region parameters of function
-    RplElement* Result = scanAttributes<RegionAttr>(D, Name);
-    if (!Result)
-      Result = scanAttributes<RegionParamAttr>(D, Name);
-    if (Result)
-      return Result;
-
-    /// if not found, search parent DeclContexts
-    DeclContext *DC = D->getDeclContext();
-    while (DC) {
-      if (DC->isFunctionOrMethod()) {
-        FunctionDecl* FD = dyn_cast<FunctionDecl>(DC);
-        assert(FD);
-        return findRegionOrParamName(FD, Name);
-      } else if (DC->isRecord()) {
-        RecordDecl* RD = dyn_cast<RecordDecl>(DC);
-        assert(RD);
-        return findRegionOrParamName(RD, Name);
-      } else if (DC->isNamespace()) {
-        NamespaceDecl *ND = dyn_cast<NamespaceDecl>(DC);
-        assert(ND);
-        return findRegionOrParamName(ND, Name);
-      } else {
-        /// no ASaP annotations on other types of declarations
-        DC = DC->getParent();
-      }
-    }
-
-    return 0;
-  }
 
                                     
 typedef std::map<const FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
 typedef std::map<const Attr*, Rpl*> RplAttrMapTy;
+
+void destroyEffectSummaryMap(EffectSummaryMapTy &EffectSummaryMap) {
+  for(EffectSummaryMapTy::iterator I = EffectSummaryMap.begin(),
+                                 E = EffectSummaryMap.end();
+      I != E; ++I) {
+    Effect::EffectVector *EV = (*I).second;
+    ASaP::destroyVector(*EV);
+    EffectSummaryMap.erase(I);
+  }
+  assert(EffectSummaryMap.size()==0);
+}
+
+void destroyRplAttrMap(RplAttrMapTy &RplAttrMap) {
+  for(RplAttrMapTy::iterator I = RplAttrMap.begin(),
+                             E = RplAttrMap.end();
+      I != E; ++I) {
+    Rpl *R = (*I).second;
+    R->destroyElements();
+    RplAttrMap.erase(I);
+  }
+  assert(RplAttrMap.size()==0);
+}
+
 
 /// FIXME temporarily just using pre-processor to concatenate code here... UGLY 
 #include "asap/EffectChecker.cpp"
@@ -247,6 +225,10 @@ public:
                                                 os, EffectsMap, RplMap);
       EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     }
+    /// TODO: destroy EffectMap & RplMap
+    /// Clean-Up
+    destroyRplAttrMap(RplMap);
+    destroyEffectSummaryMap(EffectsMap);
   }
 };
 } // end unnamed namespace

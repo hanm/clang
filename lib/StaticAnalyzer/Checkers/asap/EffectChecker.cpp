@@ -124,9 +124,9 @@ public:
   /// Destructor
   virtual ~EffectCollectorVisitor() {
     /// free effectsTmp
-    Effect::destroyEffectVector(effectsTmp);
+    ASaP::destroyVector(effectsTmp);
     if (tmpRegions) {
-      Rpl::destroyRplVector(*tmpRegions);
+      ASaP::destroyVector(*tmpRegions);
       delete tmpRegions;
     }
   }
@@ -355,7 +355,7 @@ public:
           assert(argit!=endit);
           /// TODO is this atomic or not? ignore atomic for now
           effectsTmp.push_back(
-            new Effect(EK_ReadsEffect,
+            new Effect(Effect::EK_ReadsEffect,
                        new Rpl(rplAttrMap[(*argit)]),
                        *argit));
           EffectNr++;
@@ -370,8 +370,8 @@ public:
         assert(argit!=endit);
         if (!isBase) {
           /// TODO is this atomic or not? just ignore atomic for now
-          EffectKind ec = (hasWriteSemantics) ? 
-                              EK_WritesEffect : EK_ReadsEffect;
+          Effect::EffectKind EK = (hasWriteSemantics) ? 
+                              Effect::EK_WritesEffect : Effect::EK_ReadsEffect;
           // if it is an aggregate type we have to capture all the copy effects
           // at most one of isAddrOf and isDeref can be true
           // last type to work on
@@ -382,7 +382,7 @@ public:
             /// i.e., not here!
           } else {
             effectsTmp.push_back(
-              new Effect(ec, new Rpl(rplAttrMap[(*argit)]), *argit));
+              new Effect(EK, new Rpl(rplAttrMap[(*argit)]), *argit));
             EffectNr++;
           }
         }
@@ -510,7 +510,7 @@ public:
     bool saved_hws = hasWriteSemantics;
     if (tmpRegions) {
     /// FIXME doesn't this disallow nested assignments (a=b=c)?
-      Rpl::destroyRplVector(*tmpRegions);
+      ASaP::destroyVector(*tmpRegions);
       delete tmpRegions;
     }
 
@@ -560,7 +560,7 @@ public:
     hasWriteSemantics = saved_hws;
     //delete lhsRegions;
     tmpRegions = lhsRegions; // propagate up for chains of assignments
-    Rpl::destroyRplVector(*rhsRegions);
+    ASaP::destroyVector(*rhsRegions);
     delete rhsRegions;
     rhsRegions = 0;
   }

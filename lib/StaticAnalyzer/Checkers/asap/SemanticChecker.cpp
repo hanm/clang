@@ -15,13 +15,13 @@ class ASaPSemanticCheckerTraverser :
   public RecursiveASTVisitor<ASaPSemanticCheckerTraverser> {
 
 private:
-  ento::BugReporter& BR;
-  ASTContext& Ctx;
-  AnalysisDeclContext* AC;
-  raw_ostream& os;
+  ento::BugReporter &BR;
+  ASTContext &Ctx;
+  AnalysisDeclContext *AC;
+  raw_ostream &OS;
   bool FatalError;
-  EffectSummaryMapTy& effectSummaryMap;
-  RplAttrMapTy& rplAttrMap;
+  EffectSummaryMapTy &EffectSummaryMap;
+  RplAttrMapTy &RplAttrMap;
 
   /// \brief Issues Warning: '<str>' <bugName> on Declaration
   void helperEmitDeclarationWarning(const Decl *D,
@@ -70,9 +70,9 @@ private:
   
   /// \brief Emit a Warning when the input string (which is assumed to be an
   /// RPL element) is not declared.
-  void emitUndeclaredRplElementWarning(const Decl *D,
-                                       const Attr *Attr,
-                                       const StringRef &Str) {
+  void emitUndeclaredRplElement(const Decl *D,
+                                const Attr *Attr,
+                                const StringRef &Str) {
     StringRef BugName = "RPL element was not declared";
     helperEmitAttributeWarning(D, Attr, Str, BugName);
   }
@@ -99,18 +99,63 @@ private:
     helperEmitAttributeWarning(D, A, strbuf.str(), bugName);
   }
   
+  /// \brief Wrong number of region arguments for type
+  void emitWrongNumberOfArguments(Decl *D, RegionArgAttr *Attr) {
+    std::string BugName = "wrong number of region arguments for type";
+
+    std::string sbuf;
+    llvm::raw_string_ostream strbuf(sbuf);
+    Attr->printPretty(strbuf, Ctx.getPrintingPolicy());
+
+    helperEmitAttributeWarning(D, Attr, strbuf.str(), BugName);
+  }
+
+  /// \brief Region name or parameter contains illegal characters
+  void emitIllFormedRegionNameOrParameter(Decl *D, Attr *A) {
+    StringRef Name = getRegionOrParamName(A);
+    std::string AttrTypeStr = "";
+    if (isa<RegionAttr>(A)) 
+      AttrTypeStr = "region";
+    else if 
+      (isa<RegionParamAttr>(A)) AttrTypeStr = "region parameter";
+    std::string BugName = "invalid ";
+    BugName.append(AttrTypeStr);
+    BugName.append(" name");
+    helperEmitAttributeWarning(D, A, Name, BugName);
+  }
+
+  /// \brief Effect summary not minimal: effect E1 is covered by effect E2
+  void emitEffectCovered(Decl *D, Effect *E1, Effect *E2) {
+    // warning: e is covered by *J
+    StringRef BugName = "effect summary is not minimal";
+    std::string sbuf;
+    llvm::raw_string_ostream StrBuf(sbuf);
+    StrBuf << "'"; E1->print(StrBuf);
+    StrBuf << "' covered by '";
+    E2->print(StrBuf); StrBuf << "': ";
+    StrBuf << BugName;
+
+    StringRef BugStr = StrBuf.str();
+    helperEmitAttributeWarning(D, E1->getAttr(), BugStr, BugName);
+  }
+  
+  // FIXME
+  inline bool isValidArgForType(const QualType Qt,
+                                const RegionArgAttr *RegionArg) {
+    bool Result = true;
+    // TODO what about function pointers, incomplete types, ...
+    if (Qt->isAggregateType()) {
+      // TODO is the number of args the same as that of the params on the decl.
+      // (currently we only support a single parameter per type.)
+    }
+    return Result;
+  }
+
   /// \brief Check that the number of region arguments matches the number 
   ///        of region parameters
   void checkIsValidTypeForArg(Decl *D, QualType QT, RegionArgAttr *Attr) {
-    if (!isValidTypeForArg(QT, Attr)) {
-      // Emit Warning: Incompatible arg annotation TODO
-      std::string BugName = "wrong number of region parameter arguments";
-
-      std::string sbuf;
-      llvm::raw_string_ostream strbuf(sbuf);
-      Attr->printPretty(strbuf, Ctx.getPrintingPolicy());
-
-      helperEmitAttributeWarning(D, Attr, strbuf.str(), BugName);
+    if (!isValidArgForType(QT, Attr)) {
+      emitWrongNumberOfArguments(D, Attr);
     }
   }
 
@@ -186,39 +231,71 @@ private:
   ///        of D are well formed (don't contain illegal characters).
   template<typename AttrType>
   bool checkRegionOrParamDecls(Decl* D) {
-    bool result = true;
+    bool Result = true;
+    
     for (specific_attr_iterator<AttrType>
-         i = D->specific_attr_begin<AttrType>(),
-         e = D->specific_attr_end<AttrType>();
-         i != e; ++i) {
+         I = D->specific_attr_begin<AttrType>(),
+         E = D->specific_attr_end<AttrType>();
+         I != E; ++I) {
       //const Attr* attr = *i;
-      const StringRef str = getRegionOrParamName(*i);
-      if (!isValidRegionName(str)) {
+      const StringRef Name = getRegionOrParamName(*I);
+      if (!isValidRegionName(Name)) {
         // Emit bug report!
-        std::string attrType = "";
-        if (isa<RegionAttr>(*i)) attrType = "region";
-        else if (isa<RegionParamAttr>(*i)) attrType = "region parameter";
-        std::string bugName = "invalid ";
-        bugName.append(attrType);
-        bugName.append(" name");
-
-        helperEmitAttributeWarning(D, *i, str, bugName);
-        //SourceLocation loc = attr->getLocation();
-        result = false;
+        assert(isa<RegionAttr>(*I) || isa<RegionParamAttr>(*I));
+        emitIllFormedRegionNameOrParameter(D, *I);
+        Result = false;
       }
     }
-    return result;
+    return Result;
+  }
+
+  /// \brief Looks for 'Name' in the declaration 'D' and its parent scopes.
+  RplElement *findRegionOrParamName(Decl *D, StringRef Name) {
+    if (!D)
+      return 0;
+    /// 1. try to find among regions or region parameters of function
+    RplElement* Result = scanAttributes<RegionAttr>(D, Name);
+    if (!Result)
+      Result = scanAttributes<RegionParamAttr>(D, Name);
+    if (Result)
+      return Result;
+
+    /// if not found, search parent DeclContexts
+    DeclContext *DC = D->getDeclContext();
+    while (DC) {
+      if (DC->isFunctionOrMethod()) {
+        FunctionDecl* FD = dyn_cast<FunctionDecl>(DC);
+        assert(FD);
+        return findRegionOrParamName(FD, Name);
+      } else if (DC->isRecord()) {
+        RecordDecl* RD = dyn_cast<RecordDecl>(DC);
+        assert(RD);
+        return findRegionOrParamName(RD, Name);
+      } else if (DC->isNamespace()) {
+        NamespaceDecl *ND = dyn_cast<NamespaceDecl>(DC);
+        assert(ND);
+        return findRegionOrParamName(ND, Name);
+      } else {
+        /// no ASaP annotations on other types of declarations
+        DC = DC->getParent();
+      }
+    }
+
+    return 0;
   }
 
   /// \brief Check that the annotations of type AttrType of declaration
   /// D have RPLs whose elements have been declared.
   Rpl* checkRpl(Decl *D, Attr *A, StringRef RplStr) {
-    if (rplAttrMap[A]) return rplAttrMap[A];
+    /// First check that we have not already parsed this attribute's RPL
+    Rpl *R = RplAttrMap[A];
+    if (R) 
+      return R;
     /// else
     bool Result = true;
     int Count = 0;
-    Rpl *R = new Rpl();
     
+    R = new Rpl();    
     while(RplStr.size() > 0) { /// for all RPL elements of the RPL
       // FIXME: '::' can appear as part of an RPL element. Splitting must
       // be done differently to account for that.
@@ -231,7 +308,7 @@ private:
         RplEl = findRegionOrParamName(D, Head);
       if (!RplEl) {
         // Emit bug report!
-        emitUndeclaredRplElementWarning(D, A, Head);
+        emitUndeclaredRplElement(D, A, Head);
         Result = false;
       } else { // RplEl != NULL
         if (Count>0 && (isa<ParamRplElement>(RplEl) 
@@ -250,7 +327,7 @@ private:
       FatalError = true;
       return 0;
     } else {
-      rplAttrMap[A] = R;
+      RplAttrMap[A] = R;
       return R;
     }
   }
@@ -273,35 +350,35 @@ private:
   }
 
   /// Get Effect Kind from Attr type
-  inline EffectKind getEffectKind(const NoEffectAttr* attr) {
-    return EK_NoEffect;
+  inline Effect::EffectKind getEffectKind(const NoEffectAttr* attr) {
+    return Effect::EK_NoEffect;
   }
-  inline EffectKind getEffectKind(const ReadsEffectAttr* attr) {
-    return EK_ReadsEffect;
+  inline Effect::EffectKind getEffectKind(const ReadsEffectAttr* attr) {
+    return Effect::EK_ReadsEffect;
   }
-  inline EffectKind getEffectKind(const WritesEffectAttr* attr) {
-    return EK_WritesEffect;
+  inline Effect::EffectKind getEffectKind(const WritesEffectAttr* attr) {
+    return Effect::EK_WritesEffect;
   }
-  inline EffectKind getEffectKind(const AtomicReadsEffectAttr* attr) {
-    return EK_AtomicReadsEffect;
+  inline Effect::EffectKind getEffectKind(const AtomicReadsEffectAttr* attr) {
+    return Effect::EK_AtomicReadsEffect;
   }
-  inline EffectKind getEffectKind(const AtomicWritesEffectAttr* attr) {
-    return EK_AtomicWritesEffect;
+  inline Effect::EffectKind getEffectKind(const AtomicWritesEffectAttr* attr) {
+    return Effect::EK_AtomicWritesEffect;
   }
 
   template<typename AttrType>
-  void buildPartialEffectSummary(Decl* D, Effect::EffectVector& ev) {
+  void buildPartialEffectSummary(Decl* D, Effect::EffectVector& EV) {
     for (specific_attr_iterator<AttrType>
-         i = D->specific_attr_begin<AttrType>(),
-         e = D->specific_attr_end<AttrType>();
-         i != e; ++i) {
-      EffectKind ec = getEffectKind(*i); 
-      Rpl* rpl = 0; // TODO: I would like to be able to call this on 
+         I = D->specific_attr_begin<AttrType>(),
+         E = D->specific_attr_end<AttrType>();
+         I != E; ++I) {
+      Effect::EffectKind EK = getEffectKind(*I); 
+      Rpl* R = 0; // TODO: I would like to be able to call this on 
                     // NoEffectAttr as well, but the compiler complains
                     // that such attributes don't have a getRpl method...
-      if (Rpl* tmp = rplAttrMap[*i]) {        
-        rpl = new Rpl(tmp); // FIXME: Do we need to copy here?
-        ev.push_back(new Effect(ec, rpl, *i));
+      if (Rpl* Tmp = RplAttrMap[*I]) {        
+        R = new Rpl(Tmp); // FIXME: Do we need to copy here?
+        EV.push_back(new Effect(EK, R, *I));
       }
     }
   }
@@ -312,7 +389,7 @@ private:
     buildPartialEffectSummary<AtomicReadsEffectAttr>(D, ev);
     buildPartialEffectSummary<AtomicWritesEffectAttr>(D, ev);
     if (const NoEffectAttr* attr = D->getAttr<NoEffectAttr>()) {
-      Effect* e = new Effect(EK_NoEffect, 0, attr);
+      Effect* e = new Effect(Effect::EK_NoEffect, 0, attr);
       ev.push_back(e);
     }
   }
@@ -328,18 +405,7 @@ private:
       for (Effect::EffectVector::iterator
             J = ev.begin(); J != ev.end(); J++) {
         if (I != J && (*I)->isSubEffectOf(*(*J))) {
-          // warning: e is covered by *J
-          StringRef bugName = "effect summary is not minimal";
-          std::string sbuf;
-          llvm::raw_string_ostream strbuf(sbuf);
-          strbuf << "'"; (*I)->print(strbuf);
-          strbuf << "' covered by '";
-          (*J)->print(strbuf); strbuf << "': ";
-          strbuf << bugName;
-
-          StringRef bugStr = strbuf.str();
-          helperEmitAttributeWarning(D, (*I)->getAttr(), bugStr, bugName);
-
+          emitEffectCovered(D, *I, *J);
           found = true;
           break;
         } // end if
@@ -356,16 +422,16 @@ public:
 
   /// Constructor
   explicit ASaPSemanticCheckerTraverser (
-    ento::BugReporter& BR, ASTContext& ctx,
-    AnalysisDeclContext* AC, raw_ostream& os,
-    EffectSummaryMapTy& esm, RplAttrMapTy& rplAttrMap
+    ento::BugReporter &BR, ASTContext &Ctx,
+    AnalysisDeclContext *AC, raw_ostream &OS,
+    EffectSummaryMapTy &EffectSummaryMap, RplAttrMapTy &RplAttrMap
     ) : BR(BR),
-        Ctx(ctx),
+        Ctx(Ctx),
         AC(AC),
-        os(os),
+        OS(OS),
         FatalError(false),
-        effectSummaryMap(esm),
-        rplAttrMap(rplAttrMap)
+        EffectSummaryMap(EffectSummaryMap),
+        RplAttrMap(RplAttrMap)
   {}
 
   /// Getters & Setters
@@ -421,7 +487,7 @@ public:
     checkEffectSummary(D, effectSummary);
     os << "Minimal Effect Summary:\n";
     Effect::printEffectSummary(effectSummary, os);
-    effectSummaryMap[D] = ev;    
+    EffectSummaryMap[D] = ev;    
     return true;
   }
 
