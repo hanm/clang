@@ -31,7 +31,8 @@ private:
   bool isCoveredBySummary;
 
   /// Private Methods
-  void helperEmitEffectNotCoveredWarning(Stmt *S, Decl *D,
+  void helperEmitEffectNotCoveredWarning(const Stmt *S, 
+                                         const Decl *D,
                                          const StringRef &Str) {
     StringRef BugName = "effect not covered by effect summary";
     std::string description_std = "'";
@@ -146,6 +147,48 @@ public:
     VisitChildren(S);
   }
 
+  void helperVisitFunctionDecl(MemberExpr *Expr, const FunctionDecl *FunDecl) {
+    // TODO
+    os << "DEBUG:: helperVisitFunctionDecl!\n";
+    Effect *E = 0; // TODO here we may have a long list of effects
+
+    /// find declaration -> find parameter(s) ->
+    /// find argument(s) -> substitute
+    const RegionParamAttr* Param = FunDecl->getAttr<RegionParamAttr>();
+    if (Param) { 
+      /// if function has region params, find the region args on
+      /// the invokation
+      os << "DEBUG:: found function param";
+      Param->printPretty(os, Ctx.getPrintingPolicy());
+      os << "\n";
+    } else {
+      /// no params
+      os << "DEBUG:: didn't find function param\n";
+    }
+
+    /// parameters read after substitution, invoke effects after substitution
+    ///
+    /// return type
+    /// TODO Merge with FieldDecl (Duplicate code)
+    /// 1.3. Visit Base with read semantics, then restore write semantics
+    bool hws = hasWriteSemantics;
+    hasWriteSemantics = false;
+    Visit(Expr->getBase());
+    hasWriteSemantics = hws;
+
+    /// Post-Visit Actions: check that effects (after substitution)
+    /// are covered by effect summary
+    if (E) {
+      E = effectsTmp.pop_back_val();
+      os << "### "; E->print(os); os << "\n";
+      if (!E->isCoveredBy(effectSummary)) {
+        std::string Str = E->toString();
+        helperEmitEffectNotCoveredWarning(Expr, FunDecl, Str);
+        isCoveredBySummary = false;
+      }
+    }
+  }
+
   void VisitMemberExpr(MemberExpr *Expr) {
     os << "DEBUG:: VisitMemberExpr: ";
     Expr->printPretty(os, 0, Ctx.getPrintingPolicy());
@@ -165,46 +208,8 @@ public:
 
     /// 1. VD is a FunctionDecl
     const FunctionDecl *FD = dyn_cast<FunctionDecl>(VD);
-    if (FD) {
-      // TODO
-      Effect *E = 0; // TODO here we may have a long list of effects
-
-      /// find declaration -> find parameter(s) ->
-      /// find argument(s) -> substitute
-      const RegionParamAttr* Param = FD->getAttr<RegionParamAttr>();
-      if (Param) { 
-        /// if function has region params, find the region args on
-        /// the invokation
-        os << "DEBUG:: found function param";
-        Param->printPretty(os, Ctx.getPrintingPolicy());
-        os << "\n";
-      } else {
-        /// no params
-        os << "DEBUG:: didn't find function param\n";
-      }
-
-      /// parameters read after substitution, invoke effects after substitution
-      ///
-      /// return type
-      /// TODO Merge with FieldDecl (Duplicate code)
-      /// 1.3. Visit Base with read semantics, then restore write semantics
-      bool hws = hasWriteSemantics;
-      hasWriteSemantics = false;
-      Visit(Expr->getBase());
-      hasWriteSemantics = hws;
-
-      /// Post-Visit Actions: check that effects (after substitution)
-      /// are covered by effect summary
-      if (E) {
-        E = effectsTmp.pop_back_val();
-        os << "### "; E->print(os); os << "\n";
-        if (!E->isCoveredBy(effectSummary)) {
-          std::string Str = E->toString();
-          helperEmitEffectNotCoveredWarning(Expr, VD, Str);
-          isCoveredBySummary = false;
-        }
-      }
-    }
+    if (FD) 
+      helperVisitFunctionDecl(Expr, FD);
 
     ///-//////////////////////////////////////////////
     /// 2. vd is a FieldDecl
@@ -622,12 +627,12 @@ private:
   /// Private Fields
   ento::BugReporter& BR;
   ASTContext& Ctx;
-  AnalysisManager& mgr;
+  AnalysisManager& Mgr;
   AnalysisDeclContext* AC;
   raw_ostream& os;
   bool fatalError;
-  EffectSummaryMapTy& effectSummaryMap;
-  RplAttrMapTy& rplAttrMap;
+  EffectSummaryMapTy& EffectSummaryMap;
+  RplAttrMapTy& RplAttrMap;
 
 public:
 
@@ -635,31 +640,31 @@ public:
 
   /// Constructor
   explicit ASaPEffectsCheckerTraverser(
-    ento::BugReporter& BR, ASTContext& ctx,
-    AnalysisManager& mgr, AnalysisDeclContext* AC, raw_ostream& os,
-    EffectSummaryMapTy& esm, RplAttrMapTy& rplAttrMap
+    ento::BugReporter &BR, ASTContext &Ctx,
+    AnalysisManager &Mgr, AnalysisDeclContext *AC, raw_ostream &os,
+    EffectSummaryMapTy &ESM, RplAttrMapTy &RplAttrMap
     ) : BR(BR),
-        Ctx(ctx),
-        mgr(mgr),
+        Ctx(Ctx),
+        Mgr(Mgr),
         AC(AC),
         os(os),
         fatalError(false),
-        effectSummaryMap(esm),
-        rplAttrMap(rplAttrMap)
+        EffectSummaryMap(ESM),
+        RplAttrMap(RplAttrMap)
   {}
 
   /// Visitors
   bool VisitFunctionDecl(FunctionDecl* D) {
     const FunctionDecl* Definition;
     if (D->hasBody(Definition)) {
-      Stmt* st = Definition->getBody(Definition);
-      assert(st);
+      Stmt* St = Definition->getBody(Definition);
+      assert(St);
       //os << "DEBUG:: calling Stmt Visitor\n";
       ///  Check that Effect Summary covers method effects
-      Effect::EffectVector *ev = effectSummaryMap[D];
-      assert(ev);
-      EffectCollectorVisitor ecv(BR, Ctx, mgr, AC, os,
-                                 *ev, effectSummaryMap, rplAttrMap, st);
+      Effect::EffectVector *EV = EffectSummaryMap[D];
+      assert(EV);
+      EffectCollectorVisitor ECV(BR, Ctx, Mgr, AC, os,
+                                 *EV, EffectSummaryMap, RplAttrMap, St);
       os << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ "
          << "(END EffectCollectorVisitor)\n";
       //os << "DEBUG:: DONE!! \n";

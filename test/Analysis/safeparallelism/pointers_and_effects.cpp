@@ -1,4 +1,3 @@
-// RUN: %clang_cc1 -DASAP_GNU_SYNTAX -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
 // RUN: %clang_cc1 -DASAP_CXX11_SYNTAX -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
 //
 
@@ -18,7 +17,7 @@ public:
 }; // end Point
 
 class
-//[[asap::region_param("P, P<=Pool")]]
+//[[asap::param("P, P<=Pool")]]
 [[asap::param("Pr")]]
 [[asap::region("R1"), asap::region("R2"), 
   asap::region("Next"), asap::region("Links"), asap::region("Pool")]]

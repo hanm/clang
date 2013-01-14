@@ -22,6 +22,7 @@ private:
   bool FatalError;
   EffectSummaryMapTy &EffectSummaryMap;
   RplAttrMapTy &RplAttrMap;
+  RplElementAttrMapTy &RplElementMap;
 
   /// \brief Issues Warning: '<str>' <bugName> on Declaration
   void helperEmitDeclarationWarning(const Decl *D,
@@ -104,10 +105,10 @@ private:
     std::string BugName = "wrong number of region arguments for type";
 
     std::string sbuf;
-    llvm::raw_string_ostream strbuf(sbuf);
-    Attr->printPretty(strbuf, Ctx.getPrintingPolicy());
+    llvm::raw_string_ostream StrBuf(sbuf);
+    Attr->printPretty(StrBuf, Ctx.getPrintingPolicy());
 
-    helperEmitAttributeWarning(D, Attr, strbuf.str(), BugName);
+    helperEmitAttributeWarning(D, Attr, StrBuf.str(), BugName);
   }
 
   /// \brief Region name or parameter contains illegal characters
@@ -219,16 +220,102 @@ private:
   template<typename AttrType>
   inline void helperPrintAttributes(Decl *D) {
     for (specific_attr_iterator<AttrType>
-         i = D->specific_attr_begin<AttrType>(),
-         e = D->specific_attr_end<AttrType>();
-         i != e; ++i) {
-      (*i)->printPretty(os, Ctx.getPrintingPolicy());
-      os << "\n";
+         I = D->specific_attr_begin<AttrType>(),
+         E = D->specific_attr_end<AttrType>();
+         I != E; ++I) {
+      (*I)->printPretty(OS, Ctx.getPrintingPolicy());
+      OS << "\n";
     }
   }
 
+    /**
+   * Return the string name of the region or region parameter declaration
+   * based on the Kind of the Attribute (RegionAttr or RegionParamAttr)
+   */
+  // FIXME
+  inline StringRef getRegionOrParamName(const Attr *Attribute) {
+    StringRef Result = "";
+    switch(Attribute->getKind()) {
+    case attr::Region:
+      Result = dyn_cast<RegionAttr>(Attribute)->getName(); break;
+    case attr::RegionParam:
+      Result = dyn_cast<RegionParamAttr>(Attribute)->getName(); break;
+    default:
+      Result = "";
+    }
+
+    return Result;
+  }
+
+  /// FIXME probably the source of a memory leak
+  inline RplElement *createRegionOrParamElement(const Attr *Attribute) {
+    RplElement* Result = 0;
+    switch(Attribute->getKind()) {
+    case attr::Region:
+      Result = new NamedRplElement(dyn_cast<RegionAttr>(Attribute)->getName());
+      break;
+    case attr::RegionParam:
+      Result = new ParamRplElement(dyn_cast<RegionParamAttr>(Attribute)->
+                                   getName());
+      break;
+    default:
+      Result = 0;
+    }
+    return Result;
+  }
+
+  /**
+   *  Return true if any of the attributes of type AttrType of the
+   *  declaration Decl* D have a region name or a param name that is
+   *  the same as the 'name' provided as the second argument
+   */
+  template<typename AttrType>
+  bool scanAttributesBool(Decl* D, const StringRef &Name)
+  {
+    //AttrType *A;  /// Assertion fails on a null pointer...
+    //assert(isa<RegionParamAttr>(A) || isa<RegionAttr>(A));
+    for (specific_attr_iterator<AttrType>
+         I = D->specific_attr_begin<AttrType>(),
+         E = D->specific_attr_end<AttrType>();
+         I != E; ++I) {
+      if (getRegionOrParamName(*I) == Name)
+        return true;
+    }
+
+    return false;
+  }
+
+  /// \brief  Return an RplElement if any of the attributes of type AttrType
+  /// of the declaration Decl* D have a region name or a param name that is
+  /// the same as the 'name' provided as the 2nd argument.
+  template<typename AttrType>
+  RplElement* scanAttributes(Decl* D, const StringRef &Name)
+  {
+    //AttrType *A; /// Assertion fails on a null pointer...
+    //assert(isa<RegionParamAttr>(A) || isa<RegionAttr>(A));
+    for (specific_attr_iterator<AttrType>
+         I = D->specific_attr_begin<AttrType>(),
+         E = D->specific_attr_end<AttrType>();
+         I != E; ++ I) {
+      if (getRegionOrParamName(*I) == Name) {
+        RplElement *El = RplElementMap[*I];
+
+        std::string sbuf;
+        llvm::raw_string_ostream StrBuf(sbuf);
+        (*I)->printPretty(StrBuf, Ctx.getPrintingPolicy());
+        OS << "DEBUG:: " << StrBuf.str() << " maps to " << 
+          (El? El->getName() :"NULL") << "\n";
+        assert(El);
+        return El;
+      }
+    }
+
+    return 0;
+  }
+
   /// \brief Check that the region and region parameter declarations
-  ///        of D are well formed (don't contain illegal characters).
+  ///        of D are well formed (don't contain illegal characters)
+  ///        and add an RplElement to the corresponding map.
   template<typename AttrType>
   bool checkRegionOrParamDecls(Decl* D) {
     bool Result = true;
@@ -237,14 +324,18 @@ private:
          I = D->specific_attr_begin<AttrType>(),
          E = D->specific_attr_end<AttrType>();
          I != E; ++I) {
-      //const Attr* attr = *i;
+      assert(isa<RegionAttr>(*I) || isa<RegionParamAttr>(*I));
       const StringRef Name = getRegionOrParamName(*I);
-      if (!isValidRegionName(Name)) {
-        // Emit bug report!
-        assert(isa<RegionAttr>(*I) || isa<RegionParamAttr>(*I));
+      OS << "DEBUG:: checking RPL Element called " << Name << "\n";
+      if (isValidRegionName(Name)) {
+        /// Add it to the map
+        OS << "DEBUG:: creating RPL Element called " << Name << "\n";
+        RplElementMap[*I] = createRegionOrParamElement(*I);
+      } else {
+        /// Emit bug report: ill formed region or parameter name
         emitIllFormedRegionNameOrParameter(D, *I);
         Result = false;
-      }
+      } 
     }
     return Result;
   }
@@ -254,7 +345,7 @@ private:
     if (!D)
       return 0;
     /// 1. try to find among regions or region parameters of function
-    RplElement* Result = scanAttributes<RegionAttr>(D, Name);
+    RplElement *Result = scanAttributes<RegionAttr>(D, Name);
     if (!Result)
       Result = scanAttributes<RegionParamAttr>(D, Name);
     if (Result)
@@ -285,7 +376,8 @@ private:
   }
 
   /// \brief Check that the annotations of type AttrType of declaration
-  /// D have RPLs whose elements have been declared.
+  /// D have RPLs whose elements have been declared, and if so, add RPL
+  /// to the map from Attrs to Rpls.
   Rpl* checkRpl(Decl *D, Attr *A, StringRef RplStr) {
     /// First check that we have not already parsed this attribute's RPL
     Rpl *R = RplAttrMap[A];
@@ -328,6 +420,13 @@ private:
       return 0;
     } else {
       RplAttrMap[A] = R;
+
+      //std::string sbuf;
+      //llvm::raw_string_ostream StrBuf(sbuf);
+      //A->printPretty(StrBuf, Ctx.getPrintingPolicy());
+      //OS << "DEBUG:: adding " << R->toString() << "to Map under "
+      //  << StrBuf.str() << "\n";
+      
       return R;
     }
   }
@@ -338,72 +437,74 @@ private:
   /// AttrType must implement getRpl (i.e., RegionArgAttr, & Effect Attributes)
   template<typename AttrType>
   bool checkRpls(Decl* D) {
-    bool result = true;
+    bool Result = true;
     for (specific_attr_iterator<AttrType>
-         i = D->specific_attr_begin<AttrType>(),
-         e = D->specific_attr_end<AttrType>();
-         i != e; ++i) {
-      if (!checkRpl(D, *i, (*i)->getRpl()))
-        result = false;
+         I = D->specific_attr_begin<AttrType>(),
+         E = D->specific_attr_end<AttrType>();
+         I != E; ++I) {
+      if (!checkRpl(D, *I, (*I)->getRpl()))
+        Result = false;
     }
-    return result;
+    return Result;
   }
 
-  /// Get Effect Kind from Attr type
-  inline Effect::EffectKind getEffectKind(const NoEffectAttr* attr) {
+  /// Map AttrType to Effect Kind
+  inline Effect::EffectKind getEffectKind(const NoEffectAttr* Attr) {
     return Effect::EK_NoEffect;
   }
-  inline Effect::EffectKind getEffectKind(const ReadsEffectAttr* attr) {
+  inline Effect::EffectKind getEffectKind(const ReadsEffectAttr* Attr) {
     return Effect::EK_ReadsEffect;
   }
-  inline Effect::EffectKind getEffectKind(const WritesEffectAttr* attr) {
+  inline Effect::EffectKind getEffectKind(const WritesEffectAttr* Attr) {
     return Effect::EK_WritesEffect;
   }
-  inline Effect::EffectKind getEffectKind(const AtomicReadsEffectAttr* attr) {
+  inline Effect::EffectKind getEffectKind(const AtomicReadsEffectAttr* Attr) {
     return Effect::EK_AtomicReadsEffect;
   }
-  inline Effect::EffectKind getEffectKind(const AtomicWritesEffectAttr* attr) {
+  inline Effect::EffectKind getEffectKind(const AtomicWritesEffectAttr* Attr) {
     return Effect::EK_AtomicWritesEffect;
   }
 
+  /// Called with AttrType being one of ReadsEffectAttr, WritesEffectAttr, 
+  /// ΑtomicReadsEffectAttr, or AtomicWritesEffectAttr.
   template<typename AttrType>
-  void buildPartialEffectSummary(Decl* D, Effect::EffectVector& EV) {
+  void buildPartialEffectSummary(FunctionDecl* D, Effect::EffectVector& EV) {  
     for (specific_attr_iterator<AttrType>
          I = D->specific_attr_begin<AttrType>(),
          E = D->specific_attr_end<AttrType>();
          I != E; ++I) {
       Effect::EffectKind EK = getEffectKind(*I); 
-      Rpl* R = 0; // TODO: I would like to be able to call this on 
-                    // NoEffectAttr as well, but the compiler complains
-                    // that such attributes don't have a getRpl method...
-      if (Rpl* Tmp = RplAttrMap[*I]) {        
-        R = new Rpl(Tmp); // FIXME: Do we need to copy here?
-        EV.push_back(new Effect(EK, R, *I));
+      //Rpl* R = 0; 
+      Rpl* Tmp = RplAttrMap[*I];
+
+      if (Tmp) { /// Tmp may be NULL if the RPL was ill formed (e.g., contained
+                 /// undeclared RPL elements).
+        //R = new Rpl(Tmp); // FIXME: Do we need to copy here?
+        EV.push_back(new Effect(EK, Tmp, *I));
       }
     }
   }
 
-  void buildEffectSummary(Decl* D, Effect::EffectVector& ev) {
-    buildPartialEffectSummary<ReadsEffectAttr>(D, ev);
-    buildPartialEffectSummary<WritesEffectAttr>(D, ev);
-    buildPartialEffectSummary<AtomicReadsEffectAttr>(D, ev);
-    buildPartialEffectSummary<AtomicWritesEffectAttr>(D, ev);
-    if (const NoEffectAttr* attr = D->getAttr<NoEffectAttr>()) {
-      Effect* e = new Effect(Effect::EK_NoEffect, 0, attr);
-      ev.push_back(e);
+  void buildEffectSummary(FunctionDecl* D, Effect::EffectVector& EV) {
+    buildPartialEffectSummary<ReadsEffectAttr>(D, EV);
+    buildPartialEffectSummary<WritesEffectAttr>(D, EV);
+    buildPartialEffectSummary<AtomicReadsEffectAttr>(D, EV);
+    buildPartialEffectSummary<AtomicWritesEffectAttr>(D, EV);
+    if (const NoEffectAttr* Attr = D->getAttr<NoEffectAttr>()) {
+      Effect* E = new Effect(Effect::EK_NoEffect, 0, Attr);
+      EV.push_back(E);
     }
   }
 
-  /**
-   *  Check that an effect summary is minimal and, if not, remove 
-   *  superluous effects
-   */
-  void checkEffectSummary(Decl* D, Effect::EffectVector& ev) {
-    Effect::EffectVector::iterator I = ev.begin(); // not a const iterator
-    while (I != ev.end()) { // ev.end() is not loop invariant
+  
+  /// \brief Check that an effect summary is minimal and, if not, remove 
+  /// superluous effects
+  void checkEffectSummary(Decl* D, Effect::EffectVector& EV) {
+    Effect::EffectVector::iterator I = EV.begin(); // not a const iterator
+    while (I != EV.end()) { // EV.end() is not loop invariant
       bool found = false;
       for (Effect::EffectVector::iterator
-            J = ev.begin(); J != ev.end(); J++) {
+            J = EV.begin(); J != EV.end(); ++J) {
         if (I != J && (*I)->isSubEffectOf(*(*J))) {
           emitEffectCovered(D, *I, *J);
           found = true;
@@ -411,8 +512,8 @@ private:
         } // end if
       } // end inner for loop
       /// optimization: remove e from effect Summary
-      if (found) I = ev.erase(I);
-      else       I++;
+      if (found) I = EV.erase(I);
+      else       ++I;
     } // end while loop
   }
 
@@ -424,14 +525,17 @@ public:
   explicit ASaPSemanticCheckerTraverser (
     ento::BugReporter &BR, ASTContext &Ctx,
     AnalysisDeclContext *AC, raw_ostream &OS,
-    EffectSummaryMapTy &EffectSummaryMap, RplAttrMapTy &RplAttrMap
+    EffectSummaryMapTy &EffectSummaryMap, 
+    RplAttrMapTy &RplAttrMap,
+    RplElementAttrMapTy &RplElementMap
     ) : BR(BR),
         Ctx(Ctx),
         AC(AC),
         OS(OS),
         FatalError(false),
         EffectSummaryMap(EffectSummaryMap),
-        RplAttrMap(RplAttrMap)
+        RplAttrMap(RplAttrMap),
+        RplElementMap(RplElementMap)
   {}
 
   /// Getters & Setters
@@ -440,17 +544,17 @@ public:
   ///=///////////////////////////////////////////////////////////////
   /// Visitors
   bool VisitValueDecl(ValueDecl* E) {
-    os << "DEBUG:: VisitValueDecl : ";
-    E->print(os, Ctx.getPrintingPolicy());
-    os << "\n";
+    OS << "DEBUG:: VisitValueDecl : ";
+    E->print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
     return true;
   }
 
   bool VisitFunctionDecl(FunctionDecl* D) {
-    os << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+    OS << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
        << "DEBUG:: printing ASaP attributes for method or function '";
-    D->getDeclName().printName(os);
-    os << "':\n";
+    D->getDeclName().printName(OS);
+    OS << "':\n";
     /// A. Detect Annotations
     /// A.1. Detect Region and Parameter Declarations
     helperPrintAttributes<RegionAttr>(D);
@@ -477,24 +581,24 @@ public:
 
     /// C. Check effect summary
     /// C.1. Build Effect Summary
-    Effect::EffectVector *ev = new Effect::EffectVector();
-    Effect::EffectVector &effectSummary = *ev;
-    buildEffectSummary(D, effectSummary);
-    os << "Effect Summary from annotation:\n";
-    Effect::printEffectSummary(effectSummary, os);
+    Effect::EffectVector *EV = new Effect::EffectVector();
+    Effect::EffectVector &EffectSummary = *EV;
+    buildEffectSummary(D, EffectSummary);
+    OS << "Effect Summary from annotation:\n";
+    Effect::printEffectSummary(EffectSummary, OS);
 
-    /// C.2. Check Effect Summary is consistent and minimal
-    checkEffectSummary(D, effectSummary);
-    os << "Minimal Effect Summary:\n";
-    Effect::printEffectSummary(effectSummary, os);
-    EffectSummaryMap[D] = ev;    
+    /// C.2. Check Effect Summary is minimal
+    checkEffectSummary(D, EffectSummary);
+    OS << "Minimal Effect Summary:\n";
+    Effect::printEffectSummary(EffectSummary, OS);
+    EffectSummaryMap[D] = EV;    
     return true;
   }
 
   bool VisitRecordDecl (RecordDecl* D) {
-    os << "DEBUG:: printing ASaP attributes for class or struct '";
-    D->getDeclName().printName(os);
-    os << "':\n";
+    OS << "DEBUG:: printing ASaP attributes for class or struct '";
+    D->getDeclName().printName(OS);
+    OS << "':\n";
     /// A. Detect Region & Param Annotations
     helperPrintAttributes<RegionAttr>(D);
     helperPrintAttributes<RegionParamAttr>(D);
@@ -506,8 +610,21 @@ public:
     return true;
   }
 
+  bool VisitNamespaceDecl (NamespaceDecl *D) {
+    OS << "DEBUG:: printing ASaP attributes for namespace '";
+    D->getDeclName().printName(OS);
+    OS << "':\n";
+    /// A. Detect Region & Param Annotations
+    helperPrintAttributes<RegionAttr>(D);
+
+    /// B. Check Region & Param Names
+    checkRegionOrParamDecls<RegionAttr>(D);
+
+    return true;
+  }
+  
   bool VisitFieldDecl(FieldDecl *D) {
-    os << "DEBUG:: VisitFieldDecl\n";
+    OS << "DEBUG:: VisitFieldDecl\n";
     /// A. Detect Region In & Arg annotations
     helperPrintAttributes<RegionArgAttr>(D); /// in region
 
@@ -520,46 +637,46 @@ public:
   }
 
   bool VisitVarDecl(VarDecl *D) {
-    os << "DEBUG:: VisitVarDecl\n";
+    OS << "DEBUG:: VisitVarDecl\n";
     checkTypeRegionArgs(D, true);
     return true;
   }
 
   bool VisitCXXMethodDecl(clang::CXXMethodDecl *D) {
     // ATTENTION This is called after VisitFunctionDecl
-    os << "DEBUG:: VisitCXXMethodDecl\n";
+    OS << "DEBUG:: VisitCXXMethodDecl\n";
     return true;
   }
 
   bool VisitCXXConstructorDecl(CXXConstructorDecl *D) {
     // ATTENTION This is called after VisitCXXMethodDecl
-    os << "DEBUG:: VisitCXXConstructorDecl\n";
+    OS << "DEBUG:: VisitCXXConstructorDecl\n";
     return true;
   }
   bool VisitCXXDestructorDecl(CXXDestructorDecl *D) {
     // ATTENTION This is called after VisitCXXMethodDecl
-    os << "DEBUG:: VisitCXXDestructorDecl\n";
+    OS << "DEBUG:: VisitCXXDestructorDecl\n";
     return true;
   }
   bool VisitCXXConversionDecl(CXXConversionDecl *D) {
     // ATTENTION This is called after VisitCXXMethodDecl
-    os << "DEBUG:: VisitCXXConversionDecl\n";
+    OS << "DEBUG:: VisitCXXConversionDecl\n";
     return true;
   }
 
   /*bool VisitCastExpr(CastExpr* E) {
-    os << "DEBUG:: VisitCastExpr: ";
-    E->printPretty(os, 0, Ctx.getPrintingPolicy());
-    os << "\n";
-    os << "Rvalue=" << E->isRValue()
+    OS << "DEBUG:: VisitCastExpr: ";
+    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    OS << "Rvalue=" << E->isRValue()
        << ", Lvalue=" << E->isLValue()
        << ", Xvalue=" << E->isGLValue()
        << ", GLvalue=" << E->isGLValue() << "\n";
     Expr::LValueClassification lvc = E->ClassifyLValue(Ctx);
     if (lvc==Expr::LV_Valid)
-      os << "LV_Valid\n";
+      OS << "LV_Valid\n";
     else
-      os << "not LV_Valid\n";
+      OS << "not LV_Valid\n";
 
     return true;
   }
@@ -569,19 +686,19 @@ public:
 
   /// Visit non-static C++ member function call
   bool VisitCXXMemberCallExpr(CXXMemberCallExpr *E) {
-    os << "DEBUG:: VisitCXXMemberCallExpr\n";
+    OS << "DEBUG:: VisitCXXMemberCallExpr\n";
     return true;
   }
 
   /// Visits a C++ overloaded operator call where the operator
   /// is implemented as a non-static member function
   bool VisitCXXOperatorCallExpr(CXXOperatorCallExpr *E) {
-    os << "DEBUG:: VisitCXXOperatorCall\n";
+    OS << "DEBUG:: VisitCXXOperatorCall\n";
     return true;
   }
 */
   /*bool VisitAssignmentExpression() {
-    os << "DEBUG:: VisitAssignmentExpression\n"
+    OS << "DEBUG:: VisitAssignmentExpression\n"
     return true;
   }*/
 

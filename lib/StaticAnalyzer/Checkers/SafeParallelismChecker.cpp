@@ -57,6 +57,8 @@ static raw_ostream& osv2 = llvm::nulls();
 #include "asap/RplsAndEffects.cpp"
 
 namespace {
+  /// \brief the default region parameter "P" used for implicitly boxed types
+  /// such as int or pointers.
   RegionParamAttr *BuiltinDefaulrRegionParam;
 
   
@@ -91,82 +93,22 @@ namespace {
     return Result;
   }
 
-  /**
-   * Return the string name of the region or region parameter declaration
-   * based on the Kind of the Attribute (RegionAttr or RegionParamAttr)
-   */
-  // FIXME
-  inline StringRef getRegionOrParamName(const Attr *Attribute) {
-    StringRef Result = "";
-    switch(Attribute->getKind()) {
-    case attr::Region:
-      Result = dyn_cast<RegionAttr>(Attribute)->getName(); break;
-    case attr::RegionParam:
-      Result = dyn_cast<RegionParamAttr>(Attribute)->getName(); break;
-    default:
-      Result = "";
-    }
-
-    return Result;
-  }
-
-  inline RplElement *createRegionOrParamElement(const Attr *Attribute) {
-    RplElement* Result = 0;
-    switch(Attribute->getKind()) {
-    case attr::Region:
-      Result = new NamedRplElement(dyn_cast<RegionAttr>(Attribute)->getName());
-      break;
-    case attr::RegionParam:
-      Result = new ParamRplElement(dyn_cast<RegionParamAttr>(Attribute)->
-                                   getName());
-      break;
-    default:
-      Result = 0;
-    }
-    return Result;
-  }
-
-  /**
-   *  Return true if any of the attributes of type AttrType of the
-   *  declaration Decl* D have a region name or a param name that is
-   *  the same as the 'name' provided as the second argument
-   */
-  template<typename AttrType>
-  bool scanAttributesForRegionDecl(Decl* D, const StringRef &Name)
-  {
-    for (specific_attr_iterator<AttrType>
-         I = D->specific_attr_begin<AttrType>(),
-         E = D->specific_attr_end<AttrType>();
-         I != E; ++I) {
-      if (getRegionOrParamName(*I) == Name)
-        return true;
-    }
-
-    return false;
-  }
-
-  /// \brief  Return an RplElement if any of the attributes of type AttrType
-  /// of the declaration Decl* D have a region name or a param name that is
-  /// the same as the 'name' provided as the 2nd argument.
-  template<typename AttrType>
-  RplElement* scanAttributes(Decl* D, const StringRef &Name)
-  {
-    for (specific_attr_iterator<AttrType>
-         I = D->specific_attr_begin<AttrType>(),
-         E = D->specific_attr_end<AttrType>();
-         I != E; ++ I) {
-      if (getRegionOrParamName(*I) == Name) {
-        return createRegionOrParamElement(*I);
-      }
-    }
-
-    return 0;
-  }
-
-
                                     
 typedef std::map<const FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
 typedef std::map<const Attr*, Rpl*> RplAttrMapTy;
+typedef std::map<const Attr*, RplElement*> RplElementAttrMapTy;
+
+namespace ASaP { 
+  template<typename T>
+  void destroyVector(T &V) {
+    for (typename T::const_iterator
+             I = V.begin(),
+             E = V.end();
+         I != E; ++I) {
+      delete(*I);
+    }
+  }
+} /// end namespace ASaP
 
 void destroyEffectSummaryMap(EffectSummaryMapTy &EffectSummaryMap) {
   for(EffectSummaryMapTy::iterator I = EffectSummaryMap.begin(),
@@ -174,6 +116,7 @@ void destroyEffectSummaryMap(EffectSummaryMapTy &EffectSummaryMap) {
       I != E; ++I) {
     Effect::EffectVector *EV = (*I).second;
     ASaP::destroyVector(*EV);
+    delete EV;
     EffectSummaryMap.erase(I);
   }
   assert(EffectSummaryMap.size()==0);
@@ -184,10 +127,21 @@ void destroyRplAttrMap(RplAttrMapTy &RplAttrMap) {
                              E = RplAttrMap.end();
       I != E; ++I) {
     Rpl *R = (*I).second;
-    R->destroyElements();
+    delete R;
     RplAttrMap.erase(I);
   }
   assert(RplAttrMap.size()==0);
+}
+
+void destroyRplElementAttrMap(RplElementAttrMapTy &RplElementAttrMap) {
+  for(RplElementAttrMapTy::iterator I = RplElementAttrMap.begin(),
+                             E = RplElementAttrMap.end();
+      I != E; ++I) {
+    RplElement *RpEl = (*I).second;
+    delete RpEl;
+    RplElementAttrMap.erase(I);
+  }
+  assert(RplElementAttrMap.size()==0);
 }
 
 
@@ -208,9 +162,11 @@ public:
     /** initialize traverser */
     EffectSummaryMapTy EffectsMap;
     RplAttrMapTy RplMap;
+    RplElementAttrMapTy RplElementMap;
     ASaPSemanticCheckerTraverser SemanticChecker(BR, D->getASTContext(),
                                                  Mgr.getAnalysisDeclContext(D),
-                                                 os, EffectsMap, RplMap);
+                                                 os, EffectsMap, RplMap, 
+                                                 RplElementMap);
     /** run checker */
     SemanticChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     os << "##############################################\n";
@@ -227,8 +183,14 @@ public:
     }
     /// TODO: destroy EffectMap & RplMap
     /// Clean-Up
-    destroyRplAttrMap(RplMap);
     destroyEffectSummaryMap(EffectsMap);
+    destroyRplAttrMap(RplMap); // FIXME: tries to free freed memory (sometimes)
+    destroyRplElementAttrMap(RplElementMap);    
+    /// TODO: deallocate BuiltinDefaulrRegionParam
+    delete ROOT_RplElmt;
+    delete LOCAL_RplElmt;
+    delete STAR_RplElmt;
+    
   }
 };
 } // end unnamed namespace

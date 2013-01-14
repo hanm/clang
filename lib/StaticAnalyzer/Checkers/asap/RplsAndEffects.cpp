@@ -96,8 +96,8 @@ public:
 };
 
 
-static const SpecialRplElement* ROOT_RplElmt = new SpecialRplElement("Root");
-static const SpecialRplElement* LOCAL_RplElmt = new SpecialRplElement("Local");
+static const SpecialRplElement *ROOT_RplElmt = new SpecialRplElement("Root");
+static const SpecialRplElement *LOCAL_RplElmt = new SpecialRplElement("Local");
 
 
 ///-////////////////////////////////////////
@@ -120,7 +120,7 @@ public:
   }
 };
 
-static const StarRplElement* STAR_RplElmt = new StarRplElement();
+static const StarRplElement *STAR_RplElmt = new StarRplElement();
 
 /// \brief returns a special RPL element (Root, Local, *, ...) or NULL 
 const RplElement* getSpecialRplElement(const StringRef& s) {
@@ -210,18 +210,6 @@ public:
 typedef llvm::SmallVector<const RplElement*, 
                           RPL_ELEMENT_VECTOR_SIZE> RplElementVector;
 
-namespace ASaP { 
-  template<typename T>
-  void destroyVector(T &V) {
-    for (typename T::const_iterator
-             I = V.begin(),
-             E = V.end();
-         I != E; ++I) {
-      delete(*I);
-    }
-  }
-} /// end namespace ASaP
-
 ///-///////////////////////////////////////////////////////////////////////////
 /// Rpl Class
 class Rpl {
@@ -236,7 +224,8 @@ public:
 private:
   /// Fields
   StringRef RplString;
-  /// Note: RplElements are owned by Rpl class. They are destroyed with the Rpl
+  /// Note: RplElements are not owned by Rpl class. 
+  /// They are *NOT* destroyed with the Rpl.
   RplElementVector RplElements;
   bool FullySpecified;
 
@@ -356,18 +345,19 @@ public:
   
   Rpl() : FullySpecified(true) {}
   
-  Rpl(RplElement *Elm) {
-    FullySpecified = Elm->isFullySpecified();
-    RplString = Elm->getName();
+  Rpl(RplElement *Elm) :
+    RplString(Elm->getName()),
+    FullySpecified(Elm->isFullySpecified())
+  {
     RplElements.push_back(Elm);
   }
   
   /// Copy Constructor 
   Rpl(Rpl* That) :
       RplString(That->RplString),
-      FullySpecified(That->FullySpecified)  
+      RplElements(That->RplElements),
+      FullySpecified(That->FullySpecified)
   {
-    RplElements = That->RplElements;
     /*for(RplElementVector::const_iterator
             it = that->RplElements.begin(),
             end = that->RplElements.end();
@@ -376,9 +366,6 @@ public:
     }*/
   }
   /// Destructors
-  void destroyElements() {
-    ASaP::destroyVector(RplElements);
-  }
   
   /// Printing
   void printElements(raw_ostream& os) const {
@@ -498,9 +485,10 @@ public:
   }
   
   /// Capture
-  inline Rpl* capture(Rpl* r) {
+  /// TODO: caller must deallocate Rpl and its element
+  inline Rpl* capture() {
     if (this->isFullySpecified()) return this;
-    else return new Rpl(new CaptureRplElement(*r));
+    else return new Rpl(new CaptureRplElement(*this));
   }
   
 }; // end class Rpl
@@ -573,9 +561,6 @@ public:
         : Kind(EK), R(R), A(A) {}
 
   /// Destructors
-  virtual ~Effect() { 
-    delete R;
-  }
 
   /// Printing
   inline bool printEffectKind(raw_ostream& OS) const {
