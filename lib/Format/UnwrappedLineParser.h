@@ -146,7 +146,7 @@ private:
   void parseNamespace();
   void parseAccessSpecifier();
   void parseEnum();
-  void parseStructOrClass();
+  void parseStructClassOrBracedList();
   void parseObjCProtocolList();
   void parseObjCUntilAtEnd();
   void parseObjCInterfaceOrImplementation();
@@ -159,7 +159,7 @@ private:
   // FIXME: We are constantly running into bugs where Line.Level is incorrectly
   // subtracted from beyond 0. Introduce a method to subtract from Line.Level
   // and use that everywhere in the Parser.
-  llvm::OwningPtr<UnwrappedLine> Line;
+  OwningPtr<UnwrappedLine> Line;
   bool RootTokenInitialized;
   FormatToken *LastInCurrentLine;
   FormatToken FormatTok;

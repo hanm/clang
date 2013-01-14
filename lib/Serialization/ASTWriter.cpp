@@ -798,7 +798,7 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(STATISTICS);
   RECORD(TENTATIVE_DEFINITIONS);
   RECORD(UNUSED_FILESCOPED_DECLS);
-  RECORD(LOCALLY_SCOPED_EXTERNAL_DECLS);
+  RECORD(LOCALLY_SCOPED_EXTERN_C_DECLS);
   RECORD(SELECTOR_OFFSETS);
   RECORD(METHOD_POOL);
   RECORD(PP_COUNTER_VALUE);
@@ -1021,7 +1021,7 @@ void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
   // Imports
   if (Chain) {
     serialization::ModuleManager &Mgr = Chain->getModuleManager();
-    llvm::SmallVector<char, 128> ModulePaths;
+    SmallVector<char, 128> ModulePaths;
     Record.clear();
 
     for (ModuleManager::ModuleIterator M = Mgr.begin(), MEnd = Mgr.end();
@@ -3035,7 +3035,7 @@ uint64_t ASTWriter::WriteDeclContextVisibleBlock(ASTContext &Context,
 
   // Create the on-disk hash table representation.
   DeclarationName ConversionName;
-  llvm::SmallVector<NamedDecl *, 4> ConversionDecls;
+  SmallVector<NamedDecl *, 4> ConversionDecls;
   for (StoredDeclsMap::iterator D = Map->begin(), DEnd = Map->end();
        D != DEnd; ++D) {
     DeclarationName Name = D->first;
@@ -3217,7 +3217,7 @@ void ASTWriter::WriteRedeclarations() {
 }
 
 void ASTWriter::WriteObjCCategories() {
-  llvm::SmallVector<ObjCCategoriesInfo, 2> CategoriesMap;
+  SmallVector<ObjCCategoriesInfo, 2> CategoriesMap;
   RecordData Categories;
   
   for (unsigned I = 0, N = ObjCClassesWithCategories.size(); I != N; ++I) {
@@ -3506,18 +3506,18 @@ void ASTWriter::WriteASTCore(Sema &SemaRef,
     }
   }
 
-  // Build a record containing all of the locally-scoped external
+  // Build a record containing all of the locally-scoped extern "C"
   // declarations in this header file. Generally, this record will be
   // empty.
-  RecordData LocallyScopedExternalDecls;
+  RecordData LocallyScopedExternCDecls;
   // FIXME: This is filling in the AST file in densemap order which is
   // nondeterminstic!
   for (llvm::DenseMap<DeclarationName, NamedDecl *>::iterator
-         TD = SemaRef.LocallyScopedExternalDecls.begin(),
-         TDEnd = SemaRef.LocallyScopedExternalDecls.end();
+         TD = SemaRef.LocallyScopedExternCDecls.begin(),
+         TDEnd = SemaRef.LocallyScopedExternCDecls.end();
        TD != TDEnd; ++TD) {
     if (!TD->second->isFromASTFile())
-      AddDeclRef(TD->second, LocallyScopedExternalDecls);
+      AddDeclRef(TD->second, LocallyScopedExternCDecls);
   }
   
   // Build a record containing all of the ext_vector declarations.
@@ -3749,10 +3749,10 @@ void ASTWriter::WriteASTCore(Sema &SemaRef,
     Stream.EmitRecord(WEAK_UNDECLARED_IDENTIFIERS,
                       WeakUndeclaredIdentifiers);
 
-  // Write the record containing locally-scoped external definitions.
-  if (!LocallyScopedExternalDecls.empty())
-    Stream.EmitRecord(LOCALLY_SCOPED_EXTERNAL_DECLS,
-                      LocallyScopedExternalDecls);
+  // Write the record containing locally-scoped extern "C" definitions.
+  if (!LocallyScopedExternCDecls.empty())
+    Stream.EmitRecord(LOCALLY_SCOPED_EXTERN_C_DECLS,
+                      LocallyScopedExternCDecls);
 
   // Write the record containing ext_vector type names.
   if (!ExtVectorDecls.empty())

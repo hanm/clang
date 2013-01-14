@@ -152,7 +152,7 @@ bool UnwrappedLineParser::parseLevel(bool HasOpeningBrace) {
       } else {
         Diag.Report(FormatTok.Tok.getLocation(),
                     Diag.getCustomDiagID(clang::DiagnosticsEngine::Error,
-                                         "Stray '}' found"));
+                                         "unexpected '}'"));
         Error = true;
         nextToken();
         addUnwrappedLine();
@@ -317,9 +317,10 @@ void UnwrappedLineParser::parseStructuralElement() {
     case tok::kw_enum:
       parseEnum();
       return;
-    case tok::kw_struct:  // fallthrough
+    case tok::kw_struct: // fallthrough
+    case tok::kw_union:  // fallthrough
     case tok::kw_class:
-      parseStructOrClass();
+      parseStructClassOrBracedList();
       return;
     case tok::semi:
       nextToken();
@@ -404,7 +405,8 @@ void UnwrappedLineParser::parseParens() {
 void UnwrappedLineParser::parseIfThenElse() {
   assert(FormatTok.Tok.is(tok::kw_if) && "'if' expected");
   nextToken();
-  parseParens();
+  if (FormatTok.Tok.is(tok::l_paren))
+    parseParens();
   bool NeedsUnwrappedLine = false;
   if (FormatTok.Tok.is(tok::l_brace)) {
     parseBlock();
@@ -449,7 +451,8 @@ void UnwrappedLineParser::parseForOrWhileLoop() {
   assert((FormatTok.Tok.is(tok::kw_for) || FormatTok.Tok.is(tok::kw_while)) &&
          "'for' or 'while' expected");
   nextToken();
-  parseParens();
+  if (FormatTok.Tok.is(tok::l_paren))
+    parseParens();
   if (FormatTok.Tok.is(tok::l_brace)) {
     parseBlock();
     addUnwrappedLine();
@@ -509,7 +512,8 @@ void UnwrappedLineParser::parseCaseLabel() {
 void UnwrappedLineParser::parseSwitch() {
   assert(FormatTok.Tok.is(tok::kw_switch) && "'switch' expected");
   nextToken();
-  parseParens();
+  if (FormatTok.Tok.is(tok::l_paren))
+    parseParens();
   if (FormatTok.Tok.is(tok::l_brace)) {
     parseBlock(Style.IndentCaseLabels ? 2 : 1);
     addUnwrappedLine();
@@ -565,7 +569,7 @@ void UnwrappedLineParser::parseEnum() {
   } while (!eof());
 }
 
-void UnwrappedLineParser::parseStructOrClass() {
+void UnwrappedLineParser::parseStructClassOrBracedList() {
   nextToken();
   do {
     switch (FormatTok.Tok.getKind()) {
@@ -578,6 +582,12 @@ void UnwrappedLineParser::parseStructOrClass() {
       nextToken();
       addUnwrappedLine();
       return;
+    case tok::equal:
+      nextToken();
+      if (FormatTok.Tok.is(tok::l_brace)) {
+        parseBracedList();
+      }
+      break;
     default:
       nextToken();
       break;
