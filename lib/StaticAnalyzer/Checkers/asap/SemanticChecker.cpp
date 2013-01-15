@@ -6,10 +6,10 @@
  *  2.b Parameters only appear at the first position
  *  3. Correct number of region argument
  *  4. Declaration has too many region arguments
- *  5. Declaration has too few region arguments (ignored when default 
+ *  5. Declaration has too few region arguments (ignored when default
  *     arguments are enabled).
  *  6. Check that effect summaries are minimal
- *  7. Build map from FunctionDecl to effect summaries 
+ *  7. Build map from FunctionDecl to effect summaries
  */
 class ASaPSemanticCheckerTraverser :
   public RecursiveASTVisitor<ASaPSemanticCheckerTraverser> {
@@ -26,7 +26,7 @@ private:
 
   /// \brief Issues Warning: '<str>' <bugName> on Declaration
   void helperEmitDeclarationWarning(const Decl *D,
-                                    const StringRef &str, 
+                                    const StringRef &str,
                                     std::string bugName) {
 
     std::string description_std = "'";
@@ -45,7 +45,7 @@ private:
   /// \brief Issues Warning: '<str>' <bugName> on Attribute
   void helperEmitAttributeWarning(const Decl *D,
                                   const Attr *attr,
-                                  const StringRef &str, 
+                                  const StringRef &str,
                                   std::string bugName) {
 
     std::string description_std = "'";
@@ -61,14 +61,14 @@ private:
   }
 
   /// \brief Emit error for misplaced region parameter within RPL.
-  void emitMisplacedRegionParameter(const Decl *D, 
-                                    const Attr* A, 
+  void emitMisplacedRegionParameter(const Decl *D,
+                                    const Attr* A,
                                     const StringRef &S) {
     StringRef BugName = "Misplaced Region Parameter: Region parameters "
                         "may only appear at the head of an RPL.";
     helperEmitAttributeWarning(D, A, S, BugName);
   }
-  
+
   /// \brief Emit a Warning when the input string (which is assumed to be an
   /// RPL element) is not declared.
   void emitUndeclaredRplElement(const Decl *D,
@@ -99,7 +99,7 @@ private:
 
     helperEmitAttributeWarning(D, A, strbuf.str(), bugName);
   }
-  
+
   /// \brief Wrong number of region arguments for type
   void emitWrongNumberOfArguments(Decl *D, RegionArgAttr *Attr) {
     std::string BugName = "wrong number of region arguments for type";
@@ -115,9 +115,9 @@ private:
   void emitIllFormedRegionNameOrParameter(Decl *D, Attr *A) {
     StringRef Name = getRegionOrParamName(A);
     std::string AttrTypeStr = "";
-    if (isa<RegionAttr>(A)) 
+    if (isa<RegionAttr>(A))
       AttrTypeStr = "region";
-    else if 
+    else if
       (isa<RegionParamAttr>(A)) AttrTypeStr = "region parameter";
     std::string BugName = "invalid ";
     BugName.append(AttrTypeStr);
@@ -139,7 +139,7 @@ private:
     StringRef BugStr = StrBuf.str();
     helperEmitAttributeWarning(D, E1->getAttr(), BugStr, BugName);
   }
-  
+
   // FIXME
   inline bool isValidArgForType(const QualType Qt,
                                 const RegionArgAttr *RegionArg) {
@@ -152,7 +152,7 @@ private:
     return Result;
   }
 
-  /// \brief Check that the number of region arguments matches the number 
+  /// \brief Check that the number of region arguments matches the number
   ///        of region parameters
   void checkIsValidTypeForArg(Decl *D, QualType QT, RegionArgAttr *Attr) {
     if (!isValidArgForType(QT, Attr)) {
@@ -193,7 +193,7 @@ private:
       QT = QT->getPointeeType();
     }
     /// At this point there are 3 possibilities:
-    /// 1. The number of annotations is correct in which case 
+    /// 1. The number of annotations is correct in which case
     ///    I+1==E && ~QT->isPointerType()
     /// 2. There are too few annotations in which case I==E
     /// 3. There are too many annotations in which case I+1 < E
@@ -303,7 +303,7 @@ private:
         std::string sbuf;
         llvm::raw_string_ostream StrBuf(sbuf);
         (*I)->printPretty(StrBuf, Ctx.getPrintingPolicy());
-        OS << "DEBUG:: " << StrBuf.str() << " maps to " << 
+        OS << "DEBUG:: " << StrBuf.str() << " maps to " <<
           (El? El->getName() :"NULL") << "\n";
         assert(El);
         return El;
@@ -319,7 +319,7 @@ private:
   template<typename AttrType>
   bool checkRegionOrParamDecls(Decl* D) {
     bool Result = true;
-    
+
     for (specific_attr_iterator<AttrType>
          I = D->specific_attr_begin<AttrType>(),
          E = D->specific_attr_end<AttrType>();
@@ -335,7 +335,7 @@ private:
         /// Emit bug report: ill formed region or parameter name
         emitIllFormedRegionNameOrParameter(D, *I);
         Result = false;
-      } 
+      }
     }
     return Result;
   }
@@ -381,13 +381,13 @@ private:
   Rpl* checkRpl(Decl *D, Attr *A, StringRef RplStr) {
     /// First check that we have not already parsed this attribute's RPL
     Rpl *R = RplAttrMap[A];
-    if (R) 
+    if (R)
       return R;
     /// else
     bool Result = true;
     int Count = 0;
-    
-    R = new Rpl();    
+
+    R = new Rpl();
     while(RplStr.size() > 0) { /// for all RPL elements of the RPL
       // FIXME: '::' can appear as part of an RPL element. Splitting must
       // be done differently to account for that.
@@ -396,18 +396,18 @@ private:
       const StringRef& Head = Pair.first;
       /// head: is it a special RPL element? if not, is it declared?
       const RplElement *RplEl = getSpecialRplElement(Head);
-      if (!RplEl) 
+      if (!RplEl)
         RplEl = findRegionOrParamName(D, Head);
       if (!RplEl) {
         // Emit bug report!
         emitUndeclaredRplElement(D, A, Head);
         Result = false;
       } else { // RplEl != NULL
-        if (Count>0 && (isa<ParamRplElement>(RplEl) 
+        if (Count>0 && (isa<ParamRplElement>(RplEl)
                         || isa<CaptureRplElement>(RplEl))) {
           /// Error: region parameter is only allowed at the head of an Rpl
           emitMisplacedRegionParameter(D, A, Head);
-        } else 
+        } else
           R->appendElement(RplEl);
       }
       /// Proceed to next iteration
@@ -426,7 +426,7 @@ private:
       //A->printPretty(StrBuf, Ctx.getPrintingPolicy());
       //OS << "DEBUG:: adding " << R->toString() << "to Map under "
       //  << StrBuf.str() << "\n";
-      
+
       return R;
     }
   }
@@ -465,16 +465,16 @@ private:
     return Effect::EK_AtomicWritesEffect;
   }
 
-  /// Called with AttrType being one of ReadsEffectAttr, WritesEffectAttr, 
+  /// Called with AttrType being one of ReadsEffectAttr, WritesEffectAttr,
   /// ΑtomicReadsEffectAttr, or AtomicWritesEffectAttr.
   template<typename AttrType>
-  void buildPartialEffectSummary(FunctionDecl* D, Effect::EffectVector& EV) {  
+  void buildPartialEffectSummary(FunctionDecl* D, Effect::EffectVector& EV) {
     for (specific_attr_iterator<AttrType>
          I = D->specific_attr_begin<AttrType>(),
          E = D->specific_attr_end<AttrType>();
          I != E; ++I) {
-      Effect::EffectKind EK = getEffectKind(*I); 
-      //Rpl* R = 0; 
+      Effect::EffectKind EK = getEffectKind(*I);
+      //Rpl* R = 0;
       Rpl* Tmp = RplAttrMap[*I];
 
       if (Tmp) { /// Tmp may be NULL if the RPL was ill formed (e.g., contained
@@ -496,8 +496,8 @@ private:
     }
   }
 
-  
-  /// \brief Check that an effect summary is minimal and, if not, remove 
+
+  /// \brief Check that an effect summary is minimal and, if not, remove
   /// superluous effects
   void checkEffectSummary(Decl* D, Effect::EffectVector& EV) {
     Effect::EffectVector::iterator I = EV.begin(); // not a const iterator
@@ -525,7 +525,7 @@ public:
   explicit ASaPSemanticCheckerTraverser (
     ento::BugReporter &BR, ASTContext &Ctx,
     AnalysisDeclContext *AC, raw_ostream &OS,
-    EffectSummaryMapTy &EffectSummaryMap, 
+    EffectSummaryMapTy &EffectSummaryMap,
     RplAttrMapTy &RplAttrMap,
     RplElementAttrMapTy &RplElementMap
     ) : BR(BR),
@@ -591,7 +591,7 @@ public:
     checkEffectSummary(D, EffectSummary);
     OS << "Minimal Effect Summary:\n";
     Effect::printEffectSummary(EffectSummary, OS);
-    EffectSummaryMap[D] = EV;    
+    EffectSummaryMap[D] = EV;
     return true;
   }
 
@@ -622,7 +622,7 @@ public:
 
     return true;
   }
-  
+
   bool VisitFieldDecl(FieldDecl *D) {
     OS << "DEBUG:: VisitFieldDecl\n";
     /// A. Detect Region In & Arg annotations
@@ -630,7 +630,7 @@ public:
 
     /// B. Check RPLs
     checkRpls<RegionArgAttr>(D);
-    
+
     /// C. Check validity of annotations
     checkTypeRegionArgs(D, false);
     return true;

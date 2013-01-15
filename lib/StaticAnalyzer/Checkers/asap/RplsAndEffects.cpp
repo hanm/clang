@@ -1,4 +1,4 @@
-  
+
   /**
    *  Return true when the input string is a special RPL element
    *  (e.g., '*', '?', 'Root'.
@@ -42,7 +42,7 @@
 ///-///////////////////////////////////////////////////////////////////////////
 /// RplElement Class Hierarchy
 
-class Rpl; 
+class Rpl;
 
 class RplElement {
 public:
@@ -56,14 +56,14 @@ public:
   };
 private:
   const RplElementKind Kind;
-  
+
 public:
   /// API
   RplElementKind getKind() const { return Kind; }
   RplElement(RplElementKind K) : Kind(K) {}
-  
+
   virtual bool isFullySpecified() const { return true; }
-  
+
   virtual StringRef getName() const = 0;
   virtual bool operator == (const RplElement& that) const = 0;
   //virtual RplElement* clone() const = 0;
@@ -81,15 +81,15 @@ public:
   /// Constructor
   SpecialRplElement(StringRef name) : RplElement(RK_Special), name(name) {}
   virtual ~SpecialRplElement() {}
-  
+
   /// Methods
   virtual StringRef getName() const { return name; }
   //virtual SpecialRplElement* clone const { return new SpecialRplElement(this);}
   virtual bool operator == (const RplElement& that) const {
-    return (isa<const SpecialRplElement>(that) 
+    return (isa<const SpecialRplElement>(that)
             && this->getName().compare(that.getName()) == 0) ? true : false;
   }
-  
+
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Special;
   }
@@ -101,18 +101,18 @@ static const SpecialRplElement *LOCAL_RplElmt = new SpecialRplElement("Local");
 
 
 ///-////////////////////////////////////////
-class StarRplElement : public RplElement { 
+class StarRplElement : public RplElement {
 
 public:
   /// Constructor/Destructor
   StarRplElement () : RplElement(RK_Star) {}
   virtual ~StarRplElement() {}
-  
+
   /// Methods
   virtual bool isFullySpecified() const { return false; }
   virtual StringRef getName() const { return "*"; }
   virtual bool operator == (const RplElement &that) const {
-    return (isa<const StarRplElement>(that) 
+    return (isa<const StarRplElement>(that)
             && this==&that) ? true : false;
   }
   static bool classof(const RplElement *R) {
@@ -122,7 +122,7 @@ public:
 
 static const StarRplElement *STAR_RplElmt = new StarRplElement();
 
-/// \brief returns a special RPL element (Root, Local, *, ...) or NULL 
+/// \brief returns a special RPL element (Root, Local, *, ...) or NULL
 const RplElement* getSpecialRplElement(const StringRef& s) {
   if (!s.compare(STAR_RplElmt->getName()))
     return STAR_RplElmt;
@@ -130,12 +130,12 @@ const RplElement* getSpecialRplElement(const StringRef& s) {
     return ROOT_RplElmt;
   else if (!s.compare(LOCAL_RplElmt->getName()))
     return LOCAL_RplElmt;
-  else 
-    return 0;        
+  else
+    return 0;
 }
 
 ///-////////////////////////////////////////
-class NamedRplElement : public RplElement { 
+class NamedRplElement : public RplElement {
   /// Fields
   const StringRef name;
 
@@ -146,7 +146,7 @@ public:
   /// Methods
   virtual StringRef getName() const { return name; }
   virtual bool operator == (const RplElement &that) const {
-    return (isa<const NamedRplElement>(that) 
+    return (isa<const NamedRplElement>(that)
             && this->getName().compare(that.getName()) == 0) ? true: false;
   }
 
@@ -165,39 +165,39 @@ public:
   /// Constructor
   ParamRplElement(StringRef name) : RplElement(RK_Parameter), name(name) {}
   virtual ~ParamRplElement() {}
-  
+
   /// Methods
   virtual StringRef getName() const { return name; }
   virtual bool operator == (const RplElement& that) const {
     return (isa<const ParamRplElement>(that)
             && this->getName().compare(that.getName()) == 0) ? true : false;
-  }  
+  }
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Parameter;
   }
 };
 
 ///-////////////////////////////////////////
-class CaptureRplElement : public RplElement { 
+class CaptureRplElement : public RplElement {
   /// Fields
   Rpl& includedIn;
 
 public:
   /// Constructor
-  CaptureRplElement(Rpl& includedIn) : RplElement(RK_Capture), 
-                                       includedIn(includedIn) 
+  CaptureRplElement(Rpl& includedIn) : RplElement(RK_Capture),
+                                       includedIn(includedIn)
   { /*assert(includedIn.isFullySpecified() == false);*/ }
   virtual ~CaptureRplElement() {}
   /// Methods
   virtual StringRef getName() const { return "rho"; }
-  
+
   virtual bool operator == (const RplElement &that) const {
     return (isa<const CaptureRplElement>(that) && this==&that) ? true : false;
   }
   virtual bool isFullySpecified() const { return false; }
-  
+
   Rpl& upperBound() const { return includedIn; }
-  
+
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Capture;
   }
@@ -206,8 +206,8 @@ public:
 
 #ifndef RPL_ELEMENT_VECTOR_SIZE
   #define RPL_ELEMENT_VECTOR_SIZE 8
-#endif  
-typedef llvm::SmallVector<const RplElement*, 
+#endif
+typedef llvm::SmallVector<const RplElement*,
                           RPL_ELEMENT_VECTOR_SIZE> RplElementVector;
 
 ///-///////////////////////////////////////////////////////////////////////////
@@ -218,25 +218,25 @@ public:
   /// Types
 #ifndef RPL_VECTOR_SIZE
   #define RPL_VECTOR_SIZE 4
-#endif  
+#endif
   typedef llvm::SmallVector<Rpl*, RPL_VECTOR_SIZE> RplVector;
-  
+
 private:
   /// Fields
   StringRef RplString;
-  /// Note: RplElements are not owned by Rpl class. 
+  /// Note: RplElements are not owned by Rpl class.
   /// They are *NOT* destroyed with the Rpl.
   RplElementVector RplElements;
   bool FullySpecified;
 
   /// RplRef class
-  // We use the RplRef class, friends with Rpl to efficiently perform 
+  // We use the RplRef class, friends with Rpl to efficiently perform
   // isIncluded and isUnder tests
   class RplRef {
-    long firstIdx; 
+    long firstIdx;
     long lastIdx;
     const Rpl& rpl;
-  
+
   public:
     /// Constructor
     RplRef(const Rpl& r) : rpl(r) {
@@ -248,12 +248,12 @@ private:
       int i = firstIdx;
       for (; i<lastIdx; i++) {
         os << rpl.RplElements[i]->getName() << ":";
-      } 
+      }
       // print last element
       if (i==lastIdx)
         os << rpl.RplElements[i]->getName();
     }
-  
+
     std::string toString() {
       std::string sbuf;
       llvm::raw_string_ostream os(sbuf);
@@ -268,19 +268,19 @@ private:
     const RplElement* getLastElement() {
       return rpl.RplElements[lastIdx];
     }
-    
+
     RplRef& stripLast() {
       lastIdx--;
       return *this;
     }
     inline bool isEmpty() {
-      //os  << "DEBUG:: isEmpty[RplRef] returned " 
+      //os  << "DEBUG:: isEmpty[RplRef] returned "
       //    << (lastIdx<firstIdx ? "true" : "false") << "\n";
       return (lastIdx<firstIdx) ? true : false;
     }
-    
+
     bool isUnder(RplRef& rhs) {
-      osv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef](" 
+      osv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
           << this->toString() << ", " << rhs.toString() << ")\n";
       /// R <= Root
       if (rhs.isEmpty())
@@ -295,17 +295,17 @@ private:
       /// R:r <= R' <==  R <= R'
       /// R:[i] <= R' <==  R <= R'
       return stripLast().isUnder(rhs);
-      // TODO z-regions 
+      // TODO z-regions
     }
-    
+
     /// Inclusion: this c= rhs
-    bool isIncludedIn(RplRef& rhs) { 
-      osv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef](" 
+    bool isIncludedIn(RplRef& rhs) {
+      osv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef]("
           << this->toString() << ", " << rhs.toString() << ")\n";
       if (rhs.isEmpty()) {
-        /// Root c= Root    
+        /// Root c= Root
         if (isEmpty()) return true;
-        /// RPL c=? Root and RPL!=Root ==> not included      
+        /// RPL c=? Root and RPL!=Root ==> not included
         else /*!isEmpty()*/ return false;
       } else { /// rhs is not empty
         /// R c= R':* <==  R <= R'
@@ -323,7 +323,7 @@ private:
       }
     }
   }; /// end class RplRef
-  ///////////////////////////////////////////////////////////////////////////  
+  ///////////////////////////////////////////////////////////////////////////
 
 public:
   static const char RPL_SPLIT_CHARACTER = ':';
@@ -335,24 +335,24 @@ public:
       // FIXME: '::' can appear as part of an RPL element. Splitting must
       // be done differently to account for that.
       std::pair<StringRef,StringRef> pair = rpl.split(RPL_SPLIT_CHARACTER);
-      
+
       RplElements.push_back(new NamedRplElement(pair.first));
       if (isSpecialRplElement(pair.first))
         FullySpecified = false;
       rpl = pair.second;
     }
   }*/
-  
+
   Rpl() : FullySpecified(true) {}
-  
+
   Rpl(RplElement *Elm) :
     RplString(Elm->getName()),
     FullySpecified(Elm->isFullySpecified())
   {
     RplElements.push_back(Elm);
   }
-  
-  /// Copy Constructor 
+
+  /// Copy Constructor
   Rpl(Rpl* That) :
       RplString(That->RplString),
       RplElements(That->RplElements),
@@ -366,7 +366,7 @@ public:
     }*/
   }
   /// Destructors
-  
+
   /// Printing
   void printElements(raw_ostream& os) const {
     RplElementVector::const_iterator I = RplElements.begin();
@@ -378,23 +378,23 @@ public:
     if (I==E-1)
       os << (*I)->getName();
   }
-  
+
   std::string toString() const {
     std::string sbuf;
     llvm::raw_string_ostream os(sbuf);
     printElements(os);
     return std::string(os.str());
   }
-  
+
   /// Getters
   inline const RplElement* getLastElement() {
-    return RplElements.back(); 
+    return RplElements.back();
   }
-  
+
   inline const RplElement* getFirstElement() {
-    return RplElements.front(); 
+    return RplElements.front();
   }
-  
+
   /** returns the number of RPL elements */
   inline size_t length() {
     return RplElements.size();
@@ -402,28 +402,28 @@ public:
   /// Setters
   inline void appendElement(const RplElement* rplElm) {
     RplElements.push_back(rplElm);
-    if (rplElm->isFullySpecified() == false) 
+    if (rplElm->isFullySpecified() == false)
       FullySpecified = false;
   }
   /// Predicates
   inline bool isFullySpecified() { return FullySpecified; }
   inline bool isEmpty() { return RplElements.empty(); }
-  
+
   /// Nesting (Under)
   bool isUnder(const Rpl& rhsRpl) const {
     const CaptureRplElement *cap = dyn_cast<CaptureRplElement>(RplElements.front());
     if (cap) {
       cap->upperBound().isUnder(rhsRpl);
     }
-    
+
     RplRef* lhs = new RplRef(*this);
     RplRef* rhs = new RplRef(rhsRpl);
     bool result = lhs->isIncludedIn(*rhs);
-    delete lhs; delete rhs;    
+    delete lhs; delete rhs;
     return result;
   }
   /// Inclusion
-  bool isIncludedIn(const Rpl& rhsRpl) const { 
+  bool isIncludedIn(const Rpl& rhsRpl) const {
     const CaptureRplElement *cap = dyn_cast<CaptureRplElement>(RplElements.front());
     if (cap) {
       cap->upperBound().isIncludedIn(rhsRpl);
@@ -437,7 +437,7 @@ public:
         << rhsRpl.toString() << ")=" << (result ? "true" : "false") << "\n";
     return result;
   }
-  
+
   /// Substitution
   bool substitute(const RplElement& From, const Rpl& To) {
     os << "DEBUG:: before substitution(" << From.getName() << "<-";
@@ -445,10 +445,10 @@ public:
     os <<"): ";
     printElements(os);
     os << "\n";
-    /// A parameter is only allowed at the head of an Rpl    
+    /// A parameter is only allowed at the head of an Rpl
     RplElementVector::iterator I = RplElements.begin();
     if (*(*I) == From) {
-      osv2 << "DEBUG:: found '" << From.getName() 
+      osv2 << "DEBUG:: found '" << From.getName()
         << "' replaced with '" ;
       To.printElements(osv2);
       I = RplElements.erase(I);
@@ -463,8 +463,8 @@ public:
     printElements(os);
     os << "\n";
     return false;
-  }  
-  
+  }
+
   /// Append to this Rpl the argument Rpl without its head element
   inline void appendRplTail(Rpl* That) {
     RplElementVector::iterator I = That->RplElements.begin();
@@ -474,8 +474,8 @@ public:
       this->RplElements.push_back(*I);
     }
   }
-  
-  Rpl* upperBound() { 
+
+  Rpl* upperBound() {
     if (isEmpty() || !isa<CaptureRplElement>(RplElements.front()))
       return this;
     // else
@@ -483,14 +483,14 @@ public:
     upperBound->appendRplTail(this);
     return upperBound;
   }
-  
+
   /// Capture
   /// TODO: caller must deallocate Rpl and its element
   inline Rpl* capture() {
     if (this->isFullySpecified()) return this;
     else return new Rpl(new CaptureRplElement(*this));
   }
-  
+
 }; // end class Rpl
 
 ///-///////////////////////////////////////////////////////////////////////////
@@ -517,7 +517,7 @@ public:
     /// atomic writes effect
     EK_AtomicWritesEffect
   };
-  
+
 private:
   /// Fields
   EffectKind Kind;
@@ -531,9 +531,9 @@ private:
   /// The Subeffect relation is transitive.
   inline bool isSubEffectKindOf(const Effect &E) const {
     if (Kind == EK_NoEffect) return true; // optimization
-    
+
     bool Result = false;
-    if (!E.isAtomic() || this->isAtomic()) { 
+    if (!E.isAtomic() || this->isAtomic()) {
       /// if e.isAtomic ==> this->isAtomic [[else return false]]
       switch(E.getEffectKind()) {
       case EK_WritesEffect:
@@ -557,7 +557,7 @@ private:
 
 public:
   /// Constructors
-  Effect(EffectKind EK, Rpl* R, const Attr* A) 
+  Effect(EffectKind EK, Rpl* R, const Attr* A)
         : Kind(EK), R(R), A(A) {}
 
   /// Destructors
@@ -585,13 +585,13 @@ public:
   }
 
   static void printEffectSummary(Effect::EffectVector& EV, raw_ostream& OS) {
-    for (Effect::EffectVector::const_iterator 
+    for (Effect::EffectVector::const_iterator
             I = EV.begin(),
-            E = EV.end(); 
+            E = EV.end();
             I != E; I++) {
       (*I)->print(OS);
       OS << "\n";
-    }    
+    }
   }
 
   std::string toString() const {
@@ -600,41 +600,41 @@ public:
     print(OS);
     return std::string(OS.str());
   }
-  
+
   /// Predicates
   inline bool isNoEffect() const {
     return (Kind == EK_NoEffect) ? true : false;
   }
-  
+
   inline bool hasRplArgument() const { return !isNoEffect(); }
 
-  inline bool isAtomic() const { 
+  inline bool isAtomic() const {
     return (Kind==EK_AtomicReadsEffect ||
             Kind==EK_AtomicWritesEffect) ? true : false;
   }
 
   /// Getters
   inline EffectKind getEffectKind() const { return Kind; }
-  
+
   inline const Rpl* getRpl() { return R; }
 
   inline const Attr* getAttr() { return A; }
-  
+
   inline SourceLocation getLocation() { return A->getLocation();}
-  
+
   /// Substitution
   inline bool substitute(const RplElement &FromElm, const Rpl &ToRpl) {
     if (R)
       return R->substitute(FromElm, ToRpl);
-    else 
+    else
       return true;
-  }  
-  
+  }
+
   /// SubEffect: true if this <= e
-  /** 
+  /**
    *  rpl1 c= rpl2   E1 c= E2
    * ~~~~~~~~~~~~~~~~~~~~~~~~~
-   *    E1(rpl1) <= E2(rpl2) 
+   *    E1(rpl1) <= E2(rpl2)
    */
   bool isSubEffectOf(const Effect& E) const {
     bool Result = (isNoEffect() ||
