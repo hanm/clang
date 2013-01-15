@@ -61,20 +61,20 @@ namespace {
   /// such as int or pointers.
   RegionParamAttr *BuiltinDefaulrRegionParam;
 
-  
+
   // TODO pass arg attr as parameter
   /*
-  inline bool hasValidRegionParamAttr(const Type* T) { 
+  inline bool hasValidRegionParamAttr(const Type* T) {
     bool result = false;
     if (const TagType* tt = dyn_cast<TagType>(T)) {
       const TagDecl* td = tt->getDecl();
       const RegionParamAttr* rpa = td->getAttr<RegionParamAttr>();
       // TODO check the number of params is equal to arg attr.
-      if (rpa) result = true; 
+      if (rpa) result = true;
     } else if (T->isBuiltinType() || T->isPointerType()) {
       // TODO check the number of parameters of the arg attr to be 1
       result = true;
-    } 
+    }
     return result;
   }*/
 
@@ -93,12 +93,12 @@ namespace {
     return Result;
   }
 
-                                    
+
 typedef std::map<const FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
 typedef std::map<const Attr*, Rpl*> RplAttrMapTy;
 typedef std::map<const Attr*, RplElement*> RplElementAttrMapTy;
 
-namespace ASaP { 
+namespace ASaP {
   template<typename T>
   void destroyVector(T &V) {
     for (typename T::const_iterator
@@ -145,7 +145,7 @@ void destroyRplElementAttrMap(RplElementAttrMapTy &RplElementAttrMap) {
 }
 
 
-/// FIXME temporarily just using pre-processor to concatenate code here... UGLY 
+/// FIXME temporarily just using pre-processor to concatenate code here... UGLY
 #include "asap/EffectChecker.cpp"
 #include "asap/SemanticChecker.cpp"
 
@@ -165,7 +165,7 @@ public:
     RplElementAttrMapTy RplElementMap;
     ASaPSemanticCheckerTraverser SemanticChecker(BR, D->getASTContext(),
                                                  Mgr.getAnalysisDeclContext(D),
-                                                 os, EffectsMap, RplMap, 
+                                                 os, EffectsMap, RplMap,
                                                  RplElementMap);
     /** run checker */
     SemanticChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
@@ -173,7 +173,7 @@ public:
     os << "DEBUG:: done running ASaP Semantic Checker\n\n";
     if (SemanticChecker.encounteredFatalError())
       os << "DEBUG:: ENCOUNTERED FATAL ERROR!! STOPPING\n";
-      
+
     if (!SemanticChecker.encounteredFatalError()) {
       /// Check that Effect Summaries cover effects
       ASaPEffectsCheckerTraverser EffectChecker(BR, D->getASTContext(), Mgr,
@@ -185,12 +185,12 @@ public:
     /// Clean-Up
     destroyEffectSummaryMap(EffectsMap);
     destroyRplAttrMap(RplMap); // FIXME: tries to free freed memory (sometimes)
-    destroyRplElementAttrMap(RplElementMap);    
+    destroyRplElementAttrMap(RplElementMap);
     /// TODO: deallocate BuiltinDefaulrRegionParam
     delete ROOT_RplElmt;
     delete LOCAL_RplElmt;
     delete STAR_RplElmt;
-    
+
   }
 };
 } // end unnamed namespace

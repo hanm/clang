@@ -31,7 +31,7 @@ private:
   bool isCoveredBySummary;
 
   /// Private Methods
-  void helperEmitEffectNotCoveredWarning(const Stmt *S, 
+  void helperEmitEffectNotCoveredWarning(const Stmt *S,
                                          const Decl *D,
                                          const StringRef &Str) {
     StringRef BugName = "effect not covered by effect summary";
@@ -155,7 +155,7 @@ public:
     /// find declaration -> find parameter(s) ->
     /// find argument(s) -> substitute
     const RegionParamAttr* Param = FunDecl->getAttr<RegionParamAttr>();
-    if (Param) { 
+    if (Param) {
       /// if function has region params, find the region args on
       /// the invokation
       os << "DEBUG:: found function param";
@@ -208,7 +208,7 @@ public:
 
     /// 1. VD is a FunctionDecl
     const FunctionDecl *FD = dyn_cast<FunctionDecl>(VD);
-    if (FD) 
+    if (FD)
       helperVisitFunctionDecl(Expr, FD);
 
     ///-//////////////////////////////////////////////
@@ -267,7 +267,7 @@ public:
         StringRef from = rpa->getName();
         //FIXME do we need to capture here?
         const ParamRplElement fromElmt(from);
-                                    
+
         // apply substitution to temp effects
         StringRef to = substarg->getRpl();
         Rpl* toRpl = rplAttrMap[substarg];
@@ -375,14 +375,14 @@ public:
         assert(argit!=endit);
         if (!isBase) {
           /// TODO is this atomic or not? just ignore atomic for now
-          Effect::EffectKind EK = (hasWriteSemantics) ? 
+          Effect::EffectKind EK = (hasWriteSemantics) ?
                               Effect::EK_WritesEffect : Effect::EK_ReadsEffect;
           // if it is an aggregate type we have to capture all the copy effects
           // at most one of isAddrOf and isDeref can be true
           // last type to work on
           if (FieldD->getType()->isStructureOrClassType()) {
             // TODO for each field add effect & i++
-            /// Actually this translates into an implicit call to an 
+            /// Actually this translates into an implicit call to an
             /// implicit copy function... treat it as a function call.
             /// i.e., not here!
           } else {
@@ -405,7 +405,7 @@ public:
       /// Post visitation checking
       hasWriteSemantics = saved_hws;
       isBase = saved_isBase;
-      /// Post-Visit Actions: check that effects (after substitutions) 
+      /// Post-Visit Actions: check that effects (after substitutions)
       /// are covered by effect summary
       while (EffectNr) {
         Effect* e = effectsTmp.pop_back_val();
@@ -510,7 +510,7 @@ public:
   }
 
   inline void helperVisitAssignment(BinaryOperator *E) {
-    os << "DEBUG:: helperVisitAssignment (typecheck=" 
+    os << "DEBUG:: helperVisitAssignment (typecheck="
        << (typecheckAssignment?"true":"false") <<")\n";
     bool saved_hws = hasWriteSemantics;
     if (tmpRegions) {
@@ -520,7 +520,7 @@ public:
     }
 
     tmpRegions = new Rpl::RplVector();
-    Visit(E->getRHS()); 
+    Visit(E->getRHS());
     rhsRegions = tmpRegions;
 
     tmpRegions = new Rpl::RplVector();
