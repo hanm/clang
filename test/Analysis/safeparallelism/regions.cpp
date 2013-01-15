@@ -1,6 +1,5 @@
 // RUN: %clang_cc1 -DASAP_CXX11_SYNTAX -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
 // RUN: %clang_cc1 -DASAP_GNU_SYNTAX -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
-// 
 
 #ifdef ASAP_CXX11_SYNTAX
 /// Test Valid Region Names & Declared RPL elements
@@ -45,7 +44,8 @@ public:
 
   int close_account() [[asap::reads("P1:R3")]] {
     int balance = money;
-    set_money(0);
+    set_money(0); // writes P1:R3  expected-warning{{'Writes Effect on P1:R3' effect not covered by effect summary}}
+    next->set_money(0); // reads R1, writes P1:R2:R3  expected-warning{{'Reads Effect on P1' effect not covered by effect summary}}  expected-warning{{'Writes Effect on P1:R2:R3' effect not covered by effect summary}}
     return balance;
   }
 
@@ -135,7 +135,7 @@ public:
 
   int close_account() __attribute__((reads("P1:R3"))) {
     int balance = money;
-    set_money(0);
+    set_money(0); // expected-warning{{ 'Writes Effect on P1:R3' effect not covered by effect summary}}
     return balance;
   }
 

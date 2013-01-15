@@ -23,7 +23,7 @@ private:
   int DerefNum;
 
   Effect::EffectVector EffectsTmp;
-  Effect::EffectVector effects;
+  //Effect::EffectVector Effects;
   Effect::EffectVector &EffectSummary;
   EffectSummaryMapTy &EffectSummaryMap;
   RplAttrMapTy &RplAttrMap;
@@ -92,6 +92,21 @@ private:
     //                   bugStr, VDLoc, S->getSourceRange());
   }
 
+  bool checkEffectCoverage(Expr *Exp, Decl *D, int N) {
+    bool Result = true;
+    for (int I=0; I<N; ++I){
+      Effect* E = EffectsTmp.pop_back_val();
+      OS << "### "; E->print(OS); OS << "\n";
+      if (!E->isCoveredBy(EffectSummary)) {
+        std::string Str = E->toString();
+        helperEmitEffectNotCoveredWarning(Exp, D, Str);
+        Result = false;
+      }
+    }
+    IsCoveredBySummary &= Result;
+    return Result;
+  }
+
 public:
   /// Constructor
   EffectCollectorVisitor (
@@ -158,7 +173,7 @@ public:
     if (Param) {
       /// if function has region params, find the region args on
       /// the invokation
-      OS << "DEBUG:: found function param";
+      OS << "DEBUG:: found region param on function";
       Param->printPretty(OS, Ctx.getPrintingPolicy());
       OS << "\n";
     } else {
@@ -171,22 +186,22 @@ public:
     /// return type
     /// TODO Merge with FieldDecl (Duplicate code)
     /// 1.3. Visit Base with read semantics, then restore write semantics
-    bool hws = HasWriteSemantics;
-    HasWriteSemantics = false;
-    Visit(Expr->getBase());
-    HasWriteSemantics = hws;
+    bool saved_hws = HasWriteSemantics;
+    bool saved_isBase = IsBase; // probably not needed to save
 
+    DerefNum = Expr->isArrow() ? 1 : 0;
+    HasWriteSemantics = false;
+    IsBase = true;
+    Visit(Expr->getBase());
+
+    /// Post visitation checking
+    HasWriteSemantics = saved_hws;
+    IsBase = saved_isBase;
+    /// Post-Visit Actions: check that effects (after substitutions)
+    /// are covered by effect summary
+    //checkEffectCoverage(Expr, FunDecl, EffectNr); // checked up the AST
     /// Post-Visit Actions: check that effects (after substitution)
     /// are covered by effect summary
-    if (E) {
-      E = EffectsTmp.pop_back_val();
-      OS << "### "; E->print(OS); OS << "\n";
-      if (!E->isCoveredBy(EffectSummary)) {
-        std::string Str = E->toString();
-        helperEmitEffectNotCoveredWarning(Expr, FunDecl, Str);
-        IsCoveredBySummary = false;
-      }
-    }
   }
 
   void VisitMemberExpr(MemberExpr *Expr) {
@@ -239,6 +254,7 @@ public:
 #endif
       // TODO if (!arg) arg = some default
       assert(ArgIt != EndIt);
+      OS << "DEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
       if (IsBase) {
         /// 2.1 Region Substitution for expressions under this base
         RegionArgAttr* SubstArg;
@@ -257,7 +273,7 @@ public:
         //OS << "arg : ";
         //arg->printPretty(OS, Ctx.getPrintingPolicy());
         //OS << "\n";
-        OS << "DEBUG::substarg : ";
+        OS << "DEBUG::SubstArg : ";
         SubstArg->printPretty(OS, Ctx.getPrintingPolicy());
         OS << "\n";
 
@@ -341,7 +357,6 @@ public:
       }
 
       /// 2.2 Collect Effects
-      OS << "DEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
       if (DerefNum<0) { // DerefNum<0 ==> AddrOf Taken
         // Do nothing. Aliasing captured by type-checker
       } else { // DerefNum >=0
@@ -409,17 +424,7 @@ public:
       IsBase = saved_isBase;
       /// Post-Visit Actions: check that effects (after substitutions)
       /// are covered by effect summary
-      while (EffectNr) {
-        Effect* E = EffectsTmp.pop_back_val();
-        OS << "### "; E->print(OS); OS << "\n";
-        if (!E->isCoveredBy(EffectSummary)) {
-          std::string Str = E->toString();
-          helperEmitEffectNotCoveredWarning(Expr, VD, Str);
-          IsCoveredBySummary = false;
-        }
-
-        EffectNr --;
-      }
+      checkEffectCoverage(Expr, VD, EffectNr);
     } // end if FieldDecl
   } // end VisitMemberExpr
 
@@ -599,17 +604,31 @@ public:
   /// Visit non-static C++ member function call
   void VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
     OS << "DEBUG:: VisitCXXMemberCallExpr\n";
+    CXXMethodDecl *D = Exp->getMethodDecl();
+    assert(D);
+
     /// 1. Typecheck assignment of actuals to formals
-    /*for(ExprIterator
-            I = Exp->arg_begin(),
-            E = Exp->arg_end();
-         I != E; ++I) {
-      //Visit(*I);
-    }*/
-    /// 2. Check that the Effects are covered
-    //CXXMethodDecl *D = dyn_cast<CXXMethodDecl>(Exp->getCalleeDecl());
-    //assert(D);
-    //Effect::EffectVector *EV = effectSummaryMap[D];
+    ExprIterator ArgI, ArgE;
+    FunctionDecl::param_iterator ParamI, ParamE;
+    assert(D->getNumParams() == Exp->getNumArgs());
+
+    for(ArgI = Exp->arg_begin(), ArgE = Exp->arg_end(),
+        ParamI = D->param_begin(), ParamE = D->param_end();
+         ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
+      OS << "DEBUG:: " << "\n";
+      if ((*ArgI)->isLValue()) {
+        /// Typecheck implicit assignment
+      }
+      Visit(*ArgI);
+    }
+    /// 2. Add effects to tmp effects
+    Effect::EffectVector *EV = EffectSummaryMap[D];
+    EffectsTmp.append(EV->size(), (*EV->begin()));
+    /// 3. Visit base if it exists
+    VisitChildren(Exp);
+
+    /// 4. Check coverage
+    checkEffectCoverage(Exp, D, EV->size());
   }
 
   /// Visits a C++ overloaded operator call where the operator
