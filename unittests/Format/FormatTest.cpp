@@ -1037,6 +1037,10 @@ TEST_F(FormatTest, UnderstandsUnaryOperators) {
 
   verifyFormat("const NSPoint kBrowserFrameViewPatternOffset = { -5, +3 };");
   verifyFormat("const NSPoint kBrowserFrameViewPatternOffset = { +5, -3 };");
+
+  verifyFormat("int a = /* confusing comment */ -1;");
+  // FIXME: The space after 'i' is wrong, but hopefully, this is a rare case.
+  verifyFormat("int a = i /* confusing comment */++;");
 }
 
 TEST_F(FormatTest, UndestandsOverloadedOperators) {
@@ -1123,6 +1127,13 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyFormat("*(x + y).call();");
   verifyFormat("&(x + y)->call();");
   verifyFormat("&(*I).first");
+
+  verifyFormat("f(b * /* confusing comment */ ++c);");
+  verifyFormat(
+      "int *MyValues = {\n"
+      "  *A, // Operator detection might be confused by the '{'\n"
+      "  *BB // Operator detection might be confused by previous comment\n"
+      "};");
 }
 
 TEST_F(FormatTest, FormatsCasts) {
@@ -1173,7 +1184,8 @@ TEST_F(FormatTest, HandlesIncludeDirectives) {
                "#include \"a/b/string\"\n"
                "#include \"string.h\"\n"
                "#include \"string.h\"\n"
-               "#include <a-a>");
+               "#include <a-a>\n"
+               "#include < path with space >\n");
 
   verifyFormat("#import <string>");
   verifyFormat("#import <a/b/c.h>");
@@ -1290,8 +1302,44 @@ TEST_F(FormatTest, PullTrivialFunctionDefinitionsIntoSingleLine) {
                "}");
 }
 
-TEST_F(FormatTest, BracedInitListWithElaboratedTypeSpecifier) {
+TEST_F(FormatTest, UnderstandContextOfRecordTypeKeywords) {
+  // Elaborate type variable declarations.
   verifyFormat("struct foo a = { bar };\nint n;");
+  verifyFormat("class foo a = { bar };\nint n;");
+  verifyFormat("union foo a = { bar };\nint n;");
+
+  // Elaborate types inside function definitions.
+  verifyFormat("struct foo f() {}\nint n;");
+  verifyFormat("class foo f() {}\nint n;");
+  verifyFormat("union foo f() {}\nint n;");
+
+  // Templates.
+  verifyFormat("template <class X> void f() {}\nint n;");
+  verifyFormat("template <struct X> void f() {}\nint n;");
+  verifyFormat("template <union X> void f() {}\nint n;");
+
+  // Actual definitions...
+  verifyFormat("struct {} n;");
+  verifyFormat("template <template <class T, class Y>, class Z > class X {} n;");
+  verifyFormat("union Z {\n  int n;\n} x;");
+  verifyFormat("class MACRO Z {} n;");
+  verifyFormat("class MACRO(X) Z {} n;");
+  verifyFormat("class __attribute__(X) Z {} n;");
+  verifyFormat("class __declspec(X) Z {} n;");
+
+  // Elaborate types where incorrectly parsing the structural element would
+  // break the indent.
+  verifyFormat("if (true)\n"
+               "  class X x;\n"
+               "else\n"
+               "  f();\n");
+}
+
+TEST_F(FormatTest, DoNotInterfereWithErrorAndWarning) {
+  verifyFormat("#error Leave     all         white!!!!! space* alone!\n");
+  verifyFormat("#warning Leave     all         white!!!!! space* alone!\n");
+  EXPECT_EQ("#error 1", format("  #  error   1"));
+  EXPECT_EQ("#warning 1", format("  #  warning 1"));
 }
 
 // FIXME: This breaks the order of the unwrapped lines:
