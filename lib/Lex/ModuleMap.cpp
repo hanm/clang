@@ -383,6 +383,23 @@ bool ModuleMap::canInferFrameworkModule(const DirectoryEntry *ParentDir,
   return canInfer;
 }
 
+/// \brief For a framework module, infer the framework against which we
+/// should link.
+static void inferFrameworkLink(Module *Mod, const DirectoryEntry *FrameworkDir,
+                               FileManager &FileMgr) {
+  assert(Mod->IsFramework && "Can only infer linking for framework modules");
+  assert(!Mod->isSubFramework() &&
+         "Can only infer linking for top-level frameworks");
+
+  SmallString<128> LibName;
+  LibName += FrameworkDir->getName();
+  llvm::sys::path::append(LibName, Mod->Name);
+  if (FileMgr.getFile(LibName)) {
+    Mod->LinkLibraries.push_back(Module::LinkLibrary(Mod->Name,
+                                                     /*IsFramework=*/true));
+  }
+}
+
 Module *
 ModuleMap::inferFrameworkModule(StringRef ModuleName,
                                 const DirectoryEntry *FrameworkDir,
@@ -537,6 +554,12 @@ ModuleMap::inferFrameworkModule(StringRef ModuleName,
     }
   }
 
+  // If the module is a top-level framework, automatically link against the
+  // framework.
+  if (!Result->isSubFramework()) {
+    inferFrameworkLink(Result, FrameworkDir, FileMgr);
+  }
+
   return Result;
 }
 
@@ -645,6 +668,7 @@ namespace clang {
       ExplicitKeyword,
       ExportKeyword,
       FrameworkKeyword,
+      LinkKeyword,
       ModuleKeyword,
       Period,
       UmbrellaKeyword,
@@ -732,6 +756,7 @@ namespace clang {
     void parseHeaderDecl(SourceLocation UmbrellaLoc, SourceLocation ExcludeLoc);
     void parseUmbrellaDirDecl(SourceLocation UmbrellaLoc);
     void parseExportDecl();
+    void parseLinkDecl();
     void parseInferredModuleDecl(bool Framework, bool Explicit);
     bool parseOptionalAttributes(Attributes &Attrs);
 
@@ -774,6 +799,7 @@ retry:
                  .Case("explicit", MMToken::ExplicitKeyword)
                  .Case("export", MMToken::ExportKeyword)
                  .Case("framework", MMToken::FrameworkKeyword)
+                 .Case("link", MMToken::LinkKeyword)
                  .Case("module", MMToken::ModuleKeyword)
                  .Case("requires", MMToken::RequiresKeyword)
                  .Case("umbrella", MMToken::UmbrellaKeyword)
@@ -944,6 +970,7 @@ namespace {
 ///     header-declaration
 ///     submodule-declaration
 ///     export-declaration
+///     link-declaration
 ///
 ///   submodule-declaration:
 ///     module-declaration
@@ -1123,7 +1150,11 @@ void ModuleMapParser::parseModuleDecl() {
     case MMToken::HeaderKeyword:
       parseHeaderDecl(SourceLocation(), SourceLocation());
       break;
-        
+
+    case MMToken::LinkKeyword:
+      parseLinkDecl();
+      break;
+
     default:
       Diags.Report(Tok.getLocation(), diag::err_mmap_expected_member);
       consumeToken();
@@ -1137,6 +1168,13 @@ void ModuleMapParser::parseModuleDecl() {
     Diags.Report(Tok.getLocation(), diag::err_mmap_expected_rbrace);
     Diags.Report(LBraceLoc, diag::note_mmap_lbrace_match);
     HadError = true;
+  }
+
+  // If the active module is a top-level framework, and there are no link
+  // libraries, automatically link against the framework.
+  if (ActiveModule->IsFramework && !ActiveModule->isSubFramework() &&
+      ActiveModule->LinkLibraries.empty()) {
+    inferFrameworkLink(ActiveModule, Directory, SourceMgr.getFileManager());
   }
 
   // We're done parsing this module. Pop back to the previous module.
@@ -1440,7 +1478,36 @@ void ModuleMapParser::parseExportDecl() {
   ActiveModule->UnresolvedExports.push_back(Unresolved);
 }
 
-/// \brief Parse an inferried module declaration (wildcard modules).
+/// \brief Parse a link declaration.
+///
+///   module-declaration:
+///     'link' 'framework'[opt] string-literal
+void ModuleMapParser::parseLinkDecl() {
+  assert(Tok.is(MMToken::LinkKeyword));
+  SourceLocation LinkLoc = consumeToken();
+
+  // Parse the optional 'framework' keyword.
+  bool IsFramework = false;
+  if (Tok.is(MMToken::FrameworkKeyword)) {
+    consumeToken();
+    IsFramework = true;
+  }
+
+  // Parse the library name
+  if (!Tok.is(MMToken::StringLiteral)) {
+    Diags.Report(Tok.getLocation(), diag::err_mmap_expected_library_name)
+      << IsFramework << SourceRange(LinkLoc);
+    HadError = true;
+    return;
+  }
+
+  std::string LibraryName = Tok.getString();
+  consumeToken();
+  ActiveModule->LinkLibraries.push_back(Module::LinkLibrary(LibraryName,
+                                                            IsFramework));
+}
+
+/// \brief Parse an inferred module declaration (wildcard modules).
 ///
 ///   module-declaration:
 ///     'explicit'[opt] 'framework'[opt] 'module' * attributes[opt]
@@ -1679,13 +1746,14 @@ bool ModuleMapParser::parseModuleMapFile() {
     case MMToken::FrameworkKeyword:
       parseModuleDecl();
       break;
-      
+
     case MMToken::Comma:
     case MMToken::ExcludeKeyword:
     case MMToken::ExportKeyword:
     case MMToken::HeaderKeyword:
     case MMToken::Identifier:
     case MMToken::LBrace:
+    case MMToken::LinkKeyword:
     case MMToken::LSquare:
     case MMToken::Period:
     case MMToken::RBrace:
