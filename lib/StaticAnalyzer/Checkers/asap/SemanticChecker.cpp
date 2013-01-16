@@ -474,13 +474,11 @@ private:
          E = D->specific_attr_end<AttrType>();
          I != E; ++I) {
       Effect::EffectKind EK = getEffectKind(*I);
-      //Rpl* R = 0;
       Rpl* Tmp = RplAttrMap[*I];
 
       if (Tmp) { /// Tmp may be NULL if the RPL was ill formed (e.g., contained
                  /// undeclared RPL elements).
-        //R = new Rpl(Tmp); // FIXME: Do we need to copy here?
-        EV.push_back(new Effect(EK, Tmp, *I));
+        EV.push_back(new Effect(EK, new Rpl(Tmp), *I));
       }
     }
   }

@@ -95,6 +95,8 @@ namespace {
 
 
 typedef std::map<const FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
+/// FIXME it might be better to map declarations to vectors of Rpls
+/// and RplElements as we did for effect summaries...
 typedef std::map<const Attr*, Rpl*> RplAttrMapTy;
 typedef std::map<const Attr*, RplElement*> RplElementAttrMapTy;
 

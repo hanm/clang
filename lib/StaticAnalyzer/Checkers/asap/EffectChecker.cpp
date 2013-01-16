@@ -92,6 +92,27 @@ private:
     //                   bugStr, VDLoc, S->getSourceRange());
   }
 
+  int copyAndPushEffects(FunctionDecl *D) {
+    Effect::EffectVector *EV = EffectSummaryMap[D];
+    assert(EV);
+    // Must make copies, cannot use append:
+    //EffectsTmp.append(EV->size(), (*EV->begin()));
+    for(Effect::EffectVector::const_iterator
+            I = EV->begin(),
+            E = EV->end();
+         I != E; ++I) {
+        //OS << "DEBUG:: copying effect: ";
+        //(*I)->print(OS);
+        //OS << " to ";
+        Effect *Eff = new Effect(*I);
+        assert(Eff);
+        //Eff->print(OS);
+        //OS << "\n";
+        EffectsTmp.push_back(Eff);
+    }
+    return EV->size();
+  }
+
   bool checkEffectCoverage(Expr *Exp, Decl *D, int N) {
     bool Result = true;
     for (int I=0; I<N; ++I){
@@ -375,7 +396,6 @@ public:
           assert(QT->isPointerType());
           assert(ArgIt!=EndIt);
           /// TODO is this atomic or not? ignore atomic for now
-          /// FIXME memory leak
           EffectsTmp.push_back(
             new Effect(Effect::EK_ReadsEffect,
                        new Rpl(RplAttrMap[(*ArgIt)]),
@@ -577,6 +597,15 @@ public:
     RHSRegions = 0;
   }
 
+  void VisitCXXNewExpr(CXXNewExpr *Exp) {
+    //bool SavedTA = TypecheckAssignment;
+    /// FIXME: setting Typecheck assignment to false is
+    /// probably not sound... investigate!
+    TypecheckAssignment = false;
+    VisitChildren(Exp);
+    //TypecheckAssignment = SavedTA;
+  }
+
   void VisitCompoundAssignOperator(CompoundAssignOperator *E) {
     OS << "DEBUG:: !!!!!!!!!!! Mother of compound Assign!!!!!!!!!!!!!\n";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -608,7 +637,7 @@ public:
     assert(D);
 
     /// 1. Typecheck assignment of actuals to formals
-    ExprIterator ArgI, ArgE;
+    /*ExprIterator ArgI, ArgE;
     FunctionDecl::param_iterator ParamI, ParamE;
     assert(D->getNumParams() == Exp->getNumArgs());
 
@@ -620,24 +649,49 @@ public:
         /// Typecheck implicit assignment
       }
       Visit(*ArgI);
-    }
+    }*/
     /// 2. Add effects to tmp effects
-    Effect::EffectVector *EV = EffectSummaryMap[D];
-    EffectsTmp.append(EV->size(), (*EV->begin()));
+    int EffectCount = copyAndPushEffects(D);
     /// 3. Visit base if it exists
     VisitChildren(Exp);
-
     /// 4. Check coverage
-    checkEffectCoverage(Exp, D, EV->size());
+    checkEffectCoverage(Exp, D, EffectCount);
   }
 
   /// Visits a C++ overloaded operator call where the operator
   /// is implemented as a non-static member function
-  void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *E) {
+  void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
     OS << "DEBUG:: VisitCXXOperatorCall\n";
-    E->dump(OS, BR.getSourceManager());
-    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    Exp->dump(OS, BR.getSourceManager());
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
+    OS << "DEBUG:: VisitCXXMemberCallExpr\n";
+
+    Decl *D = Exp->getCalleeDecl();
+    assert(D);
+    FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
+    assert(FD);
+    /// 1. Typecheck assignment of actuals to formals
+    /*ExprIterator ArgI, ArgE;
+    FunctionDecl::param_iterator ParamI, ParamE;
+    assert(D->getNumParams() == Exp->getNumArgs());
+
+    for(ArgI = Exp->arg_begin(), ArgE = Exp->arg_end(),
+        ParamI = D->param_begin(), ParamE = D->param_end();
+         ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
+      OS << "DEBUG:: " << "\n";
+      if ((*ArgI)->isLValue()) {
+        /// Typecheck implicit assignment
+      }
+      Visit(*ArgI);
+    }*/
+    /// 2. Add effects to tmp effects
+    int EffectCount = copyAndPushEffects(FD);
+    /// 3. Visit base if it exists
+    VisitChildren(Exp);
+
+    /// 4. Check coverage
+    checkEffectCoverage(Exp, D, EffectCount);
   }
 
   // TODO ++ etc operators

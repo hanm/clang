@@ -135,7 +135,7 @@ public:
 
   int close_account() __attribute__((reads("P1:R3"))) {
     int balance = money;
-    set_money(0); // expected-warning{{ 'Writes Effect on P1:R3' effect not covered by effect summary}}
+    set_money(0); // expected-warning{{'Writes Effect on P1:R3' effect not covered by effect summary}}
     return balance;
   }
 

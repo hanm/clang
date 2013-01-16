@@ -357,15 +357,10 @@ public:
       RplString(That->RplString),
       RplElements(That->RplElements),
       FullySpecified(That->FullySpecified)
-  {
-    /*for(RplElementVector::const_iterator
-            it = that->RplElements.begin(),
-            end = that->RplElements.end();
-         it != end; it++) {
-      RplElements.append((*it));
-    }*/
-  }
+  {}
+
   /// Destructors
+  //~Rpl() {}
 
   /// Printing
   void printElements(raw_ostream& os) const {
@@ -438,11 +433,12 @@ public:
     return result;
   }
 
-  /// Substitution
+  /// Substitution (Rpl)
   bool substitute(const RplElement& From, const Rpl& To) {
     os << "DEBUG:: before substitution(" << From.getName() << "<-";
     To.printElements(os);
     os <<"): ";
+    assert(RplElements.size()>0);
     printElements(os);
     os << "\n";
     /// A parameter is only allowed at the head of an Rpl
@@ -467,12 +463,8 @@ public:
 
   /// Append to this Rpl the argument Rpl without its head element
   inline void appendRplTail(Rpl* That) {
-    RplElementVector::iterator I = That->RplElements.begin();
-    if (I != That->RplElements.end()) ++I; // Skip 1st element if it exists
-    for (; I != That->RplElements.end(); ++I) {
-      // FIXME: we should probably use some version of SmallVector::append
-      this->RplElements.push_back(*I);
-    }
+    if (That->length()>1)
+      RplElements.append(That->length()-1, (*(That->RplElements.begin() + 1)));
   }
 
   Rpl* upperBound() {
@@ -560,7 +552,13 @@ public:
   Effect(EffectKind EK, Rpl* R, const Attr* A)
         : Kind(EK), R(R), A(A) {}
 
+  Effect(Effect *E): Kind(E->Kind), A(E->A) {
+    R = (E->R) ? new Rpl(E->R) : 0;
+  }
   /// Destructors
+  ~Effect() {
+    delete R;
+  }
 
   /// Printing
   inline bool printEffectKind(raw_ostream& OS) const {
@@ -622,7 +620,7 @@ public:
 
   inline SourceLocation getLocation() { return A->getLocation();}
 
-  /// Substitution
+  /// Substitution (Effect)
   inline bool substitute(const RplElement &FromElm, const Rpl &ToRpl) {
     if (R)
       return R->substitute(FromElm, ToRpl);
