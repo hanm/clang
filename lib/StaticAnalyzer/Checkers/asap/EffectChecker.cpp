@@ -23,14 +23,13 @@ private:
   int DerefNum;
 
   Effect::EffectVector EffectsTmp;
-  //Effect::EffectVector Effects;
   Effect::EffectVector &EffectSummary;
   EffectSummaryMapTy &EffectSummaryMap;
   RplAttrMapTy &RplAttrMap;
-  Rpl::RplVector *LHSRegions, *RHSRegions, *TmpRegions;
-  //static const int VECVEC_SIZE = 4;
-  //typedef llvm::SmallVector<Rpl::RplVector,VECVEC_SIZE> TypeRegionsVectorTy;
-  //TypeRegionsVectorTy *TmpRegionsVec;
+  Rpl::RplVector *TmpRegions;
+  static const int VECVEC_SIZE = 4;
+  typedef llvm::SmallVector<Rpl::RplVector*, VECVEC_SIZE> TypeRegionsVectorTy;
+  TypeRegionsVectorTy *TmpRegionsVec, *LHSRegionsVec, *RHSRegionsVec;
   bool IsCoveredBySummary;
 
   /// Private Methods
@@ -155,8 +154,8 @@ public:
         EffectSummary(Effectsummary),
         EffectSummaryMap(EffectSummaryMap),
         RplAttrMap(RplAttrMap),
-        //TmpRegionsVec(0),
-        LHSRegions(0), RHSRegions(0), TmpRegions(0),
+        TmpRegions(0),
+        TmpRegionsVec(0), LHSRegionsVec(0), RHSRegionsVec(0), 
         IsCoveredBySummary(true) {
     S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     Visit(S);
@@ -165,9 +164,9 @@ public:
   /// Destructor
   virtual ~EffectCollectorVisitor() {
     /// free effectsTmp
-    if (TmpRegions) {
-      ASaP::destroyVector(*TmpRegions);
-      delete TmpRegions;
+    if (TmpRegionsVec) {
+      ASaP::destroyVectorVector(*TmpRegionsVec);
+      delete TmpRegionsVec;
     }
     ASaP::destroyVector(EffectsTmp);
   }
@@ -547,18 +546,41 @@ public:
   
   bool typecheckAssignment (BinaryOperator *E) {
     bool Result = true;  
-    assert(RHSRegions);
-    assert(LHSRegions);
-    OS << "DEBUG:: RHS.size = " << RHSRegions->size() 
-       << ", LHS.size = " << LHSRegions->size() << "\n";
+    assert(RHSRegionsVec);
+    assert(LHSRegionsVec);
+    
+    for(TypeRegionsVectorTy::const_iterator
+            LHSRegsI = LHSRegionsVec->begin(),
+            LHSRegsE = LHSRegionsVec->end();
+        LHSRegsI != LHSRegsE; ++LHSRegsI) {
+      
+      for(TypeRegionsVectorTy::const_iterator
+              RHSRegsI = RHSRegionsVec->begin(),
+              RHSRegsE = RHSRegionsVec->end();
+          RHSRegsI != RHSRegsE; ++RHSRegsI) {
+        Result &= typecheckAssignmentInner(E, *LHSRegsI, *RHSRegsI);
+      }
+    }
+    return Result;
+  }
+    
+  bool typecheckAssignmentInner (BinaryOperator *E,
+                                 const Rpl::RplVector *LHSRegs,
+                                 const Rpl::RplVector *RHSRegs) {
+    bool Result = true;  
+    assert(RHSRegs);
+    assert(LHSRegs);
+    OS << "DEBUG:: RHS.size = " << RHSRegs->size() 
+       << ", LHS.size = " << LHSRegs->size() << "\n";
+    
        
-    if (RHSRegions->size()>0 && LHSRegions->size()>0) {
+    if (RHSRegs->size()>0 && LHSRegs->size()>0) {
       // Typecheck
       Rpl::RplVector::const_iterator
-              RHSI = RHSRegions->begin(),
-              LHSI = LHSRegions->begin(),
-              RHSE = RHSRegions->end(),
-              LHSE = LHSRegions->end();
+              RHSI = RHSRegs->begin(),
+              LHSI = LHSRegs->begin(),
+              RHSE = RHSRegs->end(),
+              LHSE = LHSRegs->end();
       for ( ;
             RHSI != RHSE && LHSI != LHSE;
             RHSI++, LHSI++) {
@@ -571,10 +593,10 @@ public:
       }
       assert(RHSI==RHSE);
       assert(LHSI==LHSE);
-    } else if (RHSRegions->size()>0 && LHSRegions->size()==0) {
+    } else if (RHSRegs->size()>0 && LHSRegs->size()==0) {
       // TODO How is this path reached ?
-      if (LHSRegions->begin()!=LHSRegions->end()) {
-        helperEmitInvalidAssignmentWarning(E, *LHSRegions->begin(), 0);
+      if (LHSRegs->begin()!=LHSRegs->end()) {
+        helperEmitInvalidAssignmentWarning(E, *LHSRegs->begin(), 0);
         Result = false;
       }
     }
@@ -586,40 +608,42 @@ public:
        << (TypecheckAssignment?"true":"false") << ". ";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());   
     OS <<")\n";
-    bool SavedHWS = HasWriteSemantics;
        
-    if (TmpRegions) {
-      ASaP::destroyVector(*TmpRegions);
-      delete TmpRegions;
+    if (TmpRegionsVec) {
+      ASaP::destroyVectorVector(*TmpRegionsVec);
+      delete TmpRegionsVec;
     }
     
-    TmpRegions = new Rpl::RplVector();
-    Visit(E->getRHS());
-    RHSRegions = TmpRegions;
+    bool SavedHWS = HasWriteSemantics;
     
-    TmpRegions = new Rpl::RplVector();
+    TmpRegionsVec = new TypeRegionsVectorTy();
+    TmpRegionsVec->push_back(new Rpl::RplVector());
+    TmpRegions = TmpRegionsVec->back();
+    HasWriteSemantics = false;  // TODO hm... is this right?
+    Visit(E->getRHS());
+    RHSRegionsVec = TmpRegionsVec;
+    
+    TmpRegionsVec = new TypeRegionsVectorTy();
+    TmpRegionsVec->push_back(new Rpl::RplVector());
+    TmpRegions = TmpRegionsVec->back();
     HasWriteSemantics = true;
     Visit(E->getLHS());
-    LHSRegions = TmpRegions;
-    TmpRegions = 0;
+    LHSRegionsVec = TmpRegionsVec;
     
     /// Check assignment
-    OS << "DEBUG:: typecheck = " << TypecheckAssignment
-       << ", lhs=" << (LHSRegions==0?"NULL":"Not_NULL")
-       << ", rhs=" << (RHSRegions==0?"NULL":"Not_NULL")
-       <<"\n";
-    if(TypecheckAssignment) {
+    if(TypecheckAssignment) 
       typecheckAssignment(E);
-    }
 
+
+
+    // propagate up for chains of assignments
+    assert(TmpRegionsVec == LHSRegionsVec); 
     /// Cleanup
-    HasWriteSemantics = SavedHWS;
+    ASaP::destroyVectorVector(*RHSRegionsVec);
+    delete RHSRegionsVec;
+    RHSRegionsVec = 0;
 
-    //delete lhsRegions;
-    TmpRegions = LHSRegions; // propagate up for chains of assignments
-    ASaP::destroyVector(*RHSRegions);
-    delete RHSRegions;
-    RHSRegions = 0;
+    HasWriteSemantics = SavedHWS; // restore write semantics
   }
 
   void VisitCXXNewExpr(CXXNewExpr *Exp) {

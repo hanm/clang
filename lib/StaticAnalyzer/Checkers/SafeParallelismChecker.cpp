@@ -110,6 +110,18 @@ namespace ASaP {
       delete(*I);
     }
   }
+
+  template<typename T>
+  void destroyVectorVector(T &V) {
+    for (typename T::const_iterator
+             I = V.begin(),
+             E = V.end();
+         I != E; ++I) {
+      destroyVector(*(*I));
+      delete(*I);
+    }
+  }
+
 } /// end namespace ASaP
 
 void destroyEffectSummaryMap(EffectSummaryMapTy &EffectSummaryMap) {
