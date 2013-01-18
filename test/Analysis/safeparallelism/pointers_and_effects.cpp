@@ -1,10 +1,26 @@
 // RUN: %clang_cc1 -DASAP_CXX11_SYNTAX -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
+// RUN: %clang_cc1 -DASAP_GNU_SYNTAX -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
 //
 
 
 #ifdef ASAP_CXX11_SYNTAX
 namespace Shapes /* FIXME: is this not in the C++11 standard ? [[asap::region("Pool")]]*/ 
 {
+#if 0
+class A {};
+class B: public A {
+
+  A *pA;
+  B *pB;
+
+  B(B *p) {
+    pB = p;        // OK
+    pA = p;        // OK
+    pA = pB = p;   // OK
+    //pB = pA = p; // error. Type of assignment is type of LHS
+  }
+};
+#endif
 
 class
 [[asap::region("X")]]
@@ -45,7 +61,7 @@ Rectangle ** pnextstar [[asap::arg("Links"),
                          asap::arg("Pr:Links"), 
                          asap::arg("Pr:*:Next")]];
 
-void do_pointer_stuff(int _x, int _y) 
+void do_pointer_stuff(int _x, int _y, bool b) 
   [[asap::writes("Pr:R1:*")]]
   [[asap::writes("Pr:R2:*")]]
   //[[asap::writes("P:R1:Y")]] // Y not declared here TODO: support it
@@ -53,19 +69,24 @@ void do_pointer_stuff(int _x, int _y)
   [[asap::writes("Links")]]
   [[asap::reads("Pr:Next")]]
 {
+  ppstar = ppstar1 = &p1;
+  ppstar1 = ppstar = &p1; // expected-warning{{RHS region 'Pr:*' is not included in LHS region 'Pr:*:R1' [invalid assignment:}}
+
+  //(b ? ppstar : ppstar1) = &p1;
+
   p1.x = _x;          // writes Pr:R1:X
   p1.y = _y;          // writes Pr:R1:Y
   p2.x = _x + 5;      // writes Pr:R2:X
   p2.y = _y + 5;      // writes Pr:R2:Y
   p1.x = next->p1.x;
-  pp = &*&p1;         // writes Pr:Links                                                              expected-warning{{invalid assignment}}
+  pp = &*&p1;         // writes Pr:Links                                                              expected-warning{{[invalid assignment:}}
   ppstar = &*&p1;     // writes Pr:Links
   ppp = &(*&pp);      // writes Links
-  *ppp = pp = &p2;         // reads Links, writes Pr:Links              expected-warning{{RHS region 'Pr:R2' is not included in LHS region 'Pool:*' invalid assignment}}
-  *ppp = ppstar = &p2;         // reads Links, writes Pr:Links          expected-warning{{RHS region 'Pr:*' is not included in LHS region 'Pool:*' invalid assignment}}
+  *ppp = pp = &p2;         // reads Links, writes Pr:Links              expected-warning{{RHS region 'Pr:R2' is not included in LHS region 'Pool:*' [invalid assignment:}}
+  *ppp = ppstar = &p2;         // reads Links, writes Pr:Links          expected-warning{{RHS region 'Pr:*' is not included in LHS region 'Pool:*' [invalid assignment:}}
   ppstar = &p2;         // reads Links, writes Pr:Links
   ppstar1 = &p1;
-  ppstar1 = &p2;      // expected-warning{{invalid assignment}}
+  ppstar1 = &p2;      // expected-warning{{[invalid assignment:}}
   pppstar = &ppstar1;
 
   *pppstar = &p2;     // reads Links, writes Pr:Links                   expected-warning{{cannot modify aliasing through pointer to partly specified region}}
@@ -73,20 +94,20 @@ void do_pointer_stuff(int _x, int _y)
   *ppp = *&pp;        // reads Links, writes Pr:Links + reads Pr:Links
   *ppp = next->pp;    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
   *ppp = *&(next->pp);    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
-  ppp = &next->pp;        // writes Links + reads Pr:Links                                            expected-warning{{invalid assignment}}
+  ppp = &next->pp;        // writes Links + reads Pr:Links                                            expected-warning{{[invalid assignment:}}
   pppstar = &next->ppstar;        // writes Links + reads Pr:Links
   *ppp = *(*&next->ppp);  // reads Links, writes Pr:Links + reads Links, Pr:Links, Pr:Next:Links
   *ppp = &*pp;            // reads Links, writes Pr:Links + reads Pr:Links
-  next = this;        // writes Pr:Links (the 'this' pointer is immutable, so   expected-warning{{RHS region 'Pr' is not included in LHS region 'Pr:Next' invalid assignment}}
+  next = this;        // writes Pr:Links (the 'this' pointer is immutable, so   expected-warning{{RHS region 'Pr' is not included in LHS region 'Pr:Next' [invalid assignment:}}
                       // write effects are not possible and read effects on it 
                       // can be discarded
   loop = this;
   loop = next;
 
   pnext = &next;              // writes Links 
-  *pnext = next->next;        // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links         expected-warning{{invalid assignment}}
-  *pnext = *next->pnext;      // reads Links, writes Pr:Links + reads Pr:Links, Links, Pr:Next:Links  expected-warning{{invalid assignment}}
-  *pnext = *(*pnext)->pnext;  // reads Links, writes Pr:Links + reads Links, Pr:Links, Pr:Next:Links  expected-warning{{invalid assignment}}
+  *pnext = next->next;        // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links         expected-warning{{[invalid assignment:}}
+  *pnext = *next->pnext;      // reads Links, writes Pr:Links + reads Pr:Links, Links, Pr:Next:Links  expected-warning{{[invalid assignment:}}
+  *pnext = *(*pnext)->pnext;  // reads Links, writes Pr:Links + reads Links, Pr:Links, Pr:Next:Links  expected-warning{{[invalid assignment:}}
   *pnextstar = next->next;        // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
   *pnextstar = *next->pnext;      // reads Links, writes Pr:Links + reads Pr:Links, Links, Pr:Next:Links
   *pnextstar = *(*pnext)->pnext;  // reads Links, writes Pr:Links + reads Links, Pr:Links, Pr:Next:Links
@@ -154,14 +175,14 @@ void do_pointer_stuff(int _x, int _y)
   p2.x = _x + 5;      // writes Pr:R2:X
   p2.y = _y + 5;      // writes Pr:R2:Y
   p1.x = next->p1.x;
-  pp = &*&p1;         // writes Pr:Links                                                              expected-warning{{invalid assignment}}
+  pp = &*&p1;         // writes Pr:Links                                                              expected-warning{{[invalid assignment:}}
   ppstar = &*&p1;     // writes Pr:Links
   ppp = &(*&pp);      // writes Links
-  *ppp = pp = &p2;         // reads Links, writes Pr:Links              expected-warning{{RHS region 'Pr:R2' is not included in LHS region 'Pool:*' invalid assignment}}
-  *ppp = ppstar = &p2;         // reads Links, writes Pr:Links          expected-warning{{RHS region 'Pr:*' is not included in LHS region 'Pool:*' invalid assignment}}
+  *ppp = pp = &p2;         // reads Links, writes Pr:Links              expected-warning{{RHS region 'Pr:R2' is not included in LHS region 'Pool:*' [invalid assignment:}}
+  *ppp = ppstar = &p2;         // reads Links, writes Pr:Links          expected-warning{{RHS region 'Pr:*' is not included in LHS region 'Pool:*' [invalid assignment:}}
   ppstar = &p2;         // reads Links, writes Pr:Links
   ppstar1 = &p1;
-  ppstar1 = &p2;      // expected-warning{{invalid assignment}}
+  ppstar1 = &p2;      // expected-warning{{[invalid assignment:}}
   pppstar = &ppstar1;
 
   *pppstar = &p2;     // reads Links, writes Pr:Links                   expected-warning{{cannot modify aliasing through pointer to partly specified region}}
@@ -169,20 +190,20 @@ void do_pointer_stuff(int _x, int _y)
   *ppp = *&pp;        // reads Links, writes Pr:Links + reads Pr:Links
   *ppp = next->pp;    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
   *ppp = *&(next->pp);    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
-  ppp = &next->pp;        // writes Links + reads Pr:Links                                            expected-warning{{invalid assignment}}
+  ppp = &next->pp;        // writes Links + reads Pr:Links                                            expected-warning{{[invalid assignment:}}
   pppstar = &next->ppstar;        // writes Links + reads Pr:Links
   *ppp = *(*&next->ppp);  // reads Links, writes Pr:Links + reads Links, Pr:Links, Pr:Next:Links
   *ppp = &*pp;            // reads Links, writes Pr:Links + reads Pr:Links
-  next = this;        // writes Pr:Links (the 'this' pointer is immutable, so   expected-warning{{RHS region 'Pr' is not included in LHS region 'Pr:Next' invalid assignment}}
+  next = this;        // writes Pr:Links (the 'this' pointer is immutable, so   expected-warning{{RHS region 'Pr' is not included in LHS region 'Pr:Next' [invalid assignment:}}
                       // write effects are not possible and read effects on it 
                       // can be discarded
   loop = this;
   loop = next;
 
   pnext = &next;              // writes Links 
-  *pnext = next->next;        // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links         expected-warning{{invalid assignment}}
-  *pnext = *next->pnext;      // reads Links, writes Pr:Links + reads Pr:Links, Links, Pr:Next:Links  expected-warning{{invalid assignment}}
-  *pnext = *(*pnext)->pnext;  // reads Links, writes Pr:Links + reads Links, Pr:Links, Pr:Next:Links  expected-warning{{invalid assignment}}
+  *pnext = next->next;        // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links         expected-warning{{[invalid assignment:}}
+  *pnext = *next->pnext;      // reads Links, writes Pr:Links + reads Pr:Links, Links, Pr:Next:Links  expected-warning{{[invalid assignment:}}
+  *pnext = *(*pnext)->pnext;  // reads Links, writes Pr:Links + reads Links, Pr:Links, Pr:Next:Links  expected-warning{{[invalid assignment:}}
   *pnextstar = next->next;        // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
   *pnextstar = *next->pnext;      // reads Links, writes Pr:Links + reads Pr:Links, Links, Pr:Next:Links
   *pnextstar = *(*pnext)->pnext;  // reads Links, writes Pr:Links + reads Links, Pr:Links, Pr:Next:Links

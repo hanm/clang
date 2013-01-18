@@ -28,6 +28,9 @@ private:
   EffectSummaryMapTy &EffectSummaryMap;
   RplAttrMapTy &RplAttrMap;
   Rpl::RplVector *LHSRegions, *RHSRegions, *TmpRegions;
+  //static const int VECVEC_SIZE = 4;
+  //typedef llvm::SmallVector<Rpl::RplVector,VECVEC_SIZE> TypeRegionsVectorTy;
+  //TypeRegionsVectorTy *TmpRegionsVec;
   bool IsCoveredBySummary;
 
   /// Private Methods
@@ -76,8 +79,14 @@ private:
     description_std.append(RHS ? RHS->toString() : "");
     description_std.append("' is not included in LHS region '");
     description_std.append(LHS ? LHS->toString() : "");
-    description_std.append("' ");
+    description_std.append("' [");
     description_std.append(BugName);
+    std::string SBuf;
+    llvm::raw_string_ostream StrBuf(SBuf);
+    StrBuf << ": ";
+    S->printPretty(StrBuf, 0, Ctx.getPrintingPolicy());
+    StrBuf << "]";
+    description_std.append(StrBuf.str());
 
     StringRef BugCategory = "Safe Parallelism";
     StringRef BugStr = description_std;
@@ -95,24 +104,18 @@ private:
   int copyAndPushEffects(FunctionDecl *D) {
     Effect::EffectVector *EV = EffectSummaryMap[D];
     assert(EV);
-    // Must make copies, cannot use append:
+    // Must make copies because we will substitute, cannot use append:
     //EffectsTmp.append(EV->size(), (*EV->begin()));
     for(Effect::EffectVector::const_iterator
             I = EV->begin(),
             E = EV->end();
          I != E; ++I) {
-        //OS << "DEBUG:: copying effect: ";
-        //(*I)->print(OS);
-        //OS << " to ";
-        Effect *Eff = new Effect(*I);
-        assert(Eff);
-        //Eff->print(OS);
-        //OS << "\n";
-        EffectsTmp.push_back(Eff);
+        EffectsTmp.push_back(new Effect(*I));
     }
     return EV->size();
   }
 
+  /// \brief Check that the 'N' last effects are covered by the summary
   bool checkEffectCoverage(Expr *Exp, Decl *D, int N) {
     bool Result = true;
     for (int I=0; I<N; ++I){
@@ -152,6 +155,7 @@ public:
         EffectSummary(Effectsummary),
         EffectSummaryMap(EffectSummaryMap),
         RplAttrMap(RplAttrMap),
+        //TmpRegionsVec(0),
         LHSRegions(0), RHSRegions(0), TmpRegions(0),
         IsCoveredBySummary(true) {
     S->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -161,11 +165,11 @@ public:
   /// Destructor
   virtual ~EffectCollectorVisitor() {
     /// free effectsTmp
-    ASaP::destroyVector(EffectsTmp);
     if (TmpRegions) {
       ASaP::destroyVector(*TmpRegions);
       delete TmpRegions;
     }
+    ASaP::destroyVector(EffectsTmp);
   }
 
   /// Getters
@@ -207,8 +211,8 @@ public:
     /// return type
     /// TODO Merge with FieldDecl (Duplicate code)
     /// 1.3. Visit Base with read semantics, then restore write semantics
-    bool saved_hws = HasWriteSemantics;
-    bool saved_isBase = IsBase; // probably not needed to save
+    bool SavedHWS = HasWriteSemantics;
+    bool SavedIsBase = IsBase; // probably not needed to save
 
     DerefNum = Expr->isArrow() ? 1 : 0;
     HasWriteSemantics = false;
@@ -216,8 +220,8 @@ public:
     Visit(Expr->getBase());
 
     /// Post visitation checking
-    HasWriteSemantics = saved_hws;
-    IsBase = saved_isBase;
+    HasWriteSemantics = SavedHWS;
+    IsBase = SavedIsBase;
     /// Post-Visit Actions: check that effects (after substitutions)
     /// are covered by effect summary
     //checkEffectCoverage(Expr, FunDecl, EffectNr); // checked up the AST
@@ -431,8 +435,8 @@ public:
       }
 
       /// 2.3. Visit Base with read semantics, then restore write semantics
-      bool saved_hws = HasWriteSemantics;
-      bool saved_isBase = IsBase; // probably not needed to save
+      bool SavedHWS = HasWriteSemantics;
+      bool SavedIsBase = IsBase; // probably not needed to save
 
       DerefNum = Expr->isArrow() ? 1 : 0;
       HasWriteSemantics = false;
@@ -440,8 +444,8 @@ public:
       Visit(Expr->getBase());
 
       /// Post visitation checking
-      HasWriteSemantics = saved_hws;
-      IsBase = saved_isBase;
+      HasWriteSemantics = SavedHWS;
+      IsBase = SavedIsBase;
       /// Post-Visit Actions: check that effects (after substitutions)
       /// are covered by effect summary
       checkEffectCoverage(Expr, VD, EffectNr);
@@ -509,10 +513,12 @@ public:
     OS << "DEBUG:: visiting 'this' expression\n";
     DerefNum = 0;
     if (TmpRegions && TmpRegions->empty() && !E->isImplicit()) {
+    //if (!IsBase) { // this should in practice be equivalent to the above 
       // Add parameter as implicit argument
       CXXRecordDecl* RecDecl = const_cast<CXXRecordDecl*>(E->
                                                      getBestDynamicClassType());
       assert(RecDecl);
+      
       /// If the declaration does not yet have an implicit region argument
       /// add it to the Declaration
       if (!RecDecl->getAttr<RegionArgAttr>()) {
@@ -531,65 +537,84 @@ public:
       assert(Arg);
       Rpl *Tmp = RplAttrMap[Arg];
       assert(Tmp);
-      Rpl *R = new Rpl(Tmp);///FIXME memory leak?
-      TmpRegions->push_back(R);
+      TmpRegions->push_back(new Rpl(Tmp));
+      /*
+      const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
+      assert(Param);
+      TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));*/
     }
   }
-
+  
+  bool typecheckAssignment (BinaryOperator *E) {
+    bool Result = true;  
+    assert(RHSRegions);
+    assert(LHSRegions);
+    OS << "DEBUG:: RHS.size = " << RHSRegions->size() 
+       << ", LHS.size = " << LHSRegions->size() << "\n";
+       
+    if (RHSRegions->size()>0 && LHSRegions->size()>0) {
+      // Typecheck
+      Rpl::RplVector::const_iterator
+              RHSI = RHSRegions->begin(),
+              LHSI = LHSRegions->begin(),
+              RHSE = RHSRegions->end(),
+              LHSE = LHSRegions->end();
+      for ( ;
+            RHSI != RHSE && LHSI != LHSE;
+            RHSI++, LHSI++) {
+        Rpl *LHS = *LHSI;
+        Rpl *RHS = *RHSI;
+        if (!RHS->isIncludedIn(*LHS)) {
+          helperEmitInvalidAssignmentWarning(E, LHS, RHS);
+          Result = false;
+        }
+      }
+      assert(RHSI==RHSE);
+      assert(LHSI==LHSE);
+    } else if (RHSRegions->size()>0 && LHSRegions->size()==0) {
+      // TODO How is this path reached ?
+      if (LHSRegions->begin()!=LHSRegions->end()) {
+        helperEmitInvalidAssignmentWarning(E, *LHSRegions->begin(), 0);
+        Result = false;
+      }
+    }
+    return Result;
+  }
+  
   inline void helperVisitAssignment(BinaryOperator *E) {
     OS << "DEBUG:: helperVisitAssignment (typecheck="
-       << (TypecheckAssignment?"true":"false") <<")\n";
-    bool saved_hws = HasWriteSemantics;
+       << (TypecheckAssignment?"true":"false") << ". ";
+    E->printPretty(OS, 0, Ctx.getPrintingPolicy());   
+    OS <<")\n";
+    bool SavedHWS = HasWriteSemantics;
+       
     if (TmpRegions) {
-    /// FIXME doesn't this disallow nested assignments (a=b=c)?
       ASaP::destroyVector(*TmpRegions);
       delete TmpRegions;
     }
-
+    
     TmpRegions = new Rpl::RplVector();
     Visit(E->getRHS());
     RHSRegions = TmpRegions;
-
+    
     TmpRegions = new Rpl::RplVector();
     HasWriteSemantics = true;
     Visit(E->getLHS());
     LHSRegions = TmpRegions;
     TmpRegions = 0;
-
+    
     /// Check assignment
     OS << "DEBUG:: typecheck = " << TypecheckAssignment
        << ", lhs=" << (LHSRegions==0?"NULL":"Not_NULL")
        << ", rhs=" << (RHSRegions==0?"NULL":"Not_NULL")
        <<"\n";
     if(TypecheckAssignment) {
-      if (RHSRegions && LHSRegions) {
-        // Typecheck
-        Rpl::RplVector::const_iterator
-                RHSI = RHSRegions->begin(),
-                LHSI = LHSRegions->begin(),
-                RHSE = RHSRegions->end(),
-                LHSE = LHSRegions->end();
-        for ( ;
-              RHSI != RHSE && LHSI != LHSE;
-              RHSI++, LHSI++) {
-          Rpl *LHS = *LHSI;
-          Rpl *RHS = *RHSI;
-          if (!RHS->isIncludedIn(*LHS)) {
-            helperEmitInvalidAssignmentWarning(E, LHS, RHS);
-          }
-        }
-        assert(RHSI==RHSE);
-        assert(LHSI==LHSE);
-      } else if (!RHSRegions && LHSRegions) {
-        // TODO How is this path reached ?
-        if (LHSRegions->begin()!=LHSRegions->end()) {
-          helperEmitInvalidAssignmentWarning(E, *LHSRegions->begin(), 0);
-        }
-      }
+      typecheckAssignment(E);
     }
 
     /// Cleanup
-    HasWriteSemantics = saved_hws;
+    HasWriteSemantics = SavedHWS;
+
     //delete lhsRegions;
     TmpRegions = LHSRegions; // propagate up for chains of assignments
     ASaP::destroyVector(*RHSRegions);
@@ -598,32 +623,27 @@ public:
   }
 
   void VisitCXXNewExpr(CXXNewExpr *Exp) {
-    //bool SavedTA = TypecheckAssignment;
-    /// FIXME: setting Typecheck assignment to false is
-    /// probably not sound... investigate!
-    TypecheckAssignment = false;
     VisitChildren(Exp);
-    //TypecheckAssignment = SavedTA;
   }
 
   void VisitCompoundAssignOperator(CompoundAssignOperator *E) {
     OS << "DEBUG:: !!!!!!!!!!! Mother of compound Assign!!!!!!!!!!!!!\n";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
-    bool saved_tca = TypecheckAssignment;
+    bool SavedTCA = TypecheckAssignment;
     TypecheckAssignment = false;
     helperVisitAssignment(E);
-    TypecheckAssignment = saved_tca;
+    TypecheckAssignment = SavedTCA;
   }
 
   void VisitBinAssign(BinaryOperator *E) {
     OS << "DEBUG:: >>>>>>>>>>VisitBinAssign<<<<<<<<<<<<<<<<<\n";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
-    bool saved_tca = TypecheckAssignment;
+    bool SavedTCA = TypecheckAssignment;
     TypecheckAssignment = true;
     helperVisitAssignment(E);
-    TypecheckAssignment = saved_tca;
+    TypecheckAssignment = SavedTCA;
   }
 
   void VisitCallExpr(CallExpr *E) {
