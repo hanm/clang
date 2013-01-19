@@ -160,6 +160,7 @@ void destroyRplElementAttrMap(RplElementAttrMapTy &RplElementAttrMap) {
 
 
 /// FIXME temporarily just using pre-processor to concatenate code here... UGLY
+#include "asap/TypeChecker.cpp"
 #include "asap/EffectChecker.cpp"
 #include "asap/SemanticChecker.cpp"
 

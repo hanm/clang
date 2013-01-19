@@ -26,10 +26,6 @@ private:
   Effect::EffectVector &EffectSummary;
   EffectSummaryMapTy &EffectSummaryMap;
   RplAttrMapTy &RplAttrMap;
-  Rpl::RplVector *TmpRegions;
-  static const int VECVEC_SIZE = 4;
-  typedef llvm::SmallVector<Rpl::RplVector*, VECVEC_SIZE> TypeRegionsVectorTy;
-  TypeRegionsVectorTy *TmpRegionsVec, *LHSRegionsVec, *RHSRegionsVec;
   bool IsCoveredBySummary;
 
   /// Private Methods
@@ -50,54 +46,6 @@ private:
 
     BR.EmitBasicReport(D, BugName, BugCategory,
                        BugStr, VDLoc, S->getSourceRange());
-  }
-
-  void helperEmitInvalidAliasingModificationWarning(Stmt *S, Decl *D,
-                                                    const StringRef &Str) {
-    StringRef BugName =
-      "cannot modify aliasing through pointer to partly specified region";
-    std::string description_std = "'";
-    description_std.append(Str);
-    description_std.append("' ");
-    description_std.append(BugName);
-
-    StringRef BugCategory = "Safe Parallelism";
-    StringRef BugStr = description_std;
-
-    PathDiagnosticLocation VDLoc =
-       PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
-
-    BR.EmitBasicReport(D, BugName, BugCategory,
-                       BugStr, VDLoc, S->getSourceRange());
-  }
-
-  void helperEmitInvalidAssignmentWarning(Stmt *S, Rpl *LHS, Rpl *RHS) {
-    StringRef BugName = "invalid assignment";
-
-    std::string description_std = "RHS region '";
-    description_std.append(RHS ? RHS->toString() : "");
-    description_std.append("' is not included in LHS region '");
-    description_std.append(LHS ? LHS->toString() : "");
-    description_std.append("' [");
-    description_std.append(BugName);
-    std::string SBuf;
-    llvm::raw_string_ostream StrBuf(SBuf);
-    StrBuf << ": ";
-    S->printPretty(StrBuf, 0, Ctx.getPrintingPolicy());
-    StrBuf << "]";
-    description_std.append(StrBuf.str());
-
-    StringRef BugCategory = "Safe Parallelism";
-    StringRef BugStr = description_std;
-
-    PathDiagnosticLocation VDLoc =
-       PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
-
-    BugType *BT = new BugType(BugName, BugCategory);
-    BugReport *R = new BugReport(*BT, BugStr, VDLoc);
-    BR.emitReport(R);
-    //BR.EmitBasicReport(D, bugName, bugCategory,
-    //                   bugStr, VDLoc, S->getSourceRange());
   }
 
   int copyAndPushEffects(FunctionDecl *D) {
@@ -130,62 +78,8 @@ private:
     return Result;
   }
 
-public:
-  /// Constructor
-  EffectCollectorVisitor (
-    ento::BugReporter &BR,
-    ASTContext &Ctx,
-    AnalysisManager &Mgr,
-    AnalysisDeclContext *AC,
-    raw_ostream &OS,
-    Effect::EffectVector &Effectsummary,
-    EffectSummaryMapTy &EffectSummaryMap,
-    RplAttrMapTy &RplAttrMap,
-    Stmt *S
-    ) : BR(BR),
-        Ctx(Ctx),
-        Mgr(Mgr),
-        AC(AC),
-        OS(OS),
-        TypecheckAssignment(false),
-        HasWriteSemantics(false),
-        IsBase(false),
-        DerefNum(0),
-        EffectSummary(Effectsummary),
-        EffectSummaryMap(EffectSummaryMap),
-        RplAttrMap(RplAttrMap),
-        TmpRegions(0),
-        TmpRegionsVec(0), LHSRegionsVec(0), RHSRegionsVec(0), 
-        IsCoveredBySummary(true) {
-    S->printPretty(OS, 0, Ctx.getPrintingPolicy());
-    Visit(S);
-  }
-
-  /// Destructor
-  virtual ~EffectCollectorVisitor() {
-    /// free effectsTmp
-    if (TmpRegionsVec) {
-      ASaP::destroyVectorVector(*TmpRegionsVec);
-      delete TmpRegionsVec;
-    }
-    ASaP::destroyVector(EffectsTmp);
-  }
-
-  /// Getters
-  inline bool getIsCoveredBySummary() { return IsCoveredBySummary; }
-
-  /// Visitors
-  void VisitChildren(Stmt *S) {
-    for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
-         I!=E; ++I)
-      if (Stmt *child = *I)
-        Visit(child);
-  }
-
-  void VisitStmt(Stmt *S) {
-    VisitChildren(S);
-  }
-
+  /// \brief This is currently a mess and does next to nothing.
+  /// Michael avert your eyes! :p
   void helperVisitFunctionDecl(MemberExpr *Expr, const FunctionDecl *FunDecl) {
     // TODO
     OS << "DEBUG:: helperVisitFunctionDecl!\n";
@@ -228,6 +122,82 @@ public:
     /// are covered by effect summary
   }
 
+  inline void helperVisitAssignment(BinaryOperator *E) {
+    OS << "DEBUG:: helperVisitAssignment (typecheck="
+       << (TypecheckAssignment?"true":"false") << ". ";
+    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS <<")\n";
+    if (TypecheckAssignment) {
+      /// TODO
+      TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplAttrMap,
+                             E, E->getLHS(), E->getRHS());
+    }
+
+    bool SavedHWS = HasWriteSemantics;
+    bool SavedTCA = TypecheckAssignment;
+    TypecheckAssignment = false; // Don't typecheck subtree (already done)
+    HasWriteSemantics = false;  // TODO hm... is this right?
+    Visit(E->getRHS());
+
+    HasWriteSemantics = true;
+    Visit(E->getLHS());
+
+    /// Restore flags
+    HasWriteSemantics = SavedHWS;
+    TypecheckAssignment = SavedTCA;
+  }
+
+
+public:
+  /// Constructor
+  EffectCollectorVisitor (
+    ento::BugReporter &BR,
+    ASTContext &Ctx,
+    AnalysisManager &Mgr,
+    AnalysisDeclContext *AC,
+    raw_ostream &OS,
+    Effect::EffectVector &Effectsummary,
+    EffectSummaryMapTy &EffectSummaryMap,
+    RplAttrMapTy &RplAttrMap,
+    Stmt *S
+    ) : BR(BR),
+        Ctx(Ctx),
+        Mgr(Mgr),
+        AC(AC),
+        OS(OS),
+        TypecheckAssignment(false),
+        HasWriteSemantics(false),
+        IsBase(false),
+        DerefNum(0),
+        EffectSummary(Effectsummary),
+        EffectSummaryMap(EffectSummaryMap),
+        RplAttrMap(RplAttrMap),
+        IsCoveredBySummary(true) {
+    S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    Visit(S);
+  }
+
+  /// Destructor
+  virtual ~EffectCollectorVisitor() {
+    ASaP::destroyVector(EffectsTmp);
+  }
+
+  /// Getters
+  inline bool getIsCoveredBySummary() { return IsCoveredBySummary; }
+
+  /// Visitors
+  void VisitChildren(Stmt *S) {
+    for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
+         I!=E; ++I)
+      if (Stmt *child = *I)
+        Visit(child);
+  }
+
+  void VisitStmt(Stmt *S) {
+    VisitChildren(S);
+  }
+
+  /// TODO Factor out most of this code into helper functions
   void VisitMemberExpr(MemberExpr *Expr) {
     OS << "DEBUG:: VisitMemberExpr: ";
     Expr->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -322,61 +292,6 @@ public:
                 I != E; ++I) {
             (*I)->substitute(FromElmt, *ToRpl);
           }
-          /// 2.1.2 Substitution of Regions (for typechecking)
-          if (TypecheckAssignment) {
-            for (Rpl::RplVector::const_iterator
-                    I = TmpRegions->begin(),
-                    E = TmpRegions->end();
-                  I != E; ++I) {
-              (*I)->substitute(FromElmt, *ToRpl);
-            }
-          }
-        }
-      } else if (TypecheckAssignment) {
-        // isBase == false ==> init regions
-#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
-        specific_attr_reverse_iterator<RegionArgAttr>
-          I = FieldD->specific_attr_rbegin<RegionArgAttr>(),
-          E = FieldD->specific_attr_rend<RegionArgAttr>();
-#else
-        llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator I =
-          ArgV.rbegin(), E = argv.rend();
-#endif
-
-        /// 2.1.2.1 drop region args that are sidestepped by dereferrences.
-        int N = DerefNum;
-        while (N>0 && I != E) {
-          I ++;
-          N--;
-        }
-
-        assert(N == 0 || N == -1);
-
-        if (N==0) { /// skip the 1st arg, then add the rest
-          assert(I != E);
-          Rpl *Tmp = RplAttrMap[(*I)];
-          assert(Tmp);
-          if (HasWriteSemantics && DerefNum > 0
-              && Tmp->isFullySpecified() == false
-              /* FIXME: && (*i)->/isaPointerType/ )*/) {
-            /// emit capture error
-            std::string Str = Tmp->toString();
-            helperEmitInvalidAliasingModificationWarning(Expr, VD, Str);
-          }
-
-          I++;
-        }
-
-        /// add rest of region types
-        while(I != E) {
-          RegionArgAttr *Arg = *I;
-          Rpl *R = RplAttrMap[Arg];
-          assert(R);
-          TmpRegions->push_back(new Rpl(R)); // make a copy because rpl may
-                                               // be modified by substitution.
-          OS << "DEBUG:: adding RPL for typechecking ~~~~~~~~~~ "
-             << R->toString() << "\n";
-          ++I;
         }
       }
 
@@ -511,13 +426,14 @@ public:
   void VisitCXXThisExpr(CXXThisExpr *E) {
     OS << "DEBUG:: visiting 'this' expression\n";
     DerefNum = 0;
+    #if 0
     if (TmpRegions && TmpRegions->empty() && !E->isImplicit()) {
-    //if (!IsBase) { // this should in practice be equivalent to the above 
+    //if (!IsBase) { // this should in practice be equivalent to the above
       // Add parameter as implicit argument
       CXXRecordDecl* RecDecl = const_cast<CXXRecordDecl*>(E->
                                                      getBestDynamicClassType());
       assert(RecDecl);
-      
+
       /// If the declaration does not yet have an implicit region argument
       /// add it to the Declaration
       if (!RecDecl->getAttr<RegionArgAttr>()) {
@@ -542,112 +458,7 @@ public:
       assert(Param);
       TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));*/
     }
-  }
-  
-  bool typecheckAssignment (BinaryOperator *E) {
-    bool Result = true;  
-    assert(RHSRegionsVec);
-    assert(LHSRegionsVec);
-    
-    for(TypeRegionsVectorTy::const_iterator
-            LHSRegsI = LHSRegionsVec->begin(),
-            LHSRegsE = LHSRegionsVec->end();
-        LHSRegsI != LHSRegsE; ++LHSRegsI) {
-      
-      for(TypeRegionsVectorTy::const_iterator
-              RHSRegsI = RHSRegionsVec->begin(),
-              RHSRegsE = RHSRegionsVec->end();
-          RHSRegsI != RHSRegsE; ++RHSRegsI) {
-        Result &= typecheckAssignmentInner(E, *LHSRegsI, *RHSRegsI);
-      }
-    }
-    return Result;
-  }
-    
-  bool typecheckAssignmentInner (BinaryOperator *E,
-                                 const Rpl::RplVector *LHSRegs,
-                                 const Rpl::RplVector *RHSRegs) {
-    bool Result = true;  
-    assert(RHSRegs);
-    assert(LHSRegs);
-    OS << "DEBUG:: RHS.size = " << RHSRegs->size() 
-       << ", LHS.size = " << LHSRegs->size() << "\n";
-    
-       
-    if (RHSRegs->size()>0 && LHSRegs->size()>0) {
-      // Typecheck
-      Rpl::RplVector::const_iterator
-              RHSI = RHSRegs->begin(),
-              LHSI = LHSRegs->begin(),
-              RHSE = RHSRegs->end(),
-              LHSE = LHSRegs->end();
-      for ( ;
-            RHSI != RHSE && LHSI != LHSE;
-            RHSI++, LHSI++) {
-        Rpl *LHS = *LHSI;
-        Rpl *RHS = *RHSI;
-        if (!RHS->isIncludedIn(*LHS)) {
-          helperEmitInvalidAssignmentWarning(E, LHS, RHS);
-          Result = false;
-        }
-      }
-      assert(RHSI==RHSE);
-      assert(LHSI==LHSE);
-    } else if (RHSRegs->size()>0 && LHSRegs->size()==0) {
-      // TODO How is this path reached ?
-      if (LHSRegs->begin()!=LHSRegs->end()) {
-        helperEmitInvalidAssignmentWarning(E, *LHSRegs->begin(), 0);
-        Result = false;
-      }
-    }
-    return Result;
-  }
-  
-  inline void helperVisitAssignment(BinaryOperator *E) {
-    OS << "DEBUG:: helperVisitAssignment (typecheck="
-       << (TypecheckAssignment?"true":"false") << ". ";
-    E->printPretty(OS, 0, Ctx.getPrintingPolicy());   
-    OS <<")\n";
-       
-    if (TmpRegionsVec) {
-      ASaP::destroyVectorVector(*TmpRegionsVec);
-      delete TmpRegionsVec;
-    }
-    
-    bool SavedHWS = HasWriteSemantics;
-    
-    TmpRegionsVec = new TypeRegionsVectorTy();
-    TmpRegionsVec->push_back(new Rpl::RplVector());
-    TmpRegions = TmpRegionsVec->back();
-    HasWriteSemantics = false;  // TODO hm... is this right?
-    Visit(E->getRHS());
-    RHSRegionsVec = TmpRegionsVec;
-    
-    TmpRegionsVec = new TypeRegionsVectorTy();
-    TmpRegionsVec->push_back(new Rpl::RplVector());
-    TmpRegions = TmpRegionsVec->back();
-    HasWriteSemantics = true;
-    Visit(E->getLHS());
-    LHSRegionsVec = TmpRegionsVec;
-    
-    /// Check assignment
-    if(TypecheckAssignment) 
-      typecheckAssignment(E);
-
-
-
-    // propagate up for chains of assignments
-    assert(TmpRegionsVec == LHSRegionsVec); 
-    /// Cleanup
-    ASaP::destroyVectorVector(*RHSRegionsVec);
-    delete RHSRegionsVec;
-    RHSRegionsVec = 0;
-
-    HasWriteSemantics = SavedHWS; // restore write semantics
-  }
-
-  void VisitCXXNewExpr(CXXNewExpr *Exp) {
-    VisitChildren(Exp);
+    #endif
   }
 
   void VisitCompoundAssignOperator(CompoundAssignOperator *E) {
@@ -738,7 +549,6 @@ public:
     checkEffectCoverage(Exp, D, EffectCount);
   }
 
-  // TODO ++ etc operators
 }; // end class StmtVisitor
 
 ///-///////////////////////////////////////////////////////////////////////////
@@ -790,7 +600,9 @@ public:
       Stmt* St = Definition->getBody(Definition);
       assert(St);
       //OS << "DEBUG:: calling Stmt Visitor\n";
-      ///  Check that Effect Summary covers method effects
+      /// 1. Typecheck Assignments (explicit & implicit)
+
+      /// 2. Check that Effect Summary covers method effects
       Effect::EffectVector *EV = EffectSummaryMap[D];
       assert(EV);
       EffectCollectorVisitor ECV(BR, Ctx, Mgr, AC, OS,
