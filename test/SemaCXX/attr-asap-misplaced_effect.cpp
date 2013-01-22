@@ -1,7 +1,5 @@
 // RUN: %clang_cc1 -DASAP_GNU_SYNTAX %s -verify
-
-// FIXME: disable cxx11 tests until main trunk is fixed.
-// %clang_cc1 -DASAP_CXX11_SYNTAX -std=c++11 %s -verify
+// RUN: %clang_cc1 -DASAP_CXX11_SYNTAX -std=c++11 %s -verify
 
 #ifdef ASAP_GNU_SYNTAX
 class
@@ -52,19 +50,19 @@ Coo {
   int money [[asap::arg("P:Money")]];
 
 public:
-  Coo () [[asap::no_effect]] : money(0) {}
+  [[asap::no_effect]] Coo() : money(0) {}
 
-  Coo (int cash) [[asap::no_effect]] : money(cash) {}
+  [[asap::no_effect]] Coo(int cash) : money(cash) {}
 
-  int get_some() [[asap::reads("P:Money")]] { 
+  int get_some [[asap::reads("P:Money")]] () { 
     return money;
   }
 
-  void set_money(int cash) [[asap::writes("P:Money")]] {
+  void set_money [[asap::writes("P:Money")]] (int cash) {
     money = cash;
   }
 
-  void add_money(int cash) [[asap::atomic_writes("P:Money")]] {
+  void add_money [[asap::atomic_writes("P:Money")]] (int cash) {
     money += cash;
   }
 };
