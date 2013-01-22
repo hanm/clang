@@ -1,7 +1,5 @@
 // RUN: %clang_cc1 -DASAP_GNU_SYNTAX %s -verify
-
-// FIXME: disable cxx11 test until the main trunk is patched.
-//  %clang_cc1 -DASAP_CXX11_SYNTAX -std=c++11 %s -verify
+// RUN: %clang_cc1 -DASAP_CXX11_SYNTAX -std=c++11 %s -verify
 
 #ifdef ASAP_GNU_SYNTAX
 class
@@ -65,27 +63,29 @@ Coo {
             [[asap::region("Honey")]] ; // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
 
 public:
-  Coo () [[asap::no_effect]] 
-         [[asap::region("Money")]]   
-         [[asap::arg("P:Money")]] 
-         [[asap::arg("P:Money")]] 
-         [[asap::param("P")]] 
+[[asap::no_effect]] 
+[[asap::region("Money")]]   
+[[asap::arg("P:Money")]] 
+[[asap::arg("P:Money")]] 
+[[asap::param("P")]] 
+Coo()
         : money(0) {}
 
+[[asap::no_effect]]
   Coo (int cash [[asap::arg("P:Money")]] 
                 [[asap::region("Money")]] )  // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
-       [[asap::no_effect]] : money(cash) {}
+       : money(cash) {}
 
-  int get_some() [[asap::reads("P:Money")]]{ 
+  int get_some [[asap::reads("P:Money")]] () { 
     return money;
   }
 
-  void set_money(int cash [[asap::param("P")]] )  // expected-warning {{attribute only applies to classes and structs and functions}} 
-                          [[asap::writes("P:Money")]] {
+  void set_money [[asap::writes("P:Money")]] (int cash [[asap::param("P")]] )  // expected-warning {{attribute only applies to classes and structs and functions}} 
+  {
     money = cash ;
   }
 
-  void add_money(int cash) [[asap::atomic_writes("P:Money")]] {
+  void add_money [[asap::atomic_writes("P:Money")]] (int cash) {
     money += cash ;
   }
 };
