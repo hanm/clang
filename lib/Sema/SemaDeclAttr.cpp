@@ -1370,25 +1370,6 @@ static void handleOwnershipAttr(Sema &S, Decl *D, const AttributeList &AL) {
                                              start, size));
 }
 
-/// Whether this declaration has internal linkage for the purposes of
-/// things that want to complain about things not have internal linkage.
-static bool hasEffectivelyInternalLinkage(NamedDecl *D) {
-  switch (D->getLinkage()) {
-  case NoLinkage:
-  case InternalLinkage:
-    return true;
-
-  // Template instantiations that go from external to unique-external
-  // shouldn't get diagnosed.
-  case UniqueExternalLinkage:
-    return true;
-
-  case ExternalLinkage:
-    return false;
-  }
-  llvm_unreachable("unknown linkage kind!");
-}
-
 static void handleWeakRefAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   // Check the attribute arguments.
   if (Attr.getNumArgs() > 1) {
@@ -1438,11 +1419,6 @@ static void handleWeakRefAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   // int a7 __attribute__((weak));
   // This looks like a bug in gcc. We reject that for now. We should revisit
   // it if this behaviour is actually used.
-
-  if (!hasEffectivelyInternalLinkage(nd)) {
-    S.Diag(Attr.getLoc(), diag::err_attribute_weakref_not_static);
-    return;
-  }
 
   // GCC rejects
   // static ((alias ("y"), weakref)).
@@ -1706,6 +1682,21 @@ static void handleAnalyzerNoReturnAttr(Sema &S, Decl *D,
   }
 
   D->addAttr(::new (S.Context) AnalyzerNoReturnAttr(Attr.getRange(), S.Context));
+}
+
+static void handleCXX11NoReturnAttr(Sema &S, Decl *D,
+                                    const AttributeList &Attr) {
+  // C++11 [dcl.attr.noreturn]p1:
+  //   The attribute may be applied to the declarator-id in a function
+  //   declaration.
+  FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
+  if (!FD) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type)
+      << Attr.getName() << ExpectedFunctionOrMethod;
+    return;
+  }
+
+  D->addAttr(::new (S.Context) CXX11NoReturnAttr(Attr.getRange(), S.Context));
 }
 
 // PS3 PPU-specific.
@@ -2001,13 +1992,32 @@ static bool checkAvailabilityAttr(Sema &S, SourceRange Range,
   return false;
 }
 
+/// \brief Check whether the two versions match.
+///
+/// If either version tuple is empty, then they are assumed to match. If
+/// \p BeforeIsOkay is true, then \p X can be less than or equal to \p Y.
+static bool versionsMatch(const VersionTuple &X, const VersionTuple &Y,
+                          bool BeforeIsOkay) {
+  if (X.empty() || Y.empty())
+    return true;
+
+  if (X == Y)
+    return true;
+
+  if (BeforeIsOkay && X < Y)
+    return true;
+
+  return false;
+}
+
 AvailabilityAttr *Sema::mergeAvailabilityAttr(NamedDecl *D, SourceRange Range,
                                               IdentifierInfo *Platform,
                                               VersionTuple Introduced,
                                               VersionTuple Deprecated,
                                               VersionTuple Obsoleted,
                                               bool IsUnavailable,
-                                              StringRef Message) {
+                                              StringRef Message,
+                                              bool Override) {
   VersionTuple MergedIntroduced = Introduced;
   VersionTuple MergedDeprecated = Deprecated;
   VersionTuple MergedObsoleted = Obsoleted;
@@ -2033,18 +2043,47 @@ AvailabilityAttr *Sema::mergeAvailabilityAttr(NamedDecl *D, SourceRange Range,
       VersionTuple OldDeprecated = OldAA->getDeprecated();
       VersionTuple OldObsoleted = OldAA->getObsoleted();
       bool OldIsUnavailable = OldAA->getUnavailable();
-      StringRef OldMessage = OldAA->getMessage();
 
-      if ((!OldIntroduced.empty() && !Introduced.empty() &&
-           OldIntroduced != Introduced) ||
-          (!OldDeprecated.empty() && !Deprecated.empty() &&
-           OldDeprecated != Deprecated) ||
-          (!OldObsoleted.empty() && !Obsoleted.empty() &&
-           OldObsoleted != Obsoleted) ||
-          (OldIsUnavailable != IsUnavailable) ||
-          (OldMessage != Message)) {
-        Diag(OldAA->getLocation(), diag::warn_mismatched_availability);
-        Diag(Range.getBegin(), diag::note_previous_attribute);
+      if (!versionsMatch(OldIntroduced, Introduced, Override) ||
+          !versionsMatch(Deprecated, OldDeprecated, Override) ||
+          !versionsMatch(Obsoleted, OldObsoleted, Override) ||
+          !(OldIsUnavailable == IsUnavailable ||
+            (Override && !OldIsUnavailable && IsUnavailable))) {
+        if (Override) {
+          int Which = -1;
+          VersionTuple FirstVersion;
+          VersionTuple SecondVersion;
+          if (!versionsMatch(OldIntroduced, Introduced, Override)) {
+            Which = 0;
+            FirstVersion = OldIntroduced;
+            SecondVersion = Introduced;
+          } else if (!versionsMatch(Deprecated, OldDeprecated, Override)) {
+            Which = 1;
+            FirstVersion = Deprecated;
+            SecondVersion = OldDeprecated;
+          } else if (!versionsMatch(Obsoleted, OldObsoleted, Override)) {
+            Which = 2;
+            FirstVersion = Obsoleted;
+            SecondVersion = OldObsoleted;
+          }
+
+          if (Which == -1) {
+            Diag(OldAA->getLocation(),
+                 diag::warn_mismatched_availability_override_unavail)
+              << AvailabilityAttr::getPrettyPlatformName(Platform->getName());
+          } else {
+            Diag(OldAA->getLocation(),
+                 diag::warn_mismatched_availability_override)
+              << Which
+              << AvailabilityAttr::getPrettyPlatformName(Platform->getName())
+              << FirstVersion.getAsString() << SecondVersion.getAsString();
+          }
+          Diag(Range.getBegin(), diag::note_overridden_method);
+        } else {
+          Diag(OldAA->getLocation(), diag::warn_mismatched_availability);
+          Diag(Range.getBegin(), diag::note_previous_attribute);
+        }
+
         Attrs.erase(Attrs.begin() + i);
         --e;
         continue;
@@ -2121,7 +2160,8 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
                                                       Introduced.Version,
                                                       Deprecated.Version,
                                                       Obsoleted.Version,
-                                                      IsUnavailable, Str);
+                                                      IsUnavailable, Str,
+                                                      /*Override=*/false);
   if (NewAttr)
     D->addAttr(NewAttr);
 }
@@ -2461,12 +2501,6 @@ static void handleWeakAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   }
 
   NamedDecl *nd = cast<NamedDecl>(D);
-
-  // 'weak' only applies to declarations with external linkage.
-  if (hasEffectivelyInternalLinkage(nd)) {
-    S.Diag(Attr.getLoc(), diag::err_attribute_weak_static);
-    return;
-  }
 
   nd->addAttr(::new (S.Context) WeakAttr(Attr.getRange(), S.Context));
 }
@@ -4374,10 +4408,10 @@ static void ProcessNonInheritableDeclAttr(Sema &S, Scope *scope, Decl *D,
 static void ProcessInheritableDeclAttr(Sema &S, Scope *scope, Decl *D,
                                        const AttributeList &Attr) {
   switch (Attr.getKind()) {
-    case AttributeList::AT_IBAction:          handleIBAction(S, D, Attr); break;
-    case AttributeList::AT_IBOutlet:          handleIBOutlet(S, D, Attr); break;
-    case AttributeList::AT_IBOutletCollection:
-      handleIBOutletCollection(S, D, Attr); break;
+  case AttributeList::AT_IBAction:    handleIBAction(S, D, Attr); break;
+  case AttributeList::AT_IBOutlet:    handleIBOutlet(S, D, Attr); break;
+  case AttributeList::AT_IBOutletCollection:
+    handleIBOutletCollection(S, D, Attr); break;
   case AttributeList::AT_AddressSpace:
   case AttributeList::AT_OpenCLImageAccess:
   case AttributeList::AT_ObjCGC:
@@ -4408,6 +4442,9 @@ static void ProcessInheritableDeclAttr(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_Common:      handleCommonAttr      (S, D, Attr); break;
   case AttributeList::AT_CUDAConstant:handleConstantAttr    (S, D, Attr); break;
   case AttributeList::AT_Constructor: handleConstructorAttr (S, D, Attr); break;
+  case AttributeList::AT_CXX11NoReturn:
+    handleCXX11NoReturnAttr(S, D, Attr);
+    break;
   case AttributeList::AT_Deprecated:
     handleAttrWithMessage<DeprecatedAttr>(S, D, Attr, "deprecated");
     break;
@@ -4679,11 +4716,11 @@ static void ProcessInheritableDeclAttr(Sema &S, Scope *scope, Decl *D,
 
 /// ProcessDeclAttribute - Apply the specific attribute to the specified decl if
 /// the attribute applies to decls.  If the attribute is a type attribute, just
-/// silently ignore it if a GNU attribute. FIXME: Applying a C++0x attribute to
-/// the wrong thing is illegal (C++0x [dcl.attr.grammar]/4).
+/// silently ignore it if a GNU attribute.
 static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
                                  const AttributeList &Attr,
-                                 bool NonInheritable, bool Inheritable) {
+                                 bool NonInheritable, bool Inheritable,
+                                 bool IncludeCXX11Attributes) {
   if (Attr.isInvalid())
     return;
 
@@ -4692,6 +4729,11 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   // want to process them, however, because we will simply warn about ignoring
   // them.  So instead, we will bail out early.
   if (Attr.isMSTypespecAttribute())
+    return;
+
+  // Ignore C++11 attributes on declarator chunks: they appertain to the type
+  // instead.
+  if (Attr.isCXX11Attribute() && !IncludeCXX11Attributes)
     return;
 
   if (NonInheritable)
@@ -4705,17 +4747,19 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
 /// attribute list to the specified decl, ignoring any type attributes.
 void Sema::ProcessDeclAttributeList(Scope *S, Decl *D,
                                     const AttributeList *AttrList,
-                                    bool NonInheritable, bool Inheritable) {
-  for (const AttributeList* l = AttrList; l; l = l->getNext()) {
-    ProcessDeclAttribute(*this, S, D, *l, NonInheritable, Inheritable);
-  }
+                                    bool NonInheritable, bool Inheritable,
+                                    bool IncludeCXX11Attributes) {
+  for (const AttributeList* l = AttrList; l; l = l->getNext())
+    ProcessDeclAttribute(*this, S, D, *l, NonInheritable, Inheritable,
+                         IncludeCXX11Attributes);
 
   // GCC accepts
   // static int a9 __attribute__((weakref));
   // but that looks really pointless. We reject it.
   if (Inheritable && D->hasAttr<WeakRefAttr>() && !D->hasAttr<AliasAttr>()) {
     Diag(AttrList->getLoc(), diag::err_attribute_weakref_without_alias) <<
-    dyn_cast<NamedDecl>(D)->getNameAsString();
+    cast<NamedDecl>(D)->getNameAsString();
+    D->dropAttr<WeakRefAttr>();
     return;
   }
 }
@@ -4872,7 +4916,8 @@ void Sema::ProcessDeclAttributes(Scope *S, Decl *D, const Declarator &PD,
   // when X is a decl attribute.
   for (unsigned i = 0, e = PD.getNumTypeObjects(); i != e; ++i)
     if (const AttributeList *Attrs = PD.getTypeObject(i).getAttrs())
-      ProcessDeclAttributeList(S, D, Attrs, NonInheritable, Inheritable);
+      ProcessDeclAttributeList(S, D, Attrs, NonInheritable, Inheritable,
+                               /*IncludeCXX11Attributes=*/false);
 
   // Finally, apply any attributes on the decl itself.
   if (const AttributeList *Attrs = PD.getAttributes())

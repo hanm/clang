@@ -14,6 +14,7 @@
 
 #include "CIndexer.h"
 #include "CIndexDiagnostic.h"
+#include "CLog.h"
 #include "CXComment.h"
 #include "CXCursor.h"
 #include "CXSourceLocation.h"
@@ -21,7 +22,6 @@
 #include "CXTranslationUnit.h"
 #include "CXType.h"
 #include "CursorVisitor.h"
-#include "CLog.h"
 #include "SimpleFormatContext.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Basic/Diagnostic.h"
@@ -36,8 +36,10 @@
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/Config/config.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/CrashRecoveryContext.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Mutex.h"
 #include "llvm/Support/PrettyStackTrace.h"
@@ -47,8 +49,6 @@
 #include "llvm/Support/Threading.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/Format.h"
-#include "llvm/Config/config.h"
 
 #if HAVE_PTHREAD_H
 #include <pthread.h>
@@ -1397,6 +1397,7 @@ bool CursorVisitor::VisitBuiltinTypeLoc(BuiltinTypeLoc TL) {
   case BuiltinType::OCLImage2d:
   case BuiltinType::OCLImage2dArray:
   case BuiltinType::OCLImage3d:
+  case BuiltinType::OCLEvent:
 #define BUILTIN_TYPE(Id, SingletonId)
 #define SIGNED_TYPE(Id, SingletonId) case BuiltinType::Id:
 #define UNSIGNED_TYPE(Id, SingletonId) case BuiltinType::Id:
@@ -2587,9 +2588,7 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
 
   // Configure the diagnostics.
   IntrusiveRefCntPtr<DiagnosticsEngine>
-    Diags(CompilerInstance::createDiagnostics(new DiagnosticOptions,
-                                              num_command_line_args,
-                                              command_line_args));
+    Diags(CompilerInstance::createDiagnostics(new DiagnosticOptions));
 
   // Recover resources if we crash before exiting this function.
   llvm::CrashRecoveryContextCleanupRegistrar<DiagnosticsEngine,
@@ -2834,6 +2833,8 @@ static void clang_reparseTranslationUnit_Impl(void *UserData) {
   ReparseTranslationUnitInfo *RTUI =
     static_cast<ReparseTranslationUnitInfo*>(UserData);
   CXTranslationUnit TU = RTUI->TU;
+  if (!TU)
+    return;
 
   // Reset the associated diagnostics.
   delete static_cast<CXDiagnosticSetImpl*>(TU->Diagnostics);
@@ -2844,9 +2845,6 @@ static void clang_reparseTranslationUnit_Impl(void *UserData) {
   unsigned options = RTUI->options;
   (void) options;
   RTUI->result = 1;
-
-  if (!TU)
-    return;
 
   CIndexer *CXXIdx = (CIndexer*)TU->CIdx;
   if (CXXIdx->isOptEnabled(CXGlobalOpt_ThreadBackgroundPriorityForEditing))

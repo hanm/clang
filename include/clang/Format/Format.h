@@ -57,6 +57,10 @@ struct FormatStyle {
   /// \brief The number of spaces to before trailing line comments.
   unsigned SpacesBeforeTrailingComments;
 
+  /// \brief If false, a function call's or function definition's parameters
+  /// will either all be on the same line or will have one line each.
+  bool BinPackParameters;
+
   /// \brief If the constructor initializers don't fit on a line, put each
   /// initializer on its own line.
   bool ConstructorInitializerAllOnOneLineOrOnePerLine;
@@ -67,10 +71,6 @@ struct FormatStyle {
   /// \brief Add a space in front of an Objective-C protocol list, i.e. use
   /// Foo <Protocol> instead of Foo<Protocol>.
   bool ObjCSpaceBeforeProtocolList;
-
-  /// \brief Add a space in front method return types, i.e. use
-  /// + (id)init instead of +(id) init
-  bool ObjCSpaceBeforeReturnType;
 };
 
 /// \brief Returns a format style complying with the LLVM coding standards:

@@ -656,8 +656,7 @@ void ASTUnit::ConfigureDiags(IntrusiveRefCntPtr<DiagnosticsEngine> &Diags,
     if (CaptureDiagnostics)
       Client = new StoredDiagnosticConsumer(AST.StoredDiagnostics);
     Diags = CompilerInstance::createDiagnostics(new DiagnosticOptions(),
-                                                ArgEnd-ArgBegin,
-                                                ArgBegin, Client,
+                                                Client,
                                                 /*ShouldOwnClient=*/true,
                                                 /*ShouldCloneClient=*/false);
   } else if (CaptureDiagnostics) {
@@ -1913,6 +1912,8 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocation(CompilerInvocation *CI,
   AST->IncludeBriefCommentsInCodeCompletion
     = IncludeBriefCommentsInCodeCompletion;
   AST->Invocation = CI;
+  AST->FileSystemOpts = CI->getFileSystemOpts();
+  AST->FileMgr = new FileManager(AST->FileSystemOpts);
   AST->UserFilesAreVolatile = UserFilesAreVolatile;
   
   // Recover resources if we crash before exiting this method.
@@ -1946,9 +1947,7 @@ ASTUnit *ASTUnit::LoadFromCommandLine(const char **ArgBegin,
   if (!Diags.getPtr()) {
     // No diagnostics engine was provided, so create our own diagnostics object
     // with the default options.
-    Diags = CompilerInstance::createDiagnostics(new DiagnosticOptions(),
-                                                ArgEnd - ArgBegin,
-                                                ArgBegin);
+    Diags = CompilerInstance::createDiagnostics(new DiagnosticOptions());
   }
 
   SmallVector<StoredDiagnostic, 4> StoredDiagnostics;

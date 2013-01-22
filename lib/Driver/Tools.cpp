@@ -12,6 +12,7 @@
 #include "SanitizerArgs.h"
 #include "ToolChains.h"
 #include "clang/Basic/ObjCRuntime.h"
+#include "clang/Basic/Version.h"
 #include "clang/Driver/Action.h"
 #include "clang/Driver/Arg.h"
 #include "clang/Driver/ArgList.h"
@@ -1442,8 +1443,9 @@ static bool UseRelaxAll(Compilation &C, const ArgList &Args) {
     RelaxDefault);
 }
 
-SanitizerArgs::SanitizerArgs(const Driver &D, const ArgList &Args) {
-  Kind = 0;
+SanitizerArgs::SanitizerArgs(const Driver &D, const ArgList &Args)
+    : Kind(0), BlacklistFile(""), MsanTrackOrigins(false),
+      AsanZeroBaseShadow(false) {
 
   for (ArgList::const_iterator I = Args.begin(), E = Args.end(); I != E; ++I) {
     unsigned Add, Remove;
@@ -1492,10 +1494,17 @@ SanitizerArgs::SanitizerArgs(const Driver &D, const ArgList &Args) {
   }
 
   // Parse -f(no-)sanitize-memory-track-origins options.
-  if (Kind & Memory)
+  if (NeedsMsan)
     MsanTrackOrigins =
       Args.hasFlag(options::OPT_fsanitize_memory_track_origins,
                    options::OPT_fno_sanitize_memory_track_origins,
+                   /* Default */false);
+
+  // Parse -f(no-)sanitize-address-zero-base-shadow options.
+  if (NeedsAsan)
+    AsanZeroBaseShadow =
+      Args.hasFlag(options::OPT_fsanitize_address_zero_base_shadow,
+                   options::OPT_fno_sanitize_address_zero_base_shadow,
                    /* Default */false);
 }
 
@@ -1516,6 +1525,13 @@ static void addAsanRTLinux(const ToolChain &TC, const ArgList &Args,
     CmdArgs.insert(CmdArgs.begin(), Args.MakeArgString(LibAsan));
   } else {
     if (!Args.hasArg(options::OPT_shared)) {
+      bool ZeroBaseShadow = Args.hasFlag(
+          options::OPT_fsanitize_address_zero_base_shadow,
+          options::OPT_fno_sanitize_address_zero_base_shadow, false);
+      if (ZeroBaseShadow && !Args.hasArg(options::OPT_pie)) {
+        TC.getDriver().Diag(diag::err_drv_argument_only_allowed_with) <<
+            "-fsanitize-address-zero-base-shadow" << "-pie";
+      }
       // LibAsan is "libclang_rt.asan-<ArchName>.a" in the Linux library
       // resource directory.
       SmallString<128> LibAsan(TC.getDriver().ResourceDir);
@@ -1586,17 +1602,15 @@ static void addMsanRTLinux(const ToolChain &TC, const ArgList &Args,
 /// (Linux).
 static void addUbsanRTLinux(const ToolChain &TC, const ArgList &Args,
                             ArgStringList &CmdArgs) {
-  if (!Args.hasArg(options::OPT_shared)) {
-    // LibUbsan is "libclang_rt.ubsan-<ArchName>.a" in the Linux library
-    // resource directory.
-    SmallString<128> LibUbsan(TC.getDriver().ResourceDir);
-    llvm::sys::path::append(LibUbsan, "lib", "linux",
-                            (Twine("libclang_rt.ubsan-") +
-                             TC.getArchName() + ".a"));
-    CmdArgs.push_back(Args.MakeArgString(LibUbsan));
-    CmdArgs.push_back("-lpthread");
-    CmdArgs.push_back("-export-dynamic");
-  }
+  // LibUbsan is "libclang_rt.ubsan-<ArchName>.a" in the Linux library
+  // resource directory.
+  SmallString<128> LibUbsan(TC.getDriver().ResourceDir);
+  llvm::sys::path::append(LibUbsan, "lib", "linux",
+                          (Twine("libclang_rt.ubsan-") +
+                           TC.getArchName() + ".a"));
+  CmdArgs.push_back(Args.MakeArgString(LibUbsan));
+  CmdArgs.push_back("-lpthread");
+  CmdArgs.push_back("-export-dynamic");
 }
 
 static bool shouldUseFramePointer(const ArgList &Args,
@@ -2622,12 +2636,24 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // -fmodules enables modules (off by default). However, for C++/Objective-C++,
   // users must also pass -fcxx-modules. The latter flag will disappear once the
   // modules implementation is solid for C++/Objective-C++ programs as well.
+  bool HaveModules = false;
   if (Args.hasFlag(options::OPT_fmodules, options::OPT_fno_modules, false)) {
     bool AllowedInCXX = Args.hasFlag(options::OPT_fcxx_modules, 
                                      options::OPT_fno_cxx_modules, 
                                      false);
-    if (AllowedInCXX || !types::isCXX(InputType))
+    if (AllowedInCXX || !types::isCXX(InputType)) {
       CmdArgs.push_back("-fmodules");
+      HaveModules = true;
+    }
+  }
+
+  // -fmodules-autolink (on by default when modules is enabled) automatically
+  // links against libraries for imported modules.
+  if (HaveModules &&
+      Args.hasFlag(options::OPT_fmodules_autolink,
+                   options::OPT_fno_modules_autolink,
+                   true)) {
+    CmdArgs.push_back("-fmodules-autolink");
   }
 
   // -faccess-control is default.
@@ -3329,6 +3355,11 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
 
     // Add the -fdebug-compilation-dir flag if needed.
     addDebugCompDirArg(Args, CmdArgs);
+
+    // Set the AT_producer to the clang version when using the integrated
+    // assembler on assembly source files.
+    CmdArgs.push_back("-dwarf-debug-producer");
+    CmdArgs.push_back(Args.MakeArgString(getClangFullVersion()));
   }
 
   // Optionally embed the -cc1as level arguments into the debug info, for build
@@ -4265,11 +4296,11 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddAllArgs(CmdArgs, options::OPT_L);
 
   SanitizerArgs Sanitize(getToolChain().getDriver(), Args);
-  // If we're building a dynamic lib with -fsanitize=address, or
-  // -fsanitize=undefined, unresolved symbols may appear. Mark all
+  // If we're building a dynamic lib with -fsanitize=address,
+  // unresolved symbols may appear. Mark all
   // of them as dynamic_lookup. Linking executables is handled in
   // lib/Driver/ToolChains.cpp.
-  if (Sanitize.needsAsanRt() || Sanitize.needsUbsanRt()) {
+  if (Sanitize.needsAsanRt()) {
     if (Args.hasArg(options::OPT_dynamiclib) ||
         Args.hasArg(options::OPT_bundle)) {
       CmdArgs.push_back("-undefined");
@@ -5494,7 +5525,7 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   if (!D.SysRoot.empty())
     CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));
 
-  if (Args.hasArg(options::OPT_pie))
+  if (Args.hasArg(options::OPT_pie) && !Args.hasArg(options::OPT_shared))
     CmdArgs.push_back("-pie");
 
   if (Args.hasArg(options::OPT_rdynamic))
@@ -5693,10 +5724,19 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
       if (Args.hasArg(options::OPT_static))
         CmdArgs.push_back("--start-group");
 
+      bool OpenMP = Args.hasArg(options::OPT_fopenmp);
+      if (OpenMP) {
+        CmdArgs.push_back("-lgomp");
+
+        // FIXME: Exclude this for platforms whith libgomp that doesn't require
+        // librt. Most modern Linux platfroms require it, but some may not.
+        CmdArgs.push_back("-lrt");
+      }
+
       AddLibgcc(ToolChain.getTriple(), D, CmdArgs, Args);
 
       if (Args.hasArg(options::OPT_pthread) ||
-          Args.hasArg(options::OPT_pthreads))
+          Args.hasArg(options::OPT_pthreads) || OpenMP)
         CmdArgs.push_back("-lpthread");
 
       CmdArgs.push_back("-lc");

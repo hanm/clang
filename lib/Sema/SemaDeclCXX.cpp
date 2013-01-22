@@ -252,7 +252,7 @@ Sema::SetParamDefaultArgument(ParmVarDecl *Param, Expr *Arg,
     return true;
   Arg = Result.takeAs<Expr>();
 
-  CheckImplicitConversions(Arg, EqualLoc);
+  CheckCompletedExpr(Arg, EqualLoc);
   Arg = MaybeCreateExprWithCleanups(Arg);
 
   // Okay: add the default argument to the parameter
@@ -3062,19 +3062,17 @@ Sema::SetDelegatingInitializer(CXXConstructorDecl *Constructor,
   return false;
 }
 
-bool Sema::SetCtorInitializers(CXXConstructorDecl *Constructor,
-                               CXXCtorInitializer **Initializers,
-                               unsigned NumInitializers,
-                               bool AnyErrors) {
+bool Sema::SetCtorInitializers(CXXConstructorDecl *Constructor, bool AnyErrors,
+                               ArrayRef<CXXCtorInitializer *> Initializers) {
   if (Constructor->isDependentContext()) {
     // Just store the initializers as written, they will be checked during
     // instantiation.
-    if (NumInitializers > 0) {
-      Constructor->setNumCtorInitializers(NumInitializers);
+    if (!Initializers.empty()) {
+      Constructor->setNumCtorInitializers(Initializers.size());
       CXXCtorInitializer **baseOrMemberInitializers =
-        new (Context) CXXCtorInitializer*[NumInitializers];
-      memcpy(baseOrMemberInitializers, Initializers,
-             NumInitializers * sizeof(CXXCtorInitializer*));
+        new (Context) CXXCtorInitializer*[Initializers.size()];
+      memcpy(baseOrMemberInitializers, Initializers.data(),
+             Initializers.size() * sizeof(CXXCtorInitializer*));
       Constructor->setCtorInitializers(baseOrMemberInitializers);
     }
 
@@ -3095,7 +3093,7 @@ bool Sema::SetCtorInitializers(CXXConstructorDecl *Constructor,
   
   bool HadError = false;
 
-  for (unsigned i = 0; i < NumInitializers; i++) {
+  for (unsigned i = 0; i < Initializers.size(); i++) {
     CXXCtorInitializer *Member = Initializers[i];
     
     if (Member->isBaseInitializer())
@@ -3198,7 +3196,7 @@ bool Sema::SetCtorInitializers(CXXConstructorDecl *Constructor,
     }
   }
 
-  NumInitializers = Info.AllToInit.size();
+  unsigned NumInitializers = Info.AllToInit.size();
   if (NumInitializers > 0) {
     Constructor->setNumCtorInitializers(NumInitializers);
     CXXCtorInitializer **baseOrMemberInitializers =
@@ -3216,13 +3214,17 @@ bool Sema::SetCtorInitializers(CXXConstructorDecl *Constructor,
   return HadError;
 }
 
-static void *GetKeyForTopLevelField(FieldDecl *Field) {
-  // For anonymous unions, use the class declaration as the key.
+static void PopulateKeysForFields(FieldDecl *Field, SmallVectorImpl<const void*> &IdealInits) {
   if (const RecordType *RT = Field->getType()->getAs<RecordType>()) {
-    if (RT->getDecl()->isAnonymousStructOrUnion())
-      return static_cast<void *>(RT->getDecl());
+    const RecordDecl *RD = RT->getDecl();
+    if (RD->isAnonymousStructOrUnion()) {
+      for (RecordDecl::field_iterator Field = RD->field_begin(),
+          E = RD->field_end(); Field != E; ++Field)
+        PopulateKeysForFields(*Field, IdealInits);
+      return;
+    }
   }
-  return static_cast<void *>(Field);
+  IdealInits.push_back(Field);
 }
 
 static void *GetKeyForBase(ASTContext &Context, QualType BaseType) {
@@ -3234,40 +3236,19 @@ static void *GetKeyForMember(ASTContext &Context,
   if (!Member->isAnyMemberInitializer())
     return GetKeyForBase(Context, QualType(Member->getBaseClass(), 0));
     
-  // For fields injected into the class via declaration of an anonymous union,
-  // use its anonymous union class declaration as the unique key.
-  FieldDecl *Field = Member->getAnyMember();
- 
-  // If the field is a member of an anonymous struct or union, our key
-  // is the anonymous record decl that's a direct child of the class.
-  RecordDecl *RD = Field->getParent();
-  if (RD->isAnonymousStructOrUnion()) {
-    while (true) {
-      RecordDecl *Parent = cast<RecordDecl>(RD->getDeclContext());
-      if (Parent->isAnonymousStructOrUnion())
-        RD = Parent;
-      else
-        break;
-    }
-      
-    return static_cast<void *>(RD);
-  }
-
-  return static_cast<void *>(Field);
+  return Member->getAnyMember();
 }
 
-static void
-DiagnoseBaseOrMemInitializerOrder(Sema &SemaRef,
-                                  const CXXConstructorDecl *Constructor,
-                                  CXXCtorInitializer **Inits,
-                                  unsigned NumInits) {
+static void DiagnoseBaseOrMemInitializerOrder(
+    Sema &SemaRef, const CXXConstructorDecl *Constructor,
+    ArrayRef<CXXCtorInitializer *> Inits) {
   if (Constructor->getDeclContext()->isDependentContext())
     return;
 
   // Don't check initializers order unless the warning is enabled at the
   // location of at least one initializer. 
   bool ShouldCheckOrder = false;
-  for (unsigned InitIndex = 0; InitIndex != NumInits; ++InitIndex) {
+  for (unsigned InitIndex = 0; InitIndex != Inits.size(); ++InitIndex) {
     CXXCtorInitializer *Init = Inits[InitIndex];
     if (SemaRef.Diags.getDiagnosticLevel(diag::warn_initializer_out_of_order,
                                          Init->getSourceLocation())
@@ -3306,14 +3287,14 @@ DiagnoseBaseOrMemInitializerOrder(Sema &SemaRef,
     if (Field->isUnnamedBitfield())
       continue;
     
-    IdealInitKeys.push_back(GetKeyForTopLevelField(*Field));
+    PopulateKeysForFields(*Field, IdealInitKeys);
   }
   
   unsigned NumIdealInits = IdealInitKeys.size();
   unsigned IdealIndex = 0;
 
   CXXCtorInitializer *PrevInit = 0;
-  for (unsigned InitIndex = 0; InitIndex != NumInits; ++InitIndex) {
+  for (unsigned InitIndex = 0; InitIndex != Inits.size(); ++InitIndex) {
     CXXCtorInitializer *Init = Inits[InitIndex];
     void *InitKey = GetKeyForMember(SemaRef.Context, Init);
 
@@ -3423,8 +3404,7 @@ bool CheckRedundantUnionInit(Sema &S,
 /// ActOnMemInitializers - Handle the member initializers for a constructor.
 void Sema::ActOnMemInitializers(Decl *ConstructorDecl,
                                 SourceLocation ColonLoc,
-                                CXXCtorInitializer **meminits,
-                                unsigned NumMemInits,
+                                ArrayRef<CXXCtorInitializer*> MemInits,
                                 bool AnyErrors) {
   if (!ConstructorDecl)
     return;
@@ -3439,9 +3419,6 @@ void Sema::ActOnMemInitializers(Decl *ConstructorDecl,
     return;
   }
   
-  CXXCtorInitializer **MemInits =
-    reinterpret_cast<CXXCtorInitializer **>(meminits);
-
   // Mapping for the duplicate initializers check.
   // For member initializers, this is keyed with a FieldDecl*.
   // For base initializers, this is keyed with a Type*.
@@ -3451,7 +3428,7 @@ void Sema::ActOnMemInitializers(Decl *ConstructorDecl,
   RedundantUnionMap MemberUnions;
 
   bool HadError = false;
-  for (unsigned i = 0; i < NumMemInits; i++) {
+  for (unsigned i = 0; i < MemInits.size(); i++) {
     CXXCtorInitializer *Init = MemInits[i];
 
     // Set the source order index.
@@ -3469,7 +3446,7 @@ void Sema::ActOnMemInitializers(Decl *ConstructorDecl,
     } else {
       assert(Init->isDelegatingInitializer());
       // This must be the only initializer
-      if (NumMemInits != 1) {
+      if (MemInits.size() != 1) {
         Diag(Init->getSourceLocation(),
              diag::err_delegating_initializer_alone)
           << Init->getSourceRange() << MemInits[i ? 0 : 1]->getSourceRange();
@@ -3484,9 +3461,9 @@ void Sema::ActOnMemInitializers(Decl *ConstructorDecl,
   if (HadError)
     return;
 
-  DiagnoseBaseOrMemInitializerOrder(*this, Constructor, MemInits, NumMemInits);
+  DiagnoseBaseOrMemInitializerOrder(*this, Constructor, MemInits);
 
-  SetCtorInitializers(Constructor, MemInits, NumMemInits, AnyErrors);
+  SetCtorInitializers(Constructor, AnyErrors, MemInits);
 }
 
 void
@@ -3608,7 +3585,7 @@ void Sema::ActOnDefaultCtorInitializers(Decl *CDtorDecl) {
 
   if (CXXConstructorDecl *Constructor
       = dyn_cast<CXXConstructorDecl>(CDtorDecl))
-    SetCtorInitializers(Constructor, 0, 0, /*AnyErrors=*/false);
+    SetCtorInitializers(Constructor, /*AnyErrors=*/false);
 }
 
 bool Sema::RequireNonAbstractType(SourceLocation Loc, QualType T,
@@ -7523,7 +7500,7 @@ void Sema::DefineImplicitDefaultConstructor(SourceLocation CurrentLocation,
 
   SynthesizedFunctionScope Scope(*this, Constructor);
   DiagnosticErrorTrap Trap(Diags);
-  if (SetCtorInitializers(Constructor, 0, 0, /*AnyErrors=*/false) ||
+  if (SetCtorInitializers(Constructor, /*AnyErrors=*/false) ||
       Trap.hasErrorOccurred()) {
     Diag(CurrentLocation, diag::note_member_synthesized_at) 
       << CXXDefaultConstructor << Context.getTagDeclType(ClassDecl);
@@ -9151,7 +9128,7 @@ void Sema::DefineImplicitCopyConstructor(SourceLocation CurrentLocation,
   SynthesizedFunctionScope Scope(*this, CopyConstructor);
   DiagnosticErrorTrap Trap(Diags);
 
-  if (SetCtorInitializers(CopyConstructor, 0, 0, /*AnyErrors=*/false) ||
+  if (SetCtorInitializers(CopyConstructor, /*AnyErrors=*/false) ||
       Trap.hasErrorOccurred()) {
     Diag(CurrentLocation, diag::note_member_synthesized_at) 
       << CXXCopyConstructor << Context.getTagDeclType(ClassDecl);
@@ -9342,7 +9319,7 @@ void Sema::DefineImplicitMoveConstructor(SourceLocation CurrentLocation,
   SynthesizedFunctionScope Scope(*this, MoveConstructor);
   DiagnosticErrorTrap Trap(Diags);
 
-  if (SetCtorInitializers(MoveConstructor, 0, 0, /*AnyErrors=*/false) ||
+  if (SetCtorInitializers(MoveConstructor, /*AnyErrors=*/false) ||
       Trap.hasErrorOccurred()) {
     Diag(CurrentLocation, diag::note_member_synthesized_at) 
       << CXXMoveConstructor << Context.getTagDeclType(ClassDecl);
@@ -10815,7 +10792,7 @@ NamedDecl *Sema::ActOnFriendFunctionDecl(Scope *S, Declarator &D,
 void Sema::SetDeclDeleted(Decl *Dcl, SourceLocation DelLoc) {
   AdjustDeclIfTemplate(Dcl);
 
-  FunctionDecl *Fn = dyn_cast<FunctionDecl>(Dcl);
+  FunctionDecl *Fn = dyn_cast_or_null<FunctionDecl>(Dcl);
   if (!Fn) {
     Diag(DelLoc, diag::err_deleted_non_function);
     return;
@@ -10835,7 +10812,7 @@ void Sema::SetDeclDeleted(Decl *Dcl, SourceLocation DelLoc) {
 }
 
 void Sema::SetDeclDefaulted(Decl *Dcl, SourceLocation DefaultLoc) {
-  CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(Dcl);
+  CXXMethodDecl *MD = dyn_cast_or_null<CXXMethodDecl>(Dcl);
 
   if (MD) {
     if (MD->getParent()->isDependentType()) {

@@ -23,8 +23,7 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Format/Format.h"
 #include "clang/Lex/Lexer.h"
-
-#include <vector>
+#include <list>
 
 namespace clang {
 
@@ -76,11 +75,6 @@ struct FormatToken {
   /// This happens for example when a preprocessor directive ended directly
   /// before the token.
   bool MustBreakBefore;
-
-  // FIXME: We currently assume that there is exactly one token in this vector
-  // except for the very last token that does not have any children.
-  /// \brief All tokens that logically follow this token.
-  std::vector<FormatToken> Children;
 };
 
 /// \brief An unwrapped line is a sequence of \c Token, that we would like to
@@ -93,8 +87,9 @@ struct UnwrappedLine {
   UnwrappedLine() : Level(0), InPPDirective(false) {
   }
 
-  /// \brief The \c Token comprising this \c UnwrappedLine.
-  FormatToken RootToken;
+  // FIXME: Don't use std::list here.
+  /// \brief The \c Tokens comprising this \c UnwrappedLine.
+  std::list<FormatToken> Tokens;
 
   /// \brief The indent level of the \c UnwrappedLine.
   unsigned Level;
@@ -136,6 +131,7 @@ private:
   void parseComments();
   void parseStructuralElement();
   void parseBracedList();
+  void parseReturn();
   void parseParens();
   void parseIfThenElse();
   void parseForOrWhileLoop();
@@ -160,10 +156,22 @@ private:
   // subtracted from beyond 0. Introduce a method to subtract from Line.Level
   // and use that everywhere in the Parser.
   OwningPtr<UnwrappedLine> Line;
-  bool RootTokenInitialized;
-  FormatToken *LastInCurrentLine;
   FormatToken FormatTok;
   bool MustBreakBeforeNextToken;
+
+  // The parsed lines. Only added to through \c CurrentLines.
+  std::vector<UnwrappedLine> Lines;
+
+  // Preprocessor directives are parsed out-of-order from other unwrapped lines.
+  // Thus, we need to keep a list of preprocessor directives to be reported
+  // after an unwarpped line that has been started was finished.
+  std::vector<UnwrappedLine> PreprocessorDirectives;
+
+  // New unwrapped lines are added via CurrentLines.
+  // Usually points to \c &Lines. While parsing a preprocessor directive when
+  // there is an unfinished previous unwrapped line, will point to
+  // \c &PreprocessorDirectives.
+  std::vector<UnwrappedLine> *CurrentLines;
 
   clang::DiagnosticsEngine &Diag;
   const FormatStyle &Style;

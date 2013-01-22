@@ -491,13 +491,14 @@ void ASTDeclWriter::VisitObjCInterfaceDecl(ObjCInterfaceDecl *D) {
            PEnd = Data.AllReferencedProtocols.end();
          P != PEnd; ++P)
       Writer.AddDeclRef(*P, Record);
+
     
-    if (ObjCCategoryDecl *Cat = D->getCategoryList()) {
+    if (ObjCCategoryDecl *Cat = D->getCategoryListRaw()) {
       // Ensure that we write out the set of categories for this class.
       Writer.ObjCClassesWithCategories.insert(D);
       
       // Make sure that the categories get serialized.
-      for (; Cat; Cat = Cat->getNextClassCategory())
+      for (; Cat; Cat = Cat->getNextClassCategoryRaw())
         (void)Writer.GetDeclRef(Cat);
     }
   }  
@@ -1276,7 +1277,10 @@ template <typename T>
 void ASTDeclWriter::VisitRedeclarable(Redeclarable<T> *D) {
   T *First = D->getFirstDeclaration();
   if (First->getMostRecentDecl() != First) {
-    // There is more than one declaration of this entity, so we will need to 
+    assert(isRedeclarableDeclKind(static_cast<T *>(D)->getKind()) &&
+           "Not considered redeclarable?");
+    
+    // There is more than one declaration of this entity, so we will need to
     // write a redeclaration chain.
     Writer.AddDeclRef(First, Record);
     Writer.Redeclarations.insert(First);

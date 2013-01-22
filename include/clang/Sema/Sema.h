@@ -1677,7 +1677,8 @@ public:
                                           VersionTuple Deprecated,
                                           VersionTuple Obsoleted,
                                           bool IsUnavailable,
-                                          StringRef Message);
+                                          StringRef Message,
+                                          bool Override);
   VisibilityAttr *mergeVisibilityAttr(Decl *D, SourceRange Range,
                                       VisibilityAttr::VisibilityType Vis);
   DLLImportAttr *mergeDLLImportAttr(Decl *D, SourceRange Range);
@@ -1685,10 +1686,24 @@ public:
   FormatAttr *mergeFormatAttr(Decl *D, SourceRange Range, StringRef Format,
                               int FormatIdx, int FirstArg);
   SectionAttr *mergeSectionAttr(Decl *D, SourceRange Range, StringRef Name);
-  bool mergeDeclAttribute(NamedDecl *New, InheritableAttr *Attr);
+  bool mergeDeclAttribute(NamedDecl *New, InheritableAttr *Attr,
+                          bool Override);
+
+  /// \brief Describes the kind of merge to perform for availability
+  /// attributes (including "deprecated", "unavailable", and "availability").
+  enum AvailabilityMergeKind {
+    /// \brief Don't merge availability attributes at all.
+    AMK_None,
+    /// \brief Merge availability attributes for a redeclaration, which requires
+    /// an exact match.
+    AMK_Redeclaration,
+    /// \brief Merge availability attributes for an override, which requires
+    /// an exact match or a weakening of constraints.
+    AMK_Override
+  };
 
   void mergeDeclAttributes(NamedDecl *New, Decl *Old,
-                           bool MergeDeprecation = true);
+                           AvailabilityMergeKind AMK = AMK_Redeclaration);
   void MergeTypedefNameDecl(TypedefNameDecl *New, LookupResult &OldDecls);
   bool MergeFunctionDecl(FunctionDecl *New, Decl *Old, Scope *S);
   bool MergeCompatibleFunctionDecls(FunctionDecl *New, FunctionDecl *Old,
@@ -2308,9 +2323,12 @@ public:
 
   // Decl attributes - this routine is the top level dispatcher.
   void ProcessDeclAttributes(Scope *S, Decl *D, const Declarator &PD,
-                           bool NonInheritable = true, bool Inheritable = true);
+                             bool NonInheritable = true,
+                             bool Inheritable = true);
   void ProcessDeclAttributeList(Scope *S, Decl *D, const AttributeList *AL,
-                           bool NonInheritable = true, bool Inheritable = true);
+                                bool NonInheritable = true,
+                                bool Inheritable = true,
+                                bool IncludeCXX11Attributes = true);
   bool ProcessAccessDeclAttributeList(AccessSpecDecl *ASDecl,
                                       const AttributeList *AttrList);
 
@@ -2388,19 +2406,19 @@ public:
   
   /// Called by ActOnProperty to handle \@property declarations in
   /// class extensions.
-  Decl *HandlePropertyInClassExtension(Scope *S,
-                                       SourceLocation AtLoc,
-                                       SourceLocation LParenLoc,
-                                       FieldDeclarator &FD,
-                                       Selector GetterSel,
-                                       Selector SetterSel,
-                                       const bool isAssign,
-                                       const bool isReadWrite,
-                                       const unsigned Attributes,
-                                       const unsigned AttributesAsWritten,
-                                       bool *isOverridingProperty,
-                                       TypeSourceInfo *T,
-                                       tok::ObjCKeywordKind MethodImplKind);
+  ObjCPropertyDecl *HandlePropertyInClassExtension(Scope *S,
+                      SourceLocation AtLoc,
+                      SourceLocation LParenLoc,
+                      FieldDeclarator &FD,
+                      Selector GetterSel,
+                      Selector SetterSel,
+                      const bool isAssign,
+                      const bool isReadWrite,
+                      const unsigned Attributes,
+                      const unsigned AttributesAsWritten,
+                      bool *isOverridingProperty,
+                      TypeSourceInfo *T,
+                      tok::ObjCKeywordKind MethodImplKind);
 
   /// Called by ActOnProperty and HandlePropertyInClassExtension to
   /// handle creating the ObjcPropertyDecl for a category or \@interface.
@@ -2685,7 +2703,8 @@ public:
                              SourceLocation RParenLoc);
 
   NamedDecl *LookupInlineAsmIdentifier(StringRef Name, SourceLocation Loc,
-                                       unsigned &Size, bool &IsVarDecl);
+                                       unsigned &Length, unsigned &Size, 
+                                       unsigned &Type, bool &IsVarDecl);
   bool LookupInlineAsmField(StringRef Base, StringRef Member,
                             unsigned &Offset, SourceLocation AsmLoc);
   StmtResult ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
@@ -4261,7 +4280,8 @@ public:
                                          SourceLocation AtLoc,
                                          SourceLocation SelLoc,
                                          SourceLocation LParenLoc,
-                                         SourceLocation RParenLoc);
+                                         SourceLocation RParenLoc,
+                                         bool WarnSelector);
 
   /// ParseObjCProtocolExpression - Build protocol expression for \@protocol
   ExprResult ParseObjCProtocolExpression(IdentifierInfo * ProtocolName,
@@ -4352,9 +4372,9 @@ public:
   bool SetDelegatingInitializer(CXXConstructorDecl *Constructor,
                                 CXXCtorInitializer *Initializer);
 
-  bool SetCtorInitializers(CXXConstructorDecl *Constructor,
-                           CXXCtorInitializer **Initializers,
-                           unsigned NumInitializers, bool AnyErrors);
+  bool SetCtorInitializers(CXXConstructorDecl *Constructor, bool AnyErrors,
+                           ArrayRef<CXXCtorInitializer *> Initializers =
+                               ArrayRef<CXXCtorInitializer *>());
 
   void SetIvarInitializers(ObjCImplementationDecl *ObjCImplementation);
 
@@ -4417,8 +4437,7 @@ public:
 
   void ActOnMemInitializers(Decl *ConstructorDecl,
                             SourceLocation ColonLoc,
-                            CXXCtorInitializer **MemInits,
-                            unsigned NumMemInits,
+                            ArrayRef<CXXCtorInitializer*> MemInits,
                             bool AnyErrors);
 
   void CheckCompletedCXXClass(CXXRecordDecl *Record);
@@ -6194,10 +6213,6 @@ public:
   void DiagnosePropertyMismatch(ObjCPropertyDecl *Property,
                                 ObjCPropertyDecl *SuperProperty,
                                 const IdentifierInfo *Name);
-  void ComparePropertiesInBaseAndSuper(ObjCInterfaceDecl *IDecl);
-
-
-  void CompareProperties(Decl *CDecl, Decl *MergeProtocols);
 
   void DiagnoseClassExtensionDupMethods(ObjCCategoryDecl *CAT,
                                         ObjCInterfaceDecl *ID);
@@ -6383,8 +6398,7 @@ public:
   /// \brief Check whether the given new method is a valid override of the
   /// given overridden method, and set any properties that should be inherited.
   void CheckObjCMethodOverride(ObjCMethodDecl *NewMethod,
-                               const ObjCMethodDecl *Overridden,
-                               bool IsImplementation);
+                               const ObjCMethodDecl *Overridden);
 
   /// \brief Describes the compatibility of a result type with its method.
   enum ResultTypeCompatibilityKind {
@@ -7305,6 +7319,11 @@ private:
                             SourceLocation ReturnLoc);
   void CheckFloatComparison(SourceLocation Loc, Expr* LHS, Expr* RHS);
   void CheckImplicitConversions(Expr *E, SourceLocation CC = SourceLocation());
+  void CheckUnsequencedOperations(Expr *E);
+
+  /// \brief Perform semantic checks on a completed expression. This will either
+  /// be a full-expression or a default argument expression.
+  void CheckCompletedExpr(Expr *E, SourceLocation CheckLoc = SourceLocation());
 
   void CheckBitFieldInitialization(SourceLocation InitLoc, FieldDecl *Field,
                                    Expr *Init);

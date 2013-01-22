@@ -3629,7 +3629,6 @@ bool VectorExprEvaluator::VisitCastExpr(const CastExpr* E) {
     SmallVector<APValue, 4> Elts;
     if (EltTy->isRealFloatingType()) {
       const llvm::fltSemantics &Sem = Info.Ctx.getFloatTypeSemantics(EltTy);
-      bool isIEESem = &Sem != &APFloat::PPCDoubleDouble;
       unsigned FloatEltSize = EltSize;
       if (&Sem == &APFloat::x87DoubleExtended)
         FloatEltSize = 80;
@@ -3639,7 +3638,7 @@ bool VectorExprEvaluator::VisitCastExpr(const CastExpr* E) {
           Elt = SValInt.rotl(i*EltSize+FloatEltSize).trunc(FloatEltSize);
         else
           Elt = SValInt.rotr(i*EltSize).trunc(FloatEltSize);
-        Elts.push_back(APValue(APFloat(Elt, isIEESem)));
+        Elts.push_back(APValue(APFloat(Sem, Elt)));
       }
     } else if (EltTy->isIntegerType()) {
       for (unsigned i = 0; i < NElts; i++) {
@@ -5372,6 +5371,7 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_IntegralComplexCast:
   case CK_IntegralComplexToFloatingComplex:
   case CK_BuiltinFnToFnPtr:
+  case CK_ZeroToOCLEvent:
     llvm_unreachable("invalid cast kind for integral value");
 
   case CK_BitCast:
@@ -5859,6 +5859,7 @@ bool ComplexExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_ARCExtendBlockObject:
   case CK_CopyAndAutoreleaseBlockObject:
   case CK_BuiltinFnToFnPtr:
+  case CK_ZeroToOCLEvent:
     llvm_unreachable("invalid cast kind for complex value");
 
   case CK_LValueToRValue:

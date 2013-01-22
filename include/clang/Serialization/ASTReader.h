@@ -1311,7 +1311,7 @@ public:
 
   /// \brief Retrieve the module file that owns the given declaration, or NULL
   /// if the declaration is not from a module file.
-  ModuleFile *getOwningModuleFile(Decl *D);
+  ModuleFile *getOwningModuleFile(const Decl *D);
   
   /// \brief Returns the source location for the decl \p ID.
   SourceLocation getSourceLocationForDeclID(serialization::GlobalDeclID ID);
@@ -1658,7 +1658,8 @@ public:
   llvm::APSInt ReadAPSInt(const RecordData &Record, unsigned &Idx);
 
   /// \brief Read a floating-point value
-  llvm::APFloat ReadAPFloat(const RecordData &Record, unsigned &Idx);
+  llvm::APFloat ReadAPFloat(const RecordData &Record,
+                            const llvm::fltSemantics &Sem, unsigned &Idx);
 
   // \brief Read a string
   static std::string ReadString(const RecordData &Record, unsigned &Idx);
@@ -1757,7 +1758,7 @@ public:
 /// then restores it when destroyed.
 struct SavedStreamPosition {
   explicit SavedStreamPosition(llvm::BitstreamCursor &Cursor)
-  : Cursor(Cursor), Offset(Cursor.GetCurrentBitNo()) { }
+    : Cursor(Cursor), Offset(Cursor.GetCurrentBitNo()) { }
 
   ~SavedStreamPosition() {
     Cursor.JumpToBit(Offset);

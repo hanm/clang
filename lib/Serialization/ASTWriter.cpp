@@ -1048,6 +1048,8 @@ void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
 #define ENUM_LANGOPT(Name, Type, Bits, Default, Description) \
   Record.push_back(static_cast<unsigned>(LangOpts.get##Name()));
 #include "clang/Basic/LangOptions.def"  
+#define SANITIZER(NAME, ID) Record.push_back(LangOpts.Sanitize.ID);
+#include "clang/Basic/Sanitizers.def"
 
   Record.push_back((unsigned) LangOpts.ObjCRuntime.getKind());
   AddVersionTuple(LangOpts.ObjCRuntime.getVersion(), Record);
@@ -1552,7 +1554,7 @@ void ASTWriter::WriteHeaderSearch(const HeaderSearch &HS, StringRef isysroot) {
   
   // Free all of the strings we had to duplicate.
   for (unsigned I = 0, N = SavedStrings.size(); I != N; ++I)
-    free((void*)SavedStrings[I]);
+    free(const_cast<char *>(SavedStrings[I]));
 }
 
 /// \brief Writes the block containing the serialized form of the
@@ -3245,10 +3247,12 @@ void ASTWriter::WriteObjCCategories() {
     Categories.push_back(0);
     
     // Add the categories.
-    for (ObjCCategoryDecl *Cat = Class->getCategoryList();
-         Cat; Cat = Cat->getNextClassCategory(), ++Size) {
-      assert(getDeclID(Cat) != 0 && "Bogus category");
-      AddDeclRef(Cat, Categories);
+    for (ObjCInterfaceDecl::known_categories_iterator
+           Cat = Class->known_categories_begin(),
+           CatEnd = Class->known_categories_end();
+         Cat != CatEnd; ++Cat, ++Size) {
+      assert(getDeclID(*Cat) != 0 && "Bogus category");
+      AddDeclRef(*Cat, Categories);
     }
     
     // Update the size.
@@ -4776,6 +4780,7 @@ void ASTWriter::AddedVisibleDecl(const DeclContext *DC, const Decl *D) {
   if (!(!D->isFromASTFile() && cast<Decl>(DC)->isFromASTFile()))
     return; // Not a source decl added to a DeclContext from PCH.
 
+  assert(!getDefinitiveDeclContext(DC) && "DeclContext not definitive!");
   AddUpdatedDeclContext(DC);
   UpdatingVisibleDecls.push_back(D);
 }

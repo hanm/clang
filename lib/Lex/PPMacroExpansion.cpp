@@ -785,7 +785,7 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
     Feature = Feature.substr(2, Feature.size() - 4);
 
   return llvm::StringSwitch<bool>(Feature)
-           .Case("address_sanitizer", LangOpts.SanitizeAddress)
+           .Case("address_sanitizer", LangOpts.Sanitize.Address)
            .Case("attribute_analyzer_noreturn", true)
            .Case("attribute_availability", true)
            .Case("attribute_availability_with_message", true)
@@ -807,8 +807,8 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
            .Case("cxx_exceptions", LangOpts.Exceptions)
            .Case("cxx_rtti", LangOpts.RTTI)
            .Case("enumerator_attributes", true)
-           .Case("memory_sanitizer", LangOpts.SanitizeMemory)
-           .Case("thread_sanitizer", LangOpts.SanitizeThread)
+           .Case("memory_sanitizer", LangOpts.Sanitize.Memory)
+           .Case("thread_sanitizer", LangOpts.Sanitize.Thread)
            // Objective-C features
            .Case("objc_arr", LangOpts.ObjCAutoRefCount) // FIXME: REMOVE?
            .Case("objc_arc", LangOpts.ObjCAutoRefCount)
@@ -965,8 +965,14 @@ static bool EvaluateHasIncludeCommon(Token &Tok,
                                      IdentifierInfo *II, Preprocessor &PP,
                                      const DirectoryLookup *LookupFrom) {
   // Save the location of the current token.  If a '(' is later found, use
-  // that location.  If no, use the end of this location instead.
+  // that location.  If not, use the end of this location instead.
   SourceLocation LParenLoc = Tok.getLocation();
+
+  // These expressions are only allowed within a preprocessor directive.
+  if (!PP.isParsingIfOrElifDirective()) {
+    PP.Diag(LParenLoc, diag::err_pp_directive_required) << II->getName();
+    return false;
+  }
 
   // Get '('.
   PP.LexNonComment(Tok);

@@ -332,6 +332,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   }
   Opts.DebugColumnInfo = Args.hasArg(OPT_dwarf_column_info);
 
+  Opts.ModulesAutolink = Args.hasArg(OPT_fmodules_autolink);
   Opts.DisableLLVMOpts = Args.hasArg(OPT_disable_llvm_optzns);
   Opts.DisableRedZone = Args.hasArg(OPT_disable_red_zone);
   Opts.ForbidGuardVariables = Args.hasArg(OPT_fforbid_guard_variables);
@@ -403,8 +404,10 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DebugCompilationDir = Args.getLastArgValue(OPT_fdebug_compilation_dir);
   Opts.LinkBitcodeFile = Args.getLastArgValue(OPT_mlink_bitcode_file);
   Opts.SanitizerBlacklistFile = Args.getLastArgValue(OPT_fsanitize_blacklist);
-  Opts.MemorySanitizerTrackOrigins =
+  Opts.SanitizeMemoryTrackOrigins =
     Args.hasArg(OPT_fsanitize_memory_track_origins);
+  Opts.SanitizeAddressZeroBaseShadow =
+    Args.hasArg(OPT_fsanitize_address_zero_base_shadow);
   Opts.SSPBufferSize =
     Args.getLastArgIntValue(OPT_stack_protector_buffer_size, 8, Diags);
   Opts.StackRealignment = Args.hasArg(OPT_mstackrealign);
@@ -576,7 +579,6 @@ bool clang::ParseDiagnosticArgs(DiagnosticOptions &Opts, ArgList &Args,
       << Opts.TabStop << DiagnosticOptions::DefaultTabStop;
   }
   Opts.MessageLength = Args.getLastArgIntValue(OPT_fmessage_length, 0, Diags);
-  Opts.DumpBuildInformation = Args.getLastArgValue(OPT_dump_build_information);
   addWarningArgs(Args, Opts.Warnings);
 
   return Success;
@@ -1299,7 +1301,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
               .Default(Unknown)) {
 #define SANITIZER(NAME, ID) \
     case ID: \
-      Opts.Sanitize##ID = true; \
+      Opts.Sanitize.ID = true; \
       break;
 #include "clang/Basic/Sanitizers.def"
 

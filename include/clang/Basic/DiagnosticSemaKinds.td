@@ -214,7 +214,9 @@ def warn_use_out_of_scope_declaration : Warning<
   "use of out-of-scope declaration of %0">;
 def err_inline_non_function : Error<
   "'inline' can only appear on functions">;
-def warn_qual_return_type : Warning<
+def err_noreturn_non_function : Error<
+  "'_Noreturn' can only appear on functions">;
+def warn_qual_return_type : Warning< 
   "'%0' type qualifier%s1 on return type %plural{1:has|:have}1 no effect">,
   InGroup<IgnoredQualifiers>, DefaultIgnore;
 
@@ -381,17 +383,21 @@ def note_strncat_wrong_size : Note<
   "the terminating null byte">;
 
 /// main()
-// static/inline main() are not errors in C, just in C++.
+// static main() is not an error in C, just in C++.
 def warn_static_main : Warning<"'main' should not be declared static">,
     InGroup<Main>;
 def err_static_main : Error<"'main' is not allowed to be declared static">;
 def err_inline_main : Error<"'main' is not allowed to be declared inline">;
+def ext_noreturn_main : ExtWarn<
+  "'main' is not allowed to be declared _Noreturn">, InGroup<Main>;
+def note_main_remove_noreturn : Note<"remove '_Noreturn'">;
 def err_constexpr_main : Error<
   "'main' is not allowed to be declared constexpr">;
 def err_main_template_decl : Error<"'main' cannot be a template">;
 def err_main_returns_nonint : Error<"'main' must return 'int'">;
 def ext_main_returns_nonint : ExtWarn<"return type of 'main' is not 'int'">,
     InGroup<MainReturnType>;
+def note_main_change_return_type : Note<"change return type to 'int'">;
 def err_main_surplus_args : Error<"too many parameters (%0) for 'main': "
     "must be 0, 2, or 3">;
 def warn_main_one_arg : Warning<"only one parameter on 'main' declaration">,
@@ -1287,6 +1293,9 @@ def warn_field_is_uninit : Warning<"field %0 is uninitialized when used here">,
 def warn_reference_field_is_uninit : Warning<
   "reference %0 is not yet bound to a value when used here">,
   InGroup<Uninitialized>;
+def warn_static_self_reference_in_init : Warning<
+  "static variable %0 is suspiciously used within its own initialization">,
+  InGroup<UninitializedStaticSelfInit>;
 def warn_uninit_self_reference_in_init : Warning<
   "variable %0 is uninitialized when used within its own initialization">,
   InGroup<Uninitialized>;
@@ -1321,6 +1330,11 @@ def note_uninit_fixit_remove_cond : Note<
   "remove the %select{'%1' if its condition|condition if it}0 "
   "is always %select{false|true}2">;
 def err_init_incomplete_type : Error<"initialization of incomplete type %0">;
+
+def warn_unsequenced_mod_mod : Warning<
+  "multiple unsequenced modifications to %0">, InGroup<Unsequenced>;
+def warn_unsequenced_mod_use : Warning<
+  "unsequenced modification and access to %0">, InGroup<Unsequenced>;
 
 def err_temp_copy_no_viable : Error<
   "no viable constructor %select{copying variable|copying parameter|"
@@ -1824,6 +1838,8 @@ def err_attribute_wrong_decl_type : Error<
   "functions, methods, and parameters|classes|variables|methods|"
   "variables, functions and labels|fields and global variables|structs|"
   "variables, functions and tag types|thread-local variables}1">;
+def err_attribute_not_type_attr : Error<
+  "'%0' attribute cannot be applied to types">;
 def warn_function_attribute_wrong_type : Warning<
   "'%0' only applies to function types; type here is %1">,
   InGroup<IgnoredAttributes>;
@@ -1879,6 +1895,16 @@ def warn_availability_version_ordering : Warning<
   "attribute ignored">, InGroup<Availability>;
 def warn_mismatched_availability: Warning<
   "availability does not match previous declaration">, InGroup<Availability>;
+def warn_mismatched_availability_override : Warning<
+  "overriding method %select{introduced after|"
+  "deprecated before|obsoleted before}0 overridden method on %1 (%2 vs. %3)">, 
+  InGroup<Availability>;
+def warn_mismatched_availability_override_unavail : Warning<
+  "overriding method cannot be unavailable on %0 when its overridden method is "
+  "available">,
+  InGroup<Availability>;
+def note_overridden_method : Note<
+  "overridden method is here">;
 
 // ASaP: Safe Parallelism Attributes
 def warn_safepar_attribute_wrong_decl_type : Warning<
@@ -3753,6 +3779,10 @@ def err_arc_collection_forward : Error<
 def err_arc_multiple_method_decl : Error<
   "multiple methods named %0 found with mismatched result, "
   "parameter type or attributes">;
+def warn_arc_lifetime_result_type : Warning<
+  "ARC %select{unused|__unsafe_unretained|__strong|__weak|__autoreleasing}0 "
+  "lifetime qualifier on return type is ignored">,
+  InGroup<IgnoredQualifiers>;
 
 let CategoryName = "ARC Retain Cycle" in {
 
@@ -5857,6 +5887,10 @@ def warn_falloff_noreturn_function : Warning<
   InGroup<InvalidNoreturn>;
 def err_noreturn_block_has_return_expr : Error<
   "block declared 'noreturn' should not return">;
+def err_noreturn_missing_on_first_decl : Error<
+  "function declared '[[noreturn]]' after its first declaration">;
+def note_noreturn_missing_first_decl : Note<
+  "declaration missing '[[noreturn]]' attribute is here">;
 def err_block_on_nonlocal : Error<
   "__block attribute not allowed, only allowed on local variables">;
 def err_block_on_vm : Error<
@@ -6056,6 +6090,18 @@ def err_static_kernel : Error<
   "kernel functions cannot be declared static">;
 def err_static_function_scope : Error<
   "variables in function scope cannot be declared static">;
+def err_opencl_bitfields : Error<
+  "bitfields are not supported in OpenCL">;
+def err_opencl_vla : Error<
+  "variable length arrays are not supported in OpenCL">;
+def err_event_t_kernel_arg : Error<
+  "the event_t type cannot be used to declare a kernel function argument">;
+def err_event_t_global_var : Error<
+  "the event_t type cannot be used to declare a program scope variable">;
+def err_event_t_struct_field : Error<
+  "the event_t type cannot be used to declare a structure or union field">;
+def err_event_t_addr_space_qual : Error<
+  "the event_t type can only be used with __private address space qualifier">;
 
 } // end of sema category
 

@@ -77,8 +77,11 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
     VMContext(M.getContext()),
     NSConcreteGlobalBlock(0), NSConcreteStackBlock(0),
     BlockObjectAssign(0), BlockObjectDispose(0),
-    BlockDescriptorType(0), GenericBlockLiteralType(0) {
-      
+    BlockDescriptorType(0), GenericBlockLiteralType(0),
+    SanitizerBlacklist(CGO.SanitizerBlacklistFile),
+    SanOpts(SanitizerBlacklist.isIn(M) ?
+            SanitizerOptions::Disabled : LangOpts.Sanitize) {
+
   // Initialize the type cache.
   llvm::LLVMContext &LLVMContext = M.getContext();
   VoidTy = llvm::Type::getVoidTy(LLVMContext);
@@ -104,7 +107,7 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
     createCUDARuntime();
 
   // Enable TBAA unless it's suppressed. ThreadSanitizer needs TBAA even at O0.
-  if (LangOpts.SanitizeThread ||
+  if (SanOpts.Thread ||
       (!CodeGenOpts.RelaxedAliasing && CodeGenOpts.OptimizationLevel > 0))
     TBAA = new CodeGenTBAA(Context, VMContext, CodeGenOpts, getLangOpts(),
                            ABI.getMangleContext());
@@ -173,7 +176,10 @@ void CodeGenModule::Release() {
   EmitCtorList(GlobalDtors, "llvm.global_dtors");
   EmitGlobalAnnotations();
   EmitLLVMUsed();
-  EmitModuleLinkOptions();
+
+  if (CodeGenOpts.ModulesAutolink) {
+    EmitModuleLinkOptions();
+  }
 
   SimplifyPersonality();
 
@@ -600,8 +606,8 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
     F->addFnAttr(llvm::Attribute::StackProtect);
   else if (LangOpts.getStackProtector() == LangOptions::SSPReq)
     F->addFnAttr(llvm::Attribute::StackProtectReq);
-  
-  if (LangOpts.SanitizeAddress) {
+
+  if (SanOpts.Address) {
     // When AddressSanitizer is enabled, set AddressSafety attribute
     // unless __attribute__((no_address_safety_analysis)) is used.
     if (!D->hasAttr<NoAddressSafetyAnalysisAttr>())
@@ -720,7 +726,7 @@ void CodeGenModule::EmitLLVMUsed() {
 /// it depends on, using a postorder walk.
 static void addLinkOptionsPostorder(llvm::LLVMContext &Context,
                                     Module *Mod,
-                                    SmallVectorImpl<llvm::MDNode *> &Metadata,
+                                    SmallVectorImpl<llvm::Value *> &Metadata,
                                     llvm::SmallPtrSet<Module *, 16> &Visited) {
   // Import this module's parent.
   if (Mod->Parent && Visited.insert(Mod->Parent)) {
@@ -807,7 +813,7 @@ void CodeGenModule::EmitModuleLinkOptions() {
 
   // Add link options for all of the imported modules in reverse topological
   // order.
-  SmallVector<llvm::MDNode *, 16> MetadataArgs;
+  SmallVector<llvm::Value *, 16> MetadataArgs;
   Visited.clear();
   for (llvm::SetVector<clang::Module *>::iterator M = LinkModules.begin(),
                                                MEnd = LinkModules.end();
@@ -815,15 +821,11 @@ void CodeGenModule::EmitModuleLinkOptions() {
     if (Visited.insert(*M))
       addLinkOptionsPostorder(getLLVMContext(), *M, MetadataArgs, Visited);
   }
+  std::reverse(MetadataArgs.begin(), MetadataArgs.end());
 
-  // Get/create metadata for the link options.
-  llvm::NamedMDNode *Metadata
-    = getModule().getOrInsertNamedMetadata("llvm.module.linkoptions");
-
-  // Add link options in topological order.
-  for (unsigned I = MetadataArgs.size(); I > 0; --I) {
-    Metadata->addOperand(MetadataArgs[I-1]);
-  }
+  // Add the linker options metadata flag.
+  getModule().addModuleFlag(llvm::Module::AppendUnique, "Linker Options",
+                            llvm::MDNode::get(getLLVMContext(), MetadataArgs));
 }
 
 void CodeGenModule::EmitDeferred() {
@@ -1852,7 +1854,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
 
   // If we are compiling with ASan, add metadata indicating dynamically
   // initialized globals.
-  if (LangOpts.SanitizeAddress && NeedsGlobalCtor) {
+  if (SanOpts.Address && NeedsGlobalCtor) {
     llvm::Module &M = getModule();
 
     llvm::NamedMDNode *DynamicInitializers =
@@ -1936,10 +1938,11 @@ static void replaceUsesOfNonProtoConstant(llvm::Constant *old,
     llvm::AttributeSet oldAttrs = callSite.getAttributes();
 
     // Collect any return attributes from the call.
-    llvm::Attribute returnAttrs = oldAttrs.getRetAttributes();
-    if (returnAttrs.hasAttributes())
-      newAttrs.push_back(llvm::AttributeWithIndex::get(
-                                llvm::AttributeSet::ReturnIndex, returnAttrs));
+    if (oldAttrs.hasAttributes(llvm::AttributeSet::ReturnIndex))
+      newAttrs.push_back(
+        llvm::AttributeWithIndex::get(newFn->getContext(),
+                                      llvm::AttributeSet::ReturnIndex,
+                                      oldAttrs.getRetAttributes()));
 
     // If the function was passed too few arguments, don't transform.
     unsigned newNumArgs = newFn->arg_size();
@@ -1964,11 +1967,11 @@ static void replaceUsesOfNonProtoConstant(llvm::Constant *old,
     if (dontTransform)
       continue;
 
-    llvm::Attribute fnAttrs = oldAttrs.getFnAttributes();
-    if (fnAttrs.hasAttributes())
+    if (oldAttrs.hasAttributes(llvm::AttributeSet::FunctionIndex))
       newAttrs.push_back(llvm::
-                       AttributeWithIndex::get(llvm::AttributeSet::FunctionIndex,
-                                               fnAttrs));
+                      AttributeWithIndex::get(newFn->getContext(),
+                                              llvm::AttributeSet::FunctionIndex,
+                                              oldAttrs.getFnAttributes()));
 
     // Okay, we can transform this.  Create the new call instruction and copy
     // over the required information.
@@ -2280,7 +2283,8 @@ CodeGenModule::GetAddrOfConstantCFString(const StringLiteral *Literal) {
   llvm::Constant *C = 0;
   if (isUTF16) {
     ArrayRef<uint16_t> Arr =
-      llvm::makeArrayRef<uint16_t>((uint16_t*)Entry.getKey().data(),
+      llvm::makeArrayRef<uint16_t>(reinterpret_cast<uint16_t*>(
+                                     const_cast<char *>(Entry.getKey().data())),
                                    Entry.getKey().size() / 2);
     C = llvm::ConstantDataArray::get(VMContext, Arr);
   } else {

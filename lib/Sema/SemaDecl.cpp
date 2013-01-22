@@ -1822,13 +1822,14 @@ DeclHasAttr(const Decl *D, const Attr *A) {
   return false;
 }
 
-bool Sema::mergeDeclAttribute(NamedDecl *D, InheritableAttr *Attr) {
+bool Sema::mergeDeclAttribute(NamedDecl *D, InheritableAttr *Attr,
+                              bool Override) {
   InheritableAttr *NewAttr = NULL;
   if (AvailabilityAttr *AA = dyn_cast<AvailabilityAttr>(Attr))
     NewAttr = mergeAvailabilityAttr(D, AA->getRange(), AA->getPlatform(),
                                     AA->getIntroduced(), AA->getDeprecated(),
                                     AA->getObsoleted(), AA->getUnavailable(),
-                                    AA->getMessage());
+                                    AA->getMessage(), Override);
   else if (VisibilityAttr *VA = dyn_cast<VisibilityAttr>(Attr))
     NewAttr = mergeVisibilityAttr(D, VA->getRange(), VA->getVisibility());
   else if (DLLImportAttr *ImportA = dyn_cast<DLLImportAttr>(Attr))
@@ -1902,7 +1903,7 @@ static void checkNewAttributesAfterDef(Sema &S, Decl *New, const Decl *Old) {
 
 /// mergeDeclAttributes - Copy attributes from the Old decl to the New one.
 void Sema::mergeDeclAttributes(NamedDecl *New, Decl *Old,
-                               bool MergeDeprecation) {
+                               AvailabilityMergeKind AMK) {
   // attributes declared post-definition are currently ignored
   checkNewAttributesAfterDef(*this, New, Old);
 
@@ -1919,14 +1920,25 @@ void Sema::mergeDeclAttributes(NamedDecl *New, Decl *Old,
          i = Old->specific_attr_begin<InheritableAttr>(),
          e = Old->specific_attr_end<InheritableAttr>(); 
        i != e; ++i) {
+    bool Override = false;
     // Ignore deprecated/unavailable/availability attributes if requested.
-    if (!MergeDeprecation &&
-        (isa<DeprecatedAttr>(*i) || 
-         isa<UnavailableAttr>(*i) ||
-         isa<AvailabilityAttr>(*i)))
-      continue;
+    if (isa<DeprecatedAttr>(*i) ||
+        isa<UnavailableAttr>(*i) ||
+        isa<AvailabilityAttr>(*i)) {
+      switch (AMK) {
+      case AMK_None:
+        continue;
 
-    if (mergeDeclAttribute(New, *i))
+      case AMK_Redeclaration:
+        break;
+
+      case AMK_Override:
+        Override = true;
+        break;
+      }
+    }
+
+    if (mergeDeclAttribute(New, *i, Override))
       foundAny = true;
   }
 
@@ -2264,6 +2276,18 @@ bool Sema::MergeFunctionDecl(FunctionDecl *New, Decl *OldD, Scope *S) {
       }
     }
 
+    // C++11 [dcl.attr.noreturn]p1:
+    //   The first declaration of a function shall specify the noreturn
+    //   attribute if any declaration of that function specifies the noreturn
+    //   attribute.
+    if (New->hasAttr<CXX11NoReturnAttr>() &&
+        !Old->hasAttr<CXX11NoReturnAttr>()) {
+      Diag(New->getAttr<CXX11NoReturnAttr>()->getLocation(),
+           diag::err_noreturn_missing_on_first_decl);
+      Diag(Old->getFirstDeclaration()->getLocation(),
+           diag::note_noreturn_missing_first_decl);
+    }
+
     // (C++98 8.3.5p3):
     //   All declarations for a function shall agree exactly in both the
     //   return type and the parameter-type-list.
@@ -2475,7 +2499,7 @@ void Sema::mergeObjCMethodDecls(ObjCMethodDecl *newMethod,
                                 ObjCMethodDecl *oldMethod) {
 
   // Merge the attributes, including deprecated/unavailable
-  mergeDeclAttributes(newMethod, oldMethod, /* mergeDeprecation */true);
+  mergeDeclAttributes(newMethod, oldMethod, AMK_Override);
 
   // Merge attributes from the parameters.
   ObjCMethodDecl::param_const_iterator oi = oldMethod->param_begin(),
@@ -2485,7 +2509,7 @@ void Sema::mergeObjCMethodDecls(ObjCMethodDecl *newMethod,
        ni != ne && oi != oe; ++ni, ++oi)
     mergeParamDeclAttributes(*ni, *oi, Context);
 
-  CheckObjCMethodOverride(newMethod, oldMethod, true);
+  CheckObjCMethodOverride(newMethod, oldMethod);
 }
 
 /// MergeVarDeclTypes - We parsed a variable 'New' which has the same name and
@@ -4073,6 +4097,10 @@ void Sema::DiagnoseFunctionSpecifiers(Declarator& D) {
   if (D.getDeclSpec().isExplicitSpecified())
     Diag(D.getDeclSpec().getExplicitSpecLoc(),
          diag::err_explicit_non_function);
+
+  if (D.getDeclSpec().isNoreturnSpecified())
+    Diag(D.getDeclSpec().getNoreturnSpecLoc(),
+         diag::err_noreturn_non_function);
 }
 
 NamedDecl*
@@ -4300,6 +4328,22 @@ bool Sema::inferObjCARCLifetime(ValueDecl *decl) {
   return false;
 }
 
+static void checkAttributesAfterMerging(Sema &S, NamedDecl &ND) {
+  // 'weak' only applies to declarations with external linkage.
+  if (WeakAttr *Attr = ND.getAttr<WeakAttr>()) {
+    if (ND.getLinkage() != ExternalLinkage) {
+      S.Diag(Attr->getLocation(), diag::err_attribute_weak_static);
+      ND.dropAttr<WeakAttr>();
+    }
+  }
+  if (WeakRefAttr *Attr = ND.getAttr<WeakRefAttr>()) {
+    if (ND.getLinkage() == ExternalLinkage) {
+      S.Diag(Attr->getLocation(), diag::err_attribute_weakref_not_static);
+      ND.dropAttr<WeakRefAttr>();
+    }
+  }
+}
+
 NamedDecl*
 Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
                               TypeSourceInfo *TInfo, LookupResult &Previous,
@@ -4356,6 +4400,22 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     if (R.getAddressSpace() == LangAS::opencl_local) {
       SC = SC_OpenCLWorkGroupLocal;
       SCAsWritten = SC_OpenCLWorkGroupLocal;
+    }
+
+    // OpenCL 1.2 spec, p6.9 r:
+    // The event type cannot be used to declare a program scope variable.
+    // The event type cannot be used with the __local, __constant and __global
+    // address space qualifiers.
+    if (R->isEventT()) {
+      if (S->getParent() == 0) {
+        Diag(D.getLocStart(), diag::err_event_t_global_var);
+        D.setInvalidType();
+      }
+
+      if (R.getAddressSpace()) {
+        Diag(D.getLocStart(), diag::err_event_t_addr_space_qual);
+        D.setInvalidType();
+      }
     }
   }
 
@@ -4577,6 +4637,8 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
         CheckMemberSpecialization(NewVD, Previous))
       NewVD->setInvalidDecl();
   }
+
+  checkAttributesAfterMerging(*this, *NewVD);
 
   // If this is a locally-scoped extern C variable, update the map of
   // such variables.
@@ -6044,6 +6106,8 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     }
   }
 
+  checkAttributesAfterMerging(*this, *NewFD);
+
   AddKnownFunctionAttributes(NewFD);
 
   if (NewFD->hasAttr<OverloadableAttr>() && 
@@ -6088,12 +6152,26 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     }
   }
 
-  // OpenCL v1.2 s6.8 static is invalid for kernel functions.
-  if ((getLangOpts().OpenCLVersion >= 120)
-      && NewFD->hasAttr<OpenCLKernelAttr>()
-      && (SC == SC_Static)) {
-    Diag(D.getIdentifierLoc(), diag::err_static_kernel);
-    D.setInvalidType();
+  if (NewFD->hasAttr<OpenCLKernelAttr>()) {
+
+    // OpenCL v1.2 s6.8 static is invalid for kernel functions.
+    if ((getLangOpts().OpenCLVersion >= 120)
+        && (SC == SC_Static)) {
+      Diag(D.getIdentifierLoc(), diag::err_static_kernel);
+      D.setInvalidType();
+    }
+
+    // OpenCL v1.2 s6.8 n:
+    // Arguments to kernel functions in a program cannot be declared to be of
+    // type event_t.
+    for (FunctionDecl::param_iterator PI = NewFD->param_begin(),
+         PE = NewFD->param_end(); PI != PE; ++PI) {
+      if ((*PI)->getType()->isEventT()) {
+        Diag((*PI)->getLocation(), diag::err_event_t_kernel_arg);
+        D.setInvalidType();
+      }
+    }
+    
   }
 
   MarkUnusedFileScopedDecl(NewFD);
@@ -6365,12 +6443,30 @@ bool Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
   return Redeclaration;
 }
 
+static SourceRange getResultSourceRange(const FunctionDecl *FD) {
+  const TypeSourceInfo *TSI = FD->getTypeSourceInfo();
+  if (!TSI)
+    return SourceRange();
+
+  TypeLoc TL = TSI->getTypeLoc();
+  FunctionTypeLoc *FunctionTL = dyn_cast<FunctionTypeLoc>(&TL);
+  if (!FunctionTL)
+    return SourceRange();
+
+  TypeLoc ResultTL = FunctionTL->getResultLoc();
+  if (isa<BuiltinTypeLoc>(ResultTL.getUnqualifiedLoc()))
+    return ResultTL.getSourceRange();
+
+  return SourceRange();
+}
+
 void Sema::CheckMain(FunctionDecl* FD, const DeclSpec& DS) {
   // C++11 [basic.start.main]p3:  A program that declares main to be inline,
   //   static or constexpr is ill-formed.
-  // C99 6.7.4p4:  In a hosted environment, the inline function specifier
-  //   shall not appear in a declaration of main.
+  // C11 6.7.4p4:  In a hosted environment, no function specifier(s) shall
+  //   appear in a declaration of main.
   // static main is not an error under C99, but we should warn about it.
+  // We accept _Noreturn main as an extension.
   if (FD->getStorageClass() == SC_Static)
     Diag(DS.getStorageClassSpecLoc(), getLangOpts().CPlusPlus 
          ? diag::err_static_main : diag::warn_static_main) 
@@ -6378,6 +6474,14 @@ void Sema::CheckMain(FunctionDecl* FD, const DeclSpec& DS) {
   if (FD->isInlineSpecified())
     Diag(DS.getInlineSpecLoc(), diag::err_inline_main) 
       << FixItHint::CreateRemoval(DS.getInlineSpecLoc());
+  if (DS.isNoreturnSpecified()) {
+    SourceLocation NoreturnLoc = DS.getNoreturnSpecLoc();
+    SourceRange NoreturnRange(NoreturnLoc,
+                              PP.getLocForEndOfToken(NoreturnLoc));
+    Diag(NoreturnLoc, diag::ext_noreturn_main);
+    Diag(NoreturnLoc, diag::note_main_remove_noreturn)
+      << FixItHint::CreateRemoval(NoreturnRange);
+  }
   if (FD->isConstexpr()) {
     Diag(DS.getConstexprSpecLoc(), diag::err_constexpr_main)
       << FixItHint::CreateRemoval(DS.getConstexprSpecLoc());
@@ -6401,9 +6505,20 @@ void Sema::CheckMain(FunctionDecl* FD, const DeclSpec& DS) {
   } else if (getLangOpts().GNUMode && !getLangOpts().CPlusPlus) {
     Diag(FD->getTypeSpecStartLoc(), diag::ext_main_returns_nonint);
 
+    SourceRange ResultRange = getResultSourceRange(FD);
+    if (ResultRange.isValid())
+      Diag(ResultRange.getBegin(), diag::note_main_change_return_type)
+          << FixItHint::CreateReplacement(ResultRange, "int");
+
   // Otherwise, this is just a flat-out error.
   } else {
-    Diag(FD->getTypeSpecStartLoc(), diag::err_main_returns_nonint);
+    SourceRange ResultRange = getResultSourceRange(FD);
+    if (ResultRange.isValid())
+      Diag(FD->getTypeSpecStartLoc(), diag::err_main_returns_nonint)
+          << FixItHint::CreateReplacement(ResultRange, "int");
+    else
+      Diag(FD->getTypeSpecStartLoc(), diag::err_main_returns_nonint);
+
     FD->setInvalidDecl(true);
   }
 
@@ -6604,11 +6719,17 @@ namespace {
     void VisitObjCMessageExpr(ObjCMessageExpr *E) { return; }
 
     void HandleDeclRefExpr(DeclRefExpr *DRE) {
-      Decl* ReferenceDecl = DRE->getDecl(); 
+      Decl* ReferenceDecl = DRE->getDecl();
       if (OrigDecl != ReferenceDecl) return;
-      unsigned diag = isReferenceType
-          ? diag::warn_uninit_self_reference_in_reference_init
-          : diag::warn_uninit_self_reference_in_init;
+      unsigned diag;
+      if (isReferenceType) {
+        diag = diag::warn_uninit_self_reference_in_reference_init;
+      } else if (cast<VarDecl>(OrigDecl)->isStaticLocal()) {
+        diag = diag::warn_static_self_reference_in_init;
+      } else {
+        diag = diag::warn_uninit_self_reference_in_init;
+      }
+
       S.DiagRuntimeBehavior(DRE->getLocStart(), DRE,
                             S.PDiag(diag)
                               << DRE->getNameInfo().getName()
@@ -9691,6 +9812,14 @@ FieldDecl *Sema::HandleField(Scope *S, RecordDecl *Record,
     }
   }
 
+  // OpenCL 1.2 spec, s6.9 r:
+  // The event type cannot be used to declare a structure or union field.
+  if (LangOpts.OpenCL && T->isEventT()) {
+    Diag(Loc, diag::err_event_t_struct_field);
+    D.setInvalidType();
+  }
+
+
   DiagnoseFunctionSpecifiers(D);
 
   if (D.getDeclSpec().isThreadSpecified())
@@ -9797,6 +9926,12 @@ FieldDecl *Sema::CheckFieldDecl(DeclarationName Name, QualType T,
         InvalidDecl = true;
       }
     }
+  }
+
+  // OpenCL v1.2 s6.9.c: bitfields are not supported.
+  if (BitWidth && getLangOpts().OpenCL) {
+    Diag(Loc, diag::err_opencl_bitfields);
+    InvalidDecl = true;
   }
 
   // C99 6.7.2.1p8: A member of a structure or union may have any type other
@@ -10460,11 +10595,12 @@ void Sema::ActOnFields(Scope* S,
             Diag(ClsIvar->getLocation(), diag::note_previous_definition);
             continue;
           }
-          for (const ObjCCategoryDecl *ClsExtDecl = 
-                IDecl->getFirstClassExtension();
-               ClsExtDecl; ClsExtDecl = ClsExtDecl->getNextClassExtension()) {
-            if (const ObjCIvarDecl *ClsExtIvar = 
-                ClsExtDecl->getIvarDecl(ClsFields[i]->getIdentifier())) {
+          for (ObjCInterfaceDecl::known_extensions_iterator
+                 Ext = IDecl->known_extensions_begin(),
+                 ExtEnd = IDecl->known_extensions_end();
+               Ext != ExtEnd; ++Ext) {
+            if (const ObjCIvarDecl *ClsExtIvar
+                  = Ext->getIvarDecl(ClsFields[i]->getIdentifier())) {
               Diag(ClsFields[i]->getLocation(), 
                    diag::err_duplicate_ivar_declaration); 
               Diag(ClsExtIvar->getLocation(), diag::note_previous_definition);

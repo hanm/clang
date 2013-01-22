@@ -10,11 +10,11 @@
 #include "IndexingContext.h"
 #include "CIndexDiagnostic.h"
 #include "CIndexer.h"
+#include "CLog.h"
 #include "CXCursor.h"
 #include "CXSourceLocation.h"
 #include "CXString.h"
 #include "CXTranslationUnit.h"
-#include "CLog.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/DeclVisitor.h"
 #include "clang/Frontend/ASTUnit.h"
@@ -543,8 +543,6 @@ static void clang_indexSourceFile_Impl(void *UserData) {
   // Configure the diagnostics.
   IntrusiveRefCntPtr<DiagnosticsEngine>
     Diags(CompilerInstance::createDiagnostics(new DiagnosticOptions,
-                                              num_command_line_args,
-                                              command_line_args,
                                               CaptureDiag,
                                               /*ShouldOwnClient=*/true,
                                               /*ShouldCloneClient=*/false));
