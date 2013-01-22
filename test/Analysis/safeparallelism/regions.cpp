@@ -1,6 +1,4 @@
-//  %clang_cc1 -DASAP_CXX11_SYNTAX -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
-// FIXME: need to teach clang to parse attribute after ctor.
-
+// RUN: %clang_cc1 -DASAP_CXX11_SYNTAX -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
 // RUN: %clang_cc1 -DASAP_GNU_SYNTAX -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
 
 #ifdef ASAP_CXX11_SYNTAX
@@ -26,43 +24,43 @@ public:
   C1 (): money(70) {} 
 
   [[asap::param("Pc")]]
-  C1 (C1& [[asap::arg("Pc")]] c)
-    [[asap::reads("Pc:*")]]
-    [[asap::writes("P1:*")]]
+  [[asap::reads("Pc:*")]]
+  [[asap::writes("P1:*")]]
+  C1 (C1& c [[asap::arg("Pc")]])
     :
     money(c.money) ,
     next(c.next)
   {}
 
-  int get_money() [[asap::reads("P1:R3")]] 
+  int get_money [[asap::reads("P1:R3")]] ()
   { return money; }
 
-  int get_next_money() [[asap::reads("P1")]] [[asap::reads("P1:R2:R3")]]
+  int get_next_money [[asap::reads("P1")]] [[asap::reads("P1:R2:R3")]] ()
   { return next->money; }
 
-  void set_money(int cash) 
-    [[asap::writes("P1:R3")]]
+  void set_money
+    [[asap::writes("P1:R3")]] (int cash)
   { money = cash; }
 
-  int close_account() [[asap::reads("P1:R3")]] {
+  int close_account [[asap::reads("P1:R3")]] () {
     int balance = money;
     set_money(0); // writes P1:R3  expected-warning{{'Writes Effect on P1:R3' effect not covered by effect summary}}
     next->set_money(0); // reads R1, writes P1:R2:R3  expected-warning{{'Reads Effect on P1' effect not covered by effect summary}}  expected-warning{{'Writes Effect on P1:R2:R3' effect not covered by effect summary}}
     return balance;
   }
 
-  void set_next_money(int cash) 
+  void set_next_money 
     [[asap::reads("P1")]]
-    [[asap::writes("P1:R2:R3")]]
+    [[asap::writes("P1:R2:R3")]] (int cash)
   { next->money = cash; }
 
-  void set_next_money_to_this_money () 
+  void set_next_money_to_this_money
     [[asap::writes("P1:R2:R3")]]
     [[asap::reads("P1")]]
-    [[asap::reads("P1:R3")]]
+    [[asap::reads("P1:R3")]] ()
   { next->money = money; }
 
-  void do_stuff(int cash) 
+  void do_stuff
     [[asap::reads("P1")]]
     [[asap::reads("P1:R2")]]
     [[asap::reads("P1:R2:R3")]]
@@ -72,6 +70,7 @@ public:
     [[asap::atomic_writes("P1:R3")]] // expected-warning{{effect summary is not minimal}}
     [[asap::writes("P1:R3")]] 
     [[asap::no_effect]]                   // expected-warning{{effect summary is not minimal}}
+    (int cash)
   { 
     cash += next->money;        // reads P1, P1:R2:R3
     cash -= next->next->money;  // reads P1, P1:R2, P1:R2:R2:R3
