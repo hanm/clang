@@ -40,11 +40,11 @@ Coo {
 public:
   Coo (): money(70) {}
 
-  int get_some() [[asap::no_effect]] { 
+  int get_some [[asap::no_effect]] () { 
     return money;
   }
 
-  void set_money(int cash) [[asap::writes("P2:R")]] { 
+  void set_money [[asap::writes("P2:R")]] (int cash) { 
     money = cash;
   }
 };

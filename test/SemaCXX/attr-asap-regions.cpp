@@ -41,11 +41,11 @@ Coo {
 public:
   Coo (): money(70) {}
 
-  int get_some() [[asap::no_effect]] { 
+  int get_some [[asap::no_effect]] () { 
     return money;
   }
 
-  void set_money(int cash) [[asap::writes("P:Links")]] {
+  void set_money [[asap::writes("P:Links")]] (int cash) {
     money = cash;
   }
 };

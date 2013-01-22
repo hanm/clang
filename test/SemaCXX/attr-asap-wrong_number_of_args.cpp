@@ -63,11 +63,11 @@ Coo {
 public:
   Coo (): money(70) {}
 
-  int get_some() [[asap::no_effect]]{ 
+  int get_some [[asap::no_effect]] (){ 
     return money;
   }
 
-  void set_money(int cash) [[asap::writes]] { // expected-error {{attribute takes one argument}}
+  void set_money [[asap::writes]] (int cash) { // expected-error {{attribute takes one argument}}
     money = cash;
   }
 };
@@ -81,11 +81,11 @@ Gar {
 public:
   Gar (): money(70) {}
 
-  int get_some() [[asap::no_effect("Butter")]]{  // expected-error {{attribute takes no argument}} 
+  int get_some [[asap::no_effect("Butter")]] (){  // expected-error {{attribute takes no argument}} 
     return money;
   }
 
-  void set_money(int cash) [[asap::writes("P:Links", "Links:Butter")]] { // expected-error {{attribute takes one argument}}
+  void set_money [[asap::writes("P:Links", "Links:Butter")]] (int cash) { // expected-error {{attribute takes one argument}}
     money = cash;
   }
 };
