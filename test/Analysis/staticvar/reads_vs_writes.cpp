@@ -489,11 +489,11 @@ namespace compound_assigns {
     (i  = j)  = x;  // expected-warning-re{{Write to the variable '.*' with static duration}} \
                     
     (i  = x) += x;  // expected-warning-re{{Write to the variable '.*' with static duration}}
-    (x  = i) += x;  
+    (x  = i) += x;  // expected-warning{{unsequenced modification and access to 'x'}} 
     (i += x)  = x;  // expected-warning-re{{Write to the variable '.*' with static duration}}
-    (x += i)  = x;  
+    (x += i)  = x;  // expected-warning{{unsequenced modification and access to 'x'}}
     (i += x) += x;  // expected-warning-re{{Write to the variable '.*' with static duration}}
-    (x += i) += x;  
+    (x += i) += x;  // expected-warning{{unsequenced modification and access to 'x'}} 
                     
     --i = x;        // expected-warning-re{{Write to the variable '.*' with static duration}}
                     
@@ -539,11 +539,11 @@ namespace compound_assigns {
     (e  = er) = x;  // expected-warning-re{{Write to the variable '.*' with static duration}} \
                     
     (e  = x) += x;  // expected-warning-re{{Write to the variable '.*' with static duration}}
-    (x  = e) += x;  
+    (x  = e) += x;  // expected-warning{{unsequenced modification and access to 'x'}}
     (e += x)  = x;  // expected-warning-re{{Write to the variable '.*' with static duration}}
-    (x += e)  = x;  
+    (x += e)  = x;  // expected-warning{{unsequenced modification and access to 'x'}}
     (d += x) += x;  // expected-warning-re{{Write to the variable '.*' with static duration}}
-    (x += e) += x;  
+    (x += e) += x;  // expected-warning{{unsequenced modification and access to 'x'}}
                     
     --e = x;        // expected-warning-re{{Write to the variable '.*' with static duration}}
                     
