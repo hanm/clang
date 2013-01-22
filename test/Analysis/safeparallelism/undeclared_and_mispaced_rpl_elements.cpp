@@ -12,7 +12,7 @@ C1 {
   int money3 [[asap::arg("R1:P2")]]; // expected-warning {{RPL element was not declared}}  expected-warning {{RPL element was not declared}} 
   C1 *next [[asap::arg("P1"), asap::arg("P1:R2")]];
 
-  void subtract_money(int cash) [[asap::reads("P1:R1")]] { // expected-warning {{RPL element was not declared}}
+  void subtract_money [[asap::reads("P1:R1")]] (int cash) { // expected-warning {{RPL element was not declared}}
     money -= (cash) ? cash+3 : cash=3;
     money -= cash;
   }

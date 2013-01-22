@@ -19,7 +19,9 @@ public:
 
   /// \brief returns true if Value added, false if it already existed
   /// TODO move implementation outside declaration. I.e., TreeNode::add...
-  bool add(long V) [[asap::writes("P:Left:*")]] [[asap::writes("P:Right:*")]] [[asap::writes("P")]] //[[asap::writes("P:*")]]
+  bool add [[asap::writes("P:Left:*")]] 
+    [[asap::writes("P:Right:*")]] 
+    [[asap::writes("P")]] (long V) //[[asap::writes("P:*")]]
   {
     if (V == Value) return false;
     else if (V < Value) 
@@ -38,7 +40,10 @@ public:
       }
   }
   
-  bool operator +=(long V) [[asap::writes("P:Left:*")]] [[asap::writes("P:Right:*")]] [[asap::writes("P")]]
+  bool operator += [[asap::writes("P:Left:*")]] 
+    [[asap::writes("P:Right:*")]] 
+    [[asap::writes("P")]] 
+    (long V)
   {
     return add(V);
   }

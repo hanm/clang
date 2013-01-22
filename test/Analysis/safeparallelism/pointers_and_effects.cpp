@@ -61,13 +61,14 @@ Rectangle ** pnextstar [[asap::arg("Links"),
                          asap::arg("Pr:Links"), 
                          asap::arg("Pr:*:Next")]];
 
-void do_pointer_stuff(int _x, int _y, bool b) 
+void do_pointer_stuff
   [[asap::writes("Pr:R1:*")]]
   [[asap::writes("Pr:R2:*")]]
   //[[asap::writes("P:R1:Y")]] // Y not declared here TODO: support it
   [[asap::writes("Pr:*:Links")]]
   [[asap::writes("Links")]]
   [[asap::reads("Pr:Next")]]
+  (int _x, int _y, bool b)
 {
   ppstar = ppstar1 = &p1;
   ppstar1 = ppstar = &p1; // expected-warning{{RHS region 'Pr:*' is not included in LHS region 'Pr:*:R1' [invalid assignment:}}
