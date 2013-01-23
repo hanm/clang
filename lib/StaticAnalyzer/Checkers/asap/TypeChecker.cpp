@@ -140,6 +140,77 @@ private:
     return Result;
   }
 
+  /// \brief substitute region parameters with arguments in TmpRegions
+  void substitute(const FieldDecl *FieldD) {
+    /// 1. Set up Reverse iterator over Arg Attributes (annotations)
+#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
+    specific_attr_reverse_iterator<RegionArgAttr>
+        ArgIt = FieldD->specific_attr_rbegin<RegionArgAttr>(),
+        EndIt = FieldD->specific_attr_rend<RegionArgAttr>();
+#else
+    /// Build a reverse iterator over RegionArgAttr
+    llvm::SmallVector<RegionArgAttr*, 8> ArgV;
+    for (specific_attr_iterator<RegionArgAttr> I =
+           FieldD->specific_attr_begin<RegionArgAttr>(),
+           E = FieldD->specific_attr_end<RegionArgAttr>();
+           I != E; ++ I) {
+      ArgV.push_back(*I);
+    }
+
+    llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator
+        ArgIt = ArgV.rbegin(),
+        EndIt = ArgV.rend();
+    // Done preparing reverse iterator
+#endif
+    // TODO if (!arg) arg = some default
+    assert(ArgIt != EndIt);
+    OS << "DEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
+
+    /// 2.1 Region Substitution for expressions under this base
+    RegionArgAttr* SubstArg;
+    QualType SubstQT = FieldD->getType();
+
+    OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
+    /// Find region-argument annotation that appertains to pointee type
+    for (int I = DerefNum; I>0; I--) {
+      assert(ArgIt!=EndIt);
+      ArgIt++;
+      SubstQT = SubstQT->getPointeeType();
+    }
+    assert(ArgIt!=EndIt);
+    SubstArg = *ArgIt;
+
+    //OS << "arg : ";
+    //arg->printPretty(OS, Ctx.getPrintingPolicy());
+    //OS << "\n";
+    OS << "DEBUG::SubstArg : ";
+    SubstArg->printPretty(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+
+    const RegionParamAttr* RPA = getRegionParamAttr(SubstQT.getTypePtr());
+    assert(RPA);
+    // TODO support multiple Parameters
+    StringRef From = RPA->getName();
+    //FIXME do we need to capture here?
+    // FIXME get the param from the new map
+    const ParamRplElement FromElmt(From);
+
+    // apply substitution to temp effects
+    StringRef To = SubstArg->getRpl();
+    Rpl* ToRpl = RplAttrMap[SubstArg];
+    assert(ToRpl);
+
+    if (From.compare(To)) { // if (from != to) then substitute
+      /// 2.2 Substitution of Regions (for typechecking)
+      for (Rpl::RplVector::const_iterator
+                I = TmpRegions->begin(),
+                E = TmpRegions->end();
+            I != E; ++I) {
+        (*I)->substitute(FromElmt, *ToRpl);
+      }
+    }
+  }
+
 public:
   /// Constructor
   TypeCheckerVisitor (
@@ -327,75 +398,10 @@ public:
     /// Type_vd <args> vd
     const FieldDecl* FieldD  = dyn_cast<FieldDecl>(VD);
     if (FieldD) {
-      StringRef S;
-#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
-      specific_attr_reverse_iterator<RegionArgAttr>
-        ArgIt = FieldD->specific_attr_rbegin<RegionArgAttr>(),
-        EndIt = FieldD->specific_attr_rend<RegionArgAttr>();
-#else
-      /// Build a reverse iterator over RegionArgAttr
-      llvm::SmallVector<RegionArgAttr*, 8> ArgV;
-      for (specific_attr_iterator<RegionArgAttr> I =
-           FieldD->specific_attr_begin<RegionArgAttr>(),
-           E = FieldD->specific_attr_end<RegionArgAttr>();
-           I != E; ++ I) {
-          ArgV.push_back(*I);
-      }
-
-      llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator ArgIt =
-        ArgV.rbegin(), EndIt = ArgV.rend();
-
-      // Done preparing reverse iterator
-#endif
-      // TODO if (!arg) arg = some default
-      assert(ArgIt != EndIt);
-      OS << "DEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
+      //StringRef S;
       if (IsBase) {
-        /// 2.1 Region Substitution for expressions under this base
-        RegionArgAttr* SubstArg;
-        QualType SubstQT = FieldD->getType();
-
-        OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
-        /// Find region-argument annotation that appertains to pointee type
-        for (int I = DerefNum; I>0; I--) {
-          assert(ArgIt!=EndIt);
-          ArgIt++;
-          SubstQT = SubstQT->getPointeeType();
-        }
-        assert(ArgIt!=EndIt);
-        SubstArg = *ArgIt;
-
-        //OS << "arg : ";
-        //arg->printPretty(OS, Ctx.getPrintingPolicy());
-        //OS << "\n";
-        OS << "DEBUG::SubstArg : ";
-        SubstArg->printPretty(OS, Ctx.getPrintingPolicy());
-        OS << "\n";
-
-        const RegionParamAttr* RPA = getRegionParamAttr(SubstQT.getTypePtr());
-        assert(RPA);
-        // TODO support multiple Parameters
-        StringRef From = RPA->getName();
-        //FIXME do we need to capture here?
-        // FIXME get the param from the new map
-        const ParamRplElement FromElmt(From);
-
-        // apply substitution to temp effects
-        StringRef To = SubstArg->getRpl();
-        Rpl* ToRpl = RplAttrMap[SubstArg];
-        assert(ToRpl);
-
-        if (From.compare(To)) { // if (from != to) then substitute
-          /// 2.1.2 Substitution of Regions (for typechecking)
-          //if (TypecheckAssignment) {
-            for (Rpl::RplVector::const_iterator
-                    I = TmpRegions->begin(),
-                    E = TmpRegions->end();
-                  I != E; ++I) {
-              (*I)->substitute(FromElmt, *ToRpl);
-            }
-          //}
-        }
+        /// Substitution
+        substitute(FieldD);
       } else { //if (TypecheckAssignment) {
         // isBase == false ==> init regions
 #ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
