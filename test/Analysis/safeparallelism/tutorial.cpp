@@ -23,6 +23,8 @@ namespace ASPTutorial {
     void setXY [[asap::writes("Rx"), asap::writes("Ry")]]
       (double x, double y) {
         // TODO - cobegin kind of parallel syntax support in asp
+        this->setX(x);
+        this->setY(y);
       }
   };
 
@@ -41,27 +43,39 @@ namespace ASPTutorial {
 
   // 2.3 Class and Method Region Parameters.
   class [[asap::param("R")]] Data {
+    friend class DataPair;
     int x [[asap::arg("R")]];
   };
 
-  class [[asap::region("First"), asap::region("Second")]] DataPair {
-    Data first [[asap::arg("First")]];
-    Data second [[asap::arg("Second")]];
+  class [[asap::region("First"), asap::region("Second"), asap::region("Links")]]
+    DataPair {
+    Data *first [[asap::arg("Links"), asap::arg("First")]];
+    Data *second [[asap::arg("Links"), asap::arg("Second")]];
 
   public:
-    // FIXME: do we need to report effects here?
-    // DPJ does not.
-    DataPair(Data First [[asap::arg("First")]],
-             Data Second [[asap::arg("Second")]]) {
-      // FIXME: this crash the checker.
-      /*
+    // Do we need to report effects here?
+    // We only need to declare effects on the formal arguments.
+    // The effects on fields being initialized do not need to be reported
+    // because access to the object being initialized is not available to
+    // any other code, making this object isolated (in its own private region)
+    // until the constructor returns.
+    // FIXME: Checker complains that the writes effect on Links is not covered
+    // here. I must make a special case for constructors not to complain about
+    // effects on anything directly under 'this'(i.e., this->F, for any field F)
+    [[asap::no_effect]] // make this annotation implicit for constructors
+    DataPair(Data *First [[asap::arg("First")]],
+             Data *Second [[asap::arg("Second")]]) {
+      // FIXME: this crashes the checker.
       first = First;
       second = Second;
-      */
     }
 
-    void updateBoth(int firstX, int secondX) {
-      // FIXME: cobegin?
+    void updateBoth [[asap::reads("Links"), 
+                      asap::writes("First"), asap::writes("Second")]]
+      (int firstX, int secondX) {
+      // FIXME: cobegin
+      first->x = firstX;
+      second->x = secondX;
     }
   };
 
