@@ -48,7 +48,21 @@ namespace ASPTutorial {
     Data first [[asap::arg("First")]];
     Data second [[asap::arg("Second")]];
 
-    // FIXME: constructor.
+  public:
+    // FIXME: do we need to report effects here?
+    // DPJ does not.
+    DataPair(Data First [[asap::arg("First")]],
+             Data Second [[asap::arg("Second")]]) {
+      // FIXME: this crash the checker.
+      /*
+      first = First;
+      second = Second;
+      */
+    }
+
+    void updateBoth(int firstX, int secondX) {
+      // FIXME: cobegin?
+    }
   };
 
 }
