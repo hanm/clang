@@ -43,12 +43,12 @@ namespace ASPTutorial {
 
   // 2.3 Class and Method Region Parameters.
   class [[asap::param("R")]] Data {
-    friend class DataPair;
+  public:
     int x [[asap::arg("R")]];
   };
 
   class [[asap::region("First"), asap::region("Second"), asap::region("Links")]]
-    DataPair {
+    DataPairPtr {
     Data *first [[asap::arg("Links"), asap::arg("First")]];
     Data *second [[asap::arg("Links"), asap::arg("Second")]];
 
@@ -62,10 +62,9 @@ namespace ASPTutorial {
     // FIXME: Checker complains that the writes effect on Links is not covered
     // here. I must make a special case for constructors not to complain about
     // effects on anything directly under 'this'(i.e., this->F, for any field F)
-    [[asap::no_effect]] // make this annotation implicit for constructors
-    DataPair(Data *First [[asap::arg("First")]],
-             Data *Second [[asap::arg("Second")]]) {
-      // FIXME: this crashes the checker.
+    [[asap::no_effect]] // TODO: make this annotation implicit for constructors
+    DataPairPtr(Data *First [[asap::arg("First")]],
+                Data *Second [[asap::arg("Second")]]) {
       first = First;
       second = Second;
     }
@@ -79,4 +78,36 @@ namespace ASPTutorial {
     }
   };
 
+  // A version of DataPair using references
+  class [[asap::region("First"), asap::region("Second"), asap::region("Links")]]
+    DataPairRef {
+    Data &first [[asap::arg("First")]];
+    Data &second [[asap::arg("Second")]];
+
+  public:
+    [[asap::no_effect]] 
+    DataPairRef(Data &First [[asap::arg("First")]],
+                Data &Second [[asap::arg("Second")]]) :
+                first(First),
+                second(Second) {
+    }
+
+  };
+  // A version of DataPair using embedded objects
+  class [[asap::region("First"), asap::region("Second"), asap::region("Links")]]
+    DataPair {
+    Data first [[asap::arg("First")]];
+    Data second [[asap::arg("Second")]];
+
+  public:
+    [[asap::no_effect]]
+    DataPair(Data First [[asap::arg("First")]],
+             Data Second [[asap::arg("Second")]]) {
+      first = First; // FIXME: This crashes because it is an implicit call
+                     // to copy the whole class, which is not annotated with
+                     // effects and thus looking up its effects fails
+      second = Second;
+    }
+
+  };
 }
