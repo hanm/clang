@@ -3,7 +3,7 @@
 
 
 class EffectCollectorVisitor
-    : public StmtVisitor<EffectCollectorVisitor, void> {
+    : public StmtVisitor<EffectCollectorVisitor> {
 
 private:
   /// Fields
@@ -13,19 +13,22 @@ private:
   AnalysisDeclContext *AC;
   raw_ostream &OS;
 
-  /** true when we need to typecheck an assignment */
-  bool TypecheckAssignment;
-  /** true when visiting an expression that is being written to */
-  bool HasWriteSemantics;
-  /** true when visiting a base expression (e.g., B in B.f, or B->f) */
-  bool IsBase;
-  /** count of number of dereferences on expression (values in [-1, 0, ...] ) */
-  int DerefNum;
+  RplElementAttrMapTy &RplElementMap;
+  RplAttrMapTy &RplMap;
+  EffectSummaryMapTy &EffectSummaryMap;
+  Effect::EffectVector &EffectSummary;
+  bool FatalError;
 
   Effect::EffectVector EffectsTmp;
-  Effect::EffectVector &EffectSummary;
-  EffectSummaryMapTy &EffectSummaryMap;
-  RplAttrMapTy &RplAttrMap;
+  /// true when we need to typecheck an assignment 
+  bool TypecheckAssignment;
+  /// true when visiting an expression that is being written to 
+  bool HasWriteSemantics;
+  /// true when visiting a base expression (e.g., B in B.f, or B->f) 
+  bool IsBase;
+  /// count of number of dereferences on expression (values in [-1, 0, ...] ) 
+  int DerefNum;
+  
   bool IsCoveredBySummary;
 
   /// Private Methods
@@ -127,11 +130,11 @@ private:
        << (TypecheckAssignment?"true":"false") << ". ";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS <<")\n";
-    if (TypecheckAssignment) {
+    /*if (TypecheckAssignment) {
       /// TODO
-      TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplAttrMap,
+      TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplMap,
                              E, E->getLHS(), E->getRHS());
-    }
+    }*/
 
     bool SavedHWS = HasWriteSemantics;
     bool SavedTCA = TypecheckAssignment;
@@ -156,22 +159,25 @@ public:
     AnalysisManager &Mgr,
     AnalysisDeclContext *AC,
     raw_ostream &OS,
-    Effect::EffectVector &Effectsummary,
+    RplElementAttrMapTy &RplElementMap,
+    RplAttrMapTy &RplMap,
     EffectSummaryMapTy &EffectSummaryMap,
-    RplAttrMapTy &RplAttrMap,
+    Effect::EffectVector &EffectSummary,
     Stmt *S
     ) : BR(BR),
         Ctx(Ctx),
         Mgr(Mgr),
         AC(AC),
         OS(OS),
+        RplElementMap(RplElementMap),
+        RplMap(RplMap),
+        EffectSummaryMap(EffectSummaryMap),
+        EffectSummary(EffectSummary),
+        FatalError(false),
         TypecheckAssignment(false),
         HasWriteSemantics(false),
         IsBase(false),
         DerefNum(0),
-        EffectSummary(Effectsummary),
-        EffectSummaryMap(EffectSummaryMap),
-        RplAttrMap(RplAttrMap),
         IsCoveredBySummary(true) {
     S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     Visit(S);
@@ -184,7 +190,8 @@ public:
 
   /// Getters
   inline bool getIsCoveredBySummary() { return IsCoveredBySummary; }
-
+  inline bool encounteredFatalError() { return FatalError; }
+  
   /// Visitors
   void VisitChildren(Stmt *S) {
     for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
@@ -281,7 +288,7 @@ public:
 
         // apply substitution to temp effects
         StringRef To = SubstArg->getRpl();
-        Rpl* ToRpl = RplAttrMap[SubstArg];
+        Rpl* ToRpl = RplMap[SubstArg];
         assert(ToRpl);
 
         if (From.compare(To)) { // if (from != to) then substitute
@@ -316,7 +323,7 @@ public:
           /// TODO is this atomic or not? ignore atomic for now
           EffectsTmp.push_back(
             new Effect(Effect::EK_ReadsEffect,
-                       new Rpl(RplAttrMap[(*ArgIt)]),
+                       new Rpl(RplMap[(*ArgIt)]),
                        *ArgIt));
           EffectNr++;
           QT = QT->getPointeeType();
@@ -342,7 +349,7 @@ public:
             /// i.e., not here!
           } else {
             EffectsTmp.push_back(
-              new Effect(EK, new Rpl(RplAttrMap[(*ArgIt)]), *ArgIt));
+              new Effect(EK, new Rpl(RplMap[(*ArgIt)]), *ArgIt));
             EffectNr++;
           }
         }
@@ -424,41 +431,8 @@ public:
   }
 
   void VisitCXXThisExpr(CXXThisExpr *E) {
-    OS << "DEBUG:: visiting 'this' expression\n";
+    //OS << "DEBUG:: visiting 'this' expression\n";
     DerefNum = 0;
-    #if 0
-    if (TmpRegions && TmpRegions->empty() && !E->isImplicit()) {
-    //if (!IsBase) { // this should in practice be equivalent to the above
-      // Add parameter as implicit argument
-      CXXRecordDecl* RecDecl = const_cast<CXXRecordDecl*>(E->
-                                                     getBestDynamicClassType());
-      assert(RecDecl);
-
-      /// If the declaration does not yet have an implicit region argument
-      /// add it to the Declaration
-      if (!RecDecl->getAttr<RegionArgAttr>()) {
-        const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
-        assert(Param);
-        RegionArgAttr *Arg =
-          ::new (RecDecl->getASTContext()) RegionArgAttr(Param->getRange(),
-                                                    RecDecl->getASTContext(),
-                                                    Param->getName());
-        RecDecl->addAttr(Arg);
-
-        /// also add it to RplAttrMap
-        RplAttrMap[Arg] = new Rpl(new ParamRplElement(Param->getName()));
-      }
-      RegionArgAttr* Arg = RecDecl->getAttr<RegionArgAttr>();
-      assert(Arg);
-      Rpl *Tmp = RplAttrMap[Arg];
-      assert(Tmp);
-      TmpRegions->push_back(new Rpl(Tmp));
-      /*
-      const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
-      assert(Param);
-      TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));*/
-    }
-    #endif
   }
 
   void VisitCompoundAssignOperator(CompoundAssignOperator *E) {
@@ -550,67 +524,3 @@ public:
   }
 
 }; // end class StmtVisitor
-
-///-///////////////////////////////////////////////////////////////////////////
-/// AST Traverser Class
-
-
-/**
- * Wrapper pass that calls effect checker on each function definition.
- * This pass also typechecks assignments to avoid code duplication by having
- * a separate pass do that
- */
-class ASaPEffectsCheckerTraverser :
-  public RecursiveASTVisitor<ASaPEffectsCheckerTraverser> {
-
-private:
-  /// Private Fields
-  ento::BugReporter &BR;
-  ASTContext &Ctx;
-  AnalysisManager &Mgr;
-  AnalysisDeclContext *AC;
-  raw_ostream &OS;
-  bool FatalError;
-  EffectSummaryMapTy &EffectSummaryMap;
-  RplAttrMapTy &RplAttrMap;
-
-public:
-
-  typedef RecursiveASTVisitor<ASaPEffectsCheckerTraverser> BaseClass;
-
-  /// Constructor
-  explicit ASaPEffectsCheckerTraverser(
-    ento::BugReporter &BR, ASTContext &Ctx,
-    AnalysisManager &Mgr, AnalysisDeclContext *AC, raw_ostream &OS,
-    EffectSummaryMapTy &ESM, RplAttrMapTy &RplAttrMap
-    ) : BR(BR),
-        Ctx(Ctx),
-        Mgr(Mgr),
-        AC(AC),
-        OS(OS),
-        FatalError(false),
-        EffectSummaryMap(ESM),
-        RplAttrMap(RplAttrMap)
-  {}
-
-  /// Visitors
-  bool VisitFunctionDecl(FunctionDecl* D) {
-    const FunctionDecl* Definition;
-    if (D->hasBody(Definition)) {
-      Stmt* St = Definition->getBody(Definition);
-      assert(St);
-      //OS << "DEBUG:: calling Stmt Visitor\n";
-      /// 1. Typecheck Assignments (explicit & implicit)
-
-      /// 2. Check that Effect Summary covers method effects
-      Effect::EffectVector *EV = EffectSummaryMap[D];
-      assert(EV);
-      EffectCollectorVisitor ECV(BR, Ctx, Mgr, AC, OS,
-                                 *EV, EffectSummaryMap, RplAttrMap, St);
-      OS << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ "
-         << "(END EffectCollectorVisitor)\n";
-      //OS << "DEBUG:: DONE!! \n";
-    }
-    return true;
-  }
-}; /// class ASaPEffectsCheckerTraverser

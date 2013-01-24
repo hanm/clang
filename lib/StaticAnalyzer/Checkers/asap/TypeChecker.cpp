@@ -18,20 +18,23 @@ private:
   AnalysisManager &Mgr;
   AnalysisDeclContext *AC;
   raw_ostream &OS;
+  
+  RplElementAttrMapTy &RplElementMap;
+  RplAttrMapTy &RplAttrMap;
+  EffectSummaryMapTy &EffectSummaryMap;
+  Effect::EffectVector &EffectSummary;
+  bool FatalError;
 
-  /// true when we need to typecheck an assignment
-  //bool TypecheckAssignment;
   /// true when visiting a base expression (e.g., B in B.f, or B->f)
   bool IsBase;
   /// count of number of dereferences on expression (values in [-1, 0, ...] )
   int DerefNum;
 
-  RplAttrMapTy &RplAttrMap;
   Rpl::RplVector *TmpRegions;
   static const int VECVEC_SIZE = 4;
   typedef llvm::SmallVector<Rpl::RplVector*, VECVEC_SIZE> RplVectorSetTy;
   RplVectorSetTy *TmpRegionsVec, *LHSRegionsVec, *RHSRegionsVec;
-
+  
   /// Private Methods
   void helperEmitInvalidAliasingModificationWarning(Stmt *S, Decl *D,
                                                     const StringRef &Str) {
@@ -77,8 +80,6 @@ private:
     BugType *BT = new BugType(BugName, BugCategory);
     BugReport *R = new BugReport(*BT, BugStr, VDLoc);
     BR.emitReport(R);
-    //BR.EmitBasicReport(D, bugName, bugCategory,
-    //                   bugStr, VDLoc, S->getSourceRange());
   }
 
   bool typecheckAssignment (Expr *E) {
@@ -140,8 +141,8 @@ private:
     return Result;
   }
 
-  /// \brief substitute region parameters with arguments in TmpRegions
-  void substitute(const FieldDecl *FieldD) {
+  /// \brief substitute region parameters in TmpRegions with arguments.
+  void memberSubstitute(const FieldDecl *FieldD) {
     /// 1. Set up Reverse iterator over Arg Attributes (annotations)
 #ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
     specific_attr_reverse_iterator<RegionArgAttr>
@@ -209,8 +210,87 @@ private:
         (*I)->substitute(FromElmt, *ToRpl);
       }
     }
+  } // end substituteMember(const FieldDecl *)
+  
+  /// \brief merge two RplVectorSets by mergning the smallest into the largest
+  RplVectorSetTy *destructiveMergeVector(RplVectorSetTy *A, 
+                                          RplVectorSetTy *B) {
+    if (!A) return B;
+    if (!B) return A;
+    /// else
+    RplVectorSetTy *LHS, *RHS;
+    (A->size() >= B->size()) ? (LHS = A, RHS = B) 
+                             : (LHS = B, RHS = A);
+    //if (A->size() >= B->size())
+    RplVectorSetTy::iterator RHSI = RHS->begin(), RHSE = RHS->end();
+    while (RHSI != RHSE) {
+      LHS->push_back(*RHSI);
+      RHSI = RHS->erase(RHSI);
+    }
+    ASaP::destroyVectorVector(*RHS);
+    return LHS;
   }
+  
+  /// \brief Add a new empty RplVector at the tail of TmpRegionsVec
+  /// Used when visiting new subexpression to be typechecked
+  inline void newTmpRegions() {
+    TmpRegionsVec->push_back(new Rpl::RplVector());
+    TmpRegions = TmpRegionsVec->back();
+  }
+  
+  /// \brief collect the region arguments for a field
+  void collectRegionArgs(const FieldDecl *FieldD) {
+    newTmpRegions();
 
+#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
+    specific_attr_reverse_iterator<RegionArgAttr>
+      I = FieldD->specific_attr_rbegin<RegionArgAttr>(),
+      E = FieldD->specific_attr_rend<RegionArgAttr>();
+#else
+    llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator I =
+      ArgV.rbegin(), 
+      E = argv.rend();
+#endif
+
+    /// 2.1.2.1 drop region args that are sidestepped by dereferrences.
+    int N = DerefNum;
+    while (N>0 && I != E) {
+      I ++;
+      N--;
+    }
+
+    assert(N == 0 || N == -1);
+
+    if (N==0) { /// skip the 1st arg, then add the rest
+      assert(I != E);
+      #if 0 /// TODO implement capture properly!
+      Rpl *Tmp = RplAttrMap[(*I)];
+      assert(Tmp);
+      if (HasWriteSemantics && DerefNum > 0
+          && Tmp->isFullySpecified() == false
+          /* FIXME: && (*i)->/isaPointerType/ )*/) {
+        /// emit capture error
+        std::string Str = Tmp->toString();
+        helperEmitInvalidAliasingModificationWarning(Expr, VD, Str);
+      }
+      #endif
+
+      I++;
+    }
+
+    /// add rest of region types
+    while(I != E) {
+      RegionArgAttr *Arg = *I;
+      Rpl *R = RplAttrMap[Arg];
+      assert(R);
+      TmpRegions->push_back(new Rpl(R)); // make a copy because rpl may
+                                         // be modified by substitution.
+      OS << "DEBUG:: adding RPL for typechecking ~~~~~~~~~~ "
+         << R->toString() << "\n";
+      ++I;
+    }  
+  } // end collectRegionArgs(const FieldDecl *)
+  
 public:
   /// Constructor
   TypeCheckerVisitor (
@@ -219,36 +299,38 @@ public:
     AnalysisManager &Mgr,
     AnalysisDeclContext *AC,
     raw_ostream &OS,
+    RplElementAttrMapTy &RplElementMap,
     RplAttrMapTy &RplAttrMap,
+    EffectSummaryMapTy &EffectSummaryMap,
+    Effect::EffectVector &EffectSummary,
     Expr *E, Expr *LHS, Expr *RHS
     ) : BR(BR),
         Ctx(Ctx),
         Mgr(Mgr),
         AC(AC),
         OS(OS),
+        RplElementMap(RplElementMap),
+        RplAttrMap(RplAttrMap),
+        EffectSummaryMap(EffectSummaryMap),
+        EffectSummary(EffectSummary),
+        FatalError(false),
         IsBase(false),
         DerefNum(0),
-        RplAttrMap(RplAttrMap),
         TmpRegions(0),
         TmpRegionsVec(0),
         LHSRegionsVec(0),
         RHSRegionsVec(0) {
 
     TmpRegionsVec = new RplVectorSetTy();
-    TmpRegionsVec->push_back(new Rpl::RplVector());
-    TmpRegions = TmpRegionsVec->back();
     Visit(RHS);
     RHSRegionsVec = TmpRegionsVec;
 
     TmpRegionsVec = new RplVectorSetTy();
-    TmpRegionsVec->push_back(new Rpl::RplVector());
-    TmpRegions = TmpRegionsVec->back();
     Visit(LHS);
     LHSRegionsVec = TmpRegionsVec;
 
     /// Check assignment
-    //if(TypecheckAssignment)
-      typecheckAssignment(E);
+    typecheckAssignment(E);
 
     // propagate up for chains of assignments
     assert(TmpRegionsVec == LHSRegionsVec);
@@ -274,6 +356,8 @@ public:
     return LHSRegionsVec;
   }
 
+  inline bool encounteredFatalError() { return FatalError; }
+  
   /// Visitors
   void VisitChildren(Stmt *S) {
     for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
@@ -322,13 +406,14 @@ public:
   void VisitCXXThisExpr(CXXThisExpr *E) {
     OS << "DEBUG:: visiting 'this' expression\n";
     DerefNum = 0;
-    if (TmpRegions && TmpRegions->empty() && !E->isImplicit()) {
-    //if (!IsBase) { // this should in practice be equivalent to the above
+    //if (TmpRegions && TmpRegions->empty() && !E->isImplicit()) {
+    if (!IsBase) { // this condition should be equivalent to the above
       // Add parameter as implicit argument
       CXXRecordDecl* RecDecl = const_cast<CXXRecordDecl*>(E->
                                                      getBestDynamicClassType());
       assert(RecDecl);
 
+      /* Keeping this code below as an example of how to add nodes to the AST
       /// If the declaration does not yet have an implicit region argument
       /// add it to the Declaration
       if (!RecDecl->getAttr<RegionArgAttr>()) {
@@ -347,11 +432,10 @@ public:
       assert(Arg);
       Rpl *Tmp = RplAttrMap[Arg];
       assert(Tmp);
-      TmpRegions->push_back(new Rpl(Tmp));
-      /*
+      TmpRegions->push_back(new Rpl(Tmp));*/      
       const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
       assert(Param);
-      TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));*/
+      TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));
     }
   }
 
@@ -360,14 +444,12 @@ public:
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
 
-    TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplAttrMap,
+    TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplElementMap, 
+                           RplAttrMap, EffectSummaryMap, EffectSummary,
                            E, E->getLHS(), E->getRHS());
 
-    assert(TmpRegionsVec->size() == 1);
-    assert(TmpRegions->size() == 0);
-    // FIXME slight memory leak
-    TmpRegionsVec = TCV.getLHSRegionsVec();
-    TmpRegions = TmpRegionsVec->back();
+    RplVectorSetTy *TmpVec = TCV.getLHSRegionsVec();
+    TmpRegionsVec = destructiveMergeVector(TmpRegionsVec, TmpVec);
   }
 
   /// TODO Factor out most of this code into helper functions
@@ -389,6 +471,7 @@ public:
     OS << "\n";
 
     /// 1. VD is a FunctionDecl
+    /// TODO
     //const FunctionDecl *FD = dyn_cast<FunctionDecl>(VD);
     //if (FD)
       //helperVisitFunctionDecl(Expr, FD);
@@ -399,58 +482,10 @@ public:
     const FieldDecl* FieldD  = dyn_cast<FieldDecl>(VD);
     if (FieldD) {
       //StringRef S;
-      if (IsBase) {
-        /// Substitution
-        substitute(FieldD);
-      } else { //if (TypecheckAssignment) {
-        // isBase == false ==> init regions
-#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
-        specific_attr_reverse_iterator<RegionArgAttr>
-          I = FieldD->specific_attr_rbegin<RegionArgAttr>(),
-          E = FieldD->specific_attr_rend<RegionArgAttr>();
-#else
-        llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator I =
-          ArgV.rbegin(), E = argv.rend();
-#endif
-
-        /// 2.1.2.1 drop region args that are sidestepped by dereferrences.
-        int N = DerefNum;
-        while (N>0 && I != E) {
-          I ++;
-          N--;
-        }
-
-        assert(N == 0 || N == -1);
-
-        if (N==0) { /// skip the 1st arg, then add the rest
-          assert(I != E);
-          Rpl *Tmp = RplAttrMap[(*I)];
-          assert(Tmp);
-          #if 0 /// TODO implement capture properly!
-          if (HasWriteSemantics && DerefNum > 0
-              && Tmp->isFullySpecified() == false
-              /* FIXME: && (*i)->/isaPointerType/ )*/) {
-            /// emit capture error
-            std::string Str = Tmp->toString();
-            helperEmitInvalidAliasingModificationWarning(Expr, VD, Str);
-          }
-          #endif
-
-          I++;
-        }
-
-        /// add rest of region types
-        while(I != E) {
-          RegionArgAttr *Arg = *I;
-          Rpl *R = RplAttrMap[Arg];
-          assert(R);
-          TmpRegions->push_back(new Rpl(R)); // make a copy because rpl may
-                                             // be modified by substitution.
-          OS << "DEBUG:: adding RPL for typechecking ~~~~~~~~~~ "
-             << R->toString() << "\n";
-          ++I;
-        }
-      }
+      if (IsBase) 
+        memberSubstitute(FieldD);
+      else // not IsBase --> HEAD
+        collectRegionArgs(FieldD);
 
       /// 2.3. Visit Base with read semantics, then restore write semantics
       bool SavedIsBase = IsBase; // probably not needed to save
@@ -466,3 +501,113 @@ public:
 
 
 }; // end class StmtVisitor
+
+/// Find assignments and call Typechecking on them. Assignments include
+/// * simple assignments: a = b
+/// * complex assignments: a = b (where a and b are compound objects)
+/// * assignment of actuals to formals: f(a)
+/// * ...stay tuned, more to come
+class AssignmentDetectorVisitor : 
+    public ASaPStmtVisitorBase {
+  private:
+  /// Fields
+  
+  public:
+  /// Constructor
+  AssignmentDetectorVisitor(
+    ento::BugReporter &BR,
+    ASTContext &Ctx,
+    AnalysisManager &Mgr,
+    AnalysisDeclContext *AC,
+    raw_ostream &OS,
+    RplElementAttrMapTy &RplElementMap,
+    RplAttrMapTy &RplMap,
+    EffectSummaryMapTy &EffectSummaryMap,
+    Effect::EffectVector &EffectSummary,
+    Stmt *S)
+      : ASaPStmtVisitorBase//<AssignmentDetectorVisitor>
+                           (BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
+                            EffectSummaryMap, EffectSummary, S) {
+    Visit(S);
+  }
+  
+    void VisitBinAssign(BinaryOperator *E) {
+    OS << "DEBUG:: >>>>>>>>>> TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";
+    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
+                           EffectSummaryMap, EffectSummary,  
+                           E, E->getLHS(), E->getRHS());
+  }
+
+}; // end class AssignmentDetectorVisitor
+
+class AssignmentSeekerVisitor
+    : public StmtVisitor<AssignmentSeekerVisitor> {
+
+private:
+  /// Fields
+  ento::BugReporter &BR;
+  ASTContext &Ctx;
+  AnalysisManager &Mgr;
+  AnalysisDeclContext *AC;
+  raw_ostream &OS;
+
+  RplElementAttrMapTy &RplElementMap;
+  RplAttrMapTy &RplMap;
+  EffectSummaryMapTy &EffectSummaryMap;
+  Effect::EffectVector &EffectSummary;
+  bool FatalError;
+
+public:
+  /// Constructor
+  AssignmentSeekerVisitor (
+    ento::BugReporter &BR,
+    ASTContext &Ctx,
+    AnalysisManager &Mgr,
+    AnalysisDeclContext *AC,
+    raw_ostream &OS,
+    RplElementAttrMapTy &RplElementMap,
+    RplAttrMapTy &RplMap,
+    EffectSummaryMapTy &EffectSummaryMap,
+    Effect::EffectVector &EffectSummary,
+    Stmt *S
+    ) : BR(BR),
+        Ctx(Ctx),
+        Mgr(Mgr),
+        AC(AC),
+        OS(OS),
+        RplElementMap(RplElementMap),
+        RplMap(RplMap),
+        EffectSummaryMap(EffectSummaryMap),
+        EffectSummary(EffectSummary),
+        FatalError(false) {
+      Visit(S);
+    }
+
+  /// Getters
+  inline bool encounteredFatalError() { return FatalError; }
+  
+  /// Visitors
+  void VisitChildren(Stmt *S) {
+    for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
+         I!=E; ++I)
+      if (Stmt *child = *I)
+        Visit(child);
+  }
+
+  void VisitStmt(Stmt *S) {
+    VisitChildren(S);
+  }
+    
+    void VisitBinAssign(BinaryOperator *E) {
+    OS << "DEBUG:: >>>>>>>>>> TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";
+    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
+                           EffectSummaryMap, EffectSummary,  
+                           E, E->getLHS(), E->getRHS());
+  }
+
+}; // end class 
+

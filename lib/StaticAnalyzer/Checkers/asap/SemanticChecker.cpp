@@ -19,10 +19,10 @@ private:
   ASTContext &Ctx;
   AnalysisDeclContext *AC;
   raw_ostream &OS;
-  bool FatalError;
-  EffectSummaryMapTy &EffectSummaryMap;
-  RplAttrMapTy &RplAttrMap;
   RplElementAttrMapTy &RplElementMap;
+  RplAttrMapTy &RplAttrMap;
+  EffectSummaryMapTy &EffectSummaryMap;
+  bool FatalError;
 
   /// \brief Issues Warning: '<str>' <bugName> on Declaration
   void helperEmitDeclarationWarning(const Decl *D,
@@ -523,17 +523,17 @@ public:
   explicit ASaPSemanticCheckerTraverser (
     ento::BugReporter &BR, ASTContext &Ctx,
     AnalysisDeclContext *AC, raw_ostream &OS,
-    EffectSummaryMapTy &EffectSummaryMap,
+    RplElementAttrMapTy &RplElementMap,
     RplAttrMapTy &RplAttrMap,
-    RplElementAttrMapTy &RplElementMap
+    EffectSummaryMapTy &EffectSummaryMap
     ) : BR(BR),
         Ctx(Ctx),
         AC(AC),
         OS(OS),
-        FatalError(false),
-        EffectSummaryMap(EffectSummaryMap),
+        RplElementMap(RplElementMap),
         RplAttrMap(RplAttrMap),
-        RplElementMap(RplElementMap)
+        EffectSummaryMap(EffectSummaryMap),
+        FatalError(false)
   {}
 
   /// Getters & Setters
