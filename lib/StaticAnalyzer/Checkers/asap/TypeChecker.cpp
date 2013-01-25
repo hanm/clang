@@ -3,6 +3,77 @@
 // (b = exp1 ? x : y) = (c = exp2 ? w :z)
 // x = x + q.v // don't gather regions from q.v
 
+/// Find assignments and call Typechecking on them. Assignments include
+/// * simple assignments: a = b
+/// * complex assignments: a = b (where a and b are compound objects) TODO
+/// * assignment of actuals to formals: f(a) TODO
+/// * return statements assigning expr to formal return type TODO
+/// * ...stay tuned, more to come
+class AssignmentSeekerVisitor
+    : public StmtVisitor<AssignmentSeekerVisitor> {
+
+private:
+  /// Fields
+  ento::BugReporter &BR;
+  ASTContext &Ctx;
+  AnalysisManager &Mgr;
+  AnalysisDeclContext *AC;
+  raw_ostream &OS;
+
+  RplElementAttrMapTy &RplElementMap;
+  RplAttrMapTy &RplMap;
+  EffectSummaryMapTy &EffectSummaryMap;
+  Effect::EffectVector &EffectSummary;
+  bool FatalError;
+
+public:
+  /// Constructor
+  AssignmentSeekerVisitor (
+    ento::BugReporter &BR,
+    ASTContext &Ctx,
+    AnalysisManager &Mgr,
+    AnalysisDeclContext *AC,
+    raw_ostream &OS,
+    RplElementAttrMapTy &RplElementMap,
+    RplAttrMapTy &RplMap,
+    EffectSummaryMapTy &EffectSummaryMap,
+    Effect::EffectVector &EffectSummary,
+    Stmt *S
+    ) : BR(BR),
+        Ctx(Ctx),
+        Mgr(Mgr),
+        AC(AC),
+        OS(OS),
+        RplElementMap(RplElementMap),
+        RplMap(RplMap),
+        EffectSummaryMap(EffectSummaryMap),
+        EffectSummary(EffectSummary),
+        FatalError(false) {
+    OS << "DEBUG:: ******** INVOKING AssignmentSeekerVisitor...\n";
+    S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    
+    Visit(S);
+  }
+
+  /// Getters
+  inline bool encounteredFatalError() { return FatalError; }
+  
+  /// Visitors
+  void VisitChildren(Stmt *S) {
+    for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
+         I!=E; ++I)
+      if (Stmt *child = *I)
+        Visit(child);
+  }
+
+  void VisitStmt(Stmt *S) {
+    VisitChildren(S);
+  }
+    
+  void VisitBinAssign(BinaryOperator *E);
+
+}; // end class 
 
 ///-///////////////////////////////////////////////////////////////////////////
 /// Stmt Visitor Classes
@@ -20,7 +91,7 @@ private:
   raw_ostream &OS;
   
   RplElementAttrMapTy &RplElementMap;
-  RplAttrMapTy &RplAttrMap;
+  RplAttrMapTy &RplMap;
   EffectSummaryMapTy &EffectSummaryMap;
   Effect::EffectVector &EffectSummary;
   bool FatalError;
@@ -198,7 +269,7 @@ private:
 
     // apply substitution to temp effects
     StringRef To = SubstArg->getRpl();
-    Rpl* ToRpl = RplAttrMap[SubstArg];
+    Rpl* ToRpl = RplMap[SubstArg];
     assert(ToRpl);
 
     if (From.compare(To)) { // if (from != to) then substitute
@@ -240,6 +311,7 @@ private:
   
   /// \brief collect the region arguments for a field
   void collectRegionArgs(const FieldDecl *FieldD) {
+    
     newTmpRegions();
 
 #ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
@@ -264,7 +336,7 @@ private:
     if (N==0) { /// skip the 1st arg, then add the rest
       assert(I != E);
       #if 0 /// TODO implement capture properly!
-      Rpl *Tmp = RplAttrMap[(*I)];
+      Rpl *Tmp = RplMap[(*I)];
       assert(Tmp);
       if (HasWriteSemantics && DerefNum > 0
           && Tmp->isFullySpecified() == false
@@ -281,7 +353,7 @@ private:
     /// add rest of region types
     while(I != E) {
       RegionArgAttr *Arg = *I;
-      Rpl *R = RplAttrMap[Arg];
+      Rpl *R = RplMap[Arg];
       assert(R);
       TmpRegions->push_back(new Rpl(R)); // make a copy because rpl may
                                          // be modified by substitution.
@@ -300,7 +372,7 @@ public:
     AnalysisDeclContext *AC,
     raw_ostream &OS,
     RplElementAttrMapTy &RplElementMap,
-    RplAttrMapTy &RplAttrMap,
+    RplAttrMapTy &RplMap,
     EffectSummaryMapTy &EffectSummaryMap,
     Effect::EffectVector &EffectSummary,
     Expr *E, Expr *LHS, Expr *RHS
@@ -310,7 +382,7 @@ public:
         AC(AC),
         OS(OS),
         RplElementMap(RplElementMap),
-        RplAttrMap(RplAttrMap),
+        RplMap(RplMap),
         EffectSummaryMap(EffectSummaryMap),
         EffectSummary(EffectSummary),
         FatalError(false),
@@ -321,6 +393,10 @@ public:
         LHSRegionsVec(0),
         RHSRegionsVec(0) {
 
+    OS << "DEBUG:: ******** INVOKING TypeCheckerVisitor...\n";
+    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    
     TmpRegionsVec = new RplVectorSetTy();
     Visit(RHS);
     RHSRegionsVec = TmpRegionsVec;
@@ -425,12 +501,12 @@ public:
                                                     Param->getName());
         RecDecl->addAttr(Arg);
 
-        /// also add it to RplAttrMap
-        RplAttrMap[Arg] = new Rpl(new ParamRplElement(Param->getName()));
+        /// also add it to RplMap
+        RplMap[Arg] = new Rpl(new ParamRplElement(Param->getName()));
       }
       RegionArgAttr* Arg = RecDecl->getAttr<RegionArgAttr>();
       assert(Arg);
-      Rpl *Tmp = RplAttrMap[Arg];
+      Rpl *Tmp = RplMap[Arg];
       assert(Tmp);
       TmpRegions->push_back(new Rpl(Tmp));*/      
       const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
@@ -445,7 +521,7 @@ public:
     OS << "\n";
 
     TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplElementMap, 
-                           RplAttrMap, EffectSummaryMap, EffectSummary,
+                           RplMap, EffectSummaryMap, EffectSummary,
                            E, E->getLHS(), E->getRHS());
 
     RplVectorSetTy *TmpVec = TCV.getLHSRegionsVec();
@@ -453,9 +529,9 @@ public:
   }
 
   /// TODO Factor out most of this code into helper functions
-  void VisitMemberExpr(MemberExpr *Expr) {
+  void VisitMemberExpr(MemberExpr *Exp) {
     OS << "DEBUG:: VisitMemberExpr: ";
-    Expr->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
     /*OS << "Rvalue=" << E->isRValue()
        << ", Lvalue=" << E->isLValue()
@@ -466,7 +542,7 @@ public:
       OS << "LV_Valid\n";
     else
       OS << "not LV_Valid\n";*/
-    ValueDecl* VD = Expr->getMemberDecl();
+    ValueDecl* VD = Exp->getMemberDecl();
     VD->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
 
@@ -490,17 +566,36 @@ public:
       /// 2.3. Visit Base with read semantics, then restore write semantics
       bool SavedIsBase = IsBase; // probably not needed to save
 
-      DerefNum = Expr->isArrow() ? 1 : 0;
+      DerefNum = Exp->isArrow() ? 1 : 0;
       IsBase = true;
-      Visit(Expr->getBase());
+      Visit(Exp->getBase());
 
       /// Post visitation checking
       IsBase = SavedIsBase;
     } // end if FieldDecl
   } // end VisitMemberExpr
 
+  void VisitConditionalOperator(ConditionalOperator *Exp) {
+    OS << "DEBUG:: @@@@@@@@@@@@VisitConditionalOp@@@@@@@@@@@@@@\n";
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    AssignmentSeekerVisitor ASV(BR, Ctx, Mgr, AC, OS, RplElementMap,
+                                RplMap, EffectSummaryMap, EffectSummary, Exp->getCond());
+    FatalError |= ASV.encounteredFatalError();
+    
+    Visit(Exp->getLHS());
+    Visit(Exp->getRHS());
 
-}; // end class StmtVisitor
+  }
+
+  void VisitBinaryConditionalOperator(BinaryConditionalOperator *Exp) {
+    OS << "DEBUG:: @@@@@@@@@@@@VisitConditionalOp@@@@@@@@@@@@@@\n";
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+  
+  }
+
+}; // end class TypeCheckerVisitor
 
 /// Find assignments and call Typechecking on them. Assignments include
 /// * simple assignments: a = b
@@ -531,7 +626,12 @@ class AssignmentDetectorVisitor :
     Visit(S);
   }
   
-    void VisitBinAssign(BinaryOperator *E) {
+  /*void VisitStmt(Stmt *S) {
+    OS << "DEBUG:: Where is my Visitor now??\n";
+    VisitChildren(S);
+  }*/
+
+  void VisitBinAssign(BinaryOperator *E) {
     OS << "DEBUG:: >>>>>>>>>> TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
@@ -542,72 +642,15 @@ class AssignmentDetectorVisitor :
 
 }; // end class AssignmentDetectorVisitor
 
-class AssignmentSeekerVisitor
-    : public StmtVisitor<AssignmentSeekerVisitor> {
 
-private:
-  /// Fields
-  ento::BugReporter &BR;
-  ASTContext &Ctx;
-  AnalysisManager &Mgr;
-  AnalysisDeclContext *AC;
-  raw_ostream &OS;
+///-/////////////////////////////////////////////////////////////////////
+/// Implementation of AssignmentSeekerVisitor
 
-  RplElementAttrMapTy &RplElementMap;
-  RplAttrMapTy &RplMap;
-  EffectSummaryMapTy &EffectSummaryMap;
-  Effect::EffectVector &EffectSummary;
-  bool FatalError;
-
-public:
-  /// Constructor
-  AssignmentSeekerVisitor (
-    ento::BugReporter &BR,
-    ASTContext &Ctx,
-    AnalysisManager &Mgr,
-    AnalysisDeclContext *AC,
-    raw_ostream &OS,
-    RplElementAttrMapTy &RplElementMap,
-    RplAttrMapTy &RplMap,
-    EffectSummaryMapTy &EffectSummaryMap,
-    Effect::EffectVector &EffectSummary,
-    Stmt *S
-    ) : BR(BR),
-        Ctx(Ctx),
-        Mgr(Mgr),
-        AC(AC),
-        OS(OS),
-        RplElementMap(RplElementMap),
-        RplMap(RplMap),
-        EffectSummaryMap(EffectSummaryMap),
-        EffectSummary(EffectSummary),
-        FatalError(false) {
-      Visit(S);
-    }
-
-  /// Getters
-  inline bool encounteredFatalError() { return FatalError; }
-  
-  /// Visitors
-  void VisitChildren(Stmt *S) {
-    for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
-         I!=E; ++I)
-      if (Stmt *child = *I)
-        Visit(child);
-  }
-
-  void VisitStmt(Stmt *S) {
-    VisitChildren(S);
-  }
-    
-    void VisitBinAssign(BinaryOperator *E) {
-    OS << "DEBUG:: >>>>>>>>>> TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";
-    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
-    OS << "\n";
-    TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
-                           EffectSummaryMap, EffectSummary,  
-                           E, E->getLHS(), E->getRHS());
-  }
-
-}; // end class 
-
+void AssignmentSeekerVisitor::VisitBinAssign(BinaryOperator *E) {
+  OS << "DEBUG:: >>>>>>>>>> TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";
+  E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
+                         EffectSummaryMap, EffectSummary,  
+                         E, E->getLHS(), E->getRHS());
+}
