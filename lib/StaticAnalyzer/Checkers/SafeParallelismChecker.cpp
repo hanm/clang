@@ -78,6 +78,9 @@ namespace ASaP {
 
 } /// end namespace ASaP
 
+inline bool isNonPointerScalarType(QualType QT) {
+  return (QT->isScalarType() && !QT->isPointerType());
+}
 #include "asap/RplsAndEffects.cpp"
 
 namespace {
@@ -176,7 +179,9 @@ private:
 
   RplElementAttrMapTy RplElementMap;
   RplAttrMapTy &RplAttrMap;
+  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
   EffectSummaryMapTy &EffectSummaryMap;
+
   bool FatalError;
 
 public:
@@ -188,7 +193,7 @@ public:
     ento::BugReporter &BR, ASTContext &Ctx,
     AnalysisManager &Mgr, AnalysisDeclContext *AC, raw_ostream &OS,
     RplElementAttrMapTy RplElementMap, RplAttrMapTy &RplAttrMap,
-    EffectSummaryMapTy &ESM)
+    ASaPTypeDeclMapTy &ASaPTypeDeclMap, EffectSummaryMapTy &ESM)
       : BR(BR),
         Ctx(Ctx),
         Mgr(Mgr),
@@ -196,6 +201,7 @@ public:
         OS(OS),
         RplElementMap(RplElementMap),
         RplAttrMap(RplAttrMap),
+        ASaPTypeDeclMap(ASaPTypeDeclMap),
         EffectSummaryMap(ESM),
         FatalError(false)
   {}
@@ -211,7 +217,7 @@ public:
       assert(S);
 
       StmtVisitorTy StmtVisitor(BR, Ctx, Mgr, AC, OS,
-                                RplElementMap, RplAttrMap,
+                                RplElementMap, RplAttrMap, ASaPTypeDeclMap,
                                 EffectSummaryMap, Definition, S);
       FatalError |= StmtVisitor.encounteredFatalError();
     }
@@ -237,7 +243,9 @@ protected:
 
   RplElementAttrMapTy &RplElementMap;
   RplAttrMapTy &RplMap;
+  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
   EffectSummaryMapTy &EffectSummaryMap;
+
   const FunctionDecl *Def;
   bool FatalError;
 
@@ -251,6 +259,7 @@ public:
     raw_ostream &OS,
     RplElementAttrMapTy &RplElementMap,
     RplAttrMapTy &RplMap,
+    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
     EffectSummaryMapTy &EffectSummaryMap,
     const FunctionDecl *Def,
     Stmt *S
@@ -261,6 +270,7 @@ public:
         OS(OS),
         RplElementMap(RplElementMap),
         RplMap(RplMap),
+        ASaPTypeDeclMap(ASaPTypeDeclMap),
         EffectSummaryMap(EffectSummaryMap),
         Def(Def),
         FatalError(false) {
@@ -304,11 +314,12 @@ public:
     /** initialize traverser */
     RplElementAttrMapTy RplElementMap;
     RplAttrMapTy RplMap;
+    ASaPTypeDeclMapTy ASaPTypeMap;
     EffectSummaryMapTy EffectsMap;
-    ASaPSemanticCheckerTraverser SemanticChecker(BR, D->getASTContext(),
-                                                 Mgr.getAnalysisDeclContext(D),
-                                                 os, RplElementMap, RplMap,
-                                                 EffectsMap);
+    ASaPSemanticCheckerTraverser
+        SemanticChecker(BR, D->getASTContext(),
+                        Mgr.getAnalysisDeclContext(D),
+                        os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);
     /** run checker */
     SemanticChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     os << "##############################################\n";
@@ -320,7 +331,7 @@ public:
       StmtVisitorInvoker<AssignmentSeekerVisitor>
           TypeChecker(BR, D->getASTContext(), Mgr,
                       Mgr.getAnalysisDeclContext(D),
-                      os, RplElementMap, RplMap, EffectsMap);
+                      os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);
       TypeChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
       os << "##############################################\n";
       os << "DEBUG:: done running ASaP Type Checker\n\n";
@@ -333,7 +344,7 @@ public:
         StmtVisitorInvoker<EffectCollectorVisitor>
           EffectChecker(BR, D->getASTContext(), Mgr,
                         Mgr.getAnalysisDeclContext(D),
-                        os, RplElementMap, RplMap, EffectsMap);
+                        os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);
 
         EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
         os << "##############################################\n";
@@ -349,9 +360,9 @@ public:
     destroyRplAttrMap(RplMap); // FIXME: tries to free freed memory (sometimes)
     destroyRplElementAttrMap(RplElementMap);
     /// TODO: deallocate BuiltinDefaulrRegionParam
-    delete ROOT_RplElmt;
-    delete LOCAL_RplElmt;
-    delete STAR_RplElmt;
+    delete ROOTRplElmt;
+    delete LOCALRplElmt;
+    delete STARRplElmt;
 
 
   }

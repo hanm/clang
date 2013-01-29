@@ -22,7 +22,9 @@ private:
 
   RplElementAttrMapTy &RplElementMap;
   RplAttrMapTy &RplMap;
+  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
   EffectSummaryMapTy &EffectSummaryMap;
+
   const FunctionDecl *Def;
   bool FatalError;
   //Effect::EffectVector &EffectSummary;
@@ -37,6 +39,7 @@ public:
     raw_ostream &OS,
     RplElementAttrMapTy &RplElementMap,
     RplAttrMapTy &RplMap,
+    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
     EffectSummaryMapTy &EffectSummaryMap,
     const FunctionDecl *Def,
     Stmt *S
@@ -47,6 +50,7 @@ public:
         OS(OS),
         RplElementMap(RplElementMap),
         RplMap(RplMap),
+        ASaPTypeDeclMap(ASaPTypeDeclMap),
         EffectSummaryMap(EffectSummaryMap),
         Def(Def),
         FatalError(false) {
@@ -114,7 +118,9 @@ private:
 
   RplElementAttrMapTy &RplElementMap;
   RplAttrMapTy &RplMap;
+  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
   EffectSummaryMapTy &EffectSummaryMap;
+
   const FunctionDecl *Def;
   bool FatalError;
 
@@ -385,7 +391,8 @@ private:
 
 
 
-    if (DerefNum>=0 && SubstQT.isPODType(Ctx)) { /// skip the 1st arg (the 'in' arg)
+    if (DerefNum>=0 && isNonPointerScalarType(SubstQT)) {
+      /// skip the 1st arg (the 'in' arg)
       assert(ArgIt != EndIt);
       #if 0 /// TODO implement capture properly!
       Rpl *Tmp = RplMap[(*ArgIt)];
@@ -425,6 +432,7 @@ public:
     raw_ostream &OS,
     RplElementAttrMapTy &RplElementMap,
     RplAttrMapTy &RplMap,
+    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
     EffectSummaryMapTy &EffectSummaryMap,
     const FunctionDecl *Def,
     Expr *E, Expr *LHS, Expr *RHS
@@ -435,6 +443,7 @@ public:
         OS(OS),
         RplElementMap(RplElementMap),
         RplMap(RplMap),
+        ASaPTypeDeclMap(ASaPTypeDeclMap),
         EffectSummaryMap(EffectSummaryMap),
         Def(Def),
         FatalError(false),
@@ -573,8 +582,8 @@ public:
     OS << "\n";
 
     TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplElementMap,
-                           RplMap, EffectSummaryMap, Def,
-                           E, E->getLHS(), E->getRHS());
+                           RplMap, ASaPTypeDeclMap, EffectSummaryMap,
+                           Def, E, E->getLHS(), E->getRHS());
 
     RplVectorSetTy *TmpVec = TCV.getLHSRegionsVec();
     TmpRegionsVec = destructiveMergeVector(TmpRegionsVec, TmpVec);
@@ -631,8 +640,10 @@ public:
     OS << "DEBUG:: @@@@@@@@@@@@VisitConditionalOp@@@@@@@@@@@@@@\n";
     Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
-    AssignmentSeekerVisitor ASV(BR, Ctx, Mgr, AC, OS, RplElementMap,
-                                RplMap, EffectSummaryMap, Def, Exp->getCond());
+    AssignmentSeekerVisitor ASV(BR, Ctx, Mgr, AC, OS,
+                                RplElementMap, RplMap,
+                                ASaPTypeDeclMap, EffectSummaryMap,
+                                Def, Exp->getCond());
     FatalError |= ASV.encounteredFatalError();
 
     Visit(Exp->getLHS());
@@ -703,14 +714,17 @@ class AssignmentDetectorVisitor :
     AnalysisManager &Mgr,
     AnalysisDeclContext *AC,
     raw_ostream &OS,
+
     RplElementAttrMapTy &RplElementMap,
     RplAttrMapTy &RplMap,
+    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
     EffectSummaryMapTy &EffectSummaryMap,
+
     const FunctionDecl *Def,
     Stmt *S)
       : ASaPStmtVisitorBase//<AssignmentDetectorVisitor>
                            (BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
-                            EffectSummaryMap, Def, S) {
+                            ASaPTypeDeclMap, EffectSummaryMap, Def, S) {
     Visit(S);
   }
 
@@ -724,7 +738,7 @@ class AssignmentDetectorVisitor :
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
     TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
-                           EffectSummaryMap, Def,
+                           ASaPTypeDeclMap, EffectSummaryMap, Def,
                            E, E->getLHS(), E->getRHS());
   }
 
@@ -739,7 +753,7 @@ void AssignmentSeekerVisitor::VisitBinAssign(BinaryOperator *E) {
   E->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
   TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
-                         EffectSummaryMap, Def,
+                         ASaPTypeDeclMap, EffectSummaryMap, Def,
                          E, E->getLHS(), E->getRHS());
 }
 

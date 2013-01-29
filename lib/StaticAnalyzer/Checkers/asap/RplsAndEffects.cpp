@@ -96,8 +96,8 @@ public:
 };
 
 
-static const SpecialRplElement *ROOT_RplElmt = new SpecialRplElement("Root");
-static const SpecialRplElement *LOCAL_RplElmt = new SpecialRplElement("Local");
+static const SpecialRplElement *ROOTRplElmt = new SpecialRplElement("Root");
+static const SpecialRplElement *LOCALRplElmt = new SpecialRplElement("Local");
 
 
 ///-////////////////////////////////////////
@@ -120,16 +120,16 @@ public:
   }
 };
 
-static const StarRplElement *STAR_RplElmt = new StarRplElement();
+static const StarRplElement *STARRplElmt = new StarRplElement();
 
 /// \brief returns a special RPL element (Root, Local, *, ...) or NULL
 const RplElement* getSpecialRplElement(const StringRef& s) {
-  if (!s.compare(STAR_RplElmt->getName()))
-    return STAR_RplElmt;
-  else if (!s.compare(ROOT_RplElmt->getName()))
-    return ROOT_RplElmt;
-  else if (!s.compare(LOCAL_RplElmt->getName()))
-    return LOCAL_RplElmt;
+  if (!s.compare(STARRplElmt->getName()))
+    return STARRplElmt;
+  else if (!s.compare(ROOTRplElmt->getName()))
+    return ROOTRplElmt;
+  else if (!s.compare(LOCALRplElmt->getName()))
+    return LOCALRplElmt;
   else
     return 0;
 }
@@ -290,7 +290,7 @@ private:
       /// R <= R' <== R c= R'
       if (isIncludedIn(rhs)) return true;
       /// R:* <= R' <== R <= R'
-      if (getLastElement() == STAR_RplElmt)
+      if (getLastElement() == STARRplElmt)
         return stripLast().isUnder(rhs);
       /// R:r <= R' <==  R <= R'
       /// R:[i] <= R' <==  R <= R'
@@ -309,7 +309,7 @@ private:
         else /*!isEmpty()*/ return false;
       } else { /// rhs is not empty
         /// R c= R':* <==  R <= R'
-        if (*rhs.getLastElement() == *STAR_RplElmt) {
+        if (*rhs.getLastElement() == *STARRplElmt) {
           osv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
           return isUnder(rhs.stripLast());
         }
@@ -345,7 +345,7 @@ public:
 
   Rpl() : FullySpecified(true) {}
 
-  Rpl(RplElement *Elm) :
+  Rpl(const RplElement *Elm) :
     RplString(Elm->getName()),
     FullySpecified(Elm->isFullySpecified())
   {
@@ -479,6 +479,7 @@ public:
   /// \brief return the join of 'this' and 'that'
   Rpl *join(Rpl* That) {
     /// TODO
+
   }
 
   /// Capture
@@ -668,12 +669,17 @@ class ASaPType {
   /// Fields
   QualType QT;
   Rpl::RplVector ArgV;
+  Rpl *InRpl; // can be null
 
   public:
   /// Constructor
   ASaPType (QualType QT, Rpl::RplVector Argv)
            : QT(QT),
-             ArgV(ArgV) {}
+             ArgV(ArgV), InRpl(0) {}
+
+  ASaPType (QualType QT, Rpl::RplVector Argv, Rpl *InRpl)
+           : QT(QT),
+             ArgV(ArgV), InRpl(InRpl) {}
 
   ~ASaPType() {
     ASaP::destroyVector(ArgV);
@@ -699,7 +705,8 @@ class ASaPType {
       /// Typechecking has passed so we assume that this->QT <= that->QT
       /// but we have to find follow the mapping and substitute Rpls....
       /// TODO :)
-      return false; // until we support inheritance this is good enough
+      assert(false); // ...just fail
+      return 0; // until we support inheritance this is good enough
     }
     assert(this->QT == That->QT);
     return new ASaPType(QT, joinRegions(&this->ArgV, &That->ArgV));

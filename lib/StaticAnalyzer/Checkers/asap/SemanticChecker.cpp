@@ -21,6 +21,7 @@ private:
   raw_ostream &OS;
   RplElementAttrMapTy &RplElementMap;
   RplAttrMapTy &RplAttrMap;
+  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
   EffectSummaryMapTy &EffectSummaryMap;
   bool FatalError;
 
@@ -167,52 +168,95 @@ private:
    *  2. Incompatible arg annotation for type (invalid #of RPLs)
    *  3. Not enough arg annotations for type
    */
-  void checkTypeRegionArgs(ValueDecl *D, bool LocalVar) {
+  void checkTypeRegionArgs(ValueDecl *D, Rpl *ImplicitInAnnot) {
     QualType QT = D->getType();
+    Rpl::RplVector RV;
     // here we need a reverse iterator over RegionArgAttr
 #ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
     specific_attr_reverse_iterator<RegionArgAttr>
-      I = D->specific_attr_rbegin<RegionArgAttr>(),
-      E = D->specific_attr_rend<RegionArgAttr>();
+      ArgIt = D->specific_attr_rbegin<RegionArgAttr>(),
+      ArgEnd = D->specific_attr_rend<RegionArgAttr>();
 #else
     llvm::SmallVector<RegionArgAttr*, 8> argv;
     for (specific_attr_iterator<RegionArgAttr>
-            I = D->specific_attr_begin<RegionArgAttr>(),
-            E = D->specific_attr_end<RegionArgAttr>();
-         I!=E; i++){
-        argv.push_back(*I);
+            ArgIt = D->specific_attr_begin<RegionArgAttr>(),
+            ArgEnd = D->specific_attr_end<RegionArgAttr>();
+         ArgIt!=ArgEnd; ++ArgIt){
+        argv.push_back(*ArgIt);
     }
 
     llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator
-      I = argv.rbegin(),
-      E = argv.rend();
+      ArgIt = argv.rbegin(),
+      ArgEnd = argv.rend();
 #endif
-    while (I != E && QT->isPointerType()) {
-      checkIsValidTypeForArg(D, QT, *I);
-      I ++;
+    /// Compute In Annotation
+    Rpl *InAnnot;
+    if (QT->isScalarType()) {
+      if (ImplicitInAnnot) {
+        InAnnot = ImplicitInAnnot;
+      } else if (ArgIt == ArgEnd) {
+        emitMissingRegionArgs(D);
+        FatalError = true;
+        return;
+      } else { // isScalar && !ImplicitInAnnot && ArgIt!=ArgEnd
+        InAnnot = RplAttrMap[*ArgIt];
+        assert(InAnnot);
+        ArgIt++;
+      }
+      /// Now InAnnot is set (or we have returned with an error)
+      /// Check if we are done... (i.e., if this is a non Pointer Scalar)
+      if (!QT->isPointerType()) { // scalar but not pointer
+        /// our job here is done
+        assert(!ASaPTypeDeclMap[D]);
+        ASaPTypeDeclMap[D] = new ASaPType(D->getType(), RV, InAnnot);
+        return;
+      } else
+        QT = QT->getPointeeType();
+    } else { // not scalar (i.e., also not a pointer)
+        InAnnot = 0; /// FIXME: we may need to substitute P1<-Implicit,
+                     /// P2<-Implicit, ...
+        assert(!ASaPTypeDeclMap[D]);
+        RV.push_back(new Rpl(ImplicitInAnnot));
+        ASaPTypeDeclMap[D] = new ASaPType(D->getType(), RV, InAnnot);
+        return;
+    }
+
+    /// Grab args for multiple pointer levels
+    while (ArgIt != ArgEnd && QT->isPointerType()) {
+      checkIsValidTypeForArg(D, QT, *ArgIt);
+      Rpl *R = RplAttrMap[*ArgIt];
+      assert(R);
+      RV.push_back(new Rpl(R));
+      ArgIt ++;
       QT = QT->getPointeeType();
     }
     /// At this point there are 3 possibilities:
-    /// 1. The number of annotations is correct in which case
-    ///    I+1==E && ~QT->isPointerType()
-    /// 2. There are too few annotations in which case I==E
-    /// 3. There are too many annotations in which case I+1 < E
-    if (I == E) {
+    /// 1. There are too few annotations in which case ArgIt==ArgEnd
+    /// 2. The number of annotations is correct in which case
+    ///    ArgIt+1==ArgEnd && !QT->isPointerType()
+    /// 3. There are too many annotations in which case ArgIt+1 < ArgEnd
+
+    /// 1. too few args
+    if (ArgIt == ArgEnd) {
       /// TODO attach default annotations
-      if (!LocalVar) {
-        emitMissingRegionArgs(D);
-        FatalError = true;
-      }
-    } else {
-      checkIsValidTypeForArg(D, QT, *I);
-      I ++;
+      emitMissingRegionArgs(D);
+      FatalError = true;
+    } else { /// 2. enough arguments, hopefully not too many
+      checkIsValidTypeForArg(D, QT, *ArgIt);
+      Rpl *R = RplAttrMap[*ArgIt];
+      assert(R);
+      RV.push_back(new Rpl(R));
+      /// Add ASaP Type to map
+      assert(!ASaPTypeDeclMap[D]);
+      ASaPTypeDeclMap[D] = new ASaPType(D->getType(), RV);
+      ArgIt ++;
     }
 
-    // check if there are annotations left
-    while (I != E) {
-      emitSuperfluousRegionArg(D, *I);
+    /// 3. check if there were too many arguments
+    while (ArgIt != ArgEnd) {
+      emitSuperfluousRegionArg(D, *ArgIt);
       FatalError = true;
-      I ++;
+      ArgIt ++;
     }
   }
 
@@ -525,6 +569,7 @@ public:
     AnalysisDeclContext *AC, raw_ostream &OS,
     RplElementAttrMapTy &RplElementMap,
     RplAttrMapTy &RplAttrMap,
+    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
     EffectSummaryMapTy &EffectSummaryMap
     ) : BR(BR),
         Ctx(Ctx),
@@ -532,6 +577,7 @@ public:
         OS(OS),
         RplElementMap(RplElementMap),
         RplAttrMap(RplAttrMap),
+        ASaPTypeDeclMap(ASaPTypeDeclMap),
         EffectSummaryMap(EffectSummaryMap),
         FatalError(false)
   {}
@@ -541,9 +587,9 @@ public:
 
   ///=///////////////////////////////////////////////////////////////
   /// Visitors
-  bool VisitValueDecl(ValueDecl* E) {
+  bool VisitValueDecl(ValueDecl* D) {
     OS << "DEBUG:: VisitValueDecl : ";
-    E->print(OS, Ctx.getPrintingPolicy());
+    D->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
     return true;
   }
@@ -571,7 +617,8 @@ public:
     /// B.1 Check Regions & Params
     checkRegionOrParamDecls<RegionAttr>(D);
     checkRegionOrParamDecls<RegionParamAttr>(D);
-    /// B.2 Check Effect RPLs
+    /// B.2 Check ReturnType and Effect RPLs
+    checkRpls<RegionArgAttr>(D); // ReturnType
     checkRpls<ReadsEffectAttr>(D);
     checkRpls<WritesEffectAttr>(D);
     checkRpls<AtomicReadsEffectAttr>(D);
@@ -630,19 +677,30 @@ public:
     checkRpls<RegionArgAttr>(D);
 
     /// C. Check validity of annotations
-    checkTypeRegionArgs(D, false);
+    checkTypeRegionArgs(D, 0);
     return true;
   }
 
   bool VisitVarDecl(VarDecl *D) {
-    OS << "DEBUG:: VisitVarDecl\n";
-    checkTypeRegionArgs(D, true);
+    OS << "DEBUG:: VisitVarDecl: ";
+    D->print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+
+    /// A. Detect Region In & Arg annotations
+    helperPrintAttributes<RegionArgAttr>(D); /// in region
+
+    /// B. Check RPLs
+    checkRpls<RegionArgAttr>(D);
+
+    /// C. Check validity of annotations
+    checkTypeRegionArgs(D, new Rpl(LOCALRplElmt));
     return true;
   }
 
   bool VisitCXXMethodDecl(clang::CXXMethodDecl *D) {
     // ATTENTION This is called after VisitFunctionDecl
     OS << "DEBUG:: VisitCXXMethodDecl\n";
+    checkTypeRegionArgs(D, new Rpl(LOCALRplElmt)); // check return type
     return true;
   }
 

@@ -15,7 +15,9 @@ private:
 
   RplElementAttrMapTy &RplElementMap;
   RplAttrMapTy &RplMap;
+  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
   EffectSummaryMapTy &EffectSummaryMap;
+
   const FunctionDecl *Def;
   bool FatalError;
 
@@ -163,6 +165,7 @@ public:
     raw_ostream &OS,
     RplElementAttrMapTy &RplElementMap,
     RplAttrMapTy &RplMap,
+    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
     EffectSummaryMapTy &EffectSummaryMap,
     const FunctionDecl* Def,
     Stmt *S
@@ -173,6 +176,7 @@ public:
         OS(OS),
         RplElementMap(RplElementMap),
         RplMap(RplMap),
+        ASaPTypeDeclMap(ASaPTypeDeclMap),
         EffectSummaryMap(EffectSummaryMap),
         Def(Def),
         FatalError(false),
