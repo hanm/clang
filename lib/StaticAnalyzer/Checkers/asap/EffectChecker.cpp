@@ -16,20 +16,22 @@ private:
   RplElementAttrMapTy &RplElementMap;
   RplAttrMapTy &RplMap;
   EffectSummaryMapTy &EffectSummaryMap;
-  Effect::EffectVector &EffectSummary;
+  const FunctionDecl *Def;
   bool FatalError;
 
   Effect::EffectVector EffectsTmp;
-  /// true when we need to typecheck an assignment 
+  /// true when we need to typecheck an assignment
   bool TypecheckAssignment;
-  /// true when visiting an expression that is being written to 
+  /// true when visiting an expression that is being written to
   bool HasWriteSemantics;
-  /// true when visiting a base expression (e.g., B in B.f, or B->f) 
+  /// true when visiting a base expression (e.g., B in B.f, or B->f)
   bool IsBase;
-  /// count of number of dereferences on expression (values in [-1, 0, ...] ) 
+  /// count of number of dereferences on expression (values in [-1, 0, ...] )
   int DerefNum;
-  
+
   bool IsCoveredBySummary;
+
+  Effect::EffectVector *EffectSummary;
 
   /// Private Methods
   void helperEmitEffectNotCoveredWarning(const Stmt *S,
@@ -71,7 +73,7 @@ private:
     for (int I=0; I<N; ++I){
       Effect* E = EffectsTmp.pop_back_val();
       OS << "### "; E->print(OS); OS << "\n";
-      if (!E->isCoveredBy(EffectSummary)) {
+      if (!E->isCoveredBy(*EffectSummary)) {
         std::string Str = E->toString();
         helperEmitEffectNotCoveredWarning(Exp, D, Str);
         Result = false;
@@ -162,7 +164,7 @@ public:
     RplElementAttrMapTy &RplElementMap,
     RplAttrMapTy &RplMap,
     EffectSummaryMapTy &EffectSummaryMap,
-    Effect::EffectVector &EffectSummary,
+    const FunctionDecl* Def,
     Stmt *S
     ) : BR(BR),
         Ctx(Ctx),
@@ -172,14 +174,17 @@ public:
         RplElementMap(RplElementMap),
         RplMap(RplMap),
         EffectSummaryMap(EffectSummaryMap),
-        EffectSummary(EffectSummary),
+        Def(Def),
         FatalError(false),
         TypecheckAssignment(false),
         HasWriteSemantics(false),
         IsBase(false),
         DerefNum(0),
         IsCoveredBySummary(true) {
-    S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+
+    EffectSummary = EffectSummaryMap[Def];
+    assert(EffectSummary);
+
     Visit(S);
   }
 
@@ -191,7 +196,7 @@ public:
   /// Getters
   inline bool getIsCoveredBySummary() { return IsCoveredBySummary; }
   inline bool encounteredFatalError() { return FatalError; }
-  
+
   /// Visitors
   void VisitChildren(Stmt *S) {
     for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();

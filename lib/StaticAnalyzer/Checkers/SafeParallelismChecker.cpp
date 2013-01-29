@@ -54,6 +54,30 @@ static raw_ostream& osv2 = llvm::nulls();
 #endif
 
 /// FIXME temporarily just using pre-processor to concatenate code here... UGLY
+namespace ASaP {
+  template<typename T>
+  void destroyVector(T &V) {
+    for (typename T::const_iterator
+             I = V.begin(),
+             E = V.end();
+         I != E; ++I) {
+      delete(*I);
+    }
+  }
+
+  template<typename T>
+  void destroyVectorVector(T &V) {
+    for (typename T::const_iterator
+             I = V.begin(),
+             E = V.end();
+         I != E; ++I) {
+      destroyVector(*(*I));
+      delete(*I);
+    }
+  }
+
+} /// end namespace ASaP
+
 #include "asap/RplsAndEffects.cpp"
 
 namespace {
@@ -93,36 +117,13 @@ namespace {
     return Result;
   }
 
-
-typedef std::map<const FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
+typedef std::map<const Attr*, RplElement*> RplElementAttrMapTy;
 /// FIXME it might be better to map declarations to vectors of Rpls
 /// and RplElements as we did for effect summaries...
 typedef std::map<const Attr*, Rpl*> RplAttrMapTy;
-typedef std::map<const Attr*, RplElement*> RplElementAttrMapTy;
+typedef std::map<const Decl*, ASaPType*> ASaPTypeDeclMapTy; /// TODO: populate
+typedef std::map<const FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
 
-namespace ASaP {
-  template<typename T>
-  void destroyVector(T &V) {
-    for (typename T::const_iterator
-             I = V.begin(),
-             E = V.end();
-         I != E; ++I) {
-      delete(*I);
-    }
-  }
-
-  template<typename T>
-  void destroyVectorVector(T &V) {
-    for (typename T::const_iterator
-             I = V.begin(),
-             E = V.end();
-         I != E; ++I) {
-      destroyVector(*(*I));
-      delete(*I);
-    }
-  }
-
-} /// end namespace ASaP
 
 void destroyEffectSummaryMap(EffectSummaryMapTy &EffectSummaryMap) {
   for(EffectSummaryMapTy::iterator I = EffectSummaryMap.begin(),
@@ -172,7 +173,7 @@ private:
   AnalysisManager &Mgr;
   AnalysisDeclContext *AC;
   raw_ostream &OS;
-  
+
   RplElementAttrMapTy RplElementMap;
   RplAttrMapTy &RplAttrMap;
   EffectSummaryMapTy &EffectSummaryMap;
@@ -186,7 +187,7 @@ public:
   explicit StmtVisitorInvoker(
     ento::BugReporter &BR, ASTContext &Ctx,
     AnalysisManager &Mgr, AnalysisDeclContext *AC, raw_ostream &OS,
-    RplElementAttrMapTy RplElementMap, RplAttrMapTy &RplAttrMap, 
+    RplElementAttrMapTy RplElementMap, RplAttrMapTy &RplAttrMap,
     EffectSummaryMapTy &ESM)
       : BR(BR),
         Ctx(Ctx),
@@ -206,20 +207,19 @@ public:
   bool VisitFunctionDecl(FunctionDecl* D) {
     const FunctionDecl* Definition;
     if (D->hasBody(Definition)) {
-      Stmt* St = Definition->getBody(Definition);
-      assert(St);
-      Effect::EffectVector *EV = EffectSummaryMap[D];
-      assert(EV);
+      Stmt* S = Definition->getBody();
+      assert(S);
+
       StmtVisitorTy StmtVisitor(BR, Ctx, Mgr, AC, OS,
-                                RplElementMap, RplAttrMap, 
-                                EffectSummaryMap, *EV, St);
+                                RplElementMap, RplAttrMap,
+                                EffectSummaryMap, Definition, S);
       FatalError |= StmtVisitor.encounteredFatalError();
     }
     return true;
   }
 }; /// class StmtVisitorInvoker
 
-/// TODO Create a base class for my statement visitors that visit 
+/// TODO Create a base class for my statement visitors that visit
 /// the code of entire function definitions. The tricky part is,
 /// do we want this base class to follow CRTP (Curiously Recurring
 /// template pattern
@@ -238,7 +238,7 @@ protected:
   RplElementAttrMapTy &RplElementMap;
   RplAttrMapTy &RplMap;
   EffectSummaryMapTy &EffectSummaryMap;
-  Effect::EffectVector &EffectSummary;
+  const FunctionDecl *Def;
   bool FatalError;
 
 public:
@@ -252,7 +252,7 @@ public:
     RplElementAttrMapTy &RplElementMap,
     RplAttrMapTy &RplMap,
     EffectSummaryMapTy &EffectSummaryMap,
-    Effect::EffectVector &EffectSummary,
+    const FunctionDecl *Def,
     Stmt *S
     ) : BR(BR),
         Ctx(Ctx),
@@ -262,14 +262,14 @@ public:
         RplElementMap(RplElementMap),
         RplMap(RplMap),
         EffectSummaryMap(EffectSummaryMap),
-        EffectSummary(EffectSummary),
+        Def(Def),
         FatalError(false) {
       //Visit(S);
     }
 
   /// Getters
   inline bool encounteredFatalError() { return FatalError; }
-  
+
   /// Visitors
   void VisitChildren(Stmt *S) {
     for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
@@ -281,7 +281,7 @@ public:
   void VisitStmt(Stmt *S) {
     VisitChildren(S);
   }
-    
+
 }; // end class StmtVisitor
 
 
@@ -317,7 +317,7 @@ public:
       os << "DEBUG:: ENCOUNTERED FATAL ERROR!! STOPPING\n";
     } else {
       // else continue with Typechecking
-      StmtVisitorInvoker<AssignmentSeekerVisitor> 
+      StmtVisitorInvoker<AssignmentSeekerVisitor>
           TypeChecker(BR, D->getASTContext(), Mgr,
                       Mgr.getAnalysisDeclContext(D),
                       os, RplElementMap, RplMap, EffectsMap);
@@ -330,7 +330,7 @@ public:
         /// TODO check for fatal errors during typechecking
         // else continue with Effects Checking
         /// Check that Effect Summaries cover effects
-        StmtVisitorInvoker<EffectCollectorVisitor> 
+        StmtVisitorInvoker<EffectCollectorVisitor>
           EffectChecker(BR, D->getASTContext(), Mgr,
                         Mgr.getAnalysisDeclContext(D),
                         os, RplElementMap, RplMap, EffectsMap);
@@ -343,7 +343,7 @@ public:
         }
       }
     }
-    
+
     /// Clean-Up
     destroyEffectSummaryMap(EffectsMap);
     destroyRplAttrMap(RplMap); // FIXME: tries to free freed memory (sometimes)

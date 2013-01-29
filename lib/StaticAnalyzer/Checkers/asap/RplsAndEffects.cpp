@@ -239,19 +239,19 @@ private:
 
   public:
     /// Constructor
-    RplRef(const Rpl& r) : rpl(r) {
+    RplRef(const Rpl& R) : rpl(R) {
       firstIdx = 0;
       lastIdx = rpl.RplElements.size()-1;
     }
     /// Printing
-    void printElements(raw_ostream& os) {
-      int i = firstIdx;
-      for (; i<lastIdx; i++) {
-        os << rpl.RplElements[i]->getName() << ":";
+    void printElements(raw_ostream& OS) {
+      int I = firstIdx;
+      for (; I < lastIdx; ++I) {
+        OS << rpl.RplElements[I]->getName() << ":";
       }
       // print last element
-      if (i==lastIdx)
-        os << rpl.RplElements[i]->getName();
+      if (I==lastIdx)
+        OS << rpl.RplElements[I]->getName();
     }
 
     std::string toString() {
@@ -467,13 +467,18 @@ public:
       RplElements.append(That->length()-1, (*(That->RplElements.begin() + 1)));
   }
 
-  Rpl* upperBound() {
+  Rpl *upperBound() {
     if (isEmpty() || !isa<CaptureRplElement>(RplElements.front()))
       return this;
     // else
     Rpl* upperBound = & dyn_cast<CaptureRplElement>(RplElements.front())->upperBound();
     upperBound->appendRplTail(this);
     return upperBound;
+  }
+
+  /// \brief return the join of 'this' and 'that'
+  Rpl *join(Rpl* That) {
+    /// TODO
   }
 
   /// Capture
@@ -653,3 +658,103 @@ public:
   }
 
 }; // end class Effect
+
+///-///////////////////////////////////////////////////////////////////////////
+/// ASapType Class
+
+class ASaPType {
+  friend class ASaPType;
+  private:
+  /// Fields
+  QualType QT;
+  Rpl::RplVector ArgV;
+
+  public:
+  /// Constructor
+  ASaPType (QualType QT, Rpl::RplVector Argv)
+           : QT(QT),
+             ArgV(ArgV) {}
+
+  ~ASaPType() {
+    ASaP::destroyVector(ArgV);
+    // delete ArgV;
+  }
+  /// Methods
+  /// \brief true when 'this' is a subtype (derived type) of 'that'
+  bool operator <= (ASaPType *That) {
+    if (this->QT!=That->QT) {
+      /// Typechecking has passed so we assume that this->QT <= that->QT
+      /// but we have to find follow the mapping and substitute Rpls....
+      /// TODO :)
+      return false; // until we support inheritance this is good enough
+    }
+    assert(this->QT == That->QT);
+
+    return isIncludedIn(&this->ArgV, &That->ArgV);
+  }
+
+  /// \brief returns the smallest common supertype (Base Type)
+  ASaPType *join(ASaPType *That) {
+    if (this->QT!=That->QT) {
+      /// Typechecking has passed so we assume that this->QT <= that->QT
+      /// but we have to find follow the mapping and substitute Rpls....
+      /// TODO :)
+      return false; // until we support inheritance this is good enough
+    }
+    assert(this->QT == That->QT);
+    return new ASaPType(QT, joinRegions(&this->ArgV, &That->ArgV));
+  }
+
+  private:
+  /// Private Methods
+
+  /// \brief returns the join of two RplVectors
+  Rpl::RplVector joinRegions(Rpl::RplVector *LHSRs, Rpl::RplVector *RHSRs) {
+    Rpl::RplVector Result;
+    assert(RHSRs);
+    assert(LHSRs);
+    assert(RHSRs->size() == LHSRs->size());
+
+    Rpl::RplVector::const_iterator
+            RHSI = RHSRs->begin(),
+            LHSI = LHSRs->begin(),
+            RHSE = RHSRs->end(),
+            LHSE = LHSRs->end();
+    for ( ;
+          RHSI != RHSE && LHSI != LHSE;
+          RHSI++, LHSI++) {
+      Rpl *LHS = *LHSI;
+      Rpl *RHS = *RHSI;
+      Rpl *Join = LHS->join(RHS);
+      Result.push_back(Join);
+    }
+    return Result;
+  }
+
+  /// \brief return true when LHSRegions <= RHSRegions, false otherwise
+  bool isIncludedIn (const Rpl::RplVector *LHSRegs,
+                     const Rpl::RplVector *RHSRegs) {
+    bool Result = true;
+    assert(RHSRegs);
+    assert(LHSRegs);
+    assert(RHSRegs->size() == LHSRegs->size());
+
+    Rpl::RplVector::const_iterator
+            RHSI = RHSRegs->begin(),
+            LHSI = LHSRegs->begin(),
+            RHSE = RHSRegs->end(),
+            LHSE = LHSRegs->end();
+    for ( ;
+          RHSI != RHSE && LHSI != LHSE;
+          RHSI++, LHSI++) {
+      Rpl *LHS = *LHSI;
+      Rpl *RHS = *RHSI;
+      if (!RHS->isIncludedIn(*LHS)) {
+        Result = false;
+        break;
+      }
+    }
+    return Result;
+  }
+}; // end class ASaPType
+
