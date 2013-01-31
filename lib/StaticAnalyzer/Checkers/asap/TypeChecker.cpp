@@ -391,7 +391,7 @@ private:
 
 
 
-    if (DerefNum>=0 && isNonPointerScalarType(SubstQT)) {
+    if (DerefNum>=0 && SubstQT->isScalarType()) {
       /// skip the 1st arg (the 'in' arg)
       assert(ArgIt != EndIt);
       #if 0 /// TODO implement capture properly!
@@ -542,11 +542,14 @@ public:
 
   void VisitCXXThisExpr(CXXThisExpr *E) {
     OS << "DEBUG:: visiting 'this' expression\n";
+    assert(E);
     DerefNum = 0;
     //if (TmpRegions && TmpRegions->empty() && !E->isImplicit()) {
     if (!IsBase) { // this condition should be equivalent to the above
+      assert(!TmpRegions);
+      newTmpRegions();
       // Add parameter as implicit argument
-      CXXRecordDecl* RecDecl = const_cast<CXXRecordDecl*>(E->
+      CXXRecordDecl *RecDecl = const_cast<CXXRecordDecl*>(E->
                                                      getBestDynamicClassType());
       assert(RecDecl);
 
@@ -574,6 +577,7 @@ public:
       assert(Param);
       TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));
     }
+    OS << "DEBUG:: DONE visiting 'this' expression\n";
   }
 
   void VisitBinAssign(BinaryOperator *E) {
@@ -660,7 +664,7 @@ public:
 
   void VisitReturnStmt(ReturnStmt *Ret) {
     Expr *RHS = Ret->getRetValue();
-
+    /// TODO
   }
 
   void VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {

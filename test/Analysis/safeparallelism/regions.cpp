@@ -16,7 +16,8 @@ class
 [[asap::region("R3")]]
 [[asap::param("P1")]]
 C1 { 
-  int money [[asap::arg("P1:R3")]]; 
+  int money [[asap::arg("P1:R3")]];
+  int *money_p [[asap::arg("R2"), asap::arg("P1:R3")]];  
   C1 *next [[asap::arg("P1"), asap::arg("P1:R2")]];
 
 public:
@@ -34,6 +35,9 @@ public:
 
   int get_money [[asap::reads("P1:R3")]] ()
   { return money; }
+
+  int *get_money_p [[asap::arg("P1:R3"), asap::reads("P1:R3")]] ()
+  { return &money; }
 
   int get_next_money [[asap::reads("P1")]] [[asap::reads("P1:R2:R3")]] ()
   { return next->money; }

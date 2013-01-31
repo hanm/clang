@@ -90,7 +90,7 @@ private:
   void helperVisitFunctionDecl(MemberExpr *Expr, const FunctionDecl *FunDecl) {
     // TODO
     OS << "DEBUG:: helperVisitFunctionDecl!\n";
-    Effect *E = 0; // TODO here we may have a long list of effects
+    //Effect *E = 0; // TODO here we may have a long list of effects
 
     /// find declaration -> find parameter(s) ->
     /// find argument(s) -> substitute

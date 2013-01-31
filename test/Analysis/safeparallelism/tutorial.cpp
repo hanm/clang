@@ -88,7 +88,7 @@ namespace ASPTutorial {
     [[asap::no_effect]] 
     DataPairRef(Data &First [[asap::arg("First")]],
                 Data &Second [[asap::arg("Second")]]) :
-                first(First),
+                first(First),  // FIXME: check initialization lists
                 second(Second) {
     }
 

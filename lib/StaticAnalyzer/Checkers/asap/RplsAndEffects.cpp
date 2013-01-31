@@ -673,11 +673,11 @@ class ASaPType {
 
   public:
   /// Constructor
-  ASaPType (QualType QT, Rpl::RplVector Argv)
+  ASaPType (QualType QT, Rpl::RplVector ArgV)
            : QT(QT),
              ArgV(ArgV), InRpl(0) {}
 
-  ASaPType (QualType QT, Rpl::RplVector Argv, Rpl *InRpl)
+  ASaPType (QualType QT, Rpl::RplVector ArgV, Rpl *InRpl)
            : QT(QT),
              ArgV(ArgV), InRpl(InRpl) {}
 
@@ -686,6 +686,26 @@ class ASaPType {
     // delete ArgV;
   }
   /// Methods
+  inline int getArgVSize() { return ArgV.size(); }
+  std::string toString() const {
+    std::string SBuf;
+    llvm::raw_string_ostream OS(SBuf);
+    //QT.print()
+    if (InRpl)
+      OS << "IN:" << InRpl->toString();
+    else
+      OS << "IN:<empty>";
+
+    OS << ", ArgV:";
+    for (Rpl::RplVector::const_iterator
+            I = ArgV.begin(),
+            E = ArgV.end();
+          I != E; ++I) {
+      OS << (*I)->toString() << " ";
+    }
+    return std::string(OS.str());
+}
+
   /// \brief true when 'this' is a subtype (derived type) of 'that'
   bool operator <= (ASaPType *That) {
     if (this->QT!=That->QT) {
