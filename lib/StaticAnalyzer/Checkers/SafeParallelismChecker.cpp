@@ -54,6 +54,33 @@ static raw_ostream& osv2 = llvm::nulls();
 #endif
 
 /// FIXME temporarily just using pre-processor to concatenate code here... UGLY
+namespace ASaP {
+  template<typename T>
+  void destroyVector(T &V) {
+    for (typename T::const_iterator
+             I = V.begin(),
+             E = V.end();
+         I != E; ++I) {
+      delete(*I);
+    }
+  }
+
+  template<typename T>
+  void destroyVectorVector(T &V) {
+    for (typename T::const_iterator
+             I = V.begin(),
+             E = V.end();
+         I != E; ++I) {
+      destroyVector(*(*I));
+      delete(*I);
+    }
+  }
+
+} /// end namespace ASaP
+
+inline bool isNonPointerScalarType(QualType QT) {
+  return (QT->isScalarType() && !QT->isPointerType());
+}
 #include "asap/RplsAndEffects.cpp"
 
 namespace {
@@ -93,36 +120,13 @@ namespace {
     return Result;
   }
 
-
-typedef std::map<const FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
+typedef std::map<const Attr*, RplElement*> RplElementAttrMapTy;
 /// FIXME it might be better to map declarations to vectors of Rpls
 /// and RplElements as we did for effect summaries...
 typedef std::map<const Attr*, Rpl*> RplAttrMapTy;
-typedef std::map<const Attr*, RplElement*> RplElementAttrMapTy;
+typedef std::map<const Decl*, ASaPType*> ASaPTypeDeclMapTy; /// TODO: populate
+typedef std::map<const FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
 
-namespace ASaP {
-  template<typename T>
-  void destroyVector(T &V) {
-    for (typename T::const_iterator
-             I = V.begin(),
-             E = V.end();
-         I != E; ++I) {
-      delete(*I);
-    }
-  }
-
-  template<typename T>
-  void destroyVectorVector(T &V) {
-    for (typename T::const_iterator
-             I = V.begin(),
-             E = V.end();
-         I != E; ++I) {
-      destroyVector(*(*I));
-      delete(*I);
-    }
-  }
-
-} /// end namespace ASaP
 
 void destroyEffectSummaryMap(EffectSummaryMapTy &EffectSummaryMap) {
   for(EffectSummaryMapTy::iterator I = EffectSummaryMap.begin(),
@@ -158,6 +162,138 @@ void destroyRplElementAttrMap(RplElementAttrMapTy &RplElementAttrMap) {
   assert(RplElementAttrMap.size()==0);
 }
 
+///-///////////////////////////////////////////////////////////////////
+/// GENERIC VISITORS
+/// 1. Wrapper pass that calls a Stmt visitor on each function definition.
+template<typename StmtVisitorTy>
+class StmtVisitorInvoker :
+  public RecursiveASTVisitor<StmtVisitorInvoker<StmtVisitorTy> > {
+
+private:
+  /// Private Fields
+  ento::BugReporter &BR;
+  ASTContext &Ctx;
+  AnalysisManager &Mgr;
+  AnalysisDeclContext *AC;
+  raw_ostream &OS;
+
+  RplElementAttrMapTy RplElementMap;
+  RplAttrMapTy &RplAttrMap;
+  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
+  EffectSummaryMapTy &EffectSummaryMap;
+
+  bool FatalError;
+
+public:
+
+  typedef RecursiveASTVisitor<StmtVisitorInvoker> BaseClass;
+
+  /// Constructor
+  explicit StmtVisitorInvoker(
+    ento::BugReporter &BR, ASTContext &Ctx,
+    AnalysisManager &Mgr, AnalysisDeclContext *AC, raw_ostream &OS,
+    RplElementAttrMapTy RplElementMap, RplAttrMapTy &RplAttrMap,
+    ASaPTypeDeclMapTy &ASaPTypeDeclMap, EffectSummaryMapTy &ESM)
+      : BR(BR),
+        Ctx(Ctx),
+        Mgr(Mgr),
+        AC(AC),
+        OS(OS),
+        RplElementMap(RplElementMap),
+        RplAttrMap(RplAttrMap),
+        ASaPTypeDeclMap(ASaPTypeDeclMap),
+        EffectSummaryMap(ESM),
+        FatalError(false)
+  {}
+
+  /// Getters & Setters
+  inline bool encounteredFatalError() { return FatalError; }
+
+  /// Visitors
+  bool VisitFunctionDecl(FunctionDecl* D) {
+    const FunctionDecl* Definition;
+    if (D->hasBody(Definition)) {
+      Stmt* S = Definition->getBody();
+      assert(S);
+
+      StmtVisitorTy StmtVisitor(BR, Ctx, Mgr, AC, OS,
+                                RplElementMap, RplAttrMap, ASaPTypeDeclMap,
+                                EffectSummaryMap, Definition, S);
+      FatalError |= StmtVisitor.encounteredFatalError();
+    }
+    return true;
+  }
+}; /// class StmtVisitorInvoker
+
+/// TODO Create a base class for my statement visitors that visit
+/// the code of entire function definitions. The tricky part is,
+/// do we want this base class to follow CRTP (Curiously Recurring
+/// template pattern
+//template<typename CustomVisitorTy>
+class ASaPStmtVisitorBase
+    : public StmtVisitor<ASaPStmtVisitorBase/*<CustomVisitorTy>*/ > {
+
+protected:
+  /// Fields
+  ento::BugReporter &BR;
+  ASTContext &Ctx;
+  AnalysisManager &Mgr;
+  AnalysisDeclContext *AC;
+  raw_ostream &OS;
+
+  RplElementAttrMapTy &RplElementMap;
+  RplAttrMapTy &RplMap;
+  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
+  EffectSummaryMapTy &EffectSummaryMap;
+
+  const FunctionDecl *Def;
+  bool FatalError;
+
+public:
+  /// Constructor
+  ASaPStmtVisitorBase (
+    ento::BugReporter &BR,
+    ASTContext &Ctx,
+    AnalysisManager &Mgr,
+    AnalysisDeclContext *AC,
+    raw_ostream &OS,
+    RplElementAttrMapTy &RplElementMap,
+    RplAttrMapTy &RplMap,
+    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
+    EffectSummaryMapTy &EffectSummaryMap,
+    const FunctionDecl *Def,
+    Stmt *S
+    ) : BR(BR),
+        Ctx(Ctx),
+        Mgr(Mgr),
+        AC(AC),
+        OS(OS),
+        RplElementMap(RplElementMap),
+        RplMap(RplMap),
+        ASaPTypeDeclMap(ASaPTypeDeclMap),
+        EffectSummaryMap(EffectSummaryMap),
+        Def(Def),
+        FatalError(false) {
+      //Visit(S);
+    }
+
+  /// Getters
+  inline bool encounteredFatalError() { return FatalError; }
+
+  /// Visitors
+  void VisitChildren(Stmt *S) {
+    for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
+         I!=E; ++I)
+      if (Stmt *child = *I)
+        Visit(child);
+  }
+
+  void VisitStmt(Stmt *S) {
+    VisitChildren(S);
+  }
+
+}; // end class StmtVisitor
+
 
 /// FIXME temporarily just using pre-processor to concatenate code here... UGLY
 #include "asap/TypeChecker.cpp"
@@ -167,6 +303,7 @@ void destroyRplElementAttrMap(RplElementAttrMapTy &RplElementAttrMap) {
 class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
 
+
 public:
   void checkASTDecl(const TranslationUnitDecl *D, AnalysisManager &Mgr,
                     BugReporter &BR) const {
@@ -175,39 +312,61 @@ public:
       RegionParamAttr(D->getSourceRange(), D->getASTContext(), "P");
 
     /** initialize traverser */
-    EffectSummaryMapTy EffectsMap;
-    RplAttrMapTy RplMap;
     RplElementAttrMapTy RplElementMap;
-    ASaPSemanticCheckerTraverser SemanticChecker(BR, D->getASTContext(),
-                                                 Mgr.getAnalysisDeclContext(D),
-                                                 os, EffectsMap, RplMap,
-                                                 RplElementMap);
+    RplAttrMapTy RplMap;
+    ASaPTypeDeclMapTy ASaPTypeMap;
+    EffectSummaryMapTy EffectsMap;
+    ASaPSemanticCheckerTraverser
+        SemanticChecker(BR, D->getASTContext(),
+                        Mgr.getAnalysisDeclContext(D),
+                        os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);
     /** run checker */
     SemanticChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     os << "##############################################\n";
     os << "DEBUG:: done running ASaP Semantic Checker\n\n";
-    if (SemanticChecker.encounteredFatalError())
+    if (SemanticChecker.encounteredFatalError()) {
       os << "DEBUG:: ENCOUNTERED FATAL ERROR!! STOPPING\n";
+    } else {
+      // else continue with Typechecking
+      StmtVisitorInvoker<AssignmentSeekerVisitor>
+          TypeChecker(BR, D->getASTContext(), Mgr,
+                      Mgr.getAnalysisDeclContext(D),
+                      os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);
+      TypeChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+      os << "##############################################\n";
+      os << "DEBUG:: done running ASaP Type Checker\n\n";
+      if (TypeChecker.encounteredFatalError()) {
+        os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      } else {
+        /// TODO check for fatal errors during typechecking
+        // else continue with Effects Checking
+        /// Check that Effect Summaries cover effects
+        StmtVisitorInvoker<EffectCollectorVisitor>
+          EffectChecker(BR, D->getASTContext(), Mgr,
+                        Mgr.getAnalysisDeclContext(D),
+                        os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);
 
-    if (!SemanticChecker.encounteredFatalError()) {
-      /// Check that Effect Summaries cover effects
-      ASaPEffectsCheckerTraverser EffectChecker(BR, D->getASTContext(), Mgr,
-                                                Mgr.getAnalysisDeclContext(D),
-                                                os, EffectsMap, RplMap);
-      EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+        EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+        os << "##############################################\n";
+        os << "DEBUG:: done running ASaP Effect Checker\n\n";
+        if (TypeChecker.encounteredFatalError()) {
+          os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
+        }
+      }
     }
-    /// TODO: destroy EffectMap & RplMap
+
     /// Clean-Up
     destroyEffectSummaryMap(EffectsMap);
     destroyRplAttrMap(RplMap); // FIXME: tries to free freed memory (sometimes)
     destroyRplElementAttrMap(RplElementMap);
     /// TODO: deallocate BuiltinDefaulrRegionParam
-    delete ROOT_RplElmt;
-    delete LOCAL_RplElmt;
-    delete STAR_RplElmt;
+    delete ROOTRplElmt;
+    delete LOCALRplElmt;
+    delete STARRplElmt;
+
 
   }
-};
+}; // end class SafeParallelismChecker
 } // end unnamed namespace
 
 void ento::registerSafeParallelismChecker(CheckerManager &mgr) {

@@ -3,6 +3,103 @@
 // (b = exp1 ? x : y) = (c = exp2 ? w :z)
 // x = x + q.v // don't gather regions from q.v
 
+/// Find assignments and call Typechecking on them. Assignments include
+/// * simple assignments: a = b
+/// * complex assignments: a = b (where a and b are compound objects) TODO
+/// * assignment of actuals to formals: f(a) TODO
+/// * return statements assigning expr to formal return type TODO
+/// * ...stay tuned, more to come
+class AssignmentSeekerVisitor
+    : public StmtVisitor<AssignmentSeekerVisitor> {
+
+private:
+  /// Fields
+  ento::BugReporter &BR;
+  ASTContext &Ctx;
+  AnalysisManager &Mgr;
+  AnalysisDeclContext *AC;
+  raw_ostream &OS;
+
+  RplElementAttrMapTy &RplElementMap;
+  RplAttrMapTy &RplMap;
+  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
+  EffectSummaryMapTy &EffectSummaryMap;
+
+  const FunctionDecl *Def;
+  bool FatalError;
+  //Effect::EffectVector &EffectSummary;
+
+public:
+  /// Constructor
+  AssignmentSeekerVisitor (
+    ento::BugReporter &BR,
+    ASTContext &Ctx,
+    AnalysisManager &Mgr,
+    AnalysisDeclContext *AC,
+    raw_ostream &OS,
+    RplElementAttrMapTy &RplElementMap,
+    RplAttrMapTy &RplMap,
+    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
+    EffectSummaryMapTy &EffectSummaryMap,
+    const FunctionDecl *Def,
+    Stmt *S
+    ) : BR(BR),
+        Ctx(Ctx),
+        Mgr(Mgr),
+        AC(AC),
+        OS(OS),
+        RplElementMap(RplElementMap),
+        RplMap(RplMap),
+        ASaPTypeDeclMap(ASaPTypeDeclMap),
+        EffectSummaryMap(EffectSummaryMap),
+        Def(Def),
+        FatalError(false) {
+
+    //ResultType = getReturnType(Def);
+    //Effect::EffectVector *EffectSummary = EffectSummaryMap[Def];
+    //assert(EffectSummary);
+    OS << "DEBUG:: ******** INVOKING AssignmentSeekerVisitor...\n";
+    S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    Visit(S);
+  }
+
+  /// Getters
+  inline bool encounteredFatalError() { return FatalError; }
+
+  /// Visitors
+  void VisitChildren(Stmt *S) {
+    for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
+         I!=E; ++I)
+      if (Stmt *child = *I)
+        Visit(child);
+  }
+
+  void VisitStmt(Stmt *S) {
+    VisitChildren(S);
+  }
+
+  /// Declarations only. Implementation later to support mutual recursion
+  /// with TypeChecker
+  void VisitBinAssign(BinaryOperator *E);
+  void VisitReturnStmt(ReturnStmt *Ret);
+
+private:
+  /// private helper methods
+  ASaPType *getReturnType(const FunctionDecl *Def) {
+    QualType ResultQT = Def->getResultType();
+    Rpl::RplVector V;
+    specific_attr_reverse_iterator<RegionArgAttr>
+        ArgIt = Def->specific_attr_rbegin<RegionArgAttr>(),
+        EndIt = Def->specific_attr_rend<RegionArgAttr>();
+    for (; ArgIt!=EndIt; ++ArgIt) {
+        Rpl *R = RplMap[*ArgIt];
+        assert(R);
+        V.push_back(R);
+    }
+    return new ASaPType(ResultQT,V);
+  }
+}; // end class
 
 ///-///////////////////////////////////////////////////////////////////////////
 /// Stmt Visitor Classes
@@ -19,14 +116,21 @@ private:
   AnalysisDeclContext *AC;
   raw_ostream &OS;
 
-  /// true when we need to typecheck an assignment
-  //bool TypecheckAssignment;
+  RplElementAttrMapTy &RplElementMap;
+  RplAttrMapTy &RplMap;
+  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
+  EffectSummaryMapTy &EffectSummaryMap;
+
+  const FunctionDecl *Def;
+  bool FatalError;
+
   /// true when visiting a base expression (e.g., B in B.f, or B->f)
   bool IsBase;
   /// count of number of dereferences on expression (values in [-1, 0, ...] )
   int DerefNum;
 
-  RplAttrMapTy &RplAttrMap;
+  //Effect::EffectVector &EffectSummary;
+
   Rpl::RplVector *TmpRegions;
   static const int VECVEC_SIZE = 4;
   typedef llvm::SmallVector<Rpl::RplVector*, VECVEC_SIZE> RplVectorSetTy;
@@ -77,10 +181,10 @@ private:
     BugType *BT = new BugType(BugName, BugCategory);
     BugReport *R = new BugReport(*BT, BugStr, VDLoc);
     BR.emitReport(R);
-    //BR.EmitBasicReport(D, bugName, bugCategory,
-    //                   bugStr, VDLoc, S->getSourceRange());
   }
 
+  /// \brief Typechecks LHSRegionsVec with RHSRegionsVec
+  /// returns true when successful, false otherwise
   bool typecheckAssignment (Expr *E) {
     bool Result = true;
     assert(RHSRegionsVec);
@@ -140,8 +244,12 @@ private:
     return Result;
   }
 
-  /// \brief substitute region parameters with arguments in TmpRegions
-  void substitute(const FieldDecl *FieldD) {
+  /// \brief substitute region parameters in TmpRegions with arguments.
+  void memberSubstitute(const FieldDecl *FieldD) {
+
+    OS << "DEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
+    OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
+
     /// 1. Set up Reverse iterator over Arg Attributes (annotations)
 #ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
     specific_attr_reverse_iterator<RegionArgAttr>
@@ -162,23 +270,24 @@ private:
         EndIt = ArgV.rend();
     // Done preparing reverse iterator
 #endif
-    // TODO if (!arg) arg = some default
-    assert(ArgIt != EndIt);
-    OS << "DEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
 
     /// 2.1 Region Substitution for expressions under this base
-    RegionArgAttr* SubstArg;
     QualType SubstQT = FieldD->getType();
 
-    OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
     /// Find region-argument annotation that appertains to pointee type
+    /// TODO: factor out: need to know type of ArgIt or use ugly macro
+    /// sidestepDerefs(DerefNum, ArgIt, SubstQT);
+    assert(DerefNum >= -1);
     for (int I = DerefNum; I>0; I--) {
       assert(ArgIt!=EndIt);
       ArgIt++;
+      assert(SubstQT->isPointerType());
       SubstQT = SubstQT->getPointeeType();
     }
     assert(ArgIt!=EndIt);
-    SubstArg = *ArgIt;
+    /// END Factor out
+
+    RegionArgAttr* SubstArg = *ArgIt;
 
     //OS << "arg : ";
     //arg->printPretty(OS, Ctx.getPrintingPolicy());
@@ -197,7 +306,7 @@ private:
 
     // apply substitution to temp effects
     StringRef To = SubstArg->getRpl();
-    Rpl* ToRpl = RplAttrMap[SubstArg];
+    Rpl* ToRpl = RplMap[SubstArg];
     assert(ToRpl);
 
     if (From.compare(To)) { // if (from != to) then substitute
@@ -209,7 +318,109 @@ private:
         (*I)->substitute(FromElmt, *ToRpl);
       }
     }
+  } // end substituteMember(const FieldDecl *)
+
+  /// \brief merge two RplVectorSets by mergning the smallest into the largest
+  RplVectorSetTy *destructiveMergeVector(RplVectorSetTy *A,
+                                          RplVectorSetTy *B) {
+    if (!A) return B;
+    if (!B) return A;
+    /// else
+    RplVectorSetTy *LHS, *RHS;
+    (A->size() >= B->size()) ? (LHS = A, RHS = B)
+                             : (LHS = B, RHS = A);
+    // fold RHS into LHS
+    RplVectorSetTy::iterator RHSI = RHS->begin(), RHSE = RHS->end();
+    while (RHSI != RHSE) {
+      LHS->push_back(*RHSI);
+      RHSI = RHS->erase(RHSI);
+    }
+    ASaP::destroyVectorVector(*RHS);
+    /// FIXME: it might be wise to pass the arg pointers by ref
+    /// and null the out before returning...
+    return LHS;
   }
+
+  /// \brief Add a new empty RplVector at the tail of TmpRegionsVec
+  /// Used when visiting new subexpression to be typechecked
+  inline void newTmpRegions() {
+    TmpRegionsVec->push_back(new Rpl::RplVector());
+    TmpRegions = TmpRegionsVec->back();
+  }
+
+  /// \brief collect the region arguments for a field
+  void collectRegionArgs(const FieldDecl *FieldD) {
+
+    newTmpRegions();
+
+    /// 1. Get a reverse iterator over RegionArgAttr
+#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
+    specific_attr_reverse_iterator<RegionArgAttr>
+        ArgIt = FieldD->specific_attr_rbegin<RegionArgAttr>(),
+        EndIt = FieldD->specific_attr_rend<RegionArgAttr>();
+#else
+    /// Build a reverse iterator over RegionArgAttr
+    llvm::SmallVector<RegionArgAttr*, 8> ArgV;
+    for (specific_attr_iterator<RegionArgAttr> I =
+           FieldD->specific_attr_begin<RegionArgAttr>(),
+           E = FieldD->specific_attr_end<RegionArgAttr>();
+           I != E; ++ I) {
+      ArgV.push_back(*I);
+    }
+
+    llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator
+        ArgIt = ArgV.rbegin(),
+        EndIt = ArgV.rend();
+    // Done preparing reverse iterator
+#endif
+
+    /// 2. drop region args that are sidestepped by dereferrences.
+    QualType SubstQT = FieldD->getType();
+
+    /// TODO: factor out: need to know type of ArgIt or use ugly macro
+    /// sidestepDerefs(DerefNum, ArgIt, SubstQT);
+    assert(DerefNum >= -1);
+    for (int I = DerefNum; I>0; I--) {
+      assert(ArgIt!=EndIt);
+      ArgIt++;
+      assert(SubstQT->isPointerType());
+      SubstQT = SubstQT->getPointeeType();
+    }
+    assert(ArgIt!=EndIt);
+    /// END Factor out
+
+
+
+    if (DerefNum>=0 && SubstQT->isScalarType()) {
+      /// skip the 1st arg (the 'in' arg)
+      assert(ArgIt != EndIt);
+      #if 0 /// TODO implement capture properly!
+      Rpl *Tmp = RplMap[(*ArgIt)];
+      assert(Tmp);
+      if (HasWriteSemantics && DerefNum > 0
+          && Tmp->isFullySpecified() == false
+          /* FIXME: && (*i)->/isaPointerType/ )*/) {
+        /// emit capture error
+        std::string Str = Tmp->toString();
+        helperEmitInvalidAliasingModificationWarning(Expr, VD, Str);
+      }
+      #endif
+
+      ArgIt++;
+    }
+
+    /// add rest of region types
+    while(ArgIt != EndIt) {
+      RegionArgAttr *Arg = *ArgIt;
+      Rpl *R = RplMap[Arg];
+      assert(R);
+      TmpRegions->push_back(new Rpl(R)); // make a copy because rpl may
+                                         // be modified by substitution.
+      OS << "DEBUG:: adding RPL for typechecking ~~~~~~~~~~ "
+         << R->toString() << "\n";
+      ++ArgIt;
+    }
+  } // end collectRegionArgs(const FieldDecl *)
 
 public:
   /// Constructor
@@ -219,36 +430,44 @@ public:
     AnalysisManager &Mgr,
     AnalysisDeclContext *AC,
     raw_ostream &OS,
-    RplAttrMapTy &RplAttrMap,
+    RplElementAttrMapTy &RplElementMap,
+    RplAttrMapTy &RplMap,
+    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
+    EffectSummaryMapTy &EffectSummaryMap,
+    const FunctionDecl *Def,
     Expr *E, Expr *LHS, Expr *RHS
     ) : BR(BR),
         Ctx(Ctx),
         Mgr(Mgr),
         AC(AC),
         OS(OS),
+        RplElementMap(RplElementMap),
+        RplMap(RplMap),
+        ASaPTypeDeclMap(ASaPTypeDeclMap),
+        EffectSummaryMap(EffectSummaryMap),
+        Def(Def),
+        FatalError(false),
         IsBase(false),
         DerefNum(0),
-        RplAttrMap(RplAttrMap),
         TmpRegions(0),
         TmpRegionsVec(0),
         LHSRegionsVec(0),
         RHSRegionsVec(0) {
 
+    OS << "DEBUG:: ******** INVOKING TypeCheckerVisitor...\n";
+    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+
     TmpRegionsVec = new RplVectorSetTy();
-    TmpRegionsVec->push_back(new Rpl::RplVector());
-    TmpRegions = TmpRegionsVec->back();
     Visit(RHS);
     RHSRegionsVec = TmpRegionsVec;
 
     TmpRegionsVec = new RplVectorSetTy();
-    TmpRegionsVec->push_back(new Rpl::RplVector());
-    TmpRegions = TmpRegionsVec->back();
     Visit(LHS);
     LHSRegionsVec = TmpRegionsVec;
 
     /// Check assignment
-    //if(TypecheckAssignment)
-      typecheckAssignment(E);
+    typecheckAssignment(E);
 
     // propagate up for chains of assignments
     assert(TmpRegionsVec == LHSRegionsVec);
@@ -273,6 +492,8 @@ public:
     TmpRegionsVec = 0;
     return LHSRegionsVec;
   }
+
+  inline bool encounteredFatalError() { return FatalError; }
 
   /// Visitors
   void VisitChildren(Stmt *S) {
@@ -321,14 +542,18 @@ public:
 
   void VisitCXXThisExpr(CXXThisExpr *E) {
     OS << "DEBUG:: visiting 'this' expression\n";
+    assert(E);
     DerefNum = 0;
-    if (TmpRegions && TmpRegions->empty() && !E->isImplicit()) {
-    //if (!IsBase) { // this should in practice be equivalent to the above
+    //if (TmpRegions && TmpRegions->empty() && !E->isImplicit()) {
+    if (!IsBase) { // this condition should be equivalent to the above
+      assert(!TmpRegions);
+      newTmpRegions();
       // Add parameter as implicit argument
-      CXXRecordDecl* RecDecl = const_cast<CXXRecordDecl*>(E->
+      CXXRecordDecl *RecDecl = const_cast<CXXRecordDecl*>(E->
                                                      getBestDynamicClassType());
       assert(RecDecl);
 
+      /* Keeping this code below as an example of how to add nodes to the AST
       /// If the declaration does not yet have an implicit region argument
       /// add it to the Declaration
       if (!RecDecl->getAttr<RegionArgAttr>()) {
@@ -340,19 +565,19 @@ public:
                                                     Param->getName());
         RecDecl->addAttr(Arg);
 
-        /// also add it to RplAttrMap
-        RplAttrMap[Arg] = new Rpl(new ParamRplElement(Param->getName()));
+        /// also add it to RplMap
+        RplMap[Arg] = new Rpl(new ParamRplElement(Param->getName()));
       }
       RegionArgAttr* Arg = RecDecl->getAttr<RegionArgAttr>();
       assert(Arg);
-      Rpl *Tmp = RplAttrMap[Arg];
+      Rpl *Tmp = RplMap[Arg];
       assert(Tmp);
-      TmpRegions->push_back(new Rpl(Tmp));
-      /*
+      TmpRegions->push_back(new Rpl(Tmp));*/
       const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
       assert(Param);
-      TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));*/
+      TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));
     }
+    OS << "DEBUG:: DONE visiting 'this' expression\n";
   }
 
   void VisitBinAssign(BinaryOperator *E) {
@@ -360,20 +585,18 @@ public:
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
 
-    TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplAttrMap,
-                           E, E->getLHS(), E->getRHS());
+    TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplElementMap,
+                           RplMap, ASaPTypeDeclMap, EffectSummaryMap,
+                           Def, E, E->getLHS(), E->getRHS());
 
-    assert(TmpRegionsVec->size() == 1);
-    assert(TmpRegions->size() == 0);
-    // FIXME slight memory leak
-    TmpRegionsVec = TCV.getLHSRegionsVec();
-    TmpRegions = TmpRegionsVec->back();
+    RplVectorSetTy *TmpVec = TCV.getLHSRegionsVec();
+    TmpRegionsVec = destructiveMergeVector(TmpRegionsVec, TmpVec);
   }
 
   /// TODO Factor out most of this code into helper functions
-  void VisitMemberExpr(MemberExpr *Expr) {
+  void VisitMemberExpr(MemberExpr *Exp) {
     OS << "DEBUG:: VisitMemberExpr: ";
-    Expr->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
     /*OS << "Rvalue=" << E->isRValue()
        << ", Lvalue=" << E->isLValue()
@@ -384,11 +607,12 @@ public:
       OS << "LV_Valid\n";
     else
       OS << "not LV_Valid\n";*/
-    ValueDecl* VD = Expr->getMemberDecl();
+    ValueDecl* VD = Exp->getMemberDecl();
     VD->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
 
     /// 1. VD is a FunctionDecl
+    /// TODO
     //const FunctionDecl *FD = dyn_cast<FunctionDecl>(VD);
     //if (FD)
       //helperVisitFunctionDecl(Expr, FD);
@@ -399,70 +623,147 @@ public:
     const FieldDecl* FieldD  = dyn_cast<FieldDecl>(VD);
     if (FieldD) {
       //StringRef S;
-      if (IsBase) {
-        /// Substitution
-        substitute(FieldD);
-      } else { //if (TypecheckAssignment) {
-        // isBase == false ==> init regions
-#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
-        specific_attr_reverse_iterator<RegionArgAttr>
-          I = FieldD->specific_attr_rbegin<RegionArgAttr>(),
-          E = FieldD->specific_attr_rend<RegionArgAttr>();
-#else
-        llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator I =
-          ArgV.rbegin(), E = argv.rend();
-#endif
-
-        /// 2.1.2.1 drop region args that are sidestepped by dereferrences.
-        int N = DerefNum;
-        while (N>0 && I != E) {
-          I ++;
-          N--;
-        }
-
-        assert(N == 0 || N == -1);
-
-        if (N==0) { /// skip the 1st arg, then add the rest
-          assert(I != E);
-          Rpl *Tmp = RplAttrMap[(*I)];
-          assert(Tmp);
-          #if 0 /// TODO implement capture properly!
-          if (HasWriteSemantics && DerefNum > 0
-              && Tmp->isFullySpecified() == false
-              /* FIXME: && (*i)->/isaPointerType/ )*/) {
-            /// emit capture error
-            std::string Str = Tmp->toString();
-            helperEmitInvalidAliasingModificationWarning(Expr, VD, Str);
-          }
-          #endif
-
-          I++;
-        }
-
-        /// add rest of region types
-        while(I != E) {
-          RegionArgAttr *Arg = *I;
-          Rpl *R = RplAttrMap[Arg];
-          assert(R);
-          TmpRegions->push_back(new Rpl(R)); // make a copy because rpl may
-                                             // be modified by substitution.
-          OS << "DEBUG:: adding RPL for typechecking ~~~~~~~~~~ "
-             << R->toString() << "\n";
-          ++I;
-        }
-      }
+      if (IsBase)
+        memberSubstitute(FieldD);
+      else // not IsBase --> HEAD
+        collectRegionArgs(FieldD);
 
       /// 2.3. Visit Base with read semantics, then restore write semantics
       bool SavedIsBase = IsBase; // probably not needed to save
 
-      DerefNum = Expr->isArrow() ? 1 : 0;
+      DerefNum = Exp->isArrow() ? 1 : 0;
       IsBase = true;
-      Visit(Expr->getBase());
+      Visit(Exp->getBase());
 
       /// Post visitation checking
       IsBase = SavedIsBase;
     } // end if FieldDecl
   } // end VisitMemberExpr
 
+  void VisitConditionalOperator(ConditionalOperator *Exp) {
+    OS << "DEBUG:: @@@@@@@@@@@@VisitConditionalOp@@@@@@@@@@@@@@\n";
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    AssignmentSeekerVisitor ASV(BR, Ctx, Mgr, AC, OS,
+                                RplElementMap, RplMap,
+                                ASaPTypeDeclMap, EffectSummaryMap,
+                                Def, Exp->getCond());
+    FatalError |= ASV.encounteredFatalError();
 
-}; // end class StmtVisitor
+    Visit(Exp->getLHS());
+    Visit(Exp->getRHS());
+
+  }
+
+  void VisitBinaryConditionalOperator(BinaryConditionalOperator *Exp) {
+    OS << "DEBUG:: @@@@@@@@@@@@VisitConditionalOp@@@@@@@@@@@@@@\n";
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    // TODO?
+  }
+
+  void VisitReturnStmt(ReturnStmt *Ret) {
+    Expr *RHS = Ret->getRetValue();
+    /// TODO
+  }
+
+  void VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
+    //TODO
+    CXXMethodDecl *CalleeDecl = Exp->getMethodDecl();
+    assert(CalleeDecl);
+    ExprIterator ArgI, ArgE;
+    FunctionDecl::param_iterator ParamI, ParamE;
+    /// FIXME What about default arguments? Is this assertion too conservative?
+    assert(CalleeDecl->getNumParams() == Exp->getNumArgs());
+
+    for(ArgI = Exp->arg_begin(), ArgE = Exp->arg_end(),
+        ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
+         ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
+      OS << "DEBUG:: " << "\n";
+      /// Typecheck implicit assignment
+      /// Note: we don't only need to check LValues, as &x may
+      /// not be an LValue but it may carry region information.
+
+      /// TODO finish implementing this!
+      ///Rpl::RplVector ParamRegs = getRegions(*ParamI);
+      /// get types Visit(*ArgI);
+    }
+
+  }
+  void VisitCallExpr(CallExpr *Exp) {
+    //TODO
+  }
+  void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
+    //TODO
+  }
+
+
+}; // end class TypeCheckerVisitor
+
+/// Find assignments and call Typechecking on them. Assignments include
+/// * simple assignments: a = b
+/// * complex assignments: a = b (where a and b are compound objects)
+/// * assignment of actuals to formals: f(a)
+/// * ...stay tuned, more to come
+class AssignmentDetectorVisitor :
+    public ASaPStmtVisitorBase {
+  private:
+  /// Fields
+
+  public:
+  /// Constructor
+  AssignmentDetectorVisitor(
+    ento::BugReporter &BR,
+    ASTContext &Ctx,
+    AnalysisManager &Mgr,
+    AnalysisDeclContext *AC,
+    raw_ostream &OS,
+
+    RplElementAttrMapTy &RplElementMap,
+    RplAttrMapTy &RplMap,
+    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
+    EffectSummaryMapTy &EffectSummaryMap,
+
+    const FunctionDecl *Def,
+    Stmt *S)
+      : ASaPStmtVisitorBase//<AssignmentDetectorVisitor>
+                           (BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
+                            ASaPTypeDeclMap, EffectSummaryMap, Def, S) {
+    Visit(S);
+  }
+
+  /*void VisitStmt(Stmt *S) {
+    OS << "DEBUG:: Where is my Visitor now??\n";
+    VisitChildren(S);
+  }*/
+
+  void VisitBinAssign(BinaryOperator *E) {
+    OS << "DEBUG:: >>>>>>>>>> TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";
+    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
+                           ASaPTypeDeclMap, EffectSummaryMap, Def,
+                           E, E->getLHS(), E->getRHS());
+  }
+
+}; // end class AssignmentDetectorVisitor
+
+
+///-/////////////////////////////////////////////////////////////////////
+/// Implementation of AssignmentSeekerVisitor
+
+void AssignmentSeekerVisitor::VisitBinAssign(BinaryOperator *E) {
+  OS << "DEBUG:: >>>>>>>>>> TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";
+  E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
+                         ASaPTypeDeclMap, EffectSummaryMap, Def,
+                         E, E->getLHS(), E->getRHS());
+}
+
+void AssignmentSeekerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
+    Expr *RV = Ret->getRetValue();
+    /// TODO ASaPType AT = GetASaPType(RV);
+    ///ASaPType *RetType = ASaPTypeDeclMap[Def];
+}
+

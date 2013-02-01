@@ -96,8 +96,8 @@ public:
 };
 
 
-static const SpecialRplElement *ROOT_RplElmt = new SpecialRplElement("Root");
-static const SpecialRplElement *LOCAL_RplElmt = new SpecialRplElement("Local");
+static const SpecialRplElement *ROOTRplElmt = new SpecialRplElement("Root");
+static const SpecialRplElement *LOCALRplElmt = new SpecialRplElement("Local");
 
 
 ///-////////////////////////////////////////
@@ -120,16 +120,16 @@ public:
   }
 };
 
-static const StarRplElement *STAR_RplElmt = new StarRplElement();
+static const StarRplElement *STARRplElmt = new StarRplElement();
 
 /// \brief returns a special RPL element (Root, Local, *, ...) or NULL
 const RplElement* getSpecialRplElement(const StringRef& s) {
-  if (!s.compare(STAR_RplElmt->getName()))
-    return STAR_RplElmt;
-  else if (!s.compare(ROOT_RplElmt->getName()))
-    return ROOT_RplElmt;
-  else if (!s.compare(LOCAL_RplElmt->getName()))
-    return LOCAL_RplElmt;
+  if (!s.compare(STARRplElmt->getName()))
+    return STARRplElmt;
+  else if (!s.compare(ROOTRplElmt->getName()))
+    return ROOTRplElmt;
+  else if (!s.compare(LOCALRplElmt->getName()))
+    return LOCALRplElmt;
   else
     return 0;
 }
@@ -239,19 +239,19 @@ private:
 
   public:
     /// Constructor
-    RplRef(const Rpl& r) : rpl(r) {
+    RplRef(const Rpl& R) : rpl(R) {
       firstIdx = 0;
       lastIdx = rpl.RplElements.size()-1;
     }
     /// Printing
-    void printElements(raw_ostream& os) {
-      int i = firstIdx;
-      for (; i<lastIdx; i++) {
-        os << rpl.RplElements[i]->getName() << ":";
+    void printElements(raw_ostream& OS) {
+      int I = firstIdx;
+      for (; I < lastIdx; ++I) {
+        OS << rpl.RplElements[I]->getName() << ":";
       }
       // print last element
-      if (i==lastIdx)
-        os << rpl.RplElements[i]->getName();
+      if (I==lastIdx)
+        OS << rpl.RplElements[I]->getName();
     }
 
     std::string toString() {
@@ -290,7 +290,7 @@ private:
       /// R <= R' <== R c= R'
       if (isIncludedIn(rhs)) return true;
       /// R:* <= R' <== R <= R'
-      if (getLastElement() == STAR_RplElmt)
+      if (getLastElement() == STARRplElmt)
         return stripLast().isUnder(rhs);
       /// R:r <= R' <==  R <= R'
       /// R:[i] <= R' <==  R <= R'
@@ -309,7 +309,7 @@ private:
         else /*!isEmpty()*/ return false;
       } else { /// rhs is not empty
         /// R c= R':* <==  R <= R'
-        if (*rhs.getLastElement() == *STAR_RplElmt) {
+        if (*rhs.getLastElement() == *STARRplElmt) {
           osv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
           return isUnder(rhs.stripLast());
         }
@@ -345,7 +345,7 @@ public:
 
   Rpl() : FullySpecified(true) {}
 
-  Rpl(RplElement *Elm) :
+  Rpl(const RplElement *Elm) :
     RplString(Elm->getName()),
     FullySpecified(Elm->isFullySpecified())
   {
@@ -467,13 +467,19 @@ public:
       RplElements.append(That->length()-1, (*(That->RplElements.begin() + 1)));
   }
 
-  Rpl* upperBound() {
+  Rpl *upperBound() {
     if (isEmpty() || !isa<CaptureRplElement>(RplElements.front()))
       return this;
     // else
     Rpl* upperBound = & dyn_cast<CaptureRplElement>(RplElements.front())->upperBound();
     upperBound->appendRplTail(this);
     return upperBound;
+  }
+
+  /// \brief return the join of 'this' and 'that'
+  Rpl *join(Rpl* That) {
+    /// TODO
+
   }
 
   /// Capture
@@ -653,3 +659,129 @@ public:
   }
 
 }; // end class Effect
+
+///-///////////////////////////////////////////////////////////////////////////
+/// ASapType Class
+
+class ASaPType {
+  friend class ASaPType;
+  private:
+  /// Fields
+  QualType QT;
+  Rpl::RplVector ArgV;
+  Rpl *InRpl; // can be null
+
+  public:
+  /// Constructor
+  ASaPType (QualType QT, Rpl::RplVector ArgV)
+           : QT(QT),
+             ArgV(ArgV), InRpl(0) {}
+
+  ASaPType (QualType QT, Rpl::RplVector ArgV, Rpl *InRpl)
+           : QT(QT),
+             ArgV(ArgV), InRpl(InRpl) {}
+
+  ~ASaPType() {
+    ASaP::destroyVector(ArgV);
+    // delete ArgV;
+  }
+  /// Methods
+  inline int getArgVSize() { return ArgV.size(); }
+  std::string toString() const {
+    std::string SBuf;
+    llvm::raw_string_ostream OS(SBuf);
+    //QT.print()
+    if (InRpl)
+      OS << "IN:" << InRpl->toString();
+    else
+      OS << "IN:<empty>";
+
+    OS << ", ArgV:";
+    for (Rpl::RplVector::const_iterator
+            I = ArgV.begin(),
+            E = ArgV.end();
+          I != E; ++I) {
+      OS << (*I)->toString() << " ";
+    }
+    return std::string(OS.str());
+}
+
+  /// \brief true when 'this' is a subtype (derived type) of 'that'
+  bool operator <= (ASaPType *That) {
+    if (this->QT!=That->QT) {
+      /// Typechecking has passed so we assume that this->QT <= that->QT
+      /// but we have to find follow the mapping and substitute Rpls....
+      /// TODO :)
+      return false; // until we support inheritance this is good enough
+    }
+    assert(this->QT == That->QT);
+
+    return isIncludedIn(&this->ArgV, &That->ArgV);
+  }
+
+  /// \brief returns the smallest common supertype (Base Type)
+  ASaPType *join(ASaPType *That) {
+    if (this->QT!=That->QT) {
+      /// Typechecking has passed so we assume that this->QT <= that->QT
+      /// but we have to find follow the mapping and substitute Rpls....
+      /// TODO :)
+      assert(false); // ...just fail
+      return 0; // until we support inheritance this is good enough
+    }
+    assert(this->QT == That->QT);
+    return new ASaPType(QT, joinRegions(&this->ArgV, &That->ArgV));
+  }
+
+  private:
+  /// Private Methods
+
+  /// \brief returns the join of two RplVectors
+  Rpl::RplVector joinRegions(Rpl::RplVector *LHSRs, Rpl::RplVector *RHSRs) {
+    Rpl::RplVector Result;
+    assert(RHSRs);
+    assert(LHSRs);
+    assert(RHSRs->size() == LHSRs->size());
+
+    Rpl::RplVector::const_iterator
+            RHSI = RHSRs->begin(),
+            LHSI = LHSRs->begin(),
+            RHSE = RHSRs->end(),
+            LHSE = LHSRs->end();
+    for ( ;
+          RHSI != RHSE && LHSI != LHSE;
+          RHSI++, LHSI++) {
+      Rpl *LHS = *LHSI;
+      Rpl *RHS = *RHSI;
+      Rpl *Join = LHS->join(RHS);
+      Result.push_back(Join);
+    }
+    return Result;
+  }
+
+  /// \brief return true when LHSRegions <= RHSRegions, false otherwise
+  bool isIncludedIn (const Rpl::RplVector *LHSRegs,
+                     const Rpl::RplVector *RHSRegs) {
+    bool Result = true;
+    assert(RHSRegs);
+    assert(LHSRegs);
+    assert(RHSRegs->size() == LHSRegs->size());
+
+    Rpl::RplVector::const_iterator
+            RHSI = RHSRegs->begin(),
+            LHSI = LHSRegs->begin(),
+            RHSE = RHSRegs->end(),
+            LHSE = LHSRegs->end();
+    for ( ;
+          RHSI != RHSE && LHSI != LHSE;
+          RHSI++, LHSI++) {
+      Rpl *LHS = *LHSI;
+      Rpl *RHS = *RHSI;
+      if (!RHS->isIncludedIn(*LHS)) {
+        Result = false;
+        break;
+      }
+    }
+    return Result;
+  }
+}; // end class ASaPType
+
