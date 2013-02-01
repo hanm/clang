@@ -927,56 +927,55 @@ def VirtualInheritance : InheritableAttr {
 
 /////////////////////////////////////////////
 ///  Annotations for Safe Parallelism (ASaP)
-class ASAP<string name> : Spelling<name, "ASAP">;
 
 /// REGIONS
 
 def Region : InheritableAttr {
-  let Spellings = [ASAP<"region">,  CXX11<"asap", "region">];
+  let Spellings = [GNU<"region">,  CXX11<"asap", "region">];
   let Args = [StringArgument<"name">];
 }
 
 def RegionParam : InheritableAttr {
-  let Spellings = [ASAP<"param">, CXX11<"asap", "param">];
+  let Spellings = [GNU<"param">, CXX11<"asap", "param">];
   let Subjects = [Record, Function];
   let Args = [StringArgument<"name">];
-}  
+}
 
 def RegionArg : InheritableAttr {
-  let Spellings = [ASAP<"arg">, CXX11<"asap", "arg">];
+  let Spellings = [GNU<"arg">, CXX11<"asap", "arg">];
   let Subjects = [Var, ParmVar];
   let Args = [StringArgument<"rpl">];
-}  
+}
 
 
 /// EFFECTS
 
 def NoEffect : InheritableAttr {
-  let Spellings = [ASAP<"no_effect">, CXX11<"asap", "no_effect">];
+  let Spellings = [GNU<"no_effect">, CXX11<"asap", "no_effect">];
   let Subjects = [Function];
-}  
+}
 
 def ReadsEffect : InheritableAttr {
-  let Spellings = [ASAP<"reads">, CXX11<"asap", "reads">];
+  let Spellings = [GNU<"reads">, CXX11<"asap", "reads">];
   let Subjects = [Function];
   let Args = [StringArgument<"rpl">];
-}  
+}
 
 def AtomicReadsEffect : InheritableAttr {
-  let Spellings = [ASAP<"atomic_reads">, CXX11<"asap", "atomic_reads">];
+  let Spellings = [GNU<"atomic_reads">, CXX11<"asap", "atomic_reads">];
   let Subjects = [Function];
   let Args = [StringArgument<"rpl">];
-}  
+}
 
 def WritesEffect : InheritableAttr {
-  let Spellings = [ASAP<"writes">, CXX11<"asap", "writes">];
+  let Spellings = [GNU<"writes">, CXX11<"asap", "writes">];
   let Subjects = [Function];
   let Args = [StringArgument<"rpl">];
-}  
+}
 
 def AtomicWritesEffect : InheritableAttr {
-  let Spellings = [ASAP<"atomic_writes">, CXX11<"asap", "atomic_writes">];
+  let Spellings = [GNU<"atomic_writes">, CXX11<"asap", "atomic_writes">];
   let Subjects = [Function];
   let Args = [StringArgument<"rpl">];
-}  
+}
 
