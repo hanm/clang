@@ -1,4 +1,4 @@
-//===--- ASTReader.cpp - AST File Reader ------------------------*- C++ -*-===//
+//===--- ASTReader.cpp - AST File Reader ----------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -40,6 +40,7 @@
 #include "clang/Sema/Scope.h"
 #include "clang/Sema/Sema.h"
 #include "clang/Serialization/ASTDeserializationListener.h"
+#include "clang/Serialization/GlobalModuleIndex.h"
 #include "clang/Serialization/ModuleManager.h"
 #include "clang/Serialization/SerializationDiagnostic.h"
 #include "llvm/ADT/StringExtras.h"
@@ -440,22 +441,22 @@ ASTSelectorLookupTrait::ReadData(Selector, const unsigned char* d,
   return Result;
 }
 
-unsigned ASTIdentifierLookupTrait::ComputeHash(const internal_key_type& a) {
-  return llvm::HashString(StringRef(a.first, a.second));
+unsigned ASTIdentifierLookupTraitBase::ComputeHash(const internal_key_type& a) {
+  return llvm::HashString(a);
 }
 
 std::pair<unsigned, unsigned>
-ASTIdentifierLookupTrait::ReadKeyDataLength(const unsigned char*& d) {
+ASTIdentifierLookupTraitBase::ReadKeyDataLength(const unsigned char*& d) {
   using namespace clang::io;
   unsigned DataLen = ReadUnalignedLE16(d);
   unsigned KeyLen = ReadUnalignedLE16(d);
   return std::make_pair(KeyLen, DataLen);
 }
 
-std::pair<const char*, unsigned>
-ASTIdentifierLookupTrait::ReadKey(const unsigned char* d, unsigned n) {
+ASTIdentifierLookupTraitBase::internal_key_type
+ASTIdentifierLookupTraitBase::ReadKey(const unsigned char* d, unsigned n) {
   assert(n >= 2 && d[n-1] == '\0');
-  return std::make_pair((const char*) d, n-1);
+  return StringRef((const char*) d, n-1);
 }
 
 IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
@@ -474,7 +475,7 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
     // and associate it with the persistent ID.
     IdentifierInfo *II = KnownII;
     if (!II) {
-      II = &Reader.getIdentifierTable().getOwn(StringRef(k.first, k.second));
+      II = &Reader.getIdentifierTable().getOwn(k);
       KnownII = II;
     }
     Reader.SetIdentifierInfo(ID, II);
@@ -503,7 +504,7 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
   // the new IdentifierInfo.
   IdentifierInfo *II = KnownII;
   if (!II) {
-    II = &Reader.getIdentifierTable().getOwn(StringRef(k.first, k.second));
+    II = &Reader.getIdentifierTable().getOwn(StringRef(k));
     KnownII = II;
   }
   Reader.markIdentifierUpToDate(II);
@@ -1377,10 +1378,20 @@ namespace {
   class IdentifierLookupVisitor {
     StringRef Name;
     unsigned PriorGeneration;
+    unsigned &NumIdentifierLookups;
+    unsigned &NumIdentifierLookupHits;
     IdentifierInfo *Found;
+
   public:
-    IdentifierLookupVisitor(StringRef Name, unsigned PriorGeneration) 
-      : Name(Name), PriorGeneration(PriorGeneration), Found() { }
+    IdentifierLookupVisitor(StringRef Name, unsigned PriorGeneration,
+                            unsigned &NumIdentifierLookups,
+                            unsigned &NumIdentifierLookupHits)
+      : Name(Name), PriorGeneration(PriorGeneration),
+        NumIdentifierLookups(NumIdentifierLookups),
+        NumIdentifierLookupHits(NumIdentifierLookupHits),
+        Found()
+    {
+    }
     
     static bool visit(ModuleFile &M, void *UserData) {
       IdentifierLookupVisitor *This
@@ -1389,7 +1400,7 @@ namespace {
       // If we've already searched this module file, skip it now.
       if (M.Generation <= This->PriorGeneration)
         return true;
-      
+
       ASTIdentifierLookupTable *IdTable
         = (ASTIdentifierLookupTable *)M.IdentifierLookupTable;
       if (!IdTable)
@@ -1397,16 +1408,15 @@ namespace {
       
       ASTIdentifierLookupTrait Trait(IdTable->getInfoObj().getReader(),
                                      M, This->Found);
-                                     
-      std::pair<const char*, unsigned> Key(This->Name.begin(), 
-                                           This->Name.size());
-      ASTIdentifierLookupTable::iterator Pos = IdTable->find(Key, &Trait);
+      ++This->NumIdentifierLookups;
+      ASTIdentifierLookupTable::iterator Pos = IdTable->find(This->Name,&Trait);
       if (Pos == IdTable->end())
         return false;
       
       // Dereferencing the iterator has the effect of building the
       // IdentifierInfo node and populating it with the various
       // declarations it needs.
+      ++This->NumIdentifierLookupHits;
       This->Found = *Pos;
       return true;
     }
@@ -1424,9 +1434,21 @@ void ASTReader::updateOutOfDateIdentifier(IdentifierInfo &II) {
   unsigned PriorGeneration = 0;
   if (getContext().getLangOpts().Modules)
     PriorGeneration = IdentifierGeneration[&II];
-  
-  IdentifierLookupVisitor Visitor(II.getName(), PriorGeneration);
-  ModuleMgr.visit(IdentifierLookupVisitor::visit, &Visitor);
+
+  // If there is a global index, look there first to determine which modules
+  // provably do not have any results for this identifier.
+  GlobalModuleIndex::HitSet Hits;
+  GlobalModuleIndex::HitSet *HitsPtr = 0;
+  if (!loadGlobalIndex()) {
+    if (GlobalIndex->lookupIdentifier(II.getName(), Hits)) {
+      HitsPtr = &Hits;
+    }
+  }
+
+  IdentifierLookupVisitor Visitor(II.getName(), PriorGeneration,
+                                  NumIdentifierLookups,
+                                  NumIdentifierLookupHits);
+  ModuleMgr.visit(IdentifierLookupVisitor::visit, &Visitor, HitsPtr);
   markIdentifierUpToDate(&II);
 }
 
@@ -2439,7 +2461,24 @@ bool ASTReader::ReadASTBlock(ModuleFile &F) {
       for (unsigned I = 0, N = Record.size(); I != N; ++I)
         KnownNamespaces.push_back(getGlobalDeclID(F, Record[I]));
       break;
-        
+
+    case UNDEFINED_BUT_USED:
+      if (UndefinedButUsed.size() % 2 != 0) {
+        Error("Invalid existing UndefinedButUsed");
+        return true;
+      }
+
+      if (Record.size() % 2 != 0) {
+        Error("invalid undefined-but-used record");
+        return true;
+      }
+      for (unsigned I = 0, N = Record.size(); I != N; /* in loop */) {
+        UndefinedButUsed.push_back(getGlobalDeclID(F, Record[I++]));
+        UndefinedButUsed.push_back(
+            ReadSourceLocation(F, Record, I).getRawEncoding());
+      }
+      break;
+
     case IMPORTED_MODULES: {
       if (F.Kind != MK_Module) {
         // If we aren't loading a module (which has its own exports), make
@@ -2552,7 +2591,8 @@ void ASTReader::makeNamesVisible(const HiddenNames &Names) {
 }
 
 void ASTReader::makeModuleVisible(Module *Mod, 
-                                  Module::NameVisibilityKind NameVisibility) {
+                                  Module::NameVisibilityKind NameVisibility,
+                                  SourceLocation ImportLoc) {
   llvm::SmallPtrSet<Module *, 4> Visited;
   SmallVector<Module *, 4> Stack;
   Stack.push_back(Mod);  
@@ -2649,6 +2689,33 @@ void ASTReader::makeModuleVisible(Module *Mod,
   }
 }
 
+bool ASTReader::loadGlobalIndex() {
+  if (GlobalIndex)
+    return false;
+
+  if (TriedLoadingGlobalIndex || !UseGlobalIndex ||
+      !Context.getLangOpts().Modules)
+    return true;
+  
+  // Try to load the global index.
+  TriedLoadingGlobalIndex = true;
+  StringRef ModuleCachePath
+    = getPreprocessor().getHeaderSearchInfo().getModuleCachePath();
+  std::pair<GlobalModuleIndex *, GlobalModuleIndex::ErrorCode> Result
+    = GlobalModuleIndex::readIndex(FileMgr, ModuleCachePath);
+  if (!Result.first)
+    return true;
+
+  GlobalIndex.reset(Result.first);
+  ModuleMgr.setGlobalIndex(GlobalIndex.get());
+  return false;
+}
+
+bool ASTReader::isGlobalIndexUnavailable() const {
+  return Context.getLangOpts().Modules && UseGlobalIndex &&
+         !hasGlobalIndex() && TriedLoadingGlobalIndex;
+}
+
 ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
                                             ModuleKind Type,
                                             SourceLocation ImportLoc,
@@ -2667,6 +2734,11 @@ ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
   case ConfigurationMismatch:
   case HadErrors:
     ModuleMgr.removeModules(ModuleMgr.begin() + NumModules, ModuleMgr.end());
+
+    // If we find that any modules are unusable, the global index is going
+    // to be out-of-date. Just remove it.
+    GlobalIndex.reset();
+    ModuleMgr.setGlobalIndex(0);
     return ReadResult;
 
   case Success:
@@ -2707,6 +2779,7 @@ ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
                                               MEnd = Loaded.end();
        M != MEnd; ++M) {
     ModuleFile &F = *M->Mod;
+    F.DirectImportLoc = ImportLoc;
     if (!M->ImportedBy)
       F.ImportLoc = M->ImportLoc;
     else
@@ -2768,7 +2841,7 @@ ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
                        ObjCClassesLoaded[I],
                        PreviousGeneration);
   }
-  
+
   return Success;
 }
 
@@ -3011,7 +3084,8 @@ void ASTReader::InitializeContext() {
   // Re-export any modules that were imported by a non-module AST file.
   for (unsigned I = 0, N = ImportedModules.size(); I != N; ++I) {
     if (Module *Imported = getSubmodule(ImportedModules[I]))
-      makeModuleVisible(Imported, Module::AllVisible);
+      makeModuleVisible(Imported, Module::AllVisible,
+                        /*ImportLoc=*/SourceLocation());
   }
   ImportedModules.clear();
 }
@@ -3618,14 +3692,10 @@ bool ASTReader::ParseHeaderSearchOptions(const RecordData &Record,
     std::string Path = ReadString(Record, Idx);
     frontend::IncludeDirGroup Group
       = static_cast<frontend::IncludeDirGroup>(Record[Idx++]);
-    bool IsUserSupplied = Record[Idx++];
     bool IsFramework = Record[Idx++];
     bool IgnoreSysRoot = Record[Idx++];
-    bool IsInternal = Record[Idx++];
-    bool ImplicitExternC = Record[Idx++];
     HSOpts.UserEntries.push_back(
-      HeaderSearchOptions::Entry(Path, Group, IsUserSupplied, IsFramework,
-                                 IgnoreSysRoot, IsInternal, ImplicitExternC));
+      HeaderSearchOptions::Entry(Path, Group, IsFramework, IgnoreSysRoot));
   }
 
   // System header prefixes.
@@ -5323,8 +5393,8 @@ namespace {
 /// NDEBUG checking.
 static ModuleFile *getDefinitiveModuleFileFor(const DeclContext *DC,
                                               ASTReader &Reader) {
-  if (const Decl *D = getDefinitiveDeclContext(DC))
-    return Reader.getOwningModuleFile(D);
+  if (const DeclContext *DefDC = getDefinitiveDeclContext(DC))
+    return Reader.getOwningModuleFile(cast<Decl>(DefDC));
 
   return 0;
 }
@@ -5413,8 +5483,9 @@ namespace {
         Info->second.NameLookupTableData;
       bool FoundAnything = false;
       for (ASTDeclContextNameLookupTable::data_iterator
-	     I = LookupTable->data_begin(), E = LookupTable->data_end();
-	   I != E; ++I) {
+             I = LookupTable->data_begin(), E = LookupTable->data_end();
+           I != E;
+           ++I) {
         ASTDeclContextNameLookupTrait::data_type Data = *I;
         for (; Data.first != Data.second; ++Data.first) {
           NamedDecl *ND = This->Reader.GetLocalDeclAs<NamedDecl>(M,
@@ -5584,8 +5655,31 @@ void ASTReader::PrintStats() {
                  NumMethodPoolEntriesRead, TotalNumMethodPoolEntries,
                  ((float)NumMethodPoolEntriesRead/TotalNumMethodPoolEntries
                   * 100));
-    std::fprintf(stderr, "  %u method pool misses\n", NumMethodPoolMisses);
   }
+  if (NumMethodPoolLookups) {
+    std::fprintf(stderr, "  %u/%u method pool lookups succeeded (%f%%)\n",
+                 NumMethodPoolHits, NumMethodPoolLookups,
+                 ((float)NumMethodPoolHits/NumMethodPoolLookups * 100.0));
+  }
+  if (NumMethodPoolTableLookups) {
+    std::fprintf(stderr, "  %u/%u method pool table lookups succeeded (%f%%)\n",
+                 NumMethodPoolTableHits, NumMethodPoolTableLookups,
+                 ((float)NumMethodPoolTableHits/NumMethodPoolTableLookups
+                  * 100.0));
+  }
+
+  if (NumIdentifierLookupHits) {
+    std::fprintf(stderr,
+                 "  %u / %u identifier table lookups succeeded (%f%%)\n",
+                 NumIdentifierLookupHits, NumIdentifierLookups,
+                 (double)NumIdentifierLookupHits*100.0/NumIdentifierLookups);
+  }
+
+  if (GlobalIndex) {
+    std::fprintf(stderr, "\n");
+    GlobalIndex->printStats();
+  }
+  
   std::fprintf(stderr, "\n");
   dump();
   std::fprintf(stderr, "\n");
@@ -5686,10 +5780,21 @@ void ASTReader::InitializeSema(Sema &S) {
 IdentifierInfo* ASTReader::get(const char *NameStart, const char *NameEnd) {
   // Note that we are loading an identifier.
   Deserializing AnIdentifier(this);
-  
-  IdentifierLookupVisitor Visitor(StringRef(NameStart, NameEnd - NameStart),
-                                  /*PriorGeneration=*/0);
-  ModuleMgr.visit(IdentifierLookupVisitor::visit, &Visitor);
+  StringRef Name(NameStart, NameEnd - NameStart);
+
+  // If there is a global index, look there first to determine which modules
+  // provably do not have any results for this identifier.
+  GlobalModuleIndex::HitSet Hits;
+  GlobalModuleIndex::HitSet *HitsPtr = 0;
+  if (!loadGlobalIndex()) {
+    if (GlobalIndex->lookupIdentifier(Name, Hits)) {
+      HitsPtr = &Hits;
+    }
+  }
+  IdentifierLookupVisitor Visitor(Name, /*PriorGeneration=*/0,
+                                  NumIdentifierLookups,
+                                  NumIdentifierLookupHits);
+  ModuleMgr.visit(IdentifierLookupVisitor::visit, &Visitor, HitsPtr);
   IdentifierInfo *II = Visitor.getIdentifierInfo();
   markIdentifierUpToDate(II);
   return II;
@@ -5745,9 +5850,9 @@ StringRef ASTIdentifierIterator::Next() {
 
   // We have any identifiers remaining in the current AST file; return
   // the next one.
-  std::pair<const char*, unsigned> Key = *Current;
+  StringRef Result = *Current;
   ++Current;
-  return StringRef(Key.first, Key.second);
+  return Result;
 }
 
 IdentifierIterator *ASTReader::getIdentifiers() const {
@@ -5778,12 +5883,14 @@ namespace clang { namespace serialization {
       if (M.Generation <= This->PriorGeneration)
         return true;
 
+      ++This->Reader.NumMethodPoolTableLookups;
       ASTSelectorLookupTable *PoolTable
         = (ASTSelectorLookupTable*)M.SelectorLookupTable;
       ASTSelectorLookupTable::iterator Pos = PoolTable->find(This->Sel);
       if (Pos == PoolTable->end())
         return false;
-      
+
+      ++This->Reader.NumMethodPoolTableHits;
       ++This->Reader.NumSelectorsRead;
       // FIXME: Not quite happy with the statistics here. We probably should
       // disable this tracking when called via LoadSelector.
@@ -5826,15 +5933,16 @@ void ASTReader::ReadMethodPool(Selector Sel) {
   Generation = CurrentGeneration;
   
   // Search for methods defined with this selector.
+  ++NumMethodPoolLookups;
   ReadMethodPoolVisitor Visitor(*this, Sel, PriorGeneration);
   ModuleMgr.visit(&ReadMethodPoolVisitor::visit, &Visitor);
   
   if (Visitor.getInstanceMethods().empty() &&
-      Visitor.getFactoryMethods().empty()) {
-    ++NumMethodPoolMisses;
+      Visitor.getFactoryMethods().empty())
     return;
-  }
-  
+
+  ++NumMethodPoolHits;
+
   if (!getSema())
     return;
   
@@ -5854,6 +5962,16 @@ void ASTReader::ReadKnownNamespaces(
     if (NamespaceDecl *Namespace 
                 = dyn_cast_or_null<NamespaceDecl>(GetDecl(KnownNamespaces[I])))
       Namespaces.push_back(Namespace);
+  }
+}
+
+void ASTReader::ReadUndefinedButUsed(
+                        llvm::DenseMap<NamedDecl*, SourceLocation> &Undefined) {
+  for (unsigned Idx = 0, N = UndefinedButUsed.size(); Idx != N;) {
+    NamedDecl *D = cast<NamedDecl>(GetDecl(UndefinedButUsed[Idx++]));
+    SourceLocation Loc =
+        SourceLocation::getFromRawEncoding(UndefinedButUsed[Idx++]);
+    Undefined.insert(std::make_pair(D, Loc));
   }
 }
 
@@ -6920,18 +7038,22 @@ void ASTReader::FinishedDeserializing() {
 
 ASTReader::ASTReader(Preprocessor &PP, ASTContext &Context,
                      StringRef isysroot, bool DisableValidation,
-                     bool AllowASTWithCompilerErrors)
+                     bool AllowASTWithCompilerErrors, bool UseGlobalIndex)
   : Listener(new PCHValidator(PP, *this)), DeserializationListener(0),
     SourceMgr(PP.getSourceManager()), FileMgr(PP.getFileManager()),
     Diags(PP.getDiagnostics()), SemaObj(0), PP(PP), Context(Context),
     Consumer(0), ModuleMgr(PP.getFileManager()),
     isysroot(isysroot), DisableValidation(DisableValidation),
-    AllowASTWithCompilerErrors(AllowASTWithCompilerErrors), 
+    AllowASTWithCompilerErrors(AllowASTWithCompilerErrors),
+    UseGlobalIndex(UseGlobalIndex), TriedLoadingGlobalIndex(false),
     CurrentGeneration(0), CurrSwitchCaseStmts(&SwitchCaseStmts),
     NumSLocEntriesRead(0), TotalNumSLocEntries(0), 
-    NumStatementsRead(0), TotalNumStatements(0), NumMacrosRead(0), 
-    TotalNumMacros(0), NumSelectorsRead(0), NumMethodPoolEntriesRead(0), 
-    NumMethodPoolMisses(0), TotalNumMethodPoolEntries(0), 
+    NumStatementsRead(0), TotalNumStatements(0), NumMacrosRead(0),
+    TotalNumMacros(0), NumIdentifierLookups(0), NumIdentifierLookupHits(0),
+    NumSelectorsRead(0), NumMethodPoolEntriesRead(0),
+    NumMethodPoolLookups(0), NumMethodPoolHits(0),
+    NumMethodPoolTableLookups(0), NumMethodPoolTableHits(0),
+    TotalNumMethodPoolEntries(0),
     NumLexicalDeclContextsRead(0), TotalLexicalDeclContexts(0), 
     NumVisibleDeclContextsRead(0), TotalVisibleDeclContexts(0),
     TotalModulesSizeInBits(0), NumCurrentElementsDeserializing(0),

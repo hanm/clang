@@ -824,6 +824,7 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(OPENCL_EXTENSIONS);
   RECORD(DELEGATING_CTORS);
   RECORD(KNOWN_NAMESPACES);
+  RECORD(UNDEFINED_BUT_USED);
   RECORD(MODULE_OFFSET_MAP);
   RECORD(SOURCE_MANAGER_LINE_TABLE);
   RECORD(OBJC_CATEGORIES_MAP);
@@ -1111,11 +1112,8 @@ void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
     const HeaderSearchOptions::Entry &Entry = HSOpts.UserEntries[I];
     AddString(Entry.Path, Record);
     Record.push_back(static_cast<unsigned>(Entry.Group));
-    Record.push_back(Entry.IsUserSupplied);
     Record.push_back(Entry.IsFramework);
     Record.push_back(Entry.IgnoreSysRoot);
-    Record.push_back(Entry.IsInternal);
-    Record.push_back(Entry.ImplicitExternC);
   }
 
   // System header prefixes.
@@ -3582,12 +3580,23 @@ void ASTWriter::WriteASTCore(Sema &SemaRef,
 
   // Build a record containing all of the known namespaces.
   RecordData KnownNamespaces;
-  for (llvm::DenseMap<NamespaceDecl*, bool>::iterator 
+  for (llvm::MapVector<NamespaceDecl*, bool>::iterator
             I = SemaRef.KnownNamespaces.begin(),
          IEnd = SemaRef.KnownNamespaces.end();
        I != IEnd; ++I) {
     if (!I->second)
       AddDeclRef(I->first, KnownNamespaces);
+  }
+
+  // Build a record of all used, undefined objects that require definitions.
+  RecordData UndefinedButUsed;
+
+  SmallVector<std::pair<NamedDecl *, SourceLocation>, 16> Undefined;
+  SemaRef.getUndefinedButUsed(Undefined);
+  for (SmallVectorImpl<std::pair<NamedDecl *, SourceLocation> >::iterator
+         I = Undefined.begin(), E = Undefined.end(); I != E; ++I) {
+    AddDeclRef(I->first, UndefinedButUsed);
+    AddSourceLocation(I->second, UndefinedButUsed);
   }
 
   // Write the control block
@@ -3804,6 +3813,10 @@ void ASTWriter::WriteASTCore(Sema &SemaRef,
   // Write the known namespaces.
   if (!KnownNamespaces.empty())
     Stream.EmitRecord(KNOWN_NAMESPACES, KnownNamespaces);
+
+  // Write the undefined internal functions and variables, and inline functions.
+  if (!UndefinedButUsed.empty())
+    Stream.EmitRecord(UNDEFINED_BUT_USED, UndefinedButUsed);
   
   // Write the visible updates to DeclContexts.
   for (llvm::SmallPtrSet<const DeclContext *, 16>::iterator

@@ -30,7 +30,6 @@
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/Basic/Builtins.h"
-#include "clang/Basic/ConvertUTF.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/Module.h"
 #include "clang/Basic/SourceManager.h"
@@ -44,18 +43,24 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CallSite.h"
+#include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Target/Mangler.h"
+
 using namespace clang;
 using namespace CodeGen;
 
 static const char AnnotationSection[] = "llvm.metadata";
 
 static CGCXXABI &createCXXABI(CodeGenModule &CGM) {
-  switch (CGM.getContext().getTargetInfo().getCXXABI()) {
-  case CXXABI_ARM: return *CreateARMCXXABI(CGM);
-  case CXXABI_Itanium: return *CreateItaniumCXXABI(CGM);
-  case CXXABI_Microsoft: return *CreateMicrosoftCXXABI(CGM);
+  switch (CGM.getContext().getTargetInfo().getCXXABI().getKind()) {
+  case TargetCXXABI::GenericAArch64:
+  case TargetCXXABI::GenericARM:
+  case TargetCXXABI::iOS:
+  case TargetCXXABI::GenericItanium:
+    return *CreateItaniumCXXABI(CGM);
+  case TargetCXXABI::Microsoft:
+    return *CreateMicrosoftCXXABI(CGM);
   }
 
   llvm_unreachable("invalid C++ ABI kind");
@@ -368,7 +373,9 @@ void CodeGenModule::setTypeVisibility(llvm::GlobalValue *GV,
   // that don't have the key function's definition.  But ignore
   // this if we're emitting RTTI under -fno-rtti.
   if (!(TVK != TVK_ForRTTI) || LangOpts.RTTI) {
-    if (Context.getKeyFunction(RD))
+    // FIXME: what should we do if we "lose" the key function during
+    // the emission of the file?
+    if (Context.getCurrentKeyFunction(RD))
       return;
   }
 
@@ -833,13 +840,18 @@ void CodeGenModule::EmitDeferred() {
   // previously unused static decl may become used during the generation of code
   // for a static function, iterate until no changes are made.
 
-  while (!DeferredDeclsToEmit.empty() || !DeferredVTables.empty()) {
+  while (true) {
     if (!DeferredVTables.empty()) {
-      const CXXRecordDecl *RD = DeferredVTables.back();
-      DeferredVTables.pop_back();
-      getCXXABI().EmitVTables(RD);
-      continue;
+      EmitDeferredVTables();
+
+      // Emitting a v-table doesn't directly cause more v-tables to
+      // become deferred, although it can cause functions to be
+      // emitted that then need those v-tables.
+      assert(DeferredVTables.empty());
     }
+
+    // Stop if we're out of both deferred v-tables and deferred declarations.
+    if (DeferredDeclsToEmit.empty()) break;
 
     GlobalDecl D = DeferredDeclsToEmit.back();
     DeferredDeclsToEmit.pop_back();
@@ -1221,7 +1233,7 @@ llvm::Constant *
 CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
                                        llvm::Type *Ty,
                                        GlobalDecl D, bool ForVTable,
-                                       llvm::Attribute ExtraAttrs) {
+                                       llvm::AttributeSet ExtraAttrs) {
   // Lookup the entry, lazily creating it if necessary.
   llvm::GlobalValue *Entry = GetGlobalValue(MangledName);
   if (Entry) {
@@ -1257,8 +1269,13 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
   assert(F->getName() == MangledName && "name was uniqued!");
   if (D.getDecl())
     SetFunctionAttributes(D, F, IsIncompleteFunction);
-  if (ExtraAttrs.hasAttributes())
-    F->addAttribute(llvm::AttributeSet::FunctionIndex, ExtraAttrs);
+  if (ExtraAttrs.hasAttributes(llvm::AttributeSet::FunctionIndex)) {
+    llvm::AttrBuilder B(ExtraAttrs, llvm::AttributeSet::FunctionIndex);
+    F->addAttributes(llvm::AttributeSet::FunctionIndex,
+                     llvm::AttributeSet::get(VMContext,
+                                             llvm::AttributeSet::FunctionIndex,
+                                             B));
+  }
 
   // This is the first use or definition of a mangled name.  If there is a
   // deferred decl with this name, remember that we need to emit it at the end
@@ -1329,7 +1346,7 @@ llvm::Constant *CodeGenModule::GetAddrOfFunction(GlobalDecl GD,
 llvm::Constant *
 CodeGenModule::CreateRuntimeFunction(llvm::FunctionType *FTy,
                                      StringRef Name,
-                                     llvm::Attribute ExtraAttrs) {
+                                     llvm::AttributeSet ExtraAttrs) {
   return GetOrCreateLLVMFunction(Name, FTy, GlobalDecl(), /*ForVTable=*/false,
                                  ExtraAttrs);
 }
@@ -1516,80 +1533,6 @@ void CodeGenModule::EmitTentativeDefinition(const VarDecl *D) {
 
   // The tentative definition is the only definition.
   EmitGlobalVarDefinition(D);
-}
-
-void CodeGenModule::EmitVTable(CXXRecordDecl *Class, bool DefinitionRequired) {
-  if (DefinitionRequired)
-    getCXXABI().EmitVTables(Class);
-}
-
-llvm::GlobalVariable::LinkageTypes 
-CodeGenModule::getVTableLinkage(const CXXRecordDecl *RD) {
-  if (RD->getLinkage() != ExternalLinkage)
-    return llvm::GlobalVariable::InternalLinkage;
-
-  if (const CXXMethodDecl *KeyFunction
-                                    = RD->getASTContext().getKeyFunction(RD)) {
-    // If this class has a key function, use that to determine the linkage of
-    // the vtable.
-    const FunctionDecl *Def = 0;
-    if (KeyFunction->hasBody(Def))
-      KeyFunction = cast<CXXMethodDecl>(Def);
-    
-    switch (KeyFunction->getTemplateSpecializationKind()) {
-      case TSK_Undeclared:
-      case TSK_ExplicitSpecialization:
-        // When compiling with optimizations turned on, we emit all vtables,
-        // even if the key function is not defined in the current translation
-        // unit. If this is the case, use available_externally linkage.
-        if (!Def && CodeGenOpts.OptimizationLevel)
-          return llvm::GlobalVariable::AvailableExternallyLinkage;
-
-        if (KeyFunction->isInlined())
-          return !Context.getLangOpts().AppleKext ?
-                   llvm::GlobalVariable::LinkOnceODRLinkage :
-                   llvm::Function::InternalLinkage;
-        
-        return llvm::GlobalVariable::ExternalLinkage;
-        
-      case TSK_ImplicitInstantiation:
-        return !Context.getLangOpts().AppleKext ?
-                 llvm::GlobalVariable::LinkOnceODRLinkage :
-                 llvm::Function::InternalLinkage;
-
-      case TSK_ExplicitInstantiationDefinition:
-        return !Context.getLangOpts().AppleKext ?
-                 llvm::GlobalVariable::WeakODRLinkage :
-                 llvm::Function::InternalLinkage;
-  
-      case TSK_ExplicitInstantiationDeclaration:
-        // FIXME: Use available_externally linkage. However, this currently
-        // breaks LLVM's build due to undefined symbols.
-        //      return llvm::GlobalVariable::AvailableExternallyLinkage;
-        return !Context.getLangOpts().AppleKext ?
-                 llvm::GlobalVariable::LinkOnceODRLinkage :
-                 llvm::Function::InternalLinkage;
-    }
-  }
-  
-  if (Context.getLangOpts().AppleKext)
-    return llvm::Function::InternalLinkage;
-  
-  switch (RD->getTemplateSpecializationKind()) {
-  case TSK_Undeclared:
-  case TSK_ExplicitSpecialization:
-  case TSK_ImplicitInstantiation:
-    // FIXME: Use available_externally linkage. However, this currently
-    // breaks LLVM's build due to undefined symbols.
-    //   return llvm::GlobalVariable::AvailableExternallyLinkage;
-  case TSK_ExplicitInstantiationDeclaration:
-    return llvm::GlobalVariable::LinkOnceODRLinkage;
-
-  case TSK_ExplicitInstantiationDefinition:
-      return llvm::GlobalVariable::WeakODRLinkage;
-  }
-
-  llvm_unreachable("Invalid TemplateSpecializationKind!");
 }
 
 CharUnits CodeGenModule::GetTargetTypeStoreSize(llvm::Type *Ty) const {
@@ -1934,15 +1877,14 @@ static void replaceUsesOfNonProtoConstant(llvm::Constant *old,
       continue;
 
     // Get the call site's attribute list.
-    SmallVector<llvm::AttributeWithIndex, 8> newAttrs;
+    SmallVector<llvm::AttributeSet, 8> newAttrs;
     llvm::AttributeSet oldAttrs = callSite.getAttributes();
 
     // Collect any return attributes from the call.
     if (oldAttrs.hasAttributes(llvm::AttributeSet::ReturnIndex))
       newAttrs.push_back(
-        llvm::AttributeWithIndex::get(newFn->getContext(),
-                                      llvm::AttributeSet::ReturnIndex,
-                                      oldAttrs.getRetAttributes()));
+        llvm::AttributeSet::get(newFn->getContext(),
+                                oldAttrs.getRetAttributes()));
 
     // If the function was passed too few arguments, don't transform.
     unsigned newNumArgs = newFn->arg_size();
@@ -1960,18 +1902,18 @@ static void replaceUsesOfNonProtoConstant(llvm::Constant *old,
       }
 
       // Add any parameter attributes.
-      llvm::Attribute pAttrs = oldAttrs.getParamAttributes(argNo + 1);
-      if (pAttrs.hasAttributes())
-        newAttrs.push_back(llvm::AttributeWithIndex::get(argNo + 1, pAttrs));
+      if (oldAttrs.hasAttributes(argNo + 1))
+        newAttrs.
+          push_back(llvm::
+                    AttributeSet::get(newFn->getContext(),
+                                      oldAttrs.getParamAttributes(argNo + 1)));
     }
     if (dontTransform)
       continue;
 
     if (oldAttrs.hasAttributes(llvm::AttributeSet::FunctionIndex))
-      newAttrs.push_back(llvm::
-                      AttributeWithIndex::get(newFn->getContext(),
-                                              llvm::AttributeSet::FunctionIndex,
-                                              oldAttrs.getFnAttributes()));
+      newAttrs.push_back(llvm::AttributeSet::get(newFn->getContext(),
+                                                 oldAttrs.getFnAttributes()));
 
     // Okay, we can transform this.  Create the new call instruction and copy
     // over the required information.

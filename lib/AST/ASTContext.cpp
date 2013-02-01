@@ -85,6 +85,14 @@ RawComment *ASTContext::getRawCommentForDeclNoCache(const Decl *D) const {
       return NULL;
   }
 
+  if (const ClassTemplateSpecializationDecl *CTSD =
+          dyn_cast<ClassTemplateSpecializationDecl>(D)) {
+    TemplateSpecializationKind TSK = CTSD->getSpecializationKind();
+    if (TSK == TSK_ImplicitInstantiation ||
+        TSK == TSK_Undeclared)
+      return NULL;
+  }
+
   if (const EnumDecl *ED = dyn_cast<EnumDecl>(D)) {
     if (ED->getTemplateSpecializationKind() == TSK_ImplicitInstantiation)
       return NULL;
@@ -416,23 +424,25 @@ comments::FullComment *ASTContext::getCommentForDecl(
     if (isa<ObjCMethodDecl>(D) || isa<FunctionDecl>(D)) {
       SmallVector<const NamedDecl*, 8> Overridden;
       const ObjCMethodDecl *OMD = dyn_cast<ObjCMethodDecl>(D);
-      if (OMD && OMD->isPropertyAccessor()) {
-        if (const ObjCPropertyDecl *PDecl = OMD->findPropertyDecl()) {
-          if (comments::FullComment *FC = getCommentForDecl(PDecl, PP)) {
-            comments::FullComment *CFC = cloneFullComment(FC, D);
-            return CFC;
-          }
-        }
-      }
+      if (OMD && OMD->isPropertyAccessor())
+        if (const ObjCPropertyDecl *PDecl = OMD->findPropertyDecl())
+          if (comments::FullComment *FC = getCommentForDecl(PDecl, PP))
+            return cloneFullComment(FC, D);
       if (OMD)
         addRedeclaredMethods(OMD, Overridden);
       getOverriddenMethods(dyn_cast<NamedDecl>(D), Overridden);
-      for (unsigned i = 0, e = Overridden.size(); i < e; i++) {
-        if (comments::FullComment *FC = getCommentForDecl(Overridden[i], PP)) {
-          comments::FullComment *CFC = cloneFullComment(FC, D);
-          return CFC;
-        }
-      }
+      for (unsigned i = 0, e = Overridden.size(); i < e; i++)
+        if (comments::FullComment *FC = getCommentForDecl(Overridden[i], PP))
+          return cloneFullComment(FC, D);
+    }
+    else if (const TypedefDecl *TD = dyn_cast<TypedefDecl>(D)) {
+      // Attach any tag type's documentation to its typedef if latter
+      // does not have one of its own.
+      QualType QT = TD->getUnderlyingType();
+      if (const TagType *TT = QT->getAs<TagType>())
+        if (const Decl *TD = TT->getDecl())
+          if (comments::FullComment *FC = getCommentForDecl(TD, PP))
+            return cloneFullComment(FC, D);
     }
     return NULL;
   }
@@ -583,12 +593,14 @@ ASTContext::getCanonicalTemplateTemplateParmDecl(
 CXXABI *ASTContext::createCXXABI(const TargetInfo &T) {
   if (!LangOpts.CPlusPlus) return 0;
 
-  switch (T.getCXXABI()) {
-  case CXXABI_ARM:
+  switch (T.getCXXABI().getKind()) {
+  case TargetCXXABI::GenericARM:
+  case TargetCXXABI::iOS:
     return CreateARMCXXABI(*this);
-  case CXXABI_Itanium:
+  case TargetCXXABI::GenericAArch64: // Same as Itanium at this level
+  case TargetCXXABI::GenericItanium:
     return CreateItaniumCXXABI(*this);
-  case CXXABI_Microsoft:
+  case TargetCXXABI::Microsoft:
     return CreateMicrosoftCXXABI(*this);
   }
   llvm_unreachable("Invalid CXXABI type!");
@@ -3586,6 +3598,14 @@ QualType ASTContext::getUnsignedWCharType() const {
   return UnsignedIntTy;
 }
 
+QualType ASTContext::getIntPtrType() const {
+  return getFromTargetType(Target->getIntPtrType());
+}
+
+QualType ASTContext::getUIntPtrType() const {
+  return getCorrespondingUnsignedType(getIntPtrType());
+}
+
 /// getPointerDiffType - Return the unique type for "ptrdiff_t" (C99 7.17)
 /// defined in <stddef.h>. Pointer - pointer requires this (C99 6.5.6p9).
 QualType ASTContext::getPointerDiffType() const {
@@ -4091,7 +4111,7 @@ QualType ASTContext::getFloatingTypeOfSizeWithinDomain(QualType Size,
 
   assert(Domain->isRealFloatingType() && "Unknown domain!");
   switch (EltRank) {
-  case HalfRank: llvm_unreachable("Half ranks are not valid here");
+  case HalfRank:       return HalfTy;
   case FloatRank:      return FloatTy;
   case DoubleRank:     return DoubleTy;
   case LongDoubleRank: return LongDoubleTy;
@@ -5544,6 +5564,85 @@ static TypedefDecl *CreateVoidPtrBuiltinVaListDecl(const ASTContext *Context) {
   return VaListTypeDecl;
 }
 
+static TypedefDecl *
+CreateAArch64ABIBuiltinVaListDecl(const ASTContext *Context) {
+  RecordDecl *VaListTagDecl;
+  if (Context->getLangOpts().CPlusPlus) {
+    // namespace std { struct __va_list {
+    NamespaceDecl *NS;
+    NS = NamespaceDecl::Create(const_cast<ASTContext &>(*Context),
+                               Context->getTranslationUnitDecl(),
+                               /*Inline*/false, SourceLocation(),
+                               SourceLocation(), &Context->Idents.get("std"),
+                               /*PrevDecl*/0);
+
+    VaListTagDecl = CXXRecordDecl::Create(*Context, TTK_Struct,
+                                          Context->getTranslationUnitDecl(),
+                                          SourceLocation(), SourceLocation(),
+                                          &Context->Idents.get("__va_list"));
+    VaListTagDecl->setDeclContext(NS);
+  } else {
+    // struct __va_list
+    VaListTagDecl = CreateRecordDecl(*Context, TTK_Struct,
+                                   Context->getTranslationUnitDecl(),
+                                   &Context->Idents.get("__va_list"));
+  }
+
+  VaListTagDecl->startDefinition();
+
+  const size_t NumFields = 5;
+  QualType FieldTypes[NumFields];
+  const char *FieldNames[NumFields];
+
+  // void *__stack;
+  FieldTypes[0] = Context->getPointerType(Context->VoidTy);
+  FieldNames[0] = "__stack";
+
+  // void *__gr_top;
+  FieldTypes[1] = Context->getPointerType(Context->VoidTy);
+  FieldNames[1] = "__gr_top";
+
+  // void *__vr_top;
+  FieldTypes[2] = Context->getPointerType(Context->VoidTy);
+  FieldNames[2] = "__vr_top";
+
+  // int __gr_offs;
+  FieldTypes[3] = Context->IntTy;
+  FieldNames[3] = "__gr_offs";
+
+  // int __vr_offs;
+  FieldTypes[4] = Context->IntTy;
+  FieldNames[4] = "__vr_offs";
+
+  // Create fields
+  for (unsigned i = 0; i < NumFields; ++i) {
+    FieldDecl *Field = FieldDecl::Create(const_cast<ASTContext &>(*Context),
+                                         VaListTagDecl,
+                                         SourceLocation(),
+                                         SourceLocation(),
+                                         &Context->Idents.get(FieldNames[i]),
+                                         FieldTypes[i], /*TInfo=*/0,
+                                         /*BitWidth=*/0,
+                                         /*Mutable=*/false,
+                                         ICIS_NoInit);
+    Field->setAccess(AS_public);
+    VaListTagDecl->addDecl(Field);
+  }
+  VaListTagDecl->completeDefinition();
+  QualType VaListTagType = Context->getRecordType(VaListTagDecl);
+  Context->VaListTagTy = VaListTagType;
+
+  // } __builtin_va_list;
+  TypedefDecl *VaListTypedefDecl
+    = TypedefDecl::Create(const_cast<ASTContext &>(*Context),
+                          Context->getTranslationUnitDecl(),
+                          SourceLocation(), SourceLocation(),
+                          &Context->Idents.get("__builtin_va_list"),
+                          Context->getTrivialTypeSourceInfo(VaListTagType));
+
+  return VaListTypedefDecl;
+}
+
 static TypedefDecl *CreatePowerABIBuiltinVaListDecl(const ASTContext *Context) {
   // typedef struct __va_list_tag {
   RecordDecl *VaListTagDecl;
@@ -5777,6 +5876,8 @@ static TypedefDecl *CreateVaListDecl(const ASTContext *Context,
     return CreateCharPtrBuiltinVaListDecl(Context);
   case TargetInfo::VoidPtrBuiltinVaList:
     return CreateVoidPtrBuiltinVaListDecl(Context);
+  case TargetInfo::AArch64ABIBuiltinVaList:
+    return CreateAArch64ABIBuiltinVaListDecl(Context);
   case TargetInfo::PowerABIBuiltinVaList:
     return CreatePowerABIBuiltinVaListDecl(Context);
   case TargetInfo::X86_64ABIBuiltinVaList:
@@ -7558,13 +7659,16 @@ bool ASTContext::DeclMustBeEmitted(const Decl *D) {
     if (FD->hasAttr<ConstructorAttr>() || FD->hasAttr<DestructorAttr>())
       return true;
     
-    // The key function for a class is required.
-    if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(FD)) {
-      const CXXRecordDecl *RD = MD->getParent();
-      if (MD->isOutOfLine() && RD->isDynamicClass()) {
-        const CXXMethodDecl *KeyFunc = getKeyFunction(RD);
-        if (KeyFunc && KeyFunc->getCanonicalDecl() == MD->getCanonicalDecl())
-          return true;
+    // The key function for a class is required.  This rule only comes
+    // into play when inline functions can be key functions, though.
+    if (getTargetInfo().getCXXABI().canKeyFunctionBeInline()) {
+      if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(FD)) {
+        const CXXRecordDecl *RD = MD->getParent();
+        if (MD->isOutOfLine() && RD->isDynamicClass()) {
+          const CXXMethodDecl *KeyFunc = getCurrentKeyFunction(RD);
+          if (KeyFunc && KeyFunc->getCanonicalDecl() == MD->getCanonicalDecl())
+            return true;
+        }
       }
     }
 
@@ -7607,7 +7711,8 @@ CallingConv ASTContext::getDefaultCXXMethodCallConv(bool isVariadic) {
 }
 
 CallingConv ASTContext::getCanonicalCallConv(CallingConv CC) const {
-  if (CC == CC_C && !LangOpts.MRTD && getTargetInfo().getCXXABI() != CXXABI_Microsoft)
+  if (CC == CC_C && !LangOpts.MRTD &&
+      getTargetInfo().getCXXABI().isMemberFunctionCCDefault())
     return CC_Default;
   return CC;
 }
@@ -7618,11 +7723,13 @@ bool ASTContext::isNearlyEmpty(const CXXRecordDecl *RD) const {
 }
 
 MangleContext *ASTContext::createMangleContext() {
-  switch (Target->getCXXABI()) {
-  case CXXABI_ARM:
-  case CXXABI_Itanium:
+  switch (Target->getCXXABI().getKind()) {
+  case TargetCXXABI::GenericAArch64:
+  case TargetCXXABI::GenericItanium:
+  case TargetCXXABI::GenericARM:
+  case TargetCXXABI::iOS:
     return createItaniumMangleContext(*this, getDiagnostics());
-  case CXXABI_Microsoft:
+  case TargetCXXABI::Microsoft:
     return createMicrosoftMangleContext(*this, getDiagnostics());
   }
   llvm_unreachable("Unsupported ABI");

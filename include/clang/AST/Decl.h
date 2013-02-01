@@ -1887,7 +1887,7 @@ public:
   /// \brief Determine whether this function should be inlined, because it is
   /// either marked "inline" or "constexpr" or is a member function of a class
   /// that was defined in the class body.
-  bool isInlined() const;
+  bool isInlined() const { return IsInline; }
 
   bool isInlineDefinitionExternallyVisible() const;
 
@@ -2930,6 +2930,10 @@ class RecordDecl : public TagDecl {
   /// HasObjectMember - This is true if this struct has at least one member
   /// containing an Objective-C object pointer type.
   bool HasObjectMember : 1;
+  
+  /// HasVolatileMember - This is true if struct has at least one member of
+  /// 'volatile' type.
+  bool HasVolatileMember : 1;
 
   /// \brief Whether the field declarations of this record have been loaded
   /// from external storage. To avoid unnecessary deserialization of
@@ -2986,6 +2990,9 @@ public:
   bool hasObjectMember() const { return HasObjectMember; }
   void setHasObjectMember (bool val) { HasObjectMember = val; }
 
+  bool hasVolatileMember() const { return HasVolatileMember; }
+  void setHasVolatileMember (bool val) { HasVolatileMember = val; }
+  
   /// \brief Determines whether this declaration represents the
   /// injected class name.
   ///

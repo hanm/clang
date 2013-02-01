@@ -570,6 +570,9 @@ public:
   /// integer.
   llvm::APSInt EvaluateKnownConstInt(const ASTContext &Ctx,
                           SmallVectorImpl<PartialDiagnosticAt> *Diag=0) const;
+  
+  void EvaluateForOverflow(const ASTContext &Ctx,
+                           SmallVectorImpl<PartialDiagnosticAt> *Diag) const;
 
   /// EvaluateAsLValue - Evaluate an expression to see if we can fold it to an
   /// lvalue with link time known address, with no side-effects.
@@ -1485,7 +1488,7 @@ public:
                      getByteLength());
   }
 
-  void outputString(raw_ostream &OS);
+  void outputString(raw_ostream &OS) const;
 
   uint32_t getCodeUnit(size_t i) const {
     assert(i < Length && "out of bounds access");
@@ -4034,9 +4037,9 @@ public:
   void setDesignators(ASTContext &C, const Designator *Desigs,
                       unsigned NumDesigs);
 
-  Expr *getArrayIndex(const Designator& D);
-  Expr *getArrayRangeStart(const Designator& D);
-  Expr *getArrayRangeEnd(const Designator& D);
+  Expr *getArrayIndex(const Designator &D) const;
+  Expr *getArrayRangeStart(const Designator &D) const;
+  Expr *getArrayRangeEnd(const Designator &D) const;
 
   /// @brief Retrieve the location of the '=' that precedes the
   /// initializer value itself, if present.

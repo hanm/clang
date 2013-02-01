@@ -10,9 +10,6 @@
 /// \file
 /// Various functions to configurably format source code.
 ///
-/// This is EXPERIMENTAL code under heavy development. It is not in a state yet,
-/// where it can be used to format real code.
-///
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CLANG_FORMAT_FORMAT_H
@@ -60,6 +57,13 @@ struct FormatStyle {
   /// \brief If false, a function call's or function definition's parameters
   /// will either all be on the same line or will have one line each.
   bool BinPackParameters;
+
+  /// \brief Allow putting all parameters of a function declaration onto
+  /// the next line even if \c BinPackParameters is \c false.
+  bool AllowAllParametersOfDeclarationOnNextLine;
+
+  /// \brief Allow putting the return type of a function onto its own line.
+  bool AllowReturnTypeOnItsOwnLine;
 
   /// \brief If the constructor initializers don't fit on a line, put each
   /// initializer on its own line.

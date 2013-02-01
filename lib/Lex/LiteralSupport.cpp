@@ -13,12 +13,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Lex/LiteralSupport.h"
-#include "clang/Basic/ConvertUTF.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/LexDiagnostic.h"
 #include "clang/Lex/Preprocessor.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/ErrorHandling.h"
+
 using namespace clang;
 
 static unsigned getCharWidth(tok::TokenKind kind, const TargetInfo &Target) {
@@ -130,7 +131,7 @@ static unsigned ProcessCharEscape(const char *ThisTokBegin,
     if (ThisTokBuf == ThisTokEnd || !isxdigit(*ThisTokBuf)) {
       if (Diags)
         Diag(Diags, Features, Loc, ThisTokBegin, EscapeBegin, ThisTokBuf,
-             diag::err_hex_escape_no_digits);
+             diag::err_hex_escape_no_digits) << "x";
       HadError = 1;
       break;
     }
@@ -226,7 +227,7 @@ static bool ProcessUCNEscape(const char *ThisTokBegin, const char *&ThisTokBuf,
   if (ThisTokBuf == ThisTokEnd || !isxdigit(*ThisTokBuf)) {
     if (Diags)
       Diag(Diags, Features, Loc, ThisTokBegin, UcnBegin, ThisTokBuf,
-           diag::err_ucn_escape_no_digits);
+           diag::err_hex_escape_no_digits) << StringRef(&ThisTokBuf[-1], 1);
     return false;
   }
   UcnLen = (ThisTokBuf[-1] == 'u' ? 4 : 8);
@@ -277,7 +278,7 @@ static bool ProcessUCNEscape(const char *ThisTokBegin, const char *&ThisTokBuf,
 
   if (!Features.CPlusPlus && !Features.C99 && Diags)
     Diag(Diags, Features, Loc, ThisTokBegin, UcnBegin, ThisTokBuf,
-         diag::warn_ucn_not_valid_in_c89);
+         diag::warn_ucn_not_valid_in_c89_literal);
 
   return true;
 }

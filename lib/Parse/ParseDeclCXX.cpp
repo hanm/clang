@@ -439,8 +439,8 @@ Decl *Parser::ParseUsingDirective(unsigned Context,
 ///               unqualified-id
 ///       'using' :: unqualified-id
 ///
-///     alias-declaration: C++0x [decl.typedef]p2
-///       'using' identifier = type-id ;
+///     alias-declaration: C++11 [dcl.dcl]p1
+///       'using' identifier attribute-specifier-seq[opt] = type-id ;
 ///
 Decl *Parser::ParseUsingDeclaration(unsigned Context,
                                     const ParsedTemplateInfo &TemplateInfo,
@@ -564,7 +564,7 @@ Decl *Parser::ParseUsingDeclaration(unsigned Context,
                    tok::semi);
 
   // Diagnose an attempt to declare a templated using-declaration.
-  // In C++0x, alias-declarations can be templates:
+  // In C++11, alias-declarations can be templates:
   //   template <...> using id = type;
   if (TemplateInfo.Kind && !IsAliasDecl) {
     SourceRange R = TemplateInfo.getSourceRange();
@@ -1015,6 +1015,9 @@ bool Parser::isValidAfterTypeSpecifier(bool CouldBeBitfield) {
   case tok::l_square: // enum E [[]] x
     // Note, no tok::kw_alignas here; alignas cannot appertain to a type.
     return getLangOpts().CPlusPlus11 && NextToken().is(tok::l_square);
+  case tok::greater:
+    // template<class T = class X>
+    return getLangOpts().CPlusPlus;
   }
   return false;
 }
@@ -2163,8 +2166,6 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
         HasInitializer = true;
         if (!DeclaratorInfo.isDeclarationOfFunction() &&
             DeclaratorInfo.getDeclSpec().getStorageClassSpec()
-              != DeclSpec::SCS_static &&
-            DeclaratorInfo.getDeclSpec().getStorageClassSpec()
               != DeclSpec::SCS_typedef)
           HasInClassInit = Tok.is(tok::equal) ? ICIS_CopyInit : ICIS_ListInit;
       }
@@ -2215,7 +2216,9 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
     LateParsedAttrs.clear();
 
     // Handle the initializer.
-    if (HasInClassInit != ICIS_NoInit) {
+    if (HasInClassInit != ICIS_NoInit &&
+        DeclaratorInfo.getDeclSpec().getStorageClassSpec() !=
+        DeclSpec::SCS_static) {
       // The initializer was deferred; parse it and cache the tokens.
       Diag(Tok, getLangOpts().CPlusPlus11 ?
            diag::warn_cxx98_compat_nonstatic_member_init :
