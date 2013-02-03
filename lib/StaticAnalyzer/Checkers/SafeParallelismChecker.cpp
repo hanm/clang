@@ -328,7 +328,7 @@ public:
       os << "DEBUG:: ENCOUNTERED FATAL ERROR!! STOPPING\n";
     } else {
       // else continue with Typechecking
-      StmtVisitorInvoker<AssignmentSeekerVisitor>
+      StmtVisitorInvoker<AssignmentCheckerVisitor>
           TypeChecker(BR, D->getASTContext(), Mgr,
                       Mgr.getAnalysisDeclContext(D),
                       os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);

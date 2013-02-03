@@ -215,6 +215,9 @@ typedef llvm::SmallVector<const RplElement*,
 class Rpl {
   friend class Rpl;
 public:
+  /// Static Constants
+  static const char RPL_SPLIT_CHARACTER = ':';
+
   /// Types
 #ifndef RPL_VECTOR_SIZE
   #define RPL_VECTOR_SIZE 4
@@ -223,7 +226,6 @@ public:
 
 private:
   /// Fields
-  StringRef RplString;
   /// Note: RplElements are not owned by Rpl class.
   /// They are *NOT* destroyed with the Rpl.
   RplElementVector RplElements;
@@ -247,7 +249,7 @@ private:
     void printElements(raw_ostream& OS) {
       int I = firstIdx;
       for (; I < lastIdx; ++I) {
-        OS << rpl.RplElements[I]->getName() << ":";
+        OS << rpl.RplElements[I]->getName() << RPL_SPLIT_CHARACTER;
       }
       // print last element
       if (I==lastIdx)
@@ -324,39 +326,20 @@ private:
     }
   }; /// end class RplRef
   ///////////////////////////////////////////////////////////////////////////
-
-public:
-  static const char RPL_SPLIT_CHARACTER = ':';
-
+  public:
   /// Constructors
-  /*Rpl(StringRef rpl):rpl(rpl) {
-    FullySpecified = true;
-    while(rpl.size() > 0) { /// for all RPL elements of the RPL
-      // FIXME: '::' can appear as part of an RPL element. Splitting must
-      // be done differently to account for that.
-      std::pair<StringRef,StringRef> pair = rpl.split(RPL_SPLIT_CHARACTER);
-
-      RplElements.push_back(new NamedRplElement(pair.first));
-      if (isSpecialRplElement(pair.first))
-        FullySpecified = false;
-      rpl = pair.second;
-    }
-  }*/
-
   Rpl() : FullySpecified(true) {}
 
-  Rpl(const RplElement *Elm) :
-    RplString(Elm->getName()),
-    FullySpecified(Elm->isFullySpecified())
+  Rpl(const RplElement &Elm) :
+    FullySpecified(Elm.isFullySpecified())
   {
-    RplElements.push_back(Elm);
+    RplElements.push_back(&Elm);
   }
 
   /// Copy Constructor
-  Rpl(Rpl* That) :
-      RplString(That->RplString),
-      RplElements(That->RplElements),
-      FullySpecified(That->FullySpecified)
+  Rpl(Rpl &That) :
+      RplElements(That.RplElements),
+      FullySpecified(That.FullySpecified)
   {}
 
   /// Destructors
@@ -434,7 +417,7 @@ public:
   }
 
   /// Substitution (Rpl)
-  bool substitute(const RplElement& From, const Rpl& To) {
+  void substitute(const RplElement& From, const Rpl& To) {
     os << "DEBUG:: before substitution(" << From.getName() << "<-";
     To.printElements(os);
     os <<"): ";
@@ -458,7 +441,6 @@ public:
     os << "): ";
     printElements(os);
     os << "\n";
-    return false;
   }
 
   /// Append to this Rpl the argument Rpl without its head element
@@ -476,21 +458,195 @@ public:
     return upperBound;
   }
 
-  /// \brief return the join of 'this' and 'that'
+  /// \brief join this to That
   Rpl *join(Rpl* That) {
-    /// TODO
-
+    assert(That);
+    Rpl Result;
+    /// join from the left
+    RplElementVector::const_iterator
+            ThisI = this->RplElements.begin(),
+            ThatI = That->RplElements.begin(),
+            ThisE = this->RplElements.end(),
+            ThatE = That->RplElements.end();
+    for ( ; ThisI != ThisE && ThatI != ThatE && (*ThisI == *ThatI);
+            ++ThisI, ++ThatI) {
+      Result.appendElement(*ThisI);
+    }
+    if (ThisI != ThisE) {
+      /// put a star in the middle and join from the right
+      assert(ThatI != ThatE);
+      Result.appendElement(STARRplElmt);
+      Result.FullySpecified = false;
+      RplElementVector::const_reverse_iterator
+          ThisI = this->RplElements.rbegin(),
+          ThatI = That->RplElements.rbegin(),
+          ThisE = this->RplElements.rend(),
+          ThatE = That->RplElements.rend();
+      int ElNum = 0;
+      for(; ThisI != ThisE && ThatI != ThatE && (*ThisI == *ThatI);
+          ++ThisI, ++ThatI, ++ElNum);
+      if (ElNum > 0) {
+        Result.RplElements.append(ElNum,
+                      *(RplElements.begin() + RplElements.size() - ElNum));
+      }
+    }
+    /// return
+    this->RplElements = Result.RplElements;
+    return this;
   }
 
   /// Capture
   /// TODO: caller must deallocate Rpl and its element
   inline Rpl* capture() {
     if (this->isFullySpecified()) return this;
-    else return new Rpl(new CaptureRplElement(*this));
+    else return new Rpl(*new CaptureRplElement(*this));
   }
 
 }; // end class Rpl
 
+
+class RplVector {
+  friend class RplVector;
+  private:
+  /// Fields
+  Rpl::RplVector RplV;
+
+  public:
+  /// Constructor
+  RplVector() {}
+  RplVector(Rpl &R) {
+    RplV.push_back(new Rpl(R));
+  }
+
+  RplVector(RplVector &RV) {
+    for (Rpl::RplVector::const_iterator
+            I = RV.RplV.begin(),
+            E = RV.RplV.end();
+         I != E; ++I) {
+      RplV.push_back(new Rpl(*(*I))); // copy Rpls
+    }
+  }
+
+  /// Destructor
+  ~RplVector() {
+    for (Rpl::RplVector::const_iterator
+            I = RplV.begin(),
+            E = RplV.end();
+         I != E; ++I) {
+      if (*I)
+        delete (*I);
+    }
+  }
+
+  /// Methods
+  inline Rpl::RplVector::iterator begin () { return RplV.begin(); }
+
+  inline Rpl::RplVector::iterator end () { return RplV.end(); }
+
+  inline int size () { return RplV.size(); }
+
+  inline void push_back (Rpl *R) {
+    assert(R);
+    RplV.push_back(new Rpl(*R));
+  }
+
+  inline const Rpl *getRplAt(size_t idx) {
+    assert(idx>=0 && idx < RplV.size());
+    return RplV[idx];
+  }
+
+  std::string toString() {
+    std::string SBuf;
+    llvm::raw_string_ostream OS(SBuf);
+    for (Rpl::RplVector::const_iterator
+          I = RplV.begin(),
+          E = RplV.end();
+        I != E; ++I) {
+      OS << (*I)->toString() << " ";
+    }
+    return std::string(OS.str());
+  }
+
+  /// \brief joins this to That
+  RplVector *join(RplVector *That) {
+    assert(That);
+    assert(That->size() == this->size());
+
+    Rpl::RplVector::iterator
+            ThatI = That->begin(),
+            ThisI = this->begin(),
+            ThatE = That->end(),
+            ThisE = this->end();
+    for ( ;
+          ThatI != ThatE && ThisI != ThisE;
+          ++ThatI, ++ThisI) {
+      Rpl *LHS = *ThisI;
+      Rpl *RHS = *ThatI;
+      Rpl *Join = LHS->join(RHS);
+      ThisI = this->RplV.erase(ThisI);
+      //this->RplV.assign(); // can we use assign instead of erase and insert?
+      ThisI = this->RplV.insert(ThisI, Join);
+    }
+    return this;
+  }
+
+  /// \brief return true when this <= That, false otherwise
+  bool isIncludedIn (RplVector &That) {
+    bool Result = true;
+    assert(That.RplV.size() == this->RplV.size());
+
+    Rpl::RplVector::const_iterator
+            ThatI = That.begin(),
+            ThisI = this->begin(),
+            ThatE = That.end(),
+            ThisE = this->end();
+    for ( ;
+          ThatI != ThatE && ThisI != ThisE;
+          ++ThatI, ++ThisI) {
+      Rpl *LHS = *ThisI;
+      Rpl *RHS = *ThatI;
+      if (!RHS->isIncludedIn(*LHS)) {
+        Result = false;
+        break;
+      }
+    }
+    osv2 << "DEBUG:: [" << this->toString() << "] is " << (Result?"":"not")
+        << " included in [" << That.toString() << "]\n";
+    return Result;
+  }
+
+  /// substitution (RplVector)
+  void substitute(const RplElement &FromEl, const Rpl &ToRpl) {
+    for(Rpl::RplVector::const_iterator
+            I = RplV.begin(),
+            E = RplV.end();
+         I != E; ++I) {
+      if (*I)
+        (*I)->substitute(FromEl, ToRpl);
+    }
+  }
+
+  Rpl *deref() {
+    Rpl *Result = RplV.front();
+    RplV.erase(RplV.begin());
+    return Result;
+  }
+
+  Rpl *deref(size_t DerefNum) {
+    Rpl *Result = 0;
+    assert(DerefNum >=0 && DerefNum < RplV.size());
+    for (Rpl::RplVector::iterator
+            I = RplV.begin(),
+            E = RplV.end();
+         DerefNum > 0 && I != E; ++I, --DerefNum) {
+      if (Result)
+        delete Result;
+      Result = *I;
+      I = RplV.erase(I);
+    }
+    return Result;
+  }
+}; // end class RplVector
 ///-///////////////////////////////////////////////////////////////////////////
 /// Effect Class
 
@@ -559,11 +715,12 @@ public:
         : Kind(EK), R(R), A(A) {}
 
   Effect(Effect *E): Kind(E->Kind), A(E->A) {
-    R = (E->R) ? new Rpl(E->R) : 0;
+    R = (E->R) ? new Rpl(*E->R) : 0;
   }
   /// Destructors
   ~Effect() {
-    delete R;
+    if (R)
+      delete R;
   }
 
   /// Printing
@@ -627,11 +784,9 @@ public:
   inline SourceLocation getLocation() { return A->getLocation();}
 
   /// Substitution (Effect)
-  inline bool substitute(const RplElement &FromElm, const Rpl &ToRpl) {
+  inline void substitute(const RplElement &FromElm, const Rpl &ToRpl) {
     if (R)
-      return R->substitute(FromElm, ToRpl);
-    else
-      return true;
+      R->substitute(FromElm, ToRpl);
   }
 
   /// SubEffect: true if this <= e
@@ -668,25 +823,96 @@ class ASaPType {
   private:
   /// Fields
   QualType QT;
-  Rpl::RplVector ArgV;
+  RplVector *ArgV;
   Rpl *InRpl; // can be null
 
   public:
-  /// Constructor
-  ASaPType (QualType QT, Rpl::RplVector ArgV)
-           : QT(QT),
-             ArgV(ArgV), InRpl(0) {}
+  /// Constructors
+  ASaPType (QualType QT, RplVector *ArgV, Rpl *InRpl = 0)
+           : QT(QT) {
+    if (InRpl)
+      this->InRpl = new Rpl(*InRpl);
+    else
+      this->InRpl = 0;
+    if (ArgV)
+      this->ArgV = new RplVector(*ArgV);
+    else
+      this->ArgV = 0;
+  }
 
-  ASaPType (QualType QT, Rpl::RplVector ArgV, Rpl *InRpl)
-           : QT(QT),
-             ArgV(ArgV), InRpl(InRpl) {}
+  /*ASaPType (ASaPType &T)  {
+    ASaPType(T.QT, T.ArgV, T.InRpl);
+  }*/
+
+  ASaPType (ASaPType &T) : QT(T.QT) {
+    this->QT = T.QT;
+    if (T.InRpl)
+      this->InRpl = new Rpl(*T.InRpl);
+    else
+      this->InRpl = 0;
+    if (T.ArgV)
+      this->ArgV = new RplVector(*T.ArgV);
+    else
+      this->ArgV = 0;
+  }
 
   ~ASaPType() {
-    ASaP::destroyVector(ArgV);
-    // delete ArgV;
+    if (InRpl)
+       delete InRpl;
+    if (ArgV)
+      delete ArgV;
   }
   /// Methods
-  inline int getArgVSize() { return ArgV.size(); }
+  inline int getArgVSize() { return ArgV->size(); }
+
+  inline const Rpl *getInRpl() { return InRpl; }
+
+  const Rpl *getInRpl(int DerefNum) {
+    assert(DerefNum >= -1);
+    if (DerefNum == -1) return 0;
+    if (DerefNum == 0) return InRpl;
+    return this->ArgV->getRplAt(DerefNum-1);
+  }
+
+  inline QualType getQT() { return QT; };
+
+  QualType getQT(int DerefNum) {
+    // TODO:: support DerefNum == -1 :: assert(DerefNum >= -1);
+    assert(DerefNum >= 0);
+    QualType Result = QT;
+    while (DerefNum > 0) {
+      assert(Result->isPointerType());
+      Result = Result->getPointeeType();
+      --DerefNum;
+    }
+    return Result;
+  }
+
+  /// \brief get the type of this with Num dereferences
+  void deref(int DerefNum) {
+    // TODO:: support DerefNum == -1 :: assert(DerefNum >= -1);
+    assert(DerefNum >= 0);
+
+    //ASaPType *Result = new ASaPType(*this);
+    assert(ArgV);
+    while (DerefNum > 0) {
+      if (InRpl)
+        delete InRpl;
+      InRpl = ArgV->deref();
+      assert(QT->isPointerType());
+      QT = QT->getPointeeType();
+      DerefNum--;
+    }
+  }
+
+  /// \brief Set the InAnnotation to NULL (and free the Rpl)
+  void dropInRpl() {
+    if (InRpl) {
+      delete InRpl;
+      InRpl = 0;
+    }
+  }
+
   std::string toString() const {
     std::string SBuf;
     llvm::raw_string_ostream OS(SBuf);
@@ -696,30 +922,30 @@ class ASaPType {
     else
       OS << "IN:<empty>";
 
-    OS << ", ArgV:";
-    for (Rpl::RplVector::const_iterator
-            I = ArgV.begin(),
-            E = ArgV.end();
-          I != E; ++I) {
-      OS << (*I)->toString() << " ";
-    }
+    OS << ", ArgV:" << ArgV->toString();
     return std::string(OS.str());
-}
+  }
+
+  /// \brief  true when 'this' is a subtype (derived type) of 'that'
+  inline bool subtype(const ASaPType &That) { return *this <= That; }
 
   /// \brief true when 'this' is a subtype (derived type) of 'that'
-  bool operator <= (ASaPType *That) {
-    if (this->QT!=That->QT) {
+  bool operator <= (const ASaPType &That) {
+    if (this->QT!=That.QT) {
       /// Typechecking has passed so we assume that this->QT <= that->QT
       /// but we have to find follow the mapping and substitute Rpls....
       /// TODO :)
+      osv2 << "DEBUG:: Failing ASaP::subtype because QT != QT'\n";
       return false; // until we support inheritance this is good enough
     }
-    assert(this->QT == That->QT);
-
-    return isIncludedIn(&this->ArgV, &That->ArgV);
+    assert(this->QT == That.QT);
+    /// Note that we're ignoring InRpl
+    assert(That.ArgV);
+    return this->ArgV->isIncludedIn(*That.ArgV);
   }
 
-  /// \brief returns the smallest common supertype (Base Type)
+  /// \brief joins this to That.
+  /// Join returns the smallest common supertype (Base Type)
   ASaPType *join(ASaPType *That) {
     if (this->QT!=That->QT) {
       /// Typechecking has passed so we assume that this->QT <= that->QT
@@ -729,59 +955,21 @@ class ASaPType {
       return 0; // until we support inheritance this is good enough
     }
     assert(this->QT == That->QT);
-    return new ASaPType(QT, joinRegions(&this->ArgV, &That->ArgV));
+    this->InRpl->join(That->InRpl);
+    this->ArgV->join(That->ArgV);
+    return this;
+  }
+
+  /// Substitution (ASaPType)
+  void substitute(const RplElement &FromEl, const Rpl &ToRpl) {
+    if (InRpl)
+      InRpl->substitute(FromEl, ToRpl);
+    if (ArgV)
+      ArgV->substitute(FromEl, ToRpl);
   }
 
   private:
   /// Private Methods
 
-  /// \brief returns the join of two RplVectors
-  Rpl::RplVector joinRegions(Rpl::RplVector *LHSRs, Rpl::RplVector *RHSRs) {
-    Rpl::RplVector Result;
-    assert(RHSRs);
-    assert(LHSRs);
-    assert(RHSRs->size() == LHSRs->size());
-
-    Rpl::RplVector::const_iterator
-            RHSI = RHSRs->begin(),
-            LHSI = LHSRs->begin(),
-            RHSE = RHSRs->end(),
-            LHSE = LHSRs->end();
-    for ( ;
-          RHSI != RHSE && LHSI != LHSE;
-          RHSI++, LHSI++) {
-      Rpl *LHS = *LHSI;
-      Rpl *RHS = *RHSI;
-      Rpl *Join = LHS->join(RHS);
-      Result.push_back(Join);
-    }
-    return Result;
-  }
-
-  /// \brief return true when LHSRegions <= RHSRegions, false otherwise
-  bool isIncludedIn (const Rpl::RplVector *LHSRegs,
-                     const Rpl::RplVector *RHSRegs) {
-    bool Result = true;
-    assert(RHSRegs);
-    assert(LHSRegs);
-    assert(RHSRegs->size() == LHSRegs->size());
-
-    Rpl::RplVector::const_iterator
-            RHSI = RHSRegs->begin(),
-            LHSI = LHSRegs->begin(),
-            RHSE = RHSRegs->end(),
-            LHSE = LHSRegs->end();
-    for ( ;
-          RHSI != RHSE && LHSI != LHSE;
-          RHSI++, LHSI++) {
-      Rpl *LHS = *LHSI;
-      Rpl *RHS = *RHSI;
-      if (!RHS->isIncludedIn(*LHS)) {
-        Result = false;
-        break;
-      }
-    }
-    return Result;
-  }
 }; // end class ASaPType
 

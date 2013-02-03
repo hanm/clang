@@ -28,9 +28,9 @@ private:
 
   /// Private Methods
   void addASaPTypeToMap(ASaPTypeDeclMapTy &Map, ValueDecl* D,
-                        Rpl::RplVector &RV, Rpl *In) {
+                        RplVector &RV, Rpl *InRpl) {
     assert(!ASaPTypeDeclMap[D]);
-    ASaPType *T = new ASaPType(D->getType(), RV, In);
+    ASaPType *T = new ASaPType(D->getType(), &RV, InRpl);
     OS << "Debug:: RV.size=" << RV.size() << ", T.RV.size="
         << T->getArgVSize() << "\n";
     ASaPTypeDeclMap[D] = T;
@@ -133,7 +133,7 @@ private:
     if (!QT->isPointerType()) { // scalar but not pointer
       /// our job here is done
       OS << "Debug:: type is (scalar and) not a pointer\n";
-      Rpl::RplVector RV;
+      RplVector RV;
       addASaPTypeToMap(ASaPTypeDeclMap, D, RV, InAnnot);
       emitRemainingArgsAreSuperfluous(D, ArgIt, ArgEnd);
       return 0;
@@ -151,9 +151,9 @@ private:
     assert(QT->isClassType());
     Rpl *InAnnot = 0; /// FIXME: we may need to substitute P1<-Implicit,
                      /// P2<-Implicit, ...
-    Rpl::RplVector RV;
+    RplVector RV;
     if (ImplicitInAnnot)
-      RV.push_back(new Rpl(ImplicitInAnnot));
+      RV.push_back(ImplicitInAnnot);
     else {
       if (ArgIt == ArgEnd) {
         emitMissingRegionArgs(D);
@@ -163,7 +163,7 @@ private:
         checkIsValidTypeForArg(D, QT, *ArgIt);
         Rpl *R = RplAttrMap[*ArgIt];
         assert(R || FatalError);
-        RV.push_back(new Rpl(R));
+        RV.push_back(R);
         ArgIt++;
       }
     }
@@ -179,12 +179,12 @@ private:
                            ITERATOR_TYPE &ArgIt,
                            ITERATOR_TYPE ArgEnd) {
     /// Grab args for multiple pointer levels
-    Rpl::RplVector RV;
+    RplVector RV;
     while (ArgIt != ArgEnd && QT->isPointerType()) {
       checkIsValidTypeForArg(D, QT, *ArgIt);
       Rpl *R = RplAttrMap[*ArgIt];
       assert(R || FatalError);
-      RV.push_back(new Rpl(R));
+      RV.push_back(R);
       ArgIt ++;
       QT = QT->getPointeeType();
     }
@@ -205,7 +205,7 @@ private:
       assert(R || FatalError);
       OS << "Debug: pushing Rpl to ArgV before creating ASaPType (Rpl:"
         << R->toString() << "\n";
-      RV.push_back(new Rpl(R));
+      RV.push_back(R);
       /// Add ASaP Type to map
       addASaPTypeToMap(ASaPTypeDeclMap, D, RV, InAnnot);
       ArgIt ++;
@@ -220,6 +220,7 @@ private:
                            ITERATOR_TYPE ArgIt,
                            ITERATOR_TYPE ArgEnd) {
     if (QT->isReferenceType()) {
+      OS << "DEBUG:: found reference type...\n";
       QT = QT.getNonReferenceType();
       checkTypeRegionArgs(D, QT, 0, ArgIt, ArgEnd);
     } else if (QT->isFunctionType()) {
@@ -233,7 +234,8 @@ private:
                                                ArgIt, ArgEnd);
       if (InAnnot) checkRestRegionArgs(D, QT, InAnnot, ArgIt, ArgEnd);
     } else if (QT->isClassType()) {
-      checkClassTypeRegionArgs(D, QT, ImplicitInAnnot, ArgIt, ArgEnd);
+      // drop ImplicitInAnnot
+      checkClassTypeRegionArgs(D, QT, 0, ArgIt, ArgEnd);
     } else if (QT->isVoidType()) {
       emitRemainingArgsAreSuperfluous(D, ArgIt, ArgEnd);
     } else {
@@ -336,7 +338,7 @@ private:
    */
   void checkTypeRegionArgs(ValueDecl *D, Rpl *ImplicitInAnnot) {
     QualType QT = D->getType();
-    Rpl::RplVector RV;
+    RplVector RV;
     // here we need a reverse iterator over RegionArgAttr
 #ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
     specific_attr_reverse_iterator<RegionArgAttr>
@@ -621,7 +623,7 @@ private:
 
       if (Tmp) { /// Tmp may be NULL if the RPL was ill formed (e.g., contained
                  /// undeclared RPL elements).
-        EV.push_back(new Effect(EK, new Rpl(Tmp), *I));
+        EV.push_back(new Effect(EK, new Rpl(*Tmp), *I));
       }
     }
   }
@@ -795,14 +797,16 @@ public:
     checkRpls<RegionArgAttr>(D);
 
     /// C. Check validity of annotations
-    checkTypeRegionArgs(D, new Rpl(LOCALRplElmt));
+    Rpl Local(*LOCALRplElmt);
+    checkTypeRegionArgs(D, &Local);
     return true;
   }
 
   bool VisitCXXMethodDecl(clang::CXXMethodDecl *D) {
     // ATTENTION This is called after VisitFunctionDecl
     OS << "DEBUG:: VisitCXXMethodDecl\n";
-    checkTypeRegionArgs(D, new Rpl(LOCALRplElmt)); // check return type
+    Rpl Local(*LOCALRplElmt);
+    checkTypeRegionArgs(D, &Local); // check return type
     return true;
   }
 

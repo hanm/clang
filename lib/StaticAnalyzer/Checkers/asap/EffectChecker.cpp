@@ -290,23 +290,23 @@ public:
         const RegionParamAttr* RPA = getRegionParamAttr(SubstQT.getTypePtr());
         assert(RPA);
         // TODO support multiple Parameters
-        StringRef From = RPA->getName();
-        //FIXME do we need to capture here?
-        // FIXME get the param from the new map
-        const ParamRplElement FromElmt(From);
+        RplElement *RplEl = RplElementMap[RPA];
+        assert(RplEl);
+        const ParamRplElement *FromEl = dyn_cast<ParamRplElement>(RplEl);
+        assert(FromEl);
 
         // apply substitution to temp effects
-        StringRef To = SubstArg->getRpl();
-        Rpl* ToRpl = RplMap[SubstArg];
+        const Rpl* ToRpl = RplMap[SubstArg];
         assert(ToRpl);
 
-        if (From.compare(To)) { // if (from != to) then substitute
+        if (FromEl->getName().compare(ToRpl->toString())) {
+          // if (from != to) then substitute
           /// 2.1.1 Substitution of effects
           for (Effect::EffectVector::const_iterator
                   I = EffectsTmp.begin(),
                   E = EffectsTmp.end();
                 I != E; ++I) {
-            (*I)->substitute(FromElmt, *ToRpl);
+            (*I)->substitute(*FromEl, *ToRpl);
           }
         }
       }
@@ -332,7 +332,7 @@ public:
           /// TODO is this atomic or not? ignore atomic for now
           EffectsTmp.push_back(
             new Effect(Effect::EK_ReadsEffect,
-                       new Rpl(RplMap[(*ArgIt)]),
+                       new Rpl(*RplMap[(*ArgIt)]),
                        *ArgIt));
           EffectNr++;
           QT = QT->getPointeeType();
@@ -358,7 +358,7 @@ public:
             /// i.e., not here!
           } else {
             EffectsTmp.push_back(
-              new Effect(EK, new Rpl(RplMap[(*ArgIt)]), *ArgIt));
+              new Effect(EK, new Rpl(*RplMap[(*ArgIt)]), *ArgIt));
             EffectNr++;
           }
         }
@@ -503,12 +503,15 @@ public:
     Exp->dump(OS, BR.getSourceManager());
     Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
-    OS << "DEBUG:: VisitCXXMemberCallExpr\n";
 
     Decl *D = Exp->getCalleeDecl();
     assert(D);
     FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
     assert(FD);
+    OS << "DEBUG:: FunctionDecl = ";
+    FD->print(OS, Ctx.getPrintingPolicy());
+    OS << "DEBUG:: isOverloadedOperator = " << FD->isOverloadedOperator() << "\n";
+
     /// 1. Typecheck assignment of actuals to formals
     /*ExprIterator ArgI, ArgE;
     FunctionDecl::param_iterator ParamI, ParamE;
