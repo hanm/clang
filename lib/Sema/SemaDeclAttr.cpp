@@ -4549,25 +4549,27 @@ static void handleForceInlineAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 //===----------------------------------------------------------------------===//
 
 enum SafeParallelismAttributeDeclKind {
-  SafeParExpectedClassOrFunctionOrNamespace,  // region (region_name) 
-  SafeParExpectedClassOrFunction, 					  // param(region_name)
-  SafeParExpectedFieldOrParamOrVariable,			// arg(RPL)
-  SafeParExpectedFunction 							      // Effects
+  SafeParExpectedClassOrFunctionOrNamespace, // region (region_name)
+  SafeParExpectedClassOrFunction, 	     // param(region_name)
+  SafeParExpectedFieldOrParamOrVariable,     // arg(RPL)
+  SafeParExpectedFunction 		     // Effects
 };
 
 
 /// Generic ASaP attibute handler. Does nothing except check that the attribute
 /// has exactly one argument.
 
-static void handleSafeParRegionAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleSafeParRegionAttr(Sema &S, Decl *D,
+                                    const AttributeList &Attr) {
   assert(!Attr.isInvalid());
   if (!checkAttributeNumArgs(S, Attr, 1))
     return;
-  // TODO region name declarations should be allowed at global scope, and possibly at block scope.
-  if (!isa<RecordDecl>(D) && !isa<FunctionDecl>(D) 
+  // TODO region name declarations should be allowed at global scope,
+  // and possibly at block scope.
+  if (!isa<RecordDecl>(D) && !isa<FunctionDecl>(D)
       && !isa<FunctionTemplateDecl>(D) && !isa<NamespaceDecl>(D)) {
     S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
-    	      << Attr.getName() << SafeParExpectedClassOrFunctionOrNamespace;;
+      << Attr.getName() << SafeParExpectedClassOrFunctionOrNamespace;;
     return;
   }
 
@@ -4575,25 +4577,28 @@ static void handleSafeParRegionAttr(Sema &S, Decl *D, const AttributeList &Attr)
   Arg = Arg->IgnoreParenCasts();
   StringLiteral *Str = dyn_cast<StringLiteral>(Arg);
 
-  D->addAttr(::new (S.Context) RegionAttr(Attr.getRange(), S.Context,
-		  	  	  	  	  	  	  	  	  	   	  	  	   Str->getString()));
+  D->addAttr(::new (S.Context)
+             RegionAttr(Attr.getRange(), S.Context, Str->getString(),
+                        Attr.getAttributeSpellingListIndex()));
 }
 
-static void handleSafeParRegionParamAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleSafeParRegionParamAttr(Sema &S, Decl *D,
+                                         const AttributeList &Attr) {
   assert(!Attr.isInvalid());
   if (!checkAttributeNumArgs(S, Attr, 1))
     return;
 
-  if (!isa<RecordDecl>(D) && !isa<FunctionDecl>(D) && !isa<FunctionTemplateDecl>(D)) {
+  if (!isa<RecordDecl>(D) && !isa<FunctionDecl>(D) &&
+      !isa<FunctionTemplateDecl>(D)) {
     S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
-    	      << Attr.getName() << SafeParExpectedClassOrFunction;
+      << Attr.getName() << SafeParExpectedClassOrFunction;
     return;
   }
 
   // Only a single parameter annotation per type is allowed
   if (D->hasAttr<RegionParamAttr>()) {
     S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_duplicate_attribute)
-            << Attr.getName();
+      << Attr.getName();
     return;
   }
 
@@ -4601,18 +4606,21 @@ static void handleSafeParRegionParamAttr(Sema &S, Decl *D, const AttributeList &
   Arg = Arg->IgnoreParenCasts();
   StringLiteral *Str = dyn_cast<StringLiteral>(Arg);
 
-  D->addAttr(::new (S.Context) RegionParamAttr(Attr.getRange(), S.Context,
-		  	  	  	  	  	  	  	  	  	   	  	  	   Str->getString()));
+  D->addAttr(::new (S.Context)
+             RegionParamAttr(Attr.getRange(), S.Context, Str->getString(),
+                             Attr.getAttributeSpellingListIndex()));
 }
 
-static void handleSafeParRegionArgAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleSafeParRegionArgAttr(Sema &S, Decl *D,
+                                       const AttributeList &Attr) {
   assert(!Attr.isInvalid());
-  // FIXME: the number of arguments should be equal to the number of region parameters
-  // of the annotated type
+  // FIXME: the number of arguments should be equal to the number of
+  // region parameters of the annotated type
   if (!checkAttributeNumArgs(S, Attr, 1))
     return;
 
-  if (!isa<FieldDecl>(D) && !isa<VarDecl>(D) && !isa<FunctionDecl>(D) && !isa<ParmVarDecl>(D)) {
+  if (!isa<FieldDecl>(D) && !isa<VarDecl>(D) && !isa<FunctionDecl>(D) &&
+      !isa<ParmVarDecl>(D)) {
     S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
       << Attr.getName() << SafeParExpectedFieldOrParamOrVariable;
     return;
@@ -4622,14 +4630,15 @@ static void handleSafeParRegionArgAttr(Sema &S, Decl *D, const AttributeList &At
   Arg = Arg->IgnoreParenCasts();
   StringLiteral *Str = dyn_cast<StringLiteral>(Arg);
 
-  D->addAttr(::new (S.Context) RegionArgAttr(Attr.getRange(), S.Context,
-		  	  	  	  	  	  	  	  	  	   	  	  	   Str->getString()));
+  D->addAttr(::new (S.Context)
+             RegionArgAttr(Attr.getRange(), S.Context, Str->getString(),
+                           Attr.getAttributeSpellingListIndex()));
 }
-
 
 /// EFFECTS
 
-static void handleSafeParNoEffectAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleSafeParNoEffectAttr(Sema &S, Decl *D,
+                                      const AttributeList &Attr) {
   assert(!Attr.isInvalid());
   if (!checkAttributeNumArgs(S, Attr, 0))
     return;
@@ -4640,15 +4649,17 @@ static void handleSafeParNoEffectAttr(Sema &S, Decl *D, const AttributeList &Att
     return;
   }
 
-  D->addAttr(::new (S.Context) NoEffectAttr(Attr.getRange(), S.Context));
-
+  D->addAttr(::new (S.Context)
+             NoEffectAttr(Attr.getRange(), S.Context,
+                          Attr.getAttributeSpellingListIndex()));
 }
 
 template<typename AttrType>
-static void handleSafeParEffectAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleSafeParEffectAttr(Sema &S, Decl *D,
+                                    const AttributeList &Attr) {
   assert(!Attr.isInvalid());
   if (!checkAttributeNumArgs(S, Attr, 1))
-	  return;
+    return;
 
   if (!isa<FunctionDecl>(D) && !isa<FunctionTemplateDecl>(D)) {
     S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
@@ -4660,9 +4671,9 @@ static void handleSafeParEffectAttr(Sema &S, Decl *D, const AttributeList &Attr)
   Arg = Arg->IgnoreParenCasts();
   StringLiteral *Str = dyn_cast<StringLiteral>(Arg);
 
-  D->addAttr(::new (S.Context) AttrType(Attr.getRange(), S.Context,
-		  	  	  	  	  	  	  	  	  	  	  	  	  Str->getString()));
-
+  D->addAttr(::new (S.Context)
+             AttrType(Attr.getRange(), S.Context, Str->getString(),
+                      Attr.getAttributeSpellingListIndex()));
 }
 
 //===----------------------------------------------------------------------===//
