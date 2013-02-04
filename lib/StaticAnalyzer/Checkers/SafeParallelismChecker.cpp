@@ -130,34 +130,31 @@ typedef std::map<const FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
 
 void destroyEffectSummaryMap(EffectSummaryMapTy &EffectSummaryMap) {
   for(EffectSummaryMapTy::iterator I = EffectSummaryMap.begin(),
-                                 E = EffectSummaryMap.end();
-      I != E; ++I) {
+      E = EffectSummaryMap.end(); I != E;) {
     Effect::EffectVector *EV = (*I).second;
     ASaP::destroyVector(*EV);
     delete EV;
-    EffectSummaryMap.erase(I);
+    EffectSummaryMap.erase(I++);
   }
   assert(EffectSummaryMap.size()==0);
 }
 
 void destroyRplAttrMap(RplAttrMapTy &RplAttrMap) {
   for(RplAttrMapTy::iterator I = RplAttrMap.begin(),
-                             E = RplAttrMap.end();
-      I != E; ++I) {
+      E = RplAttrMap.end(); I != E;) {
     Rpl *R = (*I).second;
     delete R;
-    RplAttrMap.erase(I);
+    RplAttrMap.erase(I++);
   }
   assert(RplAttrMap.size()==0);
 }
 
 void destroyRplElementAttrMap(RplElementAttrMapTy &RplElementAttrMap) {
   for(RplElementAttrMapTy::iterator I = RplElementAttrMap.begin(),
-                             E = RplElementAttrMap.end();
-      I != E; ++I) {
+      E = RplElementAttrMap.end(); I != E;) {
     RplElement *RpEl = (*I).second;
     delete RpEl;
-    RplElementAttrMap.erase(I);
+    RplElementAttrMap.erase(I++);
   }
   assert(RplElementAttrMap.size()==0);
 }

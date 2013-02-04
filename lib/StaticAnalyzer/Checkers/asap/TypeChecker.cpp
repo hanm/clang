@@ -67,8 +67,7 @@ public:
   }
   /// Destructor
   ~AssignmentCheckerVisitor() {
-    if (Type)
-      delete Type;
+    delete Type;
   }
 
   /// Getters
@@ -273,8 +272,7 @@ public:
 
   /// Destructor
   virtual ~TypeBuilderVisitor() {
-    if (Type)
-      delete Type;
+    delete Type;
   }
 
   /// Getters
@@ -593,8 +591,7 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
     helperEmitInvalidAssignmentWarning(E, LHSType, RHSType);
     FatalError = true;
   }
-  if (Type)
-    delete Type;
+  delete Type;
   Type = TBVR.stealType();
   assert(Type);
 
