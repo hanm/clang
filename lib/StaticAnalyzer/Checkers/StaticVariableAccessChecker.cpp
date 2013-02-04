@@ -455,6 +455,7 @@ public:
       // We should not report on static variables in functions that
       // are marked as no effect. This is required by Richard Latham too.
       // FIXME: use a better attribute type.
+#if 0
       DeclContext *Ctx = D->getDeclContext();
       if (FunctionDecl *Function = dyn_cast<FunctionDecl>(Ctx)) {
         // FIXME
@@ -463,6 +464,7 @@ public:
           return;
         */
       }
+#endif
 
       // report bug
       SourceRange SR = 
