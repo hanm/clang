@@ -533,8 +533,7 @@ class RplVector {
             I = RplV.begin(),
             E = RplV.end();
          I != E; ++I) {
-      if (*I)
-        delete (*I);
+      delete (*I);
     }
   }
 
@@ -719,8 +718,7 @@ public:
   }
   /// Destructors
   ~Effect() {
-    if (R)
-      delete R;
+    delete R;
   }
 
   /// Printing
@@ -857,10 +855,8 @@ class ASaPType {
   }
 
   ~ASaPType() {
-    if (InRpl)
-       delete InRpl;
-    if (ArgV)
-      delete ArgV;
+    delete InRpl;
+    delete ArgV;
   }
   /// Methods
   inline int getArgVSize() { return ArgV->size(); }
