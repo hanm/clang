@@ -394,7 +394,9 @@ public:
   bool Visit##CLASS##Decl(CLASS##Decl *D) { return true; }
 #include "clang/AST/DeclNodes.inc"
 
-private:
+/// FIXME - accessor changed to private
+//private:
+  protected:
   // These are helper methods used by more than one Traverse* method.
   bool TraverseTemplateParameterListHelper(TemplateParameterList *TPL);
   bool TraverseClassInstantiations(ClassTemplateDecl *D);

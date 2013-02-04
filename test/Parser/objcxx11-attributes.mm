@@ -31,6 +31,7 @@ void f(X *noreturn) {
 
   // An attribute is OK.
   [[]];
+
   [[int(), noreturn]]; // expected-warning {{unknown attribute 'int' ignored}} \
   // expected-warning {{attribute noreturn cannot be specified on a statement}}
   [[class, test(foo 'x' bar),,,]]; // expected-warning {{unknown attribute 'test' ignored}}\

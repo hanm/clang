@@ -1,7 +1,6 @@
 // RUN: %clang_cc1 -fcxx-exceptions -fexceptions -fsyntax-only -verify -std=c++11 %s
 
 void foo(int i) {
-
   [[unknown_attribute]] ; // expected-warning {{unknown attribute 'unknown_attribute' ignored}}
   [[unknown_attribute]] { } // expected-warning {{unknown attribute 'unknown_attribute' ignored}}
   [[unknown_attribute]] if (0) { } // expected-warning {{unknown attribute 'unknown_attribute' ignored}}
@@ -25,13 +24,13 @@ void foo(int i) {
   }
 
   [[unknown_attribute]] return; // expected-warning {{unknown attribute 'unknown_attribute' ignored}}
-	 
 
   alignas(8) ; // expected-warning {{attribute alignas cannot be specified on a statement}}
   [[noreturn]] { } // expected-warning {{attribute noreturn cannot be specified on a statement}}
   [[noreturn]] if (0) { } // expected-warning {{attribute noreturn cannot be specified on a statement}}
   [[noreturn]] for (;;); // expected-warning {{attribute noreturn cannot be specified on a statement}}
   [[noreturn]] do { // expected-warning {{attribute noreturn cannot be specified on a statement}}
+
     [[unavailable]] continue; // expected-warning {{unknown attribute 'unavailable' ignored}}
   } while (0);
   [[unknown_attributqqq]] while (0); // expected-warning {{unknown attribute 'unknown_attributqqq' ignored}}

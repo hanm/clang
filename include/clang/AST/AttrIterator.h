@@ -136,6 +136,90 @@ inline SpecificAttr *getSpecificAttr(const Container& container) {
     return 0;
 }
 
+#if 1
+/// specific_attr_reverse_iterator - Iterates (in reverse order) over a 
+/// subrange of an AttrVec, only providing attributes that are of a specifc 
+/// type.
+template <typename SpecificAttr, typename Container = AttrVec>
+class specific_attr_reverse_iterator {
+  typedef typename Container::const_reverse_iterator RevIterator;
+
+  /// Current - The current, underlying iterator.
+  /// In order to ensure we don't dereference an invalid iterator unless
+  /// specifically requested, we don't necessarily advance this all the
+  /// way. Instead, we advance it when an operation is requested; if the
+  /// operation is acting on what should be a past-the-end iterator,
+  /// then we offer no guarantees, but this way we do not dererence a
+  /// past-the-end iterator when we move to a past-the-end position.
+  mutable RevIterator RevCurrent;
+
+  void BacktrackToPrevious() const {
+    while (!isa<SpecificAttr>(*RevCurrent))
+      ++RevCurrent;
+  }
+
+  void BacktrackToPrevious(RevIterator RI) const {
+    while (RevCurrent != RI && !isa<SpecificAttr>(*RevCurrent))
+      ++RevCurrent;
+  }
+
+public:
+  typedef SpecificAttr*             value_type;
+  typedef SpecificAttr*             reference;
+  typedef SpecificAttr*             pointer;
+  typedef std::forward_iterator_tag iterator_category;
+  typedef std::ptrdiff_t            difference_type;
+
+  specific_attr_reverse_iterator() : RevCurrent() { }
+  explicit specific_attr_reverse_iterator(RevIterator ri) : RevCurrent(ri) { }
+
+  reference operator*() const {
+    BacktrackToPrevious();
+    return cast<SpecificAttr>(*RevCurrent);
+  }
+  pointer operator->() const {
+    BacktrackToPrevious();
+    return cast<SpecificAttr>(*RevCurrent);
+  }
+
+  specific_attr_reverse_iterator& operator++() {
+    ++RevCurrent;
+    return *this;
+  }
+  specific_attr_reverse_iterator operator++(int) {
+    specific_attr_reverse_iterator Tmp(*this);
+    ++(*this);
+    return Tmp;
+  }
+
+  friend bool operator==(specific_attr_reverse_iterator Left,
+                         specific_attr_reverse_iterator Right) {
+    if (Left.RevCurrent < Right.RevCurrent)
+      Left.BacktrackToPrevious(Right.RevCurrent);
+    else
+      Right.BacktrackToPrevious(Left.RevCurrent);
+    return Left.RevCurrent == Right.RevCurrent;
+  }
+  friend bool operator!=(specific_attr_reverse_iterator Left,
+                         specific_attr_reverse_iterator Right) {
+    return !(Left == Right);
+  }
+
+};
+
+template <typename SpecificAttr, typename Container>
+inline specific_attr_reverse_iterator<SpecificAttr, Container>
+          specific_attr_rbegin(const Container& container) {
+  return specific_attr_reverse_iterator<SpecificAttr, Container>(container.rbegin());
+}
+template <typename SpecificAttr, typename Container>
+inline specific_attr_reverse_iterator<SpecificAttr, Container>
+          specific_attr_rend(const Container& container) {
+  return specific_attr_reverse_iterator<SpecificAttr, Container>(container.rend());
+}
+
+#endif
+
 }  // end namespace clang
 
 #endif

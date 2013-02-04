@@ -938,7 +938,6 @@ void Parser::ParseLexedAttribute(LateParsedAttribute &LA,
 
       ParseGNUAttributeArgs(&LA.AttrName, LA.AttrNameLoc, Attrs, &endLoc,
                             0, SourceLocation(), AttributeList::AS_GNU);
-
       if (HasFunScope) {
         Actions.ActOnExitFunctionContext();
         FnScope.Exit();  // Pop scope, and remove Decls from IdResolver
