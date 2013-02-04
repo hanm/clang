@@ -294,7 +294,6 @@ public:
 
 }; // end class StmtVisitor
 
-
 /// FIXME temporarily just using pre-processor to concatenate code here... UGLY
 #include "asap/TypeChecker.cpp"
 #include "asap/EffectChecker.cpp"
@@ -302,7 +301,6 @@ public:
 
 class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
-
 
 public:
   void checkASTDecl(const TranslationUnitDecl *D, AnalysisManager &Mgr,
@@ -317,30 +315,30 @@ public:
     ASaPTypeDeclMapTy ASaPTypeMap;
     EffectSummaryMapTy EffectsMap;
     ASaPSemanticCheckerTraverser
-        SemanticChecker(BR, D->getASTContext(),
-                        Mgr.getAnalysisDeclContext(D),
-                        os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);
+      SemanticChecker(BR, D->getASTContext(),
+                      Mgr.getAnalysisDeclContext(D),
+                      os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);
     /** run checker */
     SemanticChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     os << "##############################################\n";
     os << "DEBUG:: done running ASaP Semantic Checker\n\n";
     if (SemanticChecker.encounteredFatalError()) {
-      os << "DEBUG:: ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      os << "DEBUG:: SEMANTIC CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
     } else {
       // else continue with Typechecking
       StmtVisitorInvoker<AssignmentCheckerVisitor>
-          TypeChecker(BR, D->getASTContext(), Mgr,
-                      Mgr.getAnalysisDeclContext(D),
-                      os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);
+        TypeChecker(BR, D->getASTContext(), Mgr,
+                    Mgr.getAnalysisDeclContext(D),
+                    os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);
       TypeChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
       os << "##############################################\n";
       os << "DEBUG:: done running ASaP Type Checker\n\n";
       if (TypeChecker.encounteredFatalError()) {
         os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
       } else {
-        /// TODO check for fatal errors during typechecking
+        // TODO check for fatal errors during typechecking
         // else continue with Effects Checking
-        /// Check that Effect Summaries cover effects
+        // Check that Effect Summaries cover effects
         StmtVisitorInvoker<EffectCollectorVisitor>
           EffectChecker(BR, D->getASTContext(), Mgr,
                         Mgr.getAnalysisDeclContext(D),
@@ -349,8 +347,8 @@ public:
         EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
         os << "##############################################\n";
         os << "DEBUG:: done running ASaP Effect Checker\n\n";
-        if (TypeChecker.encounteredFatalError()) {
-          os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
+        if (EffectChecker.encounteredFatalError()) {
+          os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
         }
       }
     }
@@ -363,8 +361,6 @@ public:
     delete ROOTRplElmt;
     delete LOCALRplElmt;
     delete STARRplElmt;
-
-
   }
 }; // end class SafeParallelismChecker
 } // end unnamed namespace
