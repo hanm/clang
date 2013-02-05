@@ -88,6 +88,9 @@ public:
   }
 
   void VisitStmt(Stmt *S) {
+    OS << "DEBUG:: GENERIC:: Visiting Stmt/Expr = ";
+    S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
     VisitChildren(S);
   }
 
@@ -95,6 +98,30 @@ public:
   /// with TypeChecker
   void VisitBinAssign(BinaryOperator *E);
   void VisitReturnStmt(ReturnStmt *Ret);
+
+  void VisitDesignatedInitExpr(DesignatedInitExpr *Exp) {
+    OS << "Designated INIT Expr!!\n";
+    // TODO
+  }
+
+  void VisitCXXScalarValueInitExpr(CXXScalarValueInitExpr *Exp) {
+    OS << "CXX Scalar Value INIT Expr!!\n";
+    // TODO
+  }
+
+  void VisitDeclStmt(DeclStmt *S) {
+    OS << "Decl Stmt INIT ?? (";
+    S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << ")\n";
+    for(DeclGroupRef::const_iterator I = S->decl_begin(), E = S->decl_end();
+        I != E; ++I) {
+      if (VarDecl *VD = dyn_cast<VarDecl>(*I)) {
+        if (VD->hasInit()) {
+          helperTypecheckDeclWithInit(VD, VD->getInit());
+        }
+      }
+    }
+  }
 
 private:
   /// private helper methods
@@ -104,6 +131,16 @@ private:
     return T;
   }
   /// Private Methods
+  bool typecheck(ASaPType *LHSType, ASaPType *RHSType) {
+    assert(LHSType);
+    if (RHSType && !RHSType->subtype(*LHSType) )
+      return false;
+    else
+      return true;
+  }
+
+  void helperTypecheckDeclWithInit(const VarDecl *VD, Expr *Init);
+
   void helperEmitInvalidAliasingModificationWarning(Stmt *S, Decl *D,
                                                     const StringRef &Str) {
     StringRef BugName =
@@ -125,13 +162,13 @@ private:
 
   void helperEmitInvalidAssignmentWarning(const Stmt *S,
                                           const ASaPType *LHS,
-                                          const ASaPType *RHS) {
-    StringRef BugName = "invalid assignment";
+                                          const ASaPType *RHS,
+                                          StringRef BugName) {
 
     std::string description_std = "The RHS type [";
-    description_std.append(RHS ? RHS->toString() : "");
+    description_std.append(RHS ? RHS->toString(Ctx) : "");
     description_std.append("] is not a subtype of the LHS type [");
-    description_std.append(LHS ? LHS->toString() : "");
+    description_std.append(LHS ? LHS->toString(Ctx) : "");
     description_std.append("] ");
     description_std.append(BugName);
     std::string SBuf;
@@ -152,6 +189,26 @@ private:
     BR.emitReport(R);
   }
 
+  void helperEmitInvalidExplicitAssignmentWarning(const Stmt *S,
+                                                  const ASaPType *LHS,
+                                                  const ASaPType *RHS) {
+    StringRef BugName = "invalid assignment";
+    helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
+  }
+
+  void helperEmitInvalidReturnTypeWarning(const Stmt *S,
+                                          const ASaPType *LHS,
+                                          const ASaPType *RHS) {
+    StringRef BugName = "invalid return type";
+    helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
+  }
+
+  void helperEmitInvalidInitializationWarning(const Stmt *S,
+                                              const ASaPType *LHS,
+                                              const ASaPType *RHS) {
+    StringRef BugName = "invalid initialization";
+    helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
+  }
 
 }; // end class
 
@@ -182,8 +239,8 @@ private:
   /// count of number of dereferences on expression (values in [-1, 0, ...] )
   int DerefNum;
 
-  //Effect::EffectVector &EffectSummary;
   ASaPType *Type;
+  QualType RefQT;
 
   /// \brief substitute region parameters in TmpT with arguments.
   void memberSubstitute(const FieldDecl *FieldD) {
@@ -193,7 +250,7 @@ private:
 
     ASaPType *T = ASaPTypeDeclMap[FieldD];
     assert(T);
-    OS << "DEBUG:: Type = " << T->toString() << "\n";
+    OS << "DEBUG:: Type = " << T->toString(Ctx) << "\n";
 
     QualType QT = T->getQT(DerefNum);
     const RegionParamAttr* RPA = getRegionParamAttr(QT.getTypePtr());
@@ -204,12 +261,11 @@ private:
     const ParamRplElement *FromEl = dyn_cast<ParamRplElement>(RplEl);
     assert(FromEl);
 
-    const Rpl *ToRpl = T->getInRpl(DerefNum);
+    const Rpl *ToRpl = T->getSubstArg(DerefNum);
     assert(ToRpl);
     OS << "DEBUG:: gonna substitute...\n";
 
     if (FromEl->getName().compare(ToRpl->toString())) {
-      // if (from != to) then substitute
       OS <<" GO!!\n";
       assert(Type);
       Type->substitute(*FromEl, *ToRpl);
@@ -224,9 +280,13 @@ private:
 
     assert(!Type);
     Type = new ASaPType(*T); // make a copy
-    OS << "DEBUG :: calling ASaPType::deref(" << DerefNum << ")\n";
-    Type->deref(DerefNum);
-    OS << "DEBUG :: DONE calling ASaPType::deref\n";
+    if (DerefNum == -1)
+      Type->addrOf(RefQT);
+    else {
+      OS << "DEBUG :: calling ASaPType::deref(" << DerefNum << ")\n";
+      Type->deref(DerefNum);
+      OS << "DEBUG :: DONE calling ASaPType::deref\n";
+    }
   }
 
 public:
@@ -294,17 +354,29 @@ public:
     VisitChildren(S);
   }
 
-  void VisitUnaryAddrOf(UnaryOperator *E)  {
+  void VisitUnaryAddrOf(UnaryOperator *Exp)  {
     assert(DerefNum>=0);
     DerefNum--;
-    OS << "DEBUG:: Visit Unary: AddrOf (DerefNum=" << DerefNum << ")\n";
-    Visit(E->getSubExpr());
+    OS << "DEBUG:: Visit Unary: AddrOf (DerefNum=" << DerefNum << ") Type = ";
+    Exp->getType().print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+
+    //OS << "  and subExpr Type = ";
+    //Exp->getSubExpr()->getType().print(OS, Ctx.getPrintingPolicy());
+    //OS << "\n";
+
+    RefQT = Exp->getType();
+    assert(RefQT->isPointerType());
+
+    Visit(Exp->getSubExpr());
+    DerefNum++;
   }
 
   void VisitUnaryDeref(UnaryOperator *E) {
     DerefNum++;
     OS << "DEBUG:: Visit Unary: Deref (DerefNum=" << DerefNum << ")\n";
     Visit(E->getSubExpr());
+    DerefNum--;
   }
 
   void VisitDeclRefExpr(DeclRefExpr *E) {
@@ -314,27 +386,13 @@ public:
     ValueDecl* VD = E->getDecl();
     assert(VD);
     setType(VD);
-    DerefNum = 0;
-    /*OS << "Rvalue=" << E->isRValue()
-       << ", Lvalue=" << E->isLValue()
-       << ", Xvalue=" << E->isGLValue()
-       << ", GLvalue=" << E->isGLValue() << "\n";
-    Expr::LValueClassification lvc = E->ClassifyLValue(Ctx);
-    if (lvc==Expr::LV_Valid)
-      OS << "LV_Valid\n";
-    else
-      OS << "not LV_Valid\n";
-    ValueDecl* vd = E->getDecl();
-    vd->print(OS, Ctx.getPrintingPolicy());
-    OS << "\n";*/
   }
 
   void VisitCXXThisExpr(CXXThisExpr *E) {
     OS << "DEBUG:: visiting 'this' expression\n";
     assert(E);
-    DerefNum = 0;
-    //if (TmpRegions && TmpRegions->empty() && !E->isImplicit()) {
-    if (!IsBase) { // this condition should be equivalent to the above
+    //DerefNum = 0;
+    if (!IsBase) {
       assert(!Type);
       // Add parameter as implicit argument
       CXXRecordDecl *RecDecl = const_cast<CXXRecordDecl*>(E->
@@ -363,7 +421,7 @@ public:
       TmpRegions->push_back(new Rpl(Tmp));*/
       const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
       assert(Param);
-      QualType ThisQT; // FIXME
+      QualType ThisQT = E->getType();
 
       RplElement *El = RplElementMap[Param];
       assert(El);
@@ -422,11 +480,12 @@ public:
 
       /// 2.3. Visit Base with read semantics, then restore write semantics
       bool SavedIsBase = IsBase; // probably not needed to save
-
+      int SavedDerefNum = DerefNum;
       DerefNum = Exp->isArrow() ? 1 : 0;
       IsBase = true;
       Visit(Exp->getBase());
       IsBase = SavedIsBase;
+      DerefNum = SavedDerefNum;
     } // end if FieldDecl
   } // end VisitMemberExpr
 
@@ -472,11 +531,19 @@ public:
     FatalError |= ACV.encounteredFatalError();
 
     assert(!Type);
+    OS << "DEBUG:: Visiting Cond LHS\n";
     Visit(Exp->getLHS());
+    OS << "DEBUG:: DONE Visiting Cond LHS\n";
     ASaPType *LHSType = stealType();
 
+    OS << "DEBUG:: Visiting Cond RHS\n";
     Visit(Exp->getRHS());
-    Type->join(LHSType);
+    OS << "DEBUG:: DONE Visiting Cond RHS\n";
+    if (Type)
+      Type->join(LHSType);
+    else
+      Type = LHSType;
+    OS << "DEBUG:: Joining Cond LHS & RHS\n";
 
   }
 
@@ -610,11 +677,12 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
 
   // allow RHSType to be NULL, e.g., we don't create ASaP Types for constants
   // because they don't have any interesting regions to typecheck.
-  if (RHSType && !RHSType->subtype(*LHSType) ) {
+  if (! typecheck(LHSType, RHSType)) {
     OS << "DEBUG:: invalid assignment: gonna emit an error\n";
-    helperEmitInvalidAssignmentWarning(E, LHSType, RHSType);
+    helperEmitInvalidExplicitAssignmentWarning(E, LHSType, RHSType);
     FatalError = true;
   }
+
   // The type of the assignment is the type of the LHS. Set it in case
   // AssignmentChecker was called recursively by a TypeBuilderVisitor
   delete Type;
@@ -625,8 +693,40 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
 }
 
 void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
-    //Expr *RV = Ret->getRetValue();
-    /// TODO ASaPType AT = GetASaPType(RV);
-    ///ASaPType *RetType = ASaPTypeDeclMap[Def];
+  Expr *RetExp = Ret->getRetValue();
+  OS << "DEBUG:: Visiting ReturnStmt:";
+  RetExp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+
+  TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
+                          ASaPTypeDeclMap, EffectSummaryMap, Def,
+                          RetExp);
+  ASaPType *LHSType = ASaPTypeDeclMap[Def];
+  if (LHSType)
+    LHSType = LHSType->getReturnType();
+  assert(LHSType);
+  ASaPType *RHSType = TBVR.getType();
+  if (! typecheck(LHSType, RHSType)) {
+    OS << "DEBUG:: invalid assignment: gonna emit an error\n";
+    helperEmitInvalidReturnTypeWarning(Ret, LHSType, RHSType);
+    FatalError = true;
+  }
+  delete Type;
+  Type = 0;
 }
 
+void AssignmentCheckerVisitor::helperTypecheckDeclWithInit(
+                                                           const VarDecl *VD,
+                                                           Expr *Init) {
+  TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
+                          ASaPTypeDeclMap, EffectSummaryMap, Def,
+                          Init);
+  ASaPType *LHSType = ASaPTypeDeclMap[VD];
+  ASaPType *RHSType = TBVR.getType();
+  if (! typecheck(LHSType, RHSType)) {
+    OS << "DEBUG:: invalid assignment: gonna emit an error\n";
+    //  Fixme pass VS as arg instead of Init
+    helperEmitInvalidInitializationWarning(Init, LHSType, RHSType);
+    FatalError = true;
+  }
+}

@@ -34,7 +34,7 @@ private:
     OS << "Debug:: RV.size=" << RV.size() << ", T.RV.size="
         << T->getArgVSize() << "\n";
     ASaPTypeDeclMap[D] = T;
-    OS << "Debug :: adding type: " << T->toString() << "\n";
+    OS << "Debug :: adding type: " << T->toString(Ctx) << "\n";
   }
 
   /// \brief Issues Warning: '<str>' <bugName> on Declaration
@@ -232,7 +232,8 @@ private:
     } else if (QT->isScalarType()) {
       Rpl *InAnnot = checkScalarTypeRegionArgs(D, QT, ImplicitInAnnot,
                                                ArgIt, ArgEnd);
-      if (InAnnot) checkRestRegionArgs(D, QT, InAnnot, ArgIt, ArgEnd);
+      if (InAnnot)
+        checkRestRegionArgs(D, QT, InAnnot, ArgIt, ArgEnd);
     } else if (QT->isClassType()) {
       // drop ImplicitInAnnot
       checkClassTypeRegionArgs(D, QT, 0, ArgIt, ArgEnd);

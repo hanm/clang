@@ -48,9 +48,9 @@ static raw_ostream& os = llvm::nulls();
 #endif
 
 #ifdef ASAP_DEBUG_VERBOSE2
-static raw_ostream& osv2 = llvm::errs();
+static raw_ostream& OSv2 = llvm::errs();
 #else
-static raw_ostream& osv2 = llvm::nulls();
+static raw_ostream& OSv2 = llvm::nulls();
 #endif
 
 namespace ASaP {
@@ -74,6 +74,7 @@ inline bool isNonPointerScalarType(QualType QT) {
   return (QT->isScalarType() && !QT->isPointerType());
 }
 #include "asap/RplsAndEffects.cpp"
+#include "asap/ASaPType.cpp"
 
 namespace {
   /// \brief The default region parameter "P" used for implicitly boxed types

@@ -282,7 +282,7 @@ private:
     }
 
     bool isUnder(RplRef& rhs) {
-      osv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
+      OSv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
           << this->toString() << ", " << rhs.toString() << ")\n";
       /// R <= Root
       if (rhs.isEmpty())
@@ -302,7 +302,7 @@ private:
 
     /// Inclusion: this c= rhs
     bool isIncludedIn(RplRef& rhs) {
-      osv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef]("
+      OSv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef]("
           << this->toString() << ", " << rhs.toString() << ")\n";
       if (rhs.isEmpty()) {
         /// Root c= Root
@@ -312,7 +312,7 @@ private:
       } else { /// rhs is not empty
         /// R c= R':* <==  R <= R'
         if (*rhs.getLastElement() == *STARRplElmt) {
-          osv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
+          OSv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
           return isUnder(rhs.stripLast());
         }
         ///   R:r c= R':r    <==  R <= R'
@@ -411,7 +411,7 @@ private:
     RplRef* rhs = new RplRef(rhsRpl);
     bool result = lhs->isIncludedIn(*rhs);
     delete lhs; delete rhs;
-    osv2 << "DEBUG:: ~~~~~ isIncludedIn[RPL](" << this->toString() << ", "
+    OSv2 << "DEBUG:: ~~~~~ isIncludedIn[RPL](" << this->toString() << ", "
         << rhsRpl.toString() << ")=" << (result ? "true" : "false") << "\n";
     return result;
   }
@@ -427,14 +427,14 @@ private:
     /// A parameter is only allowed at the head of an Rpl
     RplElementVector::iterator I = RplElements.begin();
     if (*(*I) == From) {
-      osv2 << "DEBUG:: found '" << From.getName()
+      OSv2 << "DEBUG:: found '" << From.getName()
         << "' replaced with '" ;
-      To.printElements(osv2);
+      To.printElements(OSv2);
       I = RplElements.erase(I);
       I = RplElements.insert(I, To.RplElements.begin(), To.RplElements.end());
-      osv2 << "' == '";
-      printElements(osv2);
-      osv2 << "'\n";
+      OSv2 << "' == '";
+      printElements(OSv2);
+      OSv2 << "'\n";
     }
     os << "DEBUG:: after substitution(" << From.getName() << "<-";
     To.printElements(os);
@@ -496,7 +496,7 @@ private:
   }
 
   /// Capture
-  /// TODO: caller must deallocate Rpl and its element
+  // TODO: caller must deallocate Rpl and its element
   inline Rpl* capture() {
     if (this->isFullySpecified()) return this;
     else return new Rpl(*new CaptureRplElement(*this));
@@ -549,6 +549,11 @@ class RplVector {
     RplV.push_back(new Rpl(*R));
   }
 
+  inline void push_front (Rpl *R) {
+    assert(R);
+    RplV.insert(RplV.begin(), R);
+  }
+
   inline const Rpl *getRplAt(size_t idx) {
     assert(idx>=0 && idx < RplV.size());
     return RplV[idx];
@@ -557,12 +562,14 @@ class RplVector {
   std::string toString() {
     std::string SBuf;
     llvm::raw_string_ostream OS(SBuf);
-    for (Rpl::RplVector::const_iterator
-          I = RplV.begin(),
-          E = RplV.end();
-        I != E; ++I) {
+    Rpl::RplVector::const_iterator
+      I = RplV.begin(),
+      E = RplV.end();
+    for ( ; I < E; ++I) {
       OS << (*I)->toString() << " ";
     }
+    if (I != E)
+      OS << (*I)->toString();
     return std::string(OS.str());
   }
 
@@ -604,12 +611,12 @@ class RplVector {
           ++ThatI, ++ThisI) {
       Rpl *LHS = *ThisI;
       Rpl *RHS = *ThatI;
-      if (!RHS->isIncludedIn(*LHS)) {
+      if (!LHS->isIncludedIn(*RHS)) {
         Result = false;
         break;
       }
     }
-    osv2 << "DEBUG:: [" << this->toString() << "] is " << (Result?"":"not")
+    OSv2 << "DEBUG:: [" << this->toString() << "] is " << (Result?"":"not")
         << " included in [" << That.toString() << "]\n";
     return Result;
   }
@@ -626,6 +633,7 @@ class RplVector {
   }
 
   Rpl *deref() {
+    assert(RplV.size() > 0);
     Rpl *Result = RplV.front();
     RplV.erase(RplV.begin());
     return Result;
@@ -796,7 +804,7 @@ public:
   bool isSubEffectOf(const Effect& E) const {
     bool Result = (isNoEffect() ||
             (isSubEffectKindOf(E) && R->isIncludedIn(*(E.R))));
-    osv2  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
+    OSv2  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
         << E.toString() << ")=" << (Result ? "true" : "false") << "\n";
     return Result;
   }
@@ -812,168 +820,3 @@ public:
   }
 
 }; // end class Effect
-
-///-///////////////////////////////////////////////////////////////////////////
-/// ASapType Class
-
-class ASaPType {
-  friend class ASaPType;
-  private:
-  /// Fields
-  QualType QT;
-  RplVector *ArgV;
-  Rpl *InRpl; // can be null
-
-  public:
-  /// Constructors
-  ASaPType (QualType QT, RplVector *ArgV, Rpl *InRpl = 0)
-           : QT(QT) {
-    if (InRpl)
-      this->InRpl = new Rpl(*InRpl);
-    else
-      this->InRpl = 0;
-    if (ArgV)
-      this->ArgV = new RplVector(*ArgV);
-    else
-      this->ArgV = 0;
-  }
-
-  /*ASaPType (ASaPType &T)  {
-    ASaPType(T.QT, T.ArgV, T.InRpl);
-  }*/
-
-  ASaPType (ASaPType &T) : QT(T.QT) {
-    this->QT = T.QT;
-    if (T.InRpl)
-      this->InRpl = new Rpl(*T.InRpl);
-    else
-      this->InRpl = 0;
-    if (T.ArgV)
-      this->ArgV = new RplVector(*T.ArgV);
-    else
-      this->ArgV = 0;
-  }
-
-  ~ASaPType() {
-    delete InRpl;
-    delete ArgV;
-  }
-  /// Methods
-  inline int getArgVSize() { return ArgV->size(); }
-
-  inline const Rpl *getInRpl() { return InRpl; }
-
-  const Rpl *getInRpl(int DerefNum) {
-    assert(DerefNum >= -1);
-    if (DerefNum == -1) return 0;
-    if (DerefNum == 0) return InRpl;
-    return this->ArgV->getRplAt(DerefNum-1);
-  }
-
-  inline QualType getQT() { return QT; };
-
-  QualType getQT(int DerefNum) {
-    // TODO:: support DerefNum == -1 :: assert(DerefNum >= -1);
-    assert(DerefNum >= 0);
-    QualType Result = QT;
-    while (DerefNum > 0) {
-      assert(Result->isPointerType());
-      Result = Result->getPointeeType();
-      --DerefNum;
-    }
-    return Result;
-  }
-
-  /// \brief get the type of this with Num dereferences
-  void deref(int DerefNum) {
-    // TODO:: support DerefNum == -1 :: assert(DerefNum >= -1);
-    if (DerefNum == -1) {
-      /*if (InRpl) {
-        ArgV.push_front(InRpl); << implement this
-        InRpl = 0;
-      }*/
-      /// FIXME build ReferenceType and QualType(RefType)
-    }
-    assert(DerefNum >= 0);
-
-    //ASaPType *Result = new ASaPType(*this);
-    assert(ArgV);
-    while (DerefNum > 0) {
-      if (InRpl)
-        delete InRpl;
-      InRpl = ArgV->deref();
-      assert(QT->isPointerType());
-      QT = QT->getPointeeType();
-      DerefNum--;
-    }
-  }
-
-  /// \brief Set the InAnnotation to NULL (and free the Rpl)
-  void dropInRpl() {
-    if (InRpl) {
-      delete InRpl;
-      InRpl = 0;
-    }
-  }
-
-  std::string toString() const {
-    std::string SBuf;
-    llvm::raw_string_ostream OS(SBuf);
-    //QT.print()
-    if (InRpl)
-      OS << "IN:" << InRpl->toString();
-    else
-      OS << "IN:<empty>";
-
-    OS << ", ArgV:" << ArgV->toString();
-    return std::string(OS.str());
-  }
-
-  /// \brief  true when 'this' is a subtype (derived type) of 'that'
-  inline bool subtype(const ASaPType &That) { return *this <= That; }
-
-  /// \brief true when 'this' is a subtype (derived type) of 'that'
-  bool operator <= (const ASaPType &That) {
-    if (this->QT!=That.QT) {
-      /// Typechecking has passed so we assume that this->QT <= that->QT
-      /// but we have to find follow the mapping and substitute Rpls....
-      /// TODO :)
-      osv2 << "DEBUG:: Failing ASaP::subtype because QT != QT'\n";
-      return false; // until we support inheritance this is good enough
-    }
-    assert(this->QT == That.QT);
-    /// Note that we're ignoring InRpl
-    assert(That.ArgV);
-    return this->ArgV->isIncludedIn(*That.ArgV);
-  }
-
-  /// \brief joins this to That.
-  /// Join returns the smallest common supertype (Base Type)
-  ASaPType *join(ASaPType *That) {
-    if (!That) return this;
-    if (this->QT!=That->QT) {
-      /// Typechecking has passed so we assume that this->QT <= that->QT
-      /// but we have to find follow the mapping and substitute Rpls....
-      /// TODO :)
-      assert(false); // ...just fail
-      return 0; // until we support inheritance this is good enough
-    }
-    assert(this->QT == That->QT);
-    this->InRpl->join(That->InRpl);
-    this->ArgV->join(That->ArgV);
-    return this;
-  }
-
-  /// Substitution (ASaPType)
-  void substitute(const RplElement &FromEl, const Rpl &ToRpl) {
-    if (InRpl)
-      InRpl->substitute(FromEl, ToRpl);
-    if (ArgV)
-      ArgV->substitute(FromEl, ToRpl);
-  }
-
-  private:
-  /// Private Methods
-
-}; // end class ASaPType
-
