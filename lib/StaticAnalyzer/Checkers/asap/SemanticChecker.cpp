@@ -232,7 +232,8 @@ private:
     } else if (QT->isScalarType()) {
       Rpl *InAnnot = checkScalarTypeRegionArgs(D, QT, ImplicitInAnnot,
                                                ArgIt, ArgEnd);
-      if (InAnnot) checkRestRegionArgs(D, QT, InAnnot, ArgIt, ArgEnd);
+      if (InAnnot)
+        checkRestRegionArgs(D, QT, InAnnot, ArgIt, ArgEnd);
     } else if (QT->isClassType()) {
       // drop ImplicitInAnnot
       checkClassTypeRegionArgs(D, QT, 0, ArgIt, ArgEnd);

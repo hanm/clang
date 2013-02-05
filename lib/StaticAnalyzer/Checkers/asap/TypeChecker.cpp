@@ -162,8 +162,8 @@ private:
 
   void helperEmitInvalidAssignmentWarning(const Stmt *S,
                                           const ASaPType *LHS,
-                                          const ASaPType *RHS) {
-    StringRef BugName = "invalid assignment";
+                                          const ASaPType *RHS,
+                                          StringRef BugName) {
 
     std::string description_std = "The RHS type [";
     description_std.append(RHS ? RHS->toString(Ctx) : "");
@@ -189,6 +189,26 @@ private:
     BR.emitReport(R);
   }
 
+  void helperEmitInvalidExplicitAssignmentWarning(const Stmt *S,
+                                                  const ASaPType *LHS,
+                                                  const ASaPType *RHS) {
+    StringRef BugName = "invalid assignment";
+    helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
+  }
+
+  void helperEmitInvalidReturnTypeWarning(const Stmt *S,
+                                          const ASaPType *LHS,
+                                          const ASaPType *RHS) {
+    StringRef BugName = "invalid return type";
+    helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
+  }
+
+  void helperEmitInvalidInitializationWarning(const Stmt *S,
+                                              const ASaPType *LHS,
+                                              const ASaPType *RHS) {
+    StringRef BugName = "invalid initialization";
+    helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
+  }
 
 }; // end class
 
@@ -659,7 +679,7 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
   // because they don't have any interesting regions to typecheck.
   if (! typecheck(LHSType, RHSType)) {
     OS << "DEBUG:: invalid assignment: gonna emit an error\n";
-    helperEmitInvalidAssignmentWarning(E, LHSType, RHSType);
+    helperEmitInvalidExplicitAssignmentWarning(E, LHSType, RHSType);
     FatalError = true;
   }
 
@@ -673,23 +693,40 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
 }
 
 void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
-    //Expr *RV = Ret->getRetValue();
-    /// TODO ASaPType AT = GetASaPType(RV);
-    ///ASaPType *RetType = ASaPTypeDeclMap[Def];
+  Expr *RetExp = Ret->getRetValue();
+  OS << "DEBUG:: Visiting ReturnStmt:";
+  RetExp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+
+  TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
+                          ASaPTypeDeclMap, EffectSummaryMap, Def,
+                          RetExp);
+  ASaPType *LHSType = ASaPTypeDeclMap[Def];
+  if (LHSType)
+    LHSType = LHSType->getReturnType();
+  assert(LHSType);
+  ASaPType *RHSType = TBVR.getType();
+  if (! typecheck(LHSType, RHSType)) {
+    OS << "DEBUG:: invalid assignment: gonna emit an error\n";
+    helperEmitInvalidReturnTypeWarning(Ret, LHSType, RHSType);
+    FatalError = true;
+  }
+  delete Type;
+  Type = 0;
 }
 
 void AssignmentCheckerVisitor::helperTypecheckDeclWithInit(
                                                            const VarDecl *VD,
                                                            Expr *Init) {
-    TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
+  TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
                           ASaPTypeDeclMap, EffectSummaryMap, Def,
                           Init);
-    ASaPType *LHSType = ASaPTypeDeclMap[VD];
-    ASaPType *RHSType = TBVR.getType();
-    if (! typecheck(LHSType, RHSType)) {
-      OS << "DEBUG:: invalid assignment: gonna emit an error\n";
-      //  Fixme pass VS as arg instead of Init
-      helperEmitInvalidAssignmentWarning(Init, LHSType, RHSType);
-      FatalError = true;
-    }
+  ASaPType *LHSType = ASaPTypeDeclMap[VD];
+  ASaPType *RHSType = TBVR.getType();
+  if (! typecheck(LHSType, RHSType)) {
+    OS << "DEBUG:: invalid assignment: gonna emit an error\n";
+    //  Fixme pass VS as arg instead of Init
+    helperEmitInvalidInitializationWarning(Init, LHSType, RHSType);
+    FatalError = true;
   }
+}

@@ -82,6 +82,7 @@ inline bool isNonPointerScalarType(QualType QT) {
   return (QT->isScalarType() && !QT->isPointerType());
 }
 #include "asap/RplsAndEffects.cpp"
+#include "asap/ASaPType.cpp"
 
 namespace {
   /// \brief the default region parameter "P" used for implicitly boxed types
