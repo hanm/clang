@@ -34,7 +34,7 @@ private:
     OS << "Debug:: RV.size=" << RV.size() << ", T.RV.size="
         << T->getArgVSize() << "\n";
     ASaPTypeDeclMap[D] = T;
-    OS << "Debug :: adding type: " << T->toString() << "\n";
+    OS << "Debug :: adding type: " << T->toString(Ctx) << "\n";
   }
 
   /// \brief Issues Warning: '<str>' <bugName> on Declaration

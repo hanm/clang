@@ -48,9 +48,9 @@ static raw_ostream& os = llvm::nulls();
 #endif
 
 #ifdef ASAP_DEBUG_VERBOSE2
-static raw_ostream& osv2 = llvm::errs();
+static raw_ostream& OSv2 = llvm::errs();
 #else
-static raw_ostream& osv2 = llvm::nulls();
+static raw_ostream& OSv2 = llvm::nulls();
 #endif
 
 /// FIXME temporarily just using pre-processor to concatenate code here... UGLY
