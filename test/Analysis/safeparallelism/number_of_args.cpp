@@ -22,6 +22,10 @@ class
 
   int *last_visited_data[[asap::arg("P"), asap::arg("P:*")]];
 
+  void memberFoo(C0 *p [[asap::arg("P")]]) {
+    int *local_p1 [[asap::arg("P")]];
+  }
+
 };
 
 // Too many arg annotations
@@ -53,6 +57,10 @@ class
                          [[asap::arg("P")]]
                          [[asap::arg("P:*")]]; // expected-warning{{superfluous region argument}};
 
+  void memberFoo(C0 *p [[asap::arg("P"), asap::arg("Local")]]) { // expected-warning{{superfluous region argument}};
+    int *local_p1 [[asap::arg("P"), asap::arg("Local")]]; // expected-warning{{superfluous region argument}};
+  }
+
 };
 
 // Too few arg annotations (the rest of them will use the defaults
@@ -69,6 +77,10 @@ class
   C2 *right [[asap::arg("P:R")]]; // expected-warning{{missing region argument(s)}}
   C2 **last_visited_link [[asap::arg("P:*")]]; // expected-warning{{missing region argument(s)}}
   int *last_visited_data [[asap::arg("P:*")]]; // expected-warning{{missing region argument(s)}}
+
+  void memberFoo(C0 *p) { // expected-warning{{missing region arg}}
+    int *local_p1;        // expected-warning{{missing region arg}}
+  }
 
 };
 #endif

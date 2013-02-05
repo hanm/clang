@@ -190,23 +190,19 @@ private:
 
     OS << "DEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
     OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
+
     ASaPType *T = ASaPTypeDeclMap[FieldD];
     assert(T);
-    OS << "op\n";
-    //ASaPType *T1 = T->getInRpl(DerefNum);
-    //assert(T1);
-    QualType QT = T->getQT(DerefNum);
-    OS << "ep\n";
+    OS << "DEBUG:: Type = " << T->toString() << "\n";
 
+    QualType QT = T->getQT(DerefNum);
     const RegionParamAttr* RPA = getRegionParamAttr(QT.getTypePtr());
     assert(RPA);
-    OS<< "aloha\n";
     // TODO support multiple Parameters
     RplElement *RplEl = RplElementMap[RPA];
     assert(RplEl);
     const ParamRplElement *FromEl = dyn_cast<ParamRplElement>(RplEl);
     assert(FromEl);
-    OS << "you minky\n";
 
     const Rpl *ToRpl = T->getInRpl(DerefNum);
     assert(ToRpl);
@@ -229,7 +225,7 @@ private:
     assert(!Type);
     Type = new ASaPType(*T); // make a copy
     OS << "DEBUG :: calling ASaPType::deref(" << DerefNum << ")\n";
-    //Type->deref(DerefNum);
+    Type->deref(DerefNum);
     OS << "DEBUG :: DONE calling ASaPType::deref\n";
   }
 
@@ -383,6 +379,13 @@ public:
     OS << "DEBUG:: DONE visiting 'this' expression\n";
   }
 
+  /*void VisitCastExpr(CastExpr *Exp) {
+    OS << "DEBUG:: VisitCastExpr: ";
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    Visit(Exp->getSubExpr());
+  }*/
+
   void VisitMemberExpr(MemberExpr *Exp) {
     OS << "DEBUG:: VisitMemberExpr: ";
     Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -427,14 +430,32 @@ public:
     } // end if FieldDecl
   } // end VisitMemberExpr
 
-  void VisitBinAssign(BinaryOperator *E) {
+  void helperBinAddSub(Expr *LHS, Expr* RHS) {
+    Visit(LHS);
+    ASaPType *T = stealType();
+    Visit(RHS);
+    if (Type)
+      Type->join(T);
+    else
+      Type = T;
+  }
+
+  void VisitBinSub(BinaryOperator *Exp) {
+    helperBinAddSub(Exp->getLHS(), Exp->getRHS());
+  }
+
+  void VisitBinAdd(BinaryOperator *Exp) {
+    helperBinAddSub(Exp->getLHS(), Exp->getRHS());
+  }
+
+  void VisitBinAssign(BinaryOperator *Exp) {
     OS << "DEBUG:: >>>>>>>>>>VisitBinAssign<<<<<<<<<<<<<<<<<\n";
-    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
 
     AssignmentCheckerVisitor ACV(BR, Ctx, Mgr, AC, OS, RplElementMap,
                                 RplMap, ASaPTypeDeclMap, EffectSummaryMap,
-                                Def, E);
+                                Def, Exp);
     assert(!Type);
     Type = ACV.stealType();
     assert(Type);
@@ -553,6 +574,8 @@ class AssignmentDetectorVisitor :
 
   }
   /// Visitors
+  void VisitBinOp
+
   void VisitBinAssign(BinaryOperator *E) {
     OS << "DEBUG:: >>>>>>>>>> TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -584,15 +607,18 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
   ASaPType *LHSType = TBVL.getType();
   ASaPType *RHSType = TBVR.getType();
   assert(LHSType);
-  assert(RHSType);
 
-  if ( !RHSType->subtype(*LHSType) ) {
+  // allow RHSType to be NULL, e.g., we don't create ASaP Types for constants
+  // because they don't have any interesting regions to typecheck.
+  if (RHSType && !RHSType->subtype(*LHSType) ) {
     OS << "DEBUG:: invalid assignment: gonna emit an error\n";
     helperEmitInvalidAssignmentWarning(E, LHSType, RHSType);
     FatalError = true;
   }
+  // The type of the assignment is the type of the LHS. Set it in case
+  // AssignmentChecker was called recursively by a TypeBuilderVisitor
   delete Type;
-  Type = TBVR.stealType();
+  Type = TBVL.stealType();
   assert(Type);
 
   OS << "DEBUG:: >>>>>>>>>> DONE TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";

@@ -1,5 +1,5 @@
 // RUN: %clang_cc1 -DASAP_CXX11_SYNTAX -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
-// RUN: %clang_cc1 -DASAP_GNU_SYNTAX -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
+// // RUN: %clang_cc1 -DASAP_GNU_SYNTAX -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
 
 #ifdef ASAP_CXX11_SYNTAX
 /// Test Valid Region Names & Declared RPL elements
@@ -43,8 +43,8 @@ public:
   { return next->money; }
 
   void set_money
-    [[asap::writes("P1:R3")]] (int cash)
-  { money = cash; }
+    [[asap::writes("P1:R3")]] (int cash0)
+  { money = cash0; }
 
   int close_account [[asap::reads("P1:R3")]] () {
     int balance = money;
@@ -75,7 +75,8 @@ public:
     [[asap::writes("P1:R3")]] 
     [[asap::no_effect]]                   // expected-warning{{effect summary is not minimal}}
     (int cash)
-  { 
+  {
+    money = 42;                 // writes P1:R3 
     cash += next->money;        // reads P1, P1:R2:R3
     cash -= next->next->money;  // reads P1, P1:R2, P1:R2:R2:R3
     money++;                    // writes P1:R3
@@ -85,6 +86,7 @@ public:
     money = cash + 4 + cash;    // writes P1:R3
     !cash ? (cash = money) : money++;   // writes P1:R3 or reads P1:R3
     cash ? money++ : (cash = money = 42);   // writes P1:R3 or reads P1:R3
+    cash ? money++ : (cash = money = cash);   // writes P1:R3 or reads P1:R3
   }
 
   [[asap::region("R3")]]

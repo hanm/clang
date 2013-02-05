@@ -887,6 +887,13 @@ class ASaPType {
   /// \brief get the type of this with Num dereferences
   void deref(int DerefNum) {
     // TODO:: support DerefNum == -1 :: assert(DerefNum >= -1);
+    if (DerefNum == -1) {
+      /*if (InRpl) {
+        ArgV.push_front(InRpl); << implement this
+        InRpl = 0;
+      }*/
+      /// FIXME build ReferenceType and QualType(RefType)
+    }
     assert(DerefNum >= 0);
 
     //ASaPType *Result = new ASaPType(*this);
@@ -943,6 +950,7 @@ class ASaPType {
   /// \brief joins this to That.
   /// Join returns the smallest common supertype (Base Type)
   ASaPType *join(ASaPType *That) {
+    if (!That) return this;
     if (this->QT!=That->QT) {
       /// Typechecking has passed so we assume that this->QT <= that->QT
       /// but we have to find follow the mapping and substitute Rpls....
