@@ -53,30 +53,22 @@ static raw_ostream& osv2 = llvm::errs();
 static raw_ostream& osv2 = llvm::nulls();
 #endif
 
-/// FIXME temporarily just using pre-processor to concatenate code here... UGLY
 namespace ASaP {
   template<typename T>
   void destroyVector(T &V) {
-    for (typename T::const_iterator
-             I = V.begin(),
-             E = V.end();
-         I != E; ++I) {
+    for (typename T::const_iterator I = V.begin(), E = V.end(); I != E; ++I)
       delete(*I);
-    }
   }
 
   template<typename T>
   void destroyVectorVector(T &V) {
-    for (typename T::const_iterator
-             I = V.begin(),
-             E = V.end();
-         I != E; ++I) {
+    for (typename T::const_iterator I = V.begin(), E = V.end(); I != E; ++I) {
       destroyVector(*(*I));
       delete(*I);
     }
   }
 
-} /// end namespace ASaP
+} /// End namespace ASaP
 
 inline bool isNonPointerScalarType(QualType QT) {
   return (QT->isScalarType() && !QT->isPointerType());
@@ -84,7 +76,7 @@ inline bool isNonPointerScalarType(QualType QT) {
 #include "asap/RplsAndEffects.cpp"
 
 namespace {
-  /// \brief the default region parameter "P" used for implicitly boxed types
+  /// \brief The default region parameter "P" used for implicitly boxed types
   /// such as int or pointers.
   RegionParamAttr *BuiltinDefaulrRegionParam;
 
