@@ -194,7 +194,7 @@ public:
 
   /// Destructor
   virtual ~EffectCollectorVisitor() {
-    ASaP::destroyVector(EffectsTmp);
+    destroyVector(EffectsTmp);
   }
 
   /// Getters

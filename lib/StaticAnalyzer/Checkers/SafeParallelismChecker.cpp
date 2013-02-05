@@ -53,22 +53,19 @@ static raw_ostream& OSv2 = llvm::errs();
 static raw_ostream& OSv2 = llvm::nulls();
 #endif
 
-namespace ASaP {
-  template<typename T>
-  void destroyVector(T &V) {
-    for (typename T::const_iterator I = V.begin(), E = V.end(); I != E; ++I)
-      delete(*I);
-  }
+template<typename T>
+static void destroyVector(T &V) {
+  for (typename T::const_iterator I = V.begin(), E = V.end(); I != E; ++I)
+    delete(*I);
+}
 
-  template<typename T>
-  void destroyVectorVector(T &V) {
-    for (typename T::const_iterator I = V.begin(), E = V.end(); I != E; ++I) {
-      destroyVector(*(*I));
-      delete(*I);
-    }
+template<typename T>
+static void destroyVectorVector(T &V) {
+  for (typename T::const_iterator I = V.begin(), E = V.end(); I != E; ++I) {
+    destroyVector(*(*I));
+    delete(*I);
   }
-
-} /// End namespace ASaP
+}
 
 inline bool isNonPointerScalarType(QualType QT) {
   return (QT->isScalarType() && !QT->isPointerType());
@@ -125,11 +122,11 @@ void destroyEffectSummaryMap(EffectSummaryMapTy &EffectSummaryMap) {
   for(EffectSummaryMapTy::iterator I = EffectSummaryMap.begin(),
       E = EffectSummaryMap.end(); I != E;) {
     Effect::EffectVector *EV = (*I).second;
-    ASaP::destroyVector(*EV);
+    destroyVector(*EV);
     delete EV;
     EffectSummaryMap.erase(I++);
   }
-  assert(EffectSummaryMap.size()==0);
+  assert(EffectSummaryMap.size() == 0);
 }
 
 void destroyRplAttrMap(RplAttrMapTy &RplAttrMap) {
@@ -139,7 +136,7 @@ void destroyRplAttrMap(RplAttrMapTy &RplAttrMap) {
     delete R;
     RplAttrMap.erase(I++);
   }
-  assert(RplAttrMap.size()==0);
+  assert(RplAttrMap.size() == 0);
 }
 
 void destroyRplElementAttrMap(RplElementAttrMapTy &RplElementAttrMap) {
@@ -149,7 +146,7 @@ void destroyRplElementAttrMap(RplElementAttrMapTy &RplElementAttrMap) {
     delete RpEl;
     RplElementAttrMap.erase(I++);
   }
-  assert(RplElementAttrMap.size()==0);
+  assert(RplElementAttrMap.size() == 0);
 }
 
 ///-///////////////////////////////////////////////////////////////////
