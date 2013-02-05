@@ -562,12 +562,14 @@ class RplVector {
   std::string toString() {
     std::string SBuf;
     llvm::raw_string_ostream OS(SBuf);
-    for (Rpl::RplVector::const_iterator
-          I = RplV.begin(),
-          E = RplV.end();
-        I != E; ++I) {
+    Rpl::RplVector::const_iterator
+      I = RplV.begin(),
+      E = RplV.end();
+    for ( ; I < E; ++I) {
       OS << (*I)->toString() << " ";
     }
+    if (I != E)
+      OS << (*I)->toString();
     return std::string(OS.str());
   }
 
@@ -609,7 +611,7 @@ class RplVector {
           ++ThatI, ++ThisI) {
       Rpl *LHS = *ThisI;
       Rpl *RHS = *ThatI;
-      if (!RHS->isIncludedIn(*LHS)) {
+      if (!LHS->isIncludedIn(*RHS)) {
         Result = false;
         break;
       }
@@ -876,6 +878,15 @@ class ASaPType {
     return this->ArgV->getRplAt(DerefNum-1);
   }
 
+  const Rpl *getSubstArg(int DerefNum) {
+    assert(DerefNum >= -1);
+    if (DerefNum == -1) return InRpl;
+    if (InRpl)
+      return this->ArgV->getRplAt(DerefNum-1);
+    else
+      return this->ArgV->getRplAt(DerefNum);
+  }
+
   inline QualType getQT() { return QT; };
 
   QualType getQT(int DerefNum) {
@@ -892,6 +903,8 @@ class ASaPType {
   /// \brief dereference this type DerefNum times
   void deref(int DerefNum) {
     assert(DerefNum >= 0);
+    if (DerefNum == 0)
+      return;
     assert(ArgV);
     while (DerefNum > 0) {
       if (InRpl)
@@ -927,6 +940,7 @@ class ASaPType {
     std::string SBuf;
     llvm::raw_string_ostream OS(SBuf);
     QT.print(OS, Ctx.getPrintingPolicy());
+    OS << ", ";
     if (InRpl)
       OS << "IN:" << InRpl->toString();
     else

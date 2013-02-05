@@ -241,12 +241,11 @@ private:
     const ParamRplElement *FromEl = dyn_cast<ParamRplElement>(RplEl);
     assert(FromEl);
 
-    const Rpl *ToRpl = T->getInRpl(DerefNum);
+    const Rpl *ToRpl = T->getSubstArg(DerefNum);
     assert(ToRpl);
     OS << "DEBUG:: gonna substitute...\n";
 
     if (FromEl->getName().compare(ToRpl->toString())) {
-      // if (from != to) then substitute
       OS <<" GO!!\n";
       assert(Type);
       Type->substitute(*FromEl, *ToRpl);
@@ -367,27 +366,13 @@ public:
     ValueDecl* VD = E->getDecl();
     assert(VD);
     setType(VD);
-    //DerefNum = 0;
-    /*OS << "Rvalue=" << E->isRValue()
-       << ", Lvalue=" << E->isLValue()
-       << ", Xvalue=" << E->isGLValue()
-       << ", GLvalue=" << E->isGLValue() << "\n";
-    Expr::LValueClassification lvc = E->ClassifyLValue(Ctx);
-    if (lvc==Expr::LV_Valid)
-      OS << "LV_Valid\n";
-    else
-      OS << "not LV_Valid\n";
-    ValueDecl* vd = E->getDecl();
-    vd->print(OS, Ctx.getPrintingPolicy());
-    OS << "\n";*/
   }
 
   void VisitCXXThisExpr(CXXThisExpr *E) {
     OS << "DEBUG:: visiting 'this' expression\n";
     assert(E);
     //DerefNum = 0;
-    //if (TmpRegions && TmpRegions->empty() && !E->isImplicit()) {
-    if (!IsBase) { // this condition should be equivalent to the above
+    if (!IsBase) {
       assert(!Type);
       // Add parameter as implicit argument
       CXXRecordDecl *RecDecl = const_cast<CXXRecordDecl*>(E->
@@ -416,7 +401,7 @@ public:
       TmpRegions->push_back(new Rpl(Tmp));*/
       const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
       assert(Param);
-      QualType ThisQT; // FIXME
+      QualType ThisQT = E->getType();
 
       RplElement *El = RplElementMap[Param];
       assert(El);
