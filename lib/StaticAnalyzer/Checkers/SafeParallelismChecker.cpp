@@ -172,9 +172,6 @@ private:
   bool FatalError;
 
 public:
-
-  typedef RecursiveASTVisitor<StmtVisitorInvoker> BaseClass;
-
   /// Constructor
   explicit StmtVisitorInvoker(
     ento::BugReporter &BR, ASTContext &Ctx,
