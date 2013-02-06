@@ -9,6 +9,7 @@
 /// * assignment of actuals to formals: f(a) TODO
 /// * return statements assigning expr to formal return type TODO
 /// * ...stay tuned, more to come
+
 class AssignmentCheckerVisitor
     : public StmtVisitor<AssignmentCheckerVisitor> {
 
@@ -98,6 +99,7 @@ public:
   /// with TypeChecker
   void VisitBinAssign(BinaryOperator *E);
   void VisitReturnStmt(ReturnStmt *Ret);
+  void VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp);
 
   void VisitDesignatedInitExpr(DesignatedInitExpr *Exp) {
     OS << "Designated INIT Expr!!\n";
@@ -138,6 +140,7 @@ private:
     else
       return true;
   }
+  bool typecheckParamAssignment(ParmVarDecl *Param, Expr *Arg);
 
   void helperTypecheckDeclWithInit(const VarDecl *VD, Expr *Init);
 
@@ -187,6 +190,13 @@ private:
     BugType *BT = new BugType(BugName, BugCategory);
     BugReport *R = new BugReport(*BT, BugStr, VDLoc);
     BR.emitReport(R);
+  }
+
+  void helperEmitInvalidArgToFunctionWarning(const Stmt *S,
+                                                  const ASaPType *LHS,
+                                                  const ASaPType *RHS) {
+    StringRef BugName = "invalid argument to function call";
+    helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
   }
 
   void helperEmitInvalidExplicitAssignmentWarning(const Stmt *S,
@@ -244,7 +254,6 @@ private:
 
   /// \brief substitute region parameters in TmpT with arguments.
   void memberSubstitute(const FieldDecl *FieldD) {
-
     OS << "DEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
     OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
 
@@ -559,37 +568,6 @@ public:
     /// TODO
   }
 
-  void VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
-    //TODO
-    CXXMethodDecl *CalleeDecl = Exp->getMethodDecl();
-    assert(CalleeDecl);
-    ExprIterator ArgI, ArgE;
-    FunctionDecl::param_iterator ParamI, ParamE;
-    /// FIXME What about default arguments? Is this assertion too conservative?
-    assert(CalleeDecl->getNumParams() == Exp->getNumArgs());
-
-    for(ArgI = Exp->arg_begin(), ArgE = Exp->arg_end(),
-        ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
-         ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
-      OS << "DEBUG:: " << "\n";
-      /// Typecheck implicit assignment
-      /// Note: we don't only need to check LValues, as &x may
-      /// not be an LValue but it may carry region information.
-
-      /// TODO finish implementing this!
-      ///Rpl::RplVector ParamRegs = getRegions(*ParamI);
-      /// get types Visit(*ArgI);
-    }
-
-  }
-  void VisitCallExpr(CallExpr *Exp) {
-    //TODO
-  }
-  void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
-    //TODO
-  }
-
-
 }; // end class TypeBuilderVisitor
 
 /// Find assignments and call Typechecking on them. Assignments include
@@ -730,3 +708,45 @@ void AssignmentCheckerVisitor::helperTypecheckDeclWithInit(
     FatalError = true;
   }
 }
+
+bool AssignmentCheckerVisitor::typecheckParamAssignment(ParmVarDecl *Param,
+                                                        Expr *Arg) {
+    TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
+                            ASaPTypeDeclMap, EffectSummaryMap, Def, Arg);
+    ASaPType *LHSType = ASaPTypeDeclMap[Param];
+    ASaPType *RHSType = TBVR.getType();
+    if (! typecheck(LHSType, RHSType)) {
+      OS << "DEBUG:: invalid argument to parameter assignment: "
+        << "gonna emit an error\n";
+      //  Fixme pass VS as arg instead of Init
+      helperEmitInvalidArgToFunctionWarning(Arg, LHSType, RHSType);
+      FatalError = true;
+      return false;
+    }
+    return true;
+}
+
+void AssignmentCheckerVisitor::VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
+  CXXMethodDecl *CalleeDecl = Exp->getMethodDecl();
+  assert(CalleeDecl);
+  ExprIterator ArgI, ArgE;
+  FunctionDecl::param_iterator ParamI, ParamE;
+  assert(CalleeDecl->getNumParams() == Exp->getNumArgs());
+
+  for(ArgI = Exp->arg_begin(), ArgE = Exp->arg_end(),
+      ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
+      ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
+    OS << "DEBUG:: " << "\n";
+    Expr *ArgExpr = *ArgI;
+    ParmVarDecl *ParamDecl = *ParamI;
+    typecheckParamAssignment(ParamDecl, ArgExpr);
+  }
+}
+
+/*  void VisitCallExpr(CallExpr *Exp) {
+    //TODO
+  }
+  void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
+    //TODO
+  }
+*/

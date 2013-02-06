@@ -21,14 +21,26 @@ public:
     p = &fdata; // expected-warning{{invalid assignment}}
     p = false ? &fdata : getP();  // expected-warning{{invalid assignment}}
   }
+ 
+  void setPointer [[asap::writes("Links")]] (float *p [[asap::arg("Pc:Data")]]) {
+	this->p = p;
+  }
+
+  void setPointerBad [[asap::writes("Links")]] (float *p [[asap::arg("Pc:FData")]]) {
+	this->p = p; // expected-warning{{invalid assignment}}
+  }
+
   void assignments () {
     float local_1 = 3,
           *local_p0 [[asap::arg("Local")]] = p,  // expected-warning{{invalid initialization}}
           local_2,
           *local_p1[[asap::arg("Local")]] = &local_1;
     float *local_p [[asap::arg("Local")]];
+    setPointer(this->p);
+	float *p[[asap::arg("Pc:Data")]];
+	setPointer(p);
+	setPointer(getP());
     local_p = p; // expected-warning{{invalid assignment}}
-    
   }
 }; // end class C
 #endif
