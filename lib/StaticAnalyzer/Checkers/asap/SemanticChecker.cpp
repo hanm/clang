@@ -624,7 +624,7 @@ private:
 
       if (Tmp) { /// Tmp may be NULL if the RPL was ill formed (e.g., contained
                  /// undeclared RPL elements).
-        EV.push_back(new Effect(EK, new Rpl(*Tmp), *I));
+        EV.push_back(new Effect(EK, Tmp, *I));
       }
     }
   }

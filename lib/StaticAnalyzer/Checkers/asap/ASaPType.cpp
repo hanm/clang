@@ -27,7 +27,7 @@ class ASaPType {
     ASaPType(T.QT, T.ArgV, T.InRpl);
   }*/
 
-  ASaPType (ASaPType &T) : QT(T.QT) {
+  ASaPType (const ASaPType &T) : QT(T.QT) {
     this->QT = T.QT;
     if (T.InRpl)
       this->InRpl = new Rpl(*T.InRpl);

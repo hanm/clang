@@ -337,7 +337,7 @@ private:
   }
 
   /// Copy Constructor
-  Rpl(Rpl &That) :
+  Rpl(const Rpl &That) :
       RplElements(That.RplElements),
       FullySpecified(That.FullySpecified)
   {}
@@ -683,7 +683,7 @@ private:
   /// Fields
   EffectKind Kind;
   Rpl* R;
-  const Attr* A; // used to get SourceLocation information
+  const Attr* Attribute; // used to get SourceLocation information
 
   /// \brief returns true if this is a subeffect kind of E.
   /// This method only looks at effect kinds, not their Rpls.
@@ -718,11 +718,13 @@ private:
 
 public:
   /// Constructors
-  Effect(EffectKind EK, Rpl* R, const Attr* A)
-        : Kind(EK), R(R), A(A) {}
+  Effect(EffectKind EK, const Rpl* R, const Attr* A = 0)
+        : Kind(EK), Attribute(A) {
+    this->R = (R) ? new Rpl(*R) : 0;
+  }
 
-  Effect(Effect *E): Kind(E->Kind), A(E->A) {
-    R = (E->R) ? new Rpl(*E->R) : 0;
+  Effect(const Effect &E): Kind(E.Kind), Attribute(E.Attribute) {
+    R = (E.R) ? new Rpl(*E.R) : 0;
   }
   /// Destructors
   ~Effect() {
@@ -785,9 +787,9 @@ public:
 
   inline const Rpl* getRpl() { return R; }
 
-  inline const Attr* getAttr() { return A; }
+  inline const Attr* getAttr() { return Attribute; }
 
-  inline SourceLocation getLocation() { return A->getLocation();}
+  inline SourceLocation getLocation() { return Attribute->getLocation();}
 
   /// Substitution (Effect)
   inline void substitute(const RplElement &FromElm, const Rpl &ToRpl) {

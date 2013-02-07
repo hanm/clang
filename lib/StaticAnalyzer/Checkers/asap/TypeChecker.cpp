@@ -471,10 +471,7 @@ public:
     OS << "\n";
 
     /// 1. VD is a FunctionDecl
-    /// TODO
-    //const FunctionDecl *FD = dyn_cast<FunctionDecl>(VD);
-    //if (FD)
-      //helperVisitFunctionDecl(Expr, FD);
+    /// TODO: For Michael ;-)
 
     ///-//////////////////////////////////////////////
     /// 2. vd is a FieldDecl

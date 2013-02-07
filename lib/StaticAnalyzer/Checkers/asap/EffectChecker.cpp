@@ -22,8 +22,6 @@ private:
   bool FatalError;
 
   Effect::EffectVector EffectsTmp;
-  /// true when we need to typecheck an assignment
-  bool TypecheckAssignment;
   /// true when visiting an expression that is being written to
   bool HasWriteSemantics;
   /// true when visiting a base expression (e.g., B in B.f, or B->f)
@@ -36,6 +34,65 @@ private:
   Effect::EffectVector *EffectSummary;
 
   /// Private Methods
+  /// \brief using Type with DerefNum perform substitution on all TmpEffects
+  void memberSubstitute(ASaPType *Type, int DerefNum) {
+    assert(Type);
+
+    QualType QT = Type->getQT(DerefNum);
+
+    const RegionParamAttr* RPA = getRegionParamAttr(QT.getTypePtr());
+    assert(RPA);
+    RplElement *RplEl = RplElementMap[RPA];
+    assert(RplEl);
+    const ParamRplElement *FromEl = dyn_cast<ParamRplElement>(RplEl);
+    assert(FromEl);
+
+    const Rpl *ToRpl = Type->getSubstArg(DerefNum);
+    assert(ToRpl);
+    //OS << "DEBUG:: gonna substitute...\n";
+
+    if (FromEl->getName().compare(ToRpl->toString())) {
+      // if (from != to) then substitute
+      /// 2.1.1 Substitution of effects
+      for (Effect::EffectVector::const_iterator
+              I = EffectsTmp.begin(),
+              E = EffectsTmp.end();
+            I != E; ++I) {
+        (*I)->substitute(*FromEl, *ToRpl);
+      }
+    }
+    //OS << "   DONE\n";
+  }
+
+  /// \brief adds effects to TmpEffects and returns the number of effects added
+  int collectEffects(const ASaPType *T, int DerefNum, bool IsBase) {
+    if (DerefNum < 0) return 0;
+    assert(T);
+    int EffectNr = 0;
+    ASaPType *Type = new ASaPType(*T); // Make a copy of T
+
+    // Dereferences have read effects
+    // TODO is this atomic or not? just ignore atomic for now
+    for (int I = DerefNum; I > 0; --I) {
+      const Rpl *InRpl = Type->getInRpl();
+      assert(InRpl);
+      EffectsTmp.push_back(new Effect(Effect::EK_ReadsEffect, InRpl));
+      EffectNr++;
+      Type->deref(DerefNum);
+    }
+    if (!IsBase) {
+      // TODO is this atomic or not? just ignore atomic for now
+      Effect::EffectKind EK = (HasWriteSemantics) ?
+                              Effect::EK_WritesEffect : Effect::EK_ReadsEffect;
+      const Rpl *InRpl = Type->getInRpl();
+      assert(InRpl);
+      EffectsTmp.push_back(new Effect(EK, InRpl));
+      EffectNr++;
+    }
+    delete Type;
+    return EffectNr;
+  }
+
   void helperEmitEffectNotCoveredWarning(const Stmt *S,
                                          const Decl *D,
                                          const StringRef &Str) {
@@ -55,8 +112,9 @@ private:
                        BugStr, VDLoc, S->getSourceRange());
   }
 
-  int copyAndPushEffects(FunctionDecl *D) {
-    Effect::EffectVector *EV = EffectSummaryMap[D];
+  /// \brief Copy the effect summary of FunD and push it to the TmpEffects
+  int copyAndPushEffects(FunctionDecl *FunD) {
+    Effect::EffectVector *EV = EffectSummaryMap[FunD];
     assert(EV);
     // Must make copies because we will substitute, cannot use append:
     //EffectsTmp.append(EV->size(), (*EV->begin()));
@@ -64,7 +122,7 @@ private:
             I = EV->begin(),
             E = EV->end();
          I != E; ++I) {
-        EffectsTmp.push_back(new Effect(*I));
+        EffectsTmp.push_back(new Effect(*(*I)));
     }
     return EV->size();
   }
@@ -130,19 +188,11 @@ private:
   }
 
   inline void helperVisitAssignment(BinaryOperator *E) {
-    OS << "DEBUG:: helperVisitAssignment (typecheck="
-       << (TypecheckAssignment?"true":"false") << ". ";
+    OS << "DEBUG:: helperVisitAssignment. ";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS <<")\n";
-    /*if (TypecheckAssignment) {
-      /// TODO
-      TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplMap,
-                             E, E->getLHS(), E->getRHS());
-    }*/
 
     bool SavedHWS = HasWriteSemantics;
-    bool SavedTCA = TypecheckAssignment;
-    TypecheckAssignment = false; // Don't typecheck subtree (already done)
     HasWriteSemantics = false;  // TODO hm... is this right?
     Visit(E->getRHS());
 
@@ -151,7 +201,6 @@ private:
 
     /// Restore flags
     HasWriteSemantics = SavedHWS;
-    TypecheckAssignment = SavedTCA;
   }
 
 
@@ -180,7 +229,6 @@ public:
         EffectSummaryMap(EffectSummaryMap),
         Def(Def),
         FatalError(false),
-        TypecheckAssignment(false),
         HasWriteSemantics(false),
         IsBase(false),
         DerefNum(0),
@@ -241,128 +289,13 @@ public:
     /// Type_vd <args> vd
     const FieldDecl* FieldD  = dyn_cast<FieldDecl>(VD);
     if (FieldD) {
-      StringRef S;
-      int EffectNr = 0;
-#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
-      specific_attr_reverse_iterator<RegionArgAttr>
-        ArgIt = FieldD->specific_attr_rbegin<RegionArgAttr>(),
-        EndIt = FieldD->specific_attr_rend<RegionArgAttr>();
-#else
-      /// Build a reverse iterator over RegionArgAttr
-      llvm::SmallVector<RegionArgAttr*, 8> ArgV;
-      for (specific_attr_iterator<RegionArgAttr> I =
-           FieldD->specific_attr_begin<RegionArgAttr>(),
-           E = FieldD->specific_attr_end<RegionArgAttr>();
-           I != E; ++ I) {
-          ArgV.push_back(*I);
-      }
 
-      llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator ArgIt =
-        ArgV.rbegin(), EndIt = ArgV.rend();
+      ASaPType *T = ASaPTypeDeclMap[FieldD];
+      assert(T);
+      if (IsBase)
+        memberSubstitute(T, DerefNum);
 
-      // Done preparing reverse iterator
-#endif
-      // TODO if (!arg) arg = some default
-      assert(ArgIt != EndIt);
-      OS << "DEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
-      if (IsBase) {
-        /// 2.1 Region Substitution for expressions under this base
-        RegionArgAttr* SubstArg;
-        QualType SubstQT = FieldD->getType();
-
-        OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
-        /// Find region-argument annotation that appertains to pointee type
-        for (int I = DerefNum; I>0; I--) {
-          assert(ArgIt!=EndIt);
-          ArgIt++;
-          SubstQT = SubstQT->getPointeeType();
-        }
-        assert(ArgIt!=EndIt);
-        SubstArg = *ArgIt;
-
-        //OS << "arg : ";
-        //arg->printPretty(OS, Ctx.getPrintingPolicy());
-        //OS << "\n";
-        OS << "DEBUG::SubstArg : ";
-        SubstArg->printPretty(OS, Ctx.getPrintingPolicy());
-        OS << "\n";
-
-        const RegionParamAttr* RPA = getRegionParamAttr(SubstQT.getTypePtr());
-        assert(RPA);
-        // TODO support multiple Parameters
-        RplElement *RplEl = RplElementMap[RPA];
-        assert(RplEl);
-        const ParamRplElement *FromEl = dyn_cast<ParamRplElement>(RplEl);
-        assert(FromEl);
-
-        // apply substitution to temp effects
-        const Rpl* ToRpl = RplMap[SubstArg];
-        assert(ToRpl);
-
-        if (FromEl->getName().compare(ToRpl->toString())) {
-          // if (from != to) then substitute
-          /// 2.1.1 Substitution of effects
-          for (Effect::EffectVector::const_iterator
-                  I = EffectsTmp.begin(),
-                  E = EffectsTmp.end();
-                I != E; ++I) {
-            (*I)->substitute(*FromEl, *ToRpl);
-          }
-        }
-      }
-
-      /// 2.2 Collect Effects
-      if (DerefNum<0) { // DerefNum<0 ==> AddrOf Taken
-        // Do nothing. Aliasing captured by type-checker
-      } else { // DerefNum >=0
-        /// 2.2.1. Take care of dereferences first
-#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
-        specific_attr_reverse_iterator<RegionArgAttr>
-          ArgIt = FieldD->specific_attr_rbegin<RegionArgAttr>(),
-          EndIt = FieldD->specific_attr_rend<RegionArgAttr>();
-#else
-        llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator
-          ArgIt = ArgV.rbegin(), EndIt = ArgV.rend();
-#endif
-        QualType QT = FieldD->getType();
-
-        for (int I = DerefNum; I > 0; --I) {
-          assert(QT->isPointerType());
-          assert(ArgIt!=EndIt);
-          /// TODO is this atomic or not? ignore atomic for now
-          EffectsTmp.push_back(
-            new Effect(Effect::EK_ReadsEffect,
-                       new Rpl(*RplMap[(*ArgIt)]),
-                       *ArgIt));
-          EffectNr++;
-          QT = QT->getPointeeType();
-          ArgIt++;
-        }
-
-        /// 2.2.2 Take care of the destination of dereferrences, unless this
-        /// is the base of a member expression. In that case, the '.' operator
-        /// describes the offset from the base, and the substitution performed
-        /// in earlier in 2.1 takes care of that offset.
-        assert(ArgIt!=EndIt);
-        if (!IsBase) {
-          /// TODO is this atomic or not? just ignore atomic for now
-          Effect::EffectKind EK = (HasWriteSemantics) ?
-                              Effect::EK_WritesEffect : Effect::EK_ReadsEffect;
-          // if it is an aggregate type we have to capture all the copy effects
-          // at most one of isAddrOf and isDeref can be true
-          // last type to work on
-          if (FieldD->getType()->isStructureOrClassType()) {
-            // TODO for each field add effect & i++
-            /// Actually this translates into an implicit call to an
-            /// implicit copy function... treat it as a function call.
-            /// i.e., not here!
-          } else {
-            EffectsTmp.push_back(
-              new Effect(EK, new Rpl(*RplMap[(*ArgIt)]), *ArgIt));
-            EffectNr++;
-          }
-        }
-      }
+      int EffectNr = collectEffects(T, DerefNum, IsBase);
 
       /// 2.3. Visit Base with read semantics, then restore write semantics
       bool SavedHWS = HasWriteSemantics;
@@ -448,20 +381,14 @@ public:
     OS << "DEBUG:: !!!!!!!!!!! Mother of compound Assign!!!!!!!!!!!!!\n";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
-    bool SavedTCA = TypecheckAssignment;
-    TypecheckAssignment = false;
     helperVisitAssignment(E);
-    TypecheckAssignment = SavedTCA;
   }
 
   void VisitBinAssign(BinaryOperator *E) {
     OS << "DEBUG:: >>>>>>>>>>VisitBinAssign<<<<<<<<<<<<<<<<<\n";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
-    bool SavedTCA = TypecheckAssignment;
-    TypecheckAssignment = true;
     helperVisitAssignment(E);
-    TypecheckAssignment = SavedTCA;
   }
 
   void VisitCallExpr(CallExpr *E) {
@@ -474,20 +401,6 @@ public:
     CXXMethodDecl *D = Exp->getMethodDecl();
     assert(D);
 
-    /// 1. Typecheck assignment of actuals to formals
-    /*ExprIterator ArgI, ArgE;
-    FunctionDecl::param_iterator ParamI, ParamE;
-    assert(D->getNumParams() == Exp->getNumArgs());
-
-    for(ArgI = Exp->arg_begin(), ArgE = Exp->arg_end(),
-        ParamI = D->param_begin(), ParamE = D->param_end();
-         ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
-      OS << "DEBUG:: " << "\n";
-      if ((*ArgI)->isLValue()) {
-        /// Typecheck implicit assignment
-      }
-      Visit(*ArgI);
-    }*/
     /// 2. Add effects to tmp effects
     int EffectCount = copyAndPushEffects(D);
     /// 3. Visit base if it exists
@@ -512,20 +425,6 @@ public:
     FD->print(OS, Ctx.getPrintingPolicy());
     OS << "DEBUG:: isOverloadedOperator = " << FD->isOverloadedOperator() << "\n";
 
-    /// 1. Typecheck assignment of actuals to formals
-    /*ExprIterator ArgI, ArgE;
-    FunctionDecl::param_iterator ParamI, ParamE;
-    assert(D->getNumParams() == Exp->getNumArgs());
-
-    for(ArgI = Exp->arg_begin(), ArgE = Exp->arg_end(),
-        ParamI = D->param_begin(), ParamE = D->param_end();
-         ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
-      OS << "DEBUG:: " << "\n";
-      if ((*ArgI)->isLValue()) {
-        /// Typecheck implicit assignment
-      }
-      Visit(*ArgI);
-    }*/
     /// 2. Add effects to tmp effects
     int EffectCount = copyAndPushEffects(FD);
     /// 3. Visit base if it exists
