@@ -345,6 +345,25 @@ private:
   /// Destructors
   //~Rpl() {}
 
+  /// Static
+  static std::pair<StringRef, StringRef> splitRpl(StringRef &String) {
+    size_t Idx = 0;
+    do {
+      Idx = String.find(RPL_SPLIT_CHARACTER, Idx);
+      OSv2 << "Idx = " << Idx << ", size = " << String.size() << "\n";
+      if (Idx == StringRef::npos)
+        break;
+
+    } while (Idx < String.size() - 2
+             && String[Idx+1] == RPL_SPLIT_CHARACTER && Idx++ && Idx++);
+
+    if (Idx == StringRef::npos)
+      return std::pair<StringRef, StringRef>(String, "");
+    else
+      return std::pair<StringRef, StringRef>(String.slice(0,Idx),
+                                              String.slice(Idx+1, String.size()));
+  }
+
   /// Printing
   void printElements(raw_ostream& os) const {
     RplElementVector::const_iterator I = RplElements.begin();

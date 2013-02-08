@@ -537,9 +537,14 @@ private:
     while(RplStr.size() > 0) { /// for all RPL elements of the RPL
       // FIXME: '::' can appear as part of an RPL element. Splitting must
       // be done differently to account for that.
-      std::pair<StringRef,StringRef> Pair = RplStr.split(Rpl::
-                                                          RPL_SPLIT_CHARACTER);
-      const StringRef& Head = Pair.first;
+      std::pair<StringRef,StringRef> Pair = Rpl::splitRpl(RplStr);
+      StringRef Head = Pair.first;
+      llvm::SmallVector<StringRef, 8> Vec;
+      Head.split(Vec, "::");
+      OS << "Vec.size = " << Vec.size() << ", Vec.back() = " << Vec.back() <<"\n";
+
+      Head = Vec.back();
+      // TODO Vec - Vec.back() is the qualified decl id
       /// head: is it a special RPL element? if not, is it declared?
       const RplElement *RplEl = getSpecialRplElement(Head);
       if (!RplEl)
