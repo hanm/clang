@@ -20,10 +20,12 @@ private:
   ASTContext &Ctx;
   AnalysisDeclContext *AC;
   raw_ostream &OS;
+
   RplElementAttrMapTy &RplElementMap;
   RplAttrMapTy &RplAttrMap;
   ASaPTypeDeclMapTy &ASaPTypeDeclMap;
   EffectSummaryMapTy &EffectSummaryMap;
+
   bool FatalError;
 
   /// Private Methods
@@ -541,25 +543,55 @@ private:
       StringRef Head = Pair.first;
       llvm::SmallVector<StringRef, 8> Vec;
       Head.split(Vec, "::");
-      OS << "Vec.size = " << Vec.size() << ", Vec.back() = " << Vec.back() <<"\n";
+      OS << "DEBUG:: Vec.size = " << Vec.size() << ", Vec.back() = " << Vec.back() <<"\n";
 
-      Head = Vec.back();
-      // TODO Vec - Vec.back() is the qualified decl id
-      /// head: is it a special RPL element? if not, is it declared?
-      const RplElement *RplEl = getSpecialRplElement(Head);
-      if (!RplEl)
-        RplEl = findRegionOrParamName(D, Head);
-      if (!RplEl) {
-        // Emit bug report!
-        emitUndeclaredRplElement(D, A, Head);
-        Result = false;
-      } else { // RplEl != NULL
-        if (Count>0 && (isa<ParamRplElement>(RplEl)
-                        || isa<CaptureRplElement>(RplEl))) {
-          /// Error: region parameter is only allowed at the head of an Rpl
-          emitMisplacedRegionParameter(D, A, Head);
-        } else
-          R->appendElement(RplEl);
+      if (Vec.size() > 1) {
+        // TODO Vec - Vec.back() is the qualified decl id
+        StringRef First = Vec.front();
+        IdentifierInfo& IIfirst = Ctx.Idents.get(First);
+        IdentifierInfo& IIwhole = Ctx.Idents.get(Head);
+        IdentifierInfo *IIp = &IIfirst;
+        OS << "DEBUG:: (First) IdentifierInfo.getName = " << IIfirst.getName() << "\n";
+        OS << "DEBUG:: (Whole) IdentifierInfo.getName = " << IIwhole.getName() << "\n";
+
+        DeclContext *DC = D->getDeclContext();
+        DeclarationName DN(IIp);
+        DeclContextLookupResult Res = DC->lookup(DN);
+        OS << "DEBUG:: Lookup Result Size = " << Res.size() << "\n";
+
+        NestedNameSpecifier *NNS = NestedNameSpecifier::Create(Ctx, IIp); // TODO init
+        assert(NNS);
+        OS << "DEBUG:: NNS = ";
+        NNS->print(OS, Ctx.getPrintingPolicy());
+        OS << "\n";
+        OS << "DEBUG:: NNS as Identifier.getName = " << NNS->getAsIdentifier()->getName() << "\n";
+        NestedNameSpecifier *NNSPrefix = NNS->getPrefix();
+        QualType QT = QualType(NNS->getAsType(), 0);
+        OS << "DEBUG:: NNS As QualType = ";
+        QT.print(OS, Ctx.getPrintingPolicy());
+        OS << "\n";
+        //assert(NNSPrefix);
+        //Ctx.getDependentNameType(ETK_None, NNSPrefix, NNS->getAsIdentifier());
+        // find the decl from First and the ASTcontex perhaps?
+      } else {
+        assert(Vec.size() == 1);
+        Head = Vec.back();
+        /// head: is it a special RPL element? if not, is it declared?
+        const RplElement *RplEl = getSpecialRplElement(Head);
+        if (!RplEl)
+          RplEl = findRegionOrParamName(D, Head);
+        if (!RplEl) {
+          // Emit bug report!
+          emitUndeclaredRplElement(D, A, Head);
+          Result = false;
+        } else { // RplEl != NULL
+          if (Count>0 && (isa<ParamRplElement>(RplEl)
+                          || isa<CaptureRplElement>(RplEl))) {
+            /// Error: region parameter is only allowed at the head of an Rpl
+            emitMisplacedRegionParameter(D, A, Head);
+          } else
+            R->appendElement(RplEl);
+        }
       }
       /// Proceed to next iteration
       RplStr = Pair.second;
