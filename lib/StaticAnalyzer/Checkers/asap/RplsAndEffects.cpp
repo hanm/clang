@@ -66,7 +66,7 @@ public:
 
   virtual StringRef getName() const = 0;
   //virtual bool operator == (const RplElement& that) const = 0;
-  virtual bool operator == (const RplElement& That) {
+  virtual bool operator == (const RplElement& That) const {
     return (this == &That) ? true : false;
   }
   virtual ~RplElement() {}
