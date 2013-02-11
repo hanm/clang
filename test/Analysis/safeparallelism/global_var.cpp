@@ -5,6 +5,7 @@
 namespace ASaP /*[[asap::arg("Roo")]]*/ {
 //namespace [[asap::arg("Roo")]] ASaP {
 
+
 class 
 [[asap::region("R")]]
 Globals {
@@ -13,25 +14,26 @@ public:
   static int GlobalVar [[asap::arg("R")]];
   int FieldVar [[asap::arg("R")]];
 };
+} // end namespace ASaP
  
 // function foo writes to region R.
-void foo [[asap::writes("Globals::R")]] () {
-    Globals::GlobalVar = 1;
+void foo [[asap::writes("ASaP::Globals::R")]] () {
+    ASaP::Globals::GlobalVar = 1;
 }
  
 // function bar writes to region R.
-void bar [[asap::writes("R")]] () {
-    Globals::GlobalVar = 2;
+void bar [[asap::writes("ASaP::Globals::R")]] () {
+    ASaP::Globals::GlobalVar = 2;
 }
  
 // function bar writes to region R.
-void callsBar [[asap::writes("R")]] () {
+void callsBar [[asap::writes("ASaP::Globals::R")]] () {
     bar();
 }
  
 // funciton zoo reads region R.
-void zoo [[asap::reads("R")]] () {
-    int x = Globals::GlobalVar;
+void zoo [[asap::reads("ASaP::Globals::R")]] () {
+    int x = ASaP::Globals::GlobalVar;
 }
 
 class Future {
@@ -46,7 +48,7 @@ public:
 
 
 int main() {
-    Globals::GlobalVar = 0;
+    ASaP::Globals::GlobalVar = 0;
     // No warning if they are invoked sequentially
     foo();
     bar();
@@ -74,4 +76,3 @@ int main() {
     return 0;
 } //  end main
 
-} // end namespace ASaP
