@@ -65,8 +65,10 @@ public:
   virtual bool isFullySpecified() const { return true; }
 
   virtual StringRef getName() const = 0;
-  virtual bool operator == (const RplElement& that) const = 0;
-  //virtual RplElement* clone() const = 0;
+  //virtual bool operator == (const RplElement& that) const = 0;
+  virtual bool operator == (const RplElement& That) {
+    return (this == &That) ? true : false;
+  }
   virtual ~RplElement() {}
 
 };
@@ -84,11 +86,11 @@ public:
 
   /// Methods
   virtual StringRef getName() const { return name; }
-  //virtual SpecialRplElement* clone const { return new SpecialRplElement(this);}
-  virtual bool operator == (const RplElement& that) const {
+
+  /*virtual bool operator == (const RplElement& that) const {
     return (isa<const SpecialRplElement>(that)
             && this->getName().compare(that.getName()) == 0) ? true : false;
-  }
+  }*/
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Special;
@@ -111,14 +113,14 @@ public:
   /// Methods
   virtual bool isFullySpecified() const { return false; }
   virtual StringRef getName() const { return "*"; }
-  virtual bool operator == (const RplElement &that) const {
+  /*virtual bool operator == (const RplElement &that) const {
     return (isa<const StarRplElement>(that)
             && this==&that) ? true : false;
-  }
+  }*/
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Star;
   }
-};
+}; // end class StarRplElement
 
 static const StarRplElement *STARRplElmt = new StarRplElement();
 
@@ -145,10 +147,10 @@ public:
   virtual ~NamedRplElement() {}
   /// Methods
   virtual StringRef getName() const { return name; }
-  virtual bool operator == (const RplElement &that) const {
+  /*virtual bool operator == (const RplElement &that) const {
     return (isa<const NamedRplElement>(that)
             && this->getName().compare(that.getName()) == 0) ? true: false;
-  }
+  }*/
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Named;
@@ -168,10 +170,10 @@ public:
 
   /// Methods
   virtual StringRef getName() const { return name; }
-  virtual bool operator == (const RplElement& that) const {
+  /*virtual bool operator == (const RplElement& that) const {
     return (isa<const ParamRplElement>(that)
             && this->getName().compare(that.getName()) == 0) ? true : false;
-  }
+  }*/
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Parameter;
   }
@@ -191,9 +193,9 @@ public:
   /// Methods
   virtual StringRef getName() const { return "rho"; }
 
-  virtual bool operator == (const RplElement &that) const {
+  /*virtual bool operator == (const RplElement &that) const {
     return (isa<const CaptureRplElement>(that) && this==&that) ? true : false;
-  }
+  }*/
   virtual bool isFullySpecified() const { return false; }
 
   Rpl& upperBound() const { return includedIn; }
