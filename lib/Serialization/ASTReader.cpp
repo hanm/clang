@@ -23,8 +23,6 @@
 #include "clang/AST/Type.h"
 #include "clang/AST/TypeLocVisitor.h"
 #include "clang/Basic/FileManager.h"
-#include "clang/Basic/FileSystemStatCache.h"
-#include "clang/Basic/OnDiskHashTable.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/SourceManagerInternals.h"
 #include "clang/Basic/TargetInfo.h"
@@ -459,6 +457,16 @@ ASTIdentifierLookupTraitBase::ReadKey(const unsigned char* d, unsigned n) {
   return StringRef((const char*) d, n-1);
 }
 
+/// \brief Whether the given identifier is "interesting".
+static bool isInterestingIdentifier(IdentifierInfo &II) {
+  return II.isPoisoned() ||
+         II.isExtensionToken() ||
+         II.getObjCOrBuiltinID() ||
+         II.hasRevertedTokenIDToIdentifier() ||
+         II.hadMacroDefinition() ||
+         II.getFETokenInfo<void>();
+}
+
 IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
                                                    const unsigned char* d,
                                                    unsigned DataLen) {
@@ -479,8 +487,13 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
       KnownII = II;
     }
     Reader.SetIdentifierInfo(ID, II);
-    II->setIsFromAST();
-    Reader.markIdentifierUpToDate(II);    
+    if (!II->isFromAST()) {
+      bool WasInteresting = isInterestingIdentifier(*II);
+      II->setIsFromAST();
+      if (WasInteresting)
+        II->setChangedSinceDeserialization();
+    }
+    Reader.markIdentifierUpToDate(II);
     return II;
   }
 
@@ -508,7 +521,12 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
     KnownII = II;
   }
   Reader.markIdentifierUpToDate(II);
-  II->setIsFromAST();
+  if (!II->isFromAST()) {
+    bool WasInteresting = isInterestingIdentifier(*II);
+    II->setIsFromAST();
+    if (WasInteresting)
+      II->setChangedSinceDeserialization();
+  }
 
   // Set or check the various bits in the IdentifierInfo structure.
   // Token IDs are read-only.
@@ -2053,8 +2071,24 @@ bool ASTReader::ReadASTBlock(ModuleFile &F) {
       break;
 
     case SPECIAL_TYPES:
-      for (unsigned I = 0, N = Record.size(); I != N; ++I)
-        SpecialTypes.push_back(getGlobalTypeID(F, Record[I]));
+      if (SpecialTypes.empty()) {
+        for (unsigned I = 0, N = Record.size(); I != N; ++I)
+          SpecialTypes.push_back(getGlobalTypeID(F, Record[I]));
+        break;
+      }
+
+      if (SpecialTypes.size() != Record.size()) {
+        Error("invalid special-types record");
+        return true;
+      }
+
+      for (unsigned I = 0, N = Record.size(); I != N; ++I) {
+        serialization::TypeID ID = getGlobalTypeID(F, Record[I]);
+        if (!SpecialTypes[I])
+          SpecialTypes[I] = ID;
+        // FIXME: If ID && SpecialTypes[I] != ID, do we need a separate
+        // merge step?
+      }
       break;
 
     case STATISTICS:
@@ -3394,7 +3428,18 @@ bool ASTReader::ReadSubmoduleBlock(ModuleFile &F) {
         Error("too many submodules");
         return true;
       }
-      
+
+      if (const FileEntry *CurFile = CurrentModule->getASTFile()) {
+        if (CurFile != F.File) {
+          if (!Diags.isDiagnosticInFlight()) {
+            Diag(diag::err_module_file_conflict)
+              << CurrentModule->getTopLevelModuleName()
+              << CurFile->getName()
+              << F.File->getName();
+          }
+          return true;
+        }
+      }
       CurrentModule->setASTFile(F.File);
       CurrentModule->IsFromModuleFile = true;
       CurrentModule->IsSystem = IsSystem || CurrentModule->IsSystem;
@@ -4878,6 +4923,7 @@ QualType ASTReader::GetType(TypeID ID) {
     case PREDEF_TYPE_IMAGE2D_ID:    T = Context.OCLImage2dTy;       break;
     case PREDEF_TYPE_IMAGE2D_ARR_ID: T = Context.OCLImage2dArrayTy; break;
     case PREDEF_TYPE_IMAGE3D_ID:    T = Context.OCLImage3dTy;       break;
+    case PREDEF_TYPE_SAMPLER_ID:    T = Context.OCLSamplerTy;       break;
     case PREDEF_TYPE_EVENT_ID:      T = Context.OCLEventTy;         break;
     case PREDEF_TYPE_AUTO_DEDUCT:   T = Context.getAutoDeductType(); break;
         
@@ -5399,14 +5445,13 @@ static ModuleFile *getDefinitiveModuleFileFor(const DeclContext *DC,
   return 0;
 }
 
-DeclContext::lookup_result
+bool
 ASTReader::FindExternalVisibleDeclsByName(const DeclContext *DC,
                                           DeclarationName Name) {
   assert(DC->hasExternalVisibleStorage() &&
          "DeclContext has no visible decls in storage");
   if (!Name)
-    return DeclContext::lookup_result(DeclContext::lookup_iterator(0),
-                                      DeclContext::lookup_iterator(0));
+    return false;
 
   SmallVector<NamedDecl *, 64> Decls;
   
@@ -5439,7 +5484,7 @@ ASTReader::FindExternalVisibleDeclsByName(const DeclContext *DC,
   }
   ++NumVisibleDeclContextsRead;
   SetExternalVisibleDeclsForName(DC, Name, Decls);
-  return const_cast<DeclContext*>(DC)->lookup(Name);
+  return !Decls.empty();
 }
 
 namespace {

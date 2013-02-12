@@ -19,6 +19,7 @@
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/DeclTemplate.h"
 #include "clang/AST/Expr.h"
+#include "clang/Basic/CharInfo.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Sema/DeclSpec.h"
@@ -2848,6 +2849,7 @@ static void handleCleanupAttr(Sema &S, Decl *D, const AttributeList &Attr) {
              CleanupAttr(Attr.getRange(), S.Context, FD,
                          Attr.getAttributeSpellingListIndex()));
   S.MarkFunctionReferenced(Attr.getParameterLoc(), FD);
+  S.DiagnoseUseOfDecl(FD, Attr.getParameterLoc());
 }
 
 /// Handle __attribute__((format_arg((idx)))) attribute based on
@@ -4478,7 +4480,7 @@ static void handleUuidAttr(Sema &S, Decl *D, const AttributeList &Attr) {
           S.Diag(Attr.getLoc(), diag::err_attribute_uuid_malformed_guid);
           return;
         }
-      } else if (!isxdigit(*I)) {
+      } else if (!isHexDigit(*I)) {
         S.Diag(Attr.getLoc(), diag::err_attribute_uuid_malformed_guid);
         return;
       }

@@ -1290,54 +1290,6 @@ void ASTWriter::WriteInputFiles(SourceManager &SourceMgr, StringRef isysroot) {
 }
 
 //===----------------------------------------------------------------------===//
-// stat cache Serialization
-//===----------------------------------------------------------------------===//
-
-namespace {
-// Trait used for the on-disk hash table of stat cache results.
-class ASTStatCacheTrait {
-public:
-  typedef const char * key_type;
-  typedef key_type key_type_ref;
-
-  typedef struct stat data_type;
-  typedef const data_type &data_type_ref;
-
-  static unsigned ComputeHash(const char *path) {
-    return llvm::HashString(path);
-  }
-
-  std::pair<unsigned,unsigned>
-    EmitKeyDataLength(raw_ostream& Out, const char *path,
-                      data_type_ref Data) {
-    unsigned StrLen = strlen(path);
-    clang::io::Emit16(Out, StrLen);
-    unsigned DataLen = 4 + 4 + 2 + 8 + 8;
-    clang::io::Emit8(Out, DataLen);
-    return std::make_pair(StrLen + 1, DataLen);
-  }
-
-  void EmitKey(raw_ostream& Out, const char *path, unsigned KeyLen) {
-    Out.write(path, KeyLen);
-  }
-
-  void EmitData(raw_ostream &Out, key_type_ref,
-                data_type_ref Data, unsigned DataLen) {
-    using namespace clang::io;
-    uint64_t Start = Out.tell(); (void)Start;
-
-    Emit32(Out, (uint32_t) Data.st_ino);
-    Emit32(Out, (uint32_t) Data.st_dev);
-    Emit16(Out, (uint16_t) Data.st_mode);
-    Emit64(Out, (uint64_t) Data.st_mtime);
-    Emit64(Out, (uint64_t) Data.st_size);
-
-    assert(Out.tell() - Start == DataLen && "Wrong data length");
-  }
-};
-} // end anonymous namespace
-
-//===----------------------------------------------------------------------===//
 // Source Manager Serialization
 //===----------------------------------------------------------------------===//
 
@@ -2847,7 +2799,7 @@ void ASTWriter::WriteIdentifierTable(Preprocessor &PP,
       assert(ID->first && "NULL identifier in identifier table");
       if (!Chain || !ID->first->isFromAST() || 
           ID->first->hasChangedSinceDeserialization())
-        Generator.insert(const_cast<IdentifierInfo *>(ID->first), ID->second, 
+        Generator.insert(const_cast<IdentifierInfo *>(ID->first), ID->second,
                          Trait);
     }
 
@@ -2884,6 +2836,11 @@ void ASTWriter::WriteIdentifierTable(Preprocessor &PP,
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));
   unsigned IdentifierOffsetAbbrev = Stream.EmitAbbrev(Abbrev);
 
+#ifndef NDEBUG
+  for (unsigned I = 0, N = IdentifierOffsets.size(); I != N; ++I)
+    assert(IdentifierOffsets[I] && "Missing identifier offset?");
+#endif
+  
   RecordData Record;
   Record.push_back(IDENTIFIER_OFFSET);
   Record.push_back(IdentifierOffsets.size());
@@ -4010,14 +3967,16 @@ SelectorID ASTWriter::getSelectorRef(Selector Sel) {
     return 0;
   }
 
-  SelectorID &SID = SelectorIDs[Sel];
+  SelectorID SID = SelectorIDs[Sel];
   if (SID == 0 && Chain) {
     // This might trigger a ReadSelector callback, which will set the ID for
     // this selector.
     Chain->LoadSelector(Sel);
+    SID = SelectorIDs[Sel];
   }
   if (SID == 0) {
     SID = NextSelectorID++;
+    SelectorIDs[Sel] = SID;
   }
   return SID;
 }
@@ -4732,11 +4691,17 @@ void ASTWriter::ReaderInitialized(ASTReader *Reader) {
 }
 
 void ASTWriter::IdentifierRead(IdentID ID, IdentifierInfo *II) {
-  IdentifierIDs[II] = ID;
+  // Always keep the highest ID. See \p TypeRead() for more information.
+  IdentID &StoredID = IdentifierIDs[II];
+  if (ID > StoredID)
+    StoredID = ID;
 }
 
 void ASTWriter::MacroRead(serialization::MacroID ID, MacroInfo *MI) {
-  MacroIDs[MI] = ID;
+  // Always keep the highest ID. See \p TypeRead() for more information.
+  MacroID &StoredID = MacroIDs[MI];
+  if (ID > StoredID)
+    StoredID = ID;
 }
 
 void ASTWriter::TypeRead(TypeIdx Idx, QualType T) {
@@ -4751,7 +4716,10 @@ void ASTWriter::TypeRead(TypeIdx Idx, QualType T) {
 }
 
 void ASTWriter::SelectorRead(SelectorID ID, Selector S) {
-  SelectorIDs[S] = ID;
+  // Always keep the highest ID. See \p TypeRead() for more information.
+  SelectorID &StoredID = SelectorIDs[S];
+  if (ID > StoredID)
+    StoredID = ID;
 }
 
 void ASTWriter::MacroDefinitionRead(serialization::PreprocessedEntityID ID,

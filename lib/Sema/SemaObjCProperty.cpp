@@ -368,6 +368,10 @@ Sema::HandlePropertyInClassExtension(Scope *S,
     PDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_readonly);
   if (Attributes & ObjCDeclSpec::DQ_PR_readwrite)
     PDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_readwrite);
+  if (Attributes & ObjCDeclSpec::DQ_PR_nonatomic)
+    PDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_nonatomic);
+  if (Attributes & ObjCDeclSpec::DQ_PR_atomic)
+    PDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_atomic);
   // Set setter/getter selector name. Needed later.
   PDecl->setGetterName(GetterSel);
   PDecl->setSetterName(SetterSel);
@@ -839,22 +843,40 @@ Decl *Sema::ActOnPropertyImplDecl(Scope *S,
         return 0;
       }
     }
-    
     if (Synthesize&&
         (PIkind & ObjCPropertyDecl::OBJC_PR_readonly) &&
         property->hasAttr<IBOutletAttr>() &&
         !AtLoc.isValid()) {
-      Diag(IC->getLocation(), diag::warn_auto_readonly_iboutlet_property);
-      Diag(property->getLocation(), diag::note_property_declare);
-      SourceLocation readonlyLoc;
-      if (LocPropertyAttribute(Context, "readonly", 
-                               property->getLParenLoc(), readonlyLoc)) {
-        SourceLocation endLoc = 
-          readonlyLoc.getLocWithOffset(strlen("readonly")-1);
-        SourceRange ReadonlySourceRange(readonlyLoc, endLoc);
-        Diag(property->getLocation(), 
-             diag::note_auto_readonly_iboutlet_fixup_suggest) <<
-        FixItHint::CreateReplacement(ReadonlySourceRange, "readwrite");
+      bool ReadWriteProperty = false;
+      // Search into the class extensions and see if 'readonly property is
+      // redeclared 'readwrite', then no warning is to be issued.
+      for (ObjCInterfaceDecl::known_extensions_iterator
+            Ext = IDecl->known_extensions_begin(),
+            ExtEnd = IDecl->known_extensions_end(); Ext != ExtEnd; ++Ext) {
+        DeclContext::lookup_result R = Ext->lookup(property->getDeclName());
+        if (!R.empty())
+          if (ObjCPropertyDecl *ExtProp = dyn_cast<ObjCPropertyDecl>(R[0])) {
+            PIkind = ExtProp->getPropertyAttributesAsWritten();
+            if (PIkind & ObjCPropertyDecl::OBJC_PR_readwrite) {
+              ReadWriteProperty = true;
+              break;
+            }
+          }
+      }
+      
+      if (!ReadWriteProperty) {
+        Diag(property->getLocation(), diag::warn_auto_readonly_iboutlet_property)
+            << property->getName();
+        SourceLocation readonlyLoc;
+        if (LocPropertyAttribute(Context, "readonly", 
+                                 property->getLParenLoc(), readonlyLoc)) {
+          SourceLocation endLoc = 
+            readonlyLoc.getLocWithOffset(strlen("readonly")-1);
+          SourceRange ReadonlySourceRange(readonlyLoc, endLoc);
+          Diag(property->getLocation(), 
+               diag::note_auto_readonly_iboutlet_fixup_suggest) <<
+          FixItHint::CreateReplacement(ReadonlySourceRange, "readwrite");
+        }
       }
     }
     
@@ -1274,15 +1296,21 @@ Sema::DiagnosePropertyMismatch(ObjCPropertyDecl *Property,
   }
 
   if ((CAttr & ObjCPropertyDecl::OBJC_PR_nonatomic)
-      != (SAttr & ObjCPropertyDecl::OBJC_PR_nonatomic))
+      != (SAttr & ObjCPropertyDecl::OBJC_PR_nonatomic)) {
     Diag(Property->getLocation(), diag::warn_property_attribute)
       << Property->getDeclName() << "atomic" << inheritedName;
-  if (Property->getSetterName() != SuperProperty->getSetterName())
+    Diag(SuperProperty->getLocation(), diag::note_property_declare);
+  }
+  if (Property->getSetterName() != SuperProperty->getSetterName()) {
     Diag(Property->getLocation(), diag::warn_property_attribute)
       << Property->getDeclName() << "setter" << inheritedName;
-  if (Property->getGetterName() != SuperProperty->getGetterName())
+    Diag(SuperProperty->getLocation(), diag::note_property_declare);
+  }
+  if (Property->getGetterName() != SuperProperty->getGetterName()) {
     Diag(Property->getLocation(), diag::warn_property_attribute)
       << Property->getDeclName() << "getter" << inheritedName;
+    Diag(SuperProperty->getLocation(), diag::note_property_declare);
+  }
 
   QualType LHSType =
     Context.getCanonicalType(SuperProperty->getType());

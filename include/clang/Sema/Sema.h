@@ -2863,7 +2863,7 @@ public:
   // for expressions referring to a decl; these exist because odr-use marking
   // needs to be delayed for some constant variables when we build one of the
   // named expressions.
-  void MarkAnyDeclReferenced(SourceLocation Loc, Decl *D);
+  void MarkAnyDeclReferenced(SourceLocation Loc, Decl *D, bool OdrUse);
   void MarkFunctionReferenced(SourceLocation Loc, FunctionDecl *Func);
   void MarkVariableReferenced(SourceLocation Loc, VarDecl *Var);
   void MarkDeclRefReferenced(DeclRefExpr *E);
@@ -3697,7 +3697,8 @@ public:
                                MultiExprArg ArgsPtr,
                                SourceLocation Loc,
                                SmallVectorImpl<Expr*> &ConvertedArgs,
-                               bool AllowExplicit = false);
+                               bool AllowExplicit = false,
+                               bool IsListInitialization = false);
 
   ParsedType getDestructorName(SourceLocation TildeLoc,
                                IdentifierInfo &II, SourceLocation NameLoc,
@@ -6623,7 +6624,8 @@ public:
                               Expr **Args, unsigned NumArgs,
                               SmallVector<Expr *, 8> &AllArgs,
                               VariadicCallType CallType = VariadicDoesNotApply,
-                              bool AllowExplicit = false);
+                              bool AllowExplicit = false,
+                              bool IsListInitialization = false);
 
   // DefaultVariadicArgumentPromotion - Like DefaultArgumentPromotion, but
   // will create a runtime trap if the resulting type is not a POD type.
