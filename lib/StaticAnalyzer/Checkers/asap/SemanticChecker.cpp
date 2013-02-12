@@ -20,10 +20,12 @@ private:
   ASTContext &Ctx;
   AnalysisDeclContext *AC;
   raw_ostream &OS;
+
   RplElementAttrMapTy &RplElementMap;
   RplAttrMapTy &RplAttrMap;
   ASaPTypeDeclMapTy &ASaPTypeDeclMap;
   EffectSummaryMapTy &EffectSummaryMap;
+
   bool FatalError;
 
   /// Private Methods
@@ -535,15 +537,102 @@ private:
 
     R = new Rpl();
     while(RplStr.size() > 0) { /// for all RPL elements of the RPL
-      // FIXME: '::' can appear as part of an RPL element. Splitting must
-      // be done differently to account for that.
-      std::pair<StringRef,StringRef> Pair = RplStr.split(Rpl::
-                                                          RPL_SPLIT_CHARACTER);
-      const StringRef& Head = Pair.first;
-      /// head: is it a special RPL element? if not, is it declared?
-      const RplElement *RplEl = getSpecialRplElement(Head);
-      if (!RplEl)
-        RplEl = findRegionOrParamName(D, Head);
+      const RplElement *RplEl = 0;
+      std::pair<StringRef,StringRef> Pair = Rpl::splitRpl(RplStr);
+      StringRef Head = Pair.first;
+      llvm::SmallVector<StringRef, 8> Vec;
+      Head.split(Vec, "::");
+      OS << "DEBUG:: Vec.size = " << Vec.size() << ", Vec.back() = " << Vec.back() <<"\n";
+
+      if (Vec.size() > 1) {
+        // TODO Vec - Vec.back() is the qualified decl id
+        StringRef First = Vec.front();
+        StringRef Second = (Vec.size()>1) ? Vec[1] : "";
+
+        std::string sbuf;
+        llvm::raw_string_ostream StrBuf(sbuf);
+        StrBuf << First << "::" << Second;
+        StringRef FirstTwo(StrBuf.str());
+
+        IdentifierInfo& IImain = Ctx.Idents.get("main");
+        IdentifierInfo& IIfirst = Ctx.Idents.get(First);
+        IdentifierInfo& IIsecond = Ctx.Idents.get(Second);
+        IdentifierInfo& IIfirstTwo = Ctx.Idents.get(FirstTwo);
+        IdentifierInfo& IIwhole = Ctx.Idents.get(Head);
+        IdentifierInfo *IIp = &IIfirst;
+        OS << "DEBUG:: (First) IdentifierInfo.getName = " << IIfirst.getName() << "\n";
+        OS << "DEBUG:: (Second) IdentifierInfo.getName = " << IIsecond.getName() << "\n";
+        OS << "DEBUG:: (FirstTwo) String = " << FirstTwo << "\n";
+        OS << "DEBUG:: (FirstTwo) String = " << StrBuf.str() << "\n";
+        OS << "DEBUG:: (FirstTwo) IdentifierInfo.getName = " << IIfirstTwo.getName() << "\n";
+        OS << "DEBUG:: (Whole) IdentifierInfo.getName = " << IIwhole.getName() << "\n";
+
+        DeclContext *DC = D->getDeclContext();
+        DeclarationName DN(IIp);
+        DeclContextLookupResult Res = DC->lookup(DN);
+        OS << "DEBUG:: Lookup Result Size = " << Res.size() << "\n";
+
+        NamedDecl *ND = Res[0];
+        ND->print(OS, Ctx.getPrintingPolicy()); OS << "\n";
+
+        // set DeclContext
+        /*if (NamespaceDecl *NSD = dyn_cast<NamespaceDecl>(ND)) {
+          DC = NamespaceDecl::castToDeclContext(NSD);
+        } else if (TagDecl *TD = dyn_cast<TagDecl>(ND)) {
+          DC = TagDecl::castToDeclContext(TD);
+        } else {
+          assert("Unexpected kind of NamedDecl" && false);
+        }*/
+        DC = Decl::castToDeclContext(Res[0]);
+        assert(DC);
+
+        for (DeclContext::decl_iterator
+                I = DC->decls_begin(), E = DC->decls_end();
+             I != E; ++I) {
+          Decl *Dec = *I;
+          OS << "DEBUG:: decl :";
+          Dec->print(OS, Ctx.getPrintingPolicy());
+          OS << "\n";
+        }
+        IIp = & IIfirstTwo;
+        DeclarationName DN2(IIp);
+        DeclContextLookupResult Res2 = DC->lookup(DN2);
+        OS << "DEBUG:: Lookup Result Size (" << IIp->getName() << ") = " << Res2.size() << "\n";
+
+        IIp = & IIsecond;
+        DeclarationName DNsec(IIp);
+        DeclContextLookupResult ResSec = DC->lookup(DNsec);
+        OS << "DEBUG:: Lookup Result Size (" << IIp->getName() << ") = " << ResSec.size() << "\n";
+
+        IIp = & IImain;
+        DeclarationName DNmain(IIp);
+        DeclContextLookupResult ResMain = DC->lookup(DNmain);
+        OS << "DEBUG:: Lookup Result Size (" << IIp->getName() << ") = " << ResMain.size() << "\n";
+
+        NestedNameSpecifier *NNS = NestedNameSpecifier::Create(Ctx, IIp); // TODO init
+        assert(NNS);
+        OS << "DEBUG:: NNS = ";
+        NNS->print(OS, Ctx.getPrintingPolicy());
+        OS << "\n";
+        OS << "DEBUG:: NNS as Identifier.getName = " << NNS->getAsIdentifier()->getName() << "\n";
+        NestedNameSpecifier *NNSPrefix = NNS->getPrefix();
+        QualType QT = QualType(NNS->getAsType(), 0);
+        OS << "DEBUG:: NNS As QualType = ";
+        QT.print(OS, Ctx.getPrintingPolicy());
+        OS << "\n";
+
+        RplEl = findRegionOrParamName(ResSec[0], Vec.back());
+        //assert(NNSPrefix);
+        //Ctx.getDependentNameType(ETK_None, NNSPrefix, NNS->getAsIdentifier());
+        // find the decl from First and the ASTcontex perhaps?
+      } else {
+        assert(Vec.size() == 1);
+        Head = Vec.back();
+        /// head: is it a special RPL element? if not, is it declared?
+        RplEl = getSpecialRplElement(Head);
+        if (!RplEl)
+          RplEl = findRegionOrParamName(D, Head);
+      }
       if (!RplEl) {
         // Emit bug report!
         emitUndeclaredRplElement(D, A, Head);
@@ -624,7 +713,7 @@ private:
 
       if (Tmp) { /// Tmp may be NULL if the RPL was ill formed (e.g., contained
                  /// undeclared RPL elements).
-        EV.push_back(new Effect(EK, new Rpl(*Tmp), *I));
+        EV.push_back(new Effect(EK, Tmp, *I));
       }
     }
   }
