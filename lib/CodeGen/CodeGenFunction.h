@@ -1413,7 +1413,7 @@ public:
 
   /// EmitReturnBlock - Emit the unified return block, trying to avoid its
   /// emission when possible.
-  bool EmitReturnBlock();
+  void EmitReturnBlock();
 
   /// FinishFunction - Complete IR generation of the current function. It is
   /// legal to call this function even if there is no current insertion point.
@@ -1676,7 +1676,7 @@ public:
     }
     return false;
   }
-  /// EmitAggregateCopy - Emit an aggrate assignment.
+  /// EmitAggregateCopy - Emit an aggregate assignment.
   ///
   /// The difference to EmitAggregateCopy is that tail padding is not copied.
   /// This is required for correctness when assigning non-POD structures in C++.
@@ -1687,7 +1687,7 @@ public:
                       true);
   }
 
-  /// EmitAggregateCopy - Emit an aggrate copy.
+  /// EmitAggregateCopy - Emit an aggregate copy.
   ///
   /// \param isVolatile - True iff either the source or the destination is
   /// volatile.

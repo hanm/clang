@@ -952,6 +952,10 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
     Result = Context.OCLImage3dTy;
     break;
 
+  case DeclSpec::TST_sampler_t:
+    Result = Context.OCLSamplerTy;
+    break;
+
   case DeclSpec::TST_event_t:
     Result = Context.OCLEventTy;
     break;
@@ -2638,6 +2642,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
                 S.Diag(Param->getLocation(),
                   diag::err_opencl_half_argument) << ArgTy;
                 D.setInvalidType();
+                Param->setInvalidDecl();
               }
             } else {
               S.Diag(Param->getLocation(),
