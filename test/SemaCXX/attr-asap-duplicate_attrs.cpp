@@ -6,7 +6,7 @@ class
 __attribute__ ((param("P1"), param("P2"))) // expected-warning {{duplicate attribute not allowed:}}
 __attribute__((region("R"))) 
 Coo {
-  int money __attribute__((arg("P1:R"))) __attribute__((arg("P2:R"))); // "syntactically" correct, semantically wrong
+  int money __attribute__((arg("P1:R"))) __attribute__((arg("P2:R"))); // expected-warning {{duplicate attribute not allowed:}}
 
 public:
   Coo (): money(70) {}
@@ -24,7 +24,7 @@ public:
 __attribute__((region("Roo")))  
 __attribute__((region("Raa")))
 int main (void) {
-  Coo c __attribute__((arg("Roo"))) __attribute__((arg("Raa"))); // "syntactically" correct, semantically wrong
+  Coo c __attribute__((arg("Roo"))) __attribute__((arg("Raa"))); // expected-warning {{duplicate attribute not allowed:}}
   c.set_money(17);
   return 0; 
 }
@@ -35,7 +35,7 @@ class
 [[asap::param("P1")]] [[asap::param("P2")]] // expected-warning {{duplicate attribute not allowed:}}
 [[asap::region("R")]] 
 Coo {
-  int money [[asap::arg("P1:R")]] [[asap::arg("P2:R")]]; // "syntactically" correct, semantically wrong
+  int money [[asap::arg("P1:R")]] [[asap::arg("P2:R")]]; // expected-warning {{duplicate attribute not allowed:}}
 
 public:
   Coo (): money(70) {}
@@ -53,7 +53,7 @@ public:
 [[asap::region("Roo")]] 
 [[asap::region("Raa")]]
 int main (void) {
-  Coo c [[asap::arg("Roo")]] [[asap::arg("Raa")]]; // "syntactically" correct, semantically wrong
+  Coo c [[asap::arg("Roo")]] [[asap::arg("Raa")]]; // expected-warning {{duplicate attribute not allowed:}}
   c.set_money(17);
   return 0; 
 }

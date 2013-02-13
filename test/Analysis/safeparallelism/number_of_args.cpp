@@ -12,18 +12,20 @@ class
 
   int data [[asap::arg("P")]];
 
-  C0 *left [[asap::arg("Links"), asap::arg("P:L")]];
+  C0 *left [[asap::arg("Links, P:L")]];
 
-  C0 *right[[asap::arg("Links"), asap::arg("P:R")]] ;
+  C0 *right[[asap::arg("Links, P:R")]] ;
 
-  C0 **last_visited_link[[asap::arg("Links"),
-                          asap::arg("P"),
-                          asap::arg("P:*")]];
+  C0 **last_visited_link[[asap::arg("Links, P, P:*")]];
 
-  int *last_visited_data[[asap::arg("P"), asap::arg("P:*")]];
+  int *last_visited_data[[asap::arg("P, P:*")]];
 
   void memberFoo(C0 *p [[asap::arg("P")]]) {
     int *local_p1 [[asap::arg("P")]];
+  }
+
+  void memberFoo2(C0 *p [[asap::arg("Local, P")]]) { 
+    int *local_p1 [[asap::arg("Local, P")]]; 
   }
 
 };
@@ -36,29 +38,18 @@ class
   [[asap::region("Links")]]
     C1 {
 
-  int data [[asap::arg("P:R")]]
-           [[asap::arg("P")]]    // expected-warning{{superfluous region argument}} 
-           [[asap::arg("P:L")]];   // expected-warning{{superfluous region argument}}
+  int data [[asap::arg("P:R, P, P:L")]];   // expected-warning{{superfluous region argument}}
 
-  C1 *left[[asap::arg("P:L")]]   
-      [[asap::arg("Links")]]
-      [[asap::arg("Links")]]; // expected-warning{{superfluous region argument}} 
+  C1 *left[[asap::arg("P:L, Links, Links")]]; // expected-warning{{superfluous region argument}} 
 
-  C1 *right  [[asap::arg("Links")]]
-             [[asap::arg("P:R")]]
-             [[asap::arg("Links")]];   // expected-warning{{superfluous region argument}}
+  C1 *right  [[asap::arg("Links, P:R, Links")]];   // expected-warning{{superfluous region argument}}
 
-  C1 **last_visited_link  [[asap::arg("Links")]] 
-                          [[asap::arg("P")]] 
-                          [[asap::arg("P:*")]]   
-                          [[asap::arg("P")]]; // expected-warning{{superfluous region argument}} 
+  C1 **last_visited_link  [[asap::arg("Links, P, P:*, P")]]; // expected-warning{{superfluous region argument}} 
 
-  int *last_visited_data [[asap::arg("P")]]
-                         [[asap::arg("P")]]
-                         [[asap::arg("P:*")]]; // expected-warning{{superfluous region argument}};
+  int *last_visited_data [[asap::arg("P, P, P:*")]]; // expected-warning{{superfluous region argument}};
 
-  void memberFoo(C0 *p [[asap::arg("P"), asap::arg("Local")]]) { // expected-warning{{superfluous region argument}};
-    int *local_p1 [[asap::arg("P"), asap::arg("Local")]]; // expected-warning{{superfluous region argument}};
+  void memberFoo(C0 *p [[asap::arg("Local, P, Local")]]) { // expected-warning{{superfluous region argument}};
+    int *local_p1 [[asap::arg("Local, P, Local")]]; // expected-warning{{superfluous region argument}};
   }
 
 };
@@ -96,18 +87,13 @@ class
 
   int __attribute__((arg("P"))) data;
 
-  C0 __attribute__((arg("P:L"))) 
-      * __attribute__((arg("Links"))) left;
+  C0 *left __attribute__((arg("P:L, Links")));
 
-  C0 __attribute__((arg("P:R"))) 
-      * __attribute__((arg("Links"))) right;
+  C0 *right __attribute__((arg("P:R, Links")));
 
-  C0 __attribute__((arg("P:*"))) 
-      * __attribute__((arg("Links"))) 
-      * __attribute__((arg("P"))) last_visited_link;
+  C0 **last_visited_link __attribute__((arg("P:*, Links, P")));
 
-  int __attribute__((arg("P:*")))
-      * __attribute__((arg("P"))) last_visited_data;
+  int *last_visited_data __attribute__((arg("P:*, P")));
 
 };
 
@@ -119,26 +105,15 @@ class
   __attribute__((region("Links")))
     C1 {
 
-  int __attribute__((arg("P")))    // expected-warning{{superfluous region argument}}
-    data __attribute__((arg("P:R"))) 
-    __attribute__((arg("P:L")));   // expected-warning{{superfluous region argument}}
+  int data __attribute__((arg("P, P:R, P:L")));   // expected-warning{{superfluous region argument}}
 
-  C1 __attribute__((arg("P:L")))   // expected-warning{{superfluous region argument}}
-      * __attribute__((arg("Links"))) left 
-      __attribute__((arg("Links"))); 
+  C1 *left __attribute__((arg("P:L, Links, Links"))); // expected-warning{{superfluous region argument}}
 
-  C1 __attribute__((arg("P:R")))   // expected-warning{{superfluous region argument}}
-      * __attribute__((arg("Links"))) right 
-      __attribute__((arg("Links")));
+  C1 *right __attribute__((arg("P:R, Links, Links"))); // expected-warning{{superfluous region argument}}
 
-  C1 __attribute__((arg("P:*")))   // expected-warning{{superfluous region argument}}
-      * __attribute__((arg("Links"))) 
-      * __attribute__((arg("P"))) last_visited_link
-      __attribute__((arg("P")));
+  C1 **last_visited_link __attribute__((arg("P:*, Links, P, P")));  // expected-warning{{superfluous region argument}}
 
-  int __attribute__((arg("P:*")))  // expected-warning{{superfluous region argument}}
-      * __attribute__((arg("P"))) last_visited_data
-      __attribute__((arg("P")));
+  int *last_visited_data __attribute__((arg("P:*, P, P"))); // expected-warning{{superfluous region argument}}
 
 };
 

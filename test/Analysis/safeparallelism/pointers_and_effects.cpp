@@ -44,29 +44,23 @@ Rectangle {
   Point p2 [[asap::arg("Pr:R2")]];
 
   Point 
-    * pp [[asap::arg("Pr:Links"), asap::arg("Pool:*")]],
-    **ppp [[asap::arg("Links"), asap::arg("Pr:Links"), asap::arg("Pool:*")]];
+    * pp [[asap::arg("Pr:Links, Pool:*")]],
+    **ppp [[asap::arg("Links, Pr:Links, Pool:*")]];
 
   Point
-    * ppstar [[asap::arg("Pr:Links"), asap::arg("Pr:*")]],
-    * ppstar1 [[asap::arg("Pr:Links"), asap::arg("Pr:*:R1")]],
-    **pppstar [[asap::arg("Links"), asap::arg("Pr:*:Links"), asap::arg("Pr:*")]];
+    * ppstar [[asap::arg("Pr:Links, Pr:*")]],
+    * ppstar1 [[asap::arg("Pr:Links, Pr:*:R1")]],
+    **pppstar [[asap::arg("Links, Pr:*:Links, Pr:*")]];
 
   Rectangle
-    * loop [[asap::arg("Pr:Links"), asap::arg("*")]],
-    * next [[asap::arg("Pr:Links"), asap::arg("Pr:Next")]],
-    ** pnext [[asap::arg("Links"), asap::arg("Pr:Links"), asap::arg("Pr:Next")]];
+    * loop [[asap::arg("Pr:Links, *")]],
+    * next [[asap::arg("Pr:Links, Pr:Next")]],
+    ** pnext [[asap::arg("Links, Pr:Links, Pr:Next")]];
 
-  Rectangle ** pnextstar [[asap::arg("Links"), 
-                         asap::arg("Pr:Links"), 
-                         asap::arg("Pr:*:Next")]];
+  Rectangle ** pnextstar [[asap::arg("Links, Pr:Links, Pr:*:Next")]];
 
   void do_pointer_stuff
-    [[asap::writes("Pr:R1:*")]]
-    [[asap::writes("Pr:R2:*")]]
-    //[[asap::writes("P:R1:Y")]] // Y not declared here TODO: support it
-    [[asap::writes("Pr:*:Links")]]
-    [[asap::writes("Links")]]
+    [[asap::writes("Pr:R1:X, Pr:R1:Y, Pr:R2:*, Pr:*:Links, Links")]]
     [[asap::reads("Pr:Next")]]
     (int _x, int _y, bool b)
   {
@@ -146,29 +140,26 @@ Rectangle {
   Point p2 __attribute__((arg("Pr:R2")));
 
   Point
-    * pp __attribute__((arg("Pr:Links"), arg("Pool:*"))),
-    **ppp __attribute__((arg("Links"), arg("Pr:Links"), arg("Pool:*")));
+    * pp __attribute__((arg("Pr:Links, Pool:*"))),
+    **ppp __attribute__((arg("Links, Pr:Links, Pool:*")));
 
   Point
-    * ppstar __attribute__((arg("Pr:Links"), arg("Pr:*"))),
-    * ppstar1 __attribute__((arg("Pr:Links"), arg("Pr:*:R1"))),
-    **pppstar __attribute__((arg("Links"), arg("Pr:*:Links"), arg("Pr:*")));
+    * ppstar __attribute__((arg("Pr:Links, Pr:*"))),
+    * ppstar1 __attribute__((arg("Pr:Links, Pr:*:R1"))),
+    **pppstar __attribute__((arg("Links, Pr:*:Links, Pr:*")));
 
   Rectangle
-    * loop __attribute__((arg("Pr:Links"), arg("*"))),
-    * next __attribute__((arg("Pr:Links"), arg("Pr:Next"))),
-    ** pnext __attribute((arg("Links"), arg("Pr:Links"), arg("Pr:Next")));
+    * loop __attribute__((arg("Pr:Links, *"))),
+    * next __attribute__((arg("Pr:Links, Pr:Next"))),
+    ** pnext __attribute((arg("Links, Pr:Links, Pr:Next")));
 
-  Rectangle ** pnextstar __attribute((arg("Links"),
-                                      arg("Pr:Links"),
-                                      arg("Pr:*:Next")));
+  Rectangle ** pnextstar __attribute((arg("Links, Pr:Links, Pr:*:Next")));
 
   void do_pointer_stuff(int _x, int _y) 
-    __attribute__((writes("Pr:R1:*")))
-    __attribute__((writes("Pr:R2:*")))
-    //__attribute__((writes("P:R1:Y"))) // Y not declared here TODO: support it
+    __attribute__((writes("Pr:R1:*, Pr:R2:*")))
     __attribute__((writes("Pr:*:Links")))
     __attribute__((writes("Links")))
+    //__attribute__((writes("P:R1:Y"))) // Y not declared here TODO: support it
     __attribute__((reads("Pr:Next")))
   {
     p1.x = _x;          // writes Pr:R1:X
@@ -176,14 +167,14 @@ Rectangle {
     p2.x = _x + 5;      // writes Pr:R2:X
     p2.y = _y + 5;      // writes Pr:R2:Y
     p1.x = next->p1.x;
-    pp = &*&p1;         // writes Pr:Links   expected-warning{{[invalid assignment:}}
+    pp = &*&p1;         // writes Pr:Links   expected-warning{{invalid assignment:}}
     ppstar = &*&p1;     // writes Pr:Links
     ppp = &(*&pp);      // writes Links
     *ppp = pp = &p2;         // reads Links, writes Pr:Links    expected-warning{{invalid assignment:}}
     *ppp = ppstar = &p2;         // reads Links, writes Pr:Links   expected-warning{{invalid assignment:}}
     ppstar = &p2;         // reads Links, writes Pr:Links
     ppstar1 = &p1;
-    ppstar1 = &p2;      // expected-warning{{[invalid assignment:}}
+    ppstar1 = &p2;      // expected-warning{{invalid assignment:}}
     pppstar = &ppstar1;
 
     *pppstar = &p2;     // reads Links, writes Pr:Links   expected-warning{{cannot modify aliasing through pointer to partly specified region}}
@@ -191,7 +182,7 @@ Rectangle {
     *ppp = *&pp;        // reads Links, writes Pr:Links + reads Pr:Links
     *ppp = next->pp;    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
     *ppp = *&(next->pp);    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
-    ppp = &next->pp;        // writes Links + reads Pr:Links    expected-warning{{[invalid assignment:}}
+    ppp = &next->pp;        // writes Links + reads Pr:Links    expected-warning{{invalid assignment:}}
     pppstar = &next->ppstar;        // writes Links + reads Pr:Links
     *ppp = *(*&next->ppp);  // reads Links, writes Pr:Links + reads Links, Pr:Links, Pr:Next:Links
     *ppp = &*pp;            // reads Links, writes Pr:Links + reads Pr:Links

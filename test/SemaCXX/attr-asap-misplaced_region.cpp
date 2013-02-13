@@ -16,7 +16,6 @@ public:
   Coo () __attribute__((no_effect)) 
          __attribute__((region("Money"))) 
          __attribute__((arg("P:Money"))) 
-         __attribute__((arg("P:Money"))) 
          __attribute__ ((param("P"))) 
         : money(0) {}
 
@@ -63,15 +62,14 @@ Coo {
             [[asap::region("Honey")]] ; // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
 
 public:
-[[asap::no_effect]] 
-[[asap::region("Money")]]   
-[[asap::arg("P:Money")]] 
-[[asap::arg("P:Money")]] 
-[[asap::param("P")]] 
-Coo()
+  [[asap::no_effect]] 
+  [[asap::region("Money")]]   
+  [[asap::arg("P:Money")]] 
+  [[asap::param("P")]] 
+  Coo()
         : money(0) {}
 
-[[asap::no_effect]]
+  [[asap::no_effect]]
   Coo (int cash [[asap::arg("P:Money")]] 
                 [[asap::region("Money")]] )  // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
        : money(cash) {}

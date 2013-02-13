@@ -2,11 +2,9 @@
 // expected-no-diagnostics
 
 // Declare region.
-namespace ASaP /*[[asap::arg("Roo")]]*/ {
-//namespace [[asap::arg("Roo")]] ASaP {
+namespace ASaP {
 
-
-class 
+class
 [[asap::region("R")]]
 Globals {
 public:
@@ -15,63 +13,69 @@ public:
   int FieldVar [[asap::arg("R")]];
 };
 } // end namespace ASaP
- 
-// function foo writes to region R.
-void foo [[asap::writes("ASaP::Globals::R")]] () {
-    ASaP::Globals::GlobalVar = 1;
-}
- 
-// function bar writes to region R.
-void bar [[asap::writes("ASaP::Globals::R")]] () {
-    ASaP::Globals::GlobalVar = 2;
-}
- 
-// function bar writes to region R.
-void callsBar [[asap::writes("ASaP::Globals::R")]] () {
-    bar();
-}
- 
-// funciton zoo reads region R.
-void zoo [[asap::reads("ASaP::Globals::R")]] () {
-    int x = ASaP::Globals::GlobalVar;
-}
 
-class Future {
-private:
-  void (*fun)();
+
+class FooFunctor {
 public:
-  Future(void (*fun)() ) : fun(fun) {}
-  ~Future() { join(); }
-  void fork() {};
-  void join() {};
-}; //end class Future
+  // function foo writes to region R.
+  void operator () [[asap::writes("ASaP::Globals::R")]] () const {
+    ASaP::Globals::GlobalVar = 1;
+  }
+}; // end class FooFunctor
 
+class BarFunctor {
+public:
+  // function bar writes to region R.
+  void operator () [[asap::writes("ASaP::Globals::R")]] () const {
+    ASaP::Globals::GlobalVar = 2;
+  }
+}; // end class BarFunctor
+
+class CallsBarFunctor {
+public:
+  // function bar writes to region R.
+  void operator () [[asap::writes("ASaP::Globals::R")]] () const {
+    BarFunctor bar [[asap::arg("Local")]];
+    bar();
+  }
+}; // end class CallsBarFunctor
+
+class ZooFunctor {
+public:
+  // funciton zoo reads region R.
+  void operator () [[asap::reads("ASaP::Globals::R")]] () const {
+    int x [[asap::arg("Local")]] = ASaP::Globals::GlobalVar;
+  }
+}; // end class ZooFunctor
+
+namespace tbb {
+  template<typename Func0, typename Func1>
+  void parallel_invoke(const Func0& f0, const Func1& f1) {
+    f0();
+    f1();
+  }
+} // end namespace tbb
 
 int main() {
     ASaP::Globals::GlobalVar = 0;
     // No warning if they are invoked sequentially
+    FooFunctor foo;
+    BarFunctor bar [[asap::arg("Local")]];
+    CallsBarFunctor callsBar [[asap::arg("Local")]];
+    ZooFunctor zoo1 [[asap::arg("Local")]], zoo2 [[asap::arg("Local")]];
+    callsBar();
     foo();
     bar();
-    zoo();
+    zoo1();
  
     // warning if they are forked as different tasks
     // (we don't support tbb fork syntax yet.)
-    Future F(&foo);
-    F.fork();
-    Future B(bar);
-    B.fork();
-    F.join();
-    B.join();
+    tbb::parallel_invoke(foo, bar);
     // no warning here as zoo has ready only effect
-    Future Z1(zoo);
-    Z1.fork();
-    Future Z2(zoo);
-    Z2.fork();
-    Z1.join();
+    tbb::parallel_invoke(zoo1, zoo2);
     // warning: the effects of Z2 and B2 are interferring 
     // (if we had "joined" Z2 above, it would be safe)
-    Future B2(callsBar);
-    B2.fork();
+    tbb::parallel_invoke(zoo1, callsBar);
 
     return 0;
 } //  end main

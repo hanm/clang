@@ -17,8 +17,10 @@ class
 [[asap::param("P1")]]
 C1 { 
   int money [[asap::arg("P1:R3")]];
-  int *money_p [[asap::arg("R2"), asap::arg("P1:R3")]];  
-  C1 *next [[asap::arg("P1"), asap::arg("P1:R2")]];
+  //int *money_p [[asap::arg("R2"), asap::arg("P1:R3")]];  
+  //C1 *next [[asap::arg("P1"), asap::arg("P1:R2")]];
+  int *money_p [[asap::arg("R2, P1:R3")]];  
+  C1 *next [[asap::arg("P1, P1:R2")]];
 
 public:
   [[asap::param("*")]] // expected-warning {{invalid region parameter name}}
@@ -60,16 +62,11 @@ public:
 
   void set_next_money_to_this_money
     [[asap::writes("P1:R2:R3")]]
-    [[asap::reads("P1")]]
-    [[asap::reads("P1:R3")]] ()
+    [[asap::reads("P1, P1:R3")]] ()
   { next->money = money; }
 
   void do_stuff
-    [[asap::reads("P1")]]
-    [[asap::reads("P1:R2")]]
-    [[asap::reads("P1:R2:R3")]]
-    [[asap::reads("P1:R2:R2:R3")]] 
-    [[asap::reads("P1:R3")]]         // expected-warning{{effect summary is not minimal}}
+    [[asap::reads("P1, P1:R2, P1:R2:R3, P1:R2:R2:R3, P1:R3")]]  // expected-warning{{effect summary is not minimal}}
     [[asap::atomic_reads("P1:R3")]]  // expected-warning{{effect summary is not minimal}}
     [[asap::atomic_writes("P1:R3")]] // expected-warning{{effect summary is not minimal}}
     [[asap::writes("P1:R3")]] 
@@ -94,7 +91,8 @@ public:
     money += cash; // expected-warning {{effect not covered by effect summary}}
   }
 
-  char* name [[asap::arg("P1"), asap::arg("P1")]];
+  //char* name [[asap::arg("P1"), asap::arg("P1")]];
+  char* name [[asap::arg("P1, P1")]];
 };
 #endif
 
@@ -115,7 +113,7 @@ __attribute__((param("P1")))
 C1 { 
   // TODO: check that money is not annotated with an arg annotation
   int money __attribute__((arg("P1:R3"))); 
-  C1 __attribute__((arg("P1:R2"))) * __attribute__((arg("P1"))) next;
+  C1 *next __attribute__((arg("P1, P1:R2")));
 
 public:
   __attribute__((param("*"))) // expected-warning {{invalid region parameter name}}
@@ -153,16 +151,11 @@ public:
 
   void set_next_money_to_this_money () 
     __attribute__((writes("P1:R2:R3")))
-    __attribute__((reads("P1")))
-    __attribute__((reads("P1:R3")))
+    __attribute__((reads("P1, P1:R3")))
   { next->money = money; }
 
   void do_stuff(int cash) 
-    __attribute__((reads("P1")))
-    __attribute__((reads("P1:R2")))
-    __attribute__((reads("P1:R2:R3")))
-    __attribute__((reads("P1:R2:R2:R3"))) 
-    __attribute__((reads("P1:R3")))         // expected-warning{{effect summary is not minimal}}
+    __attribute__((reads("P1, P1:R2, P1:R2:R3, P1:R2:R2:R3, P1:R3")))  // expected-warning{{effect summary is not minimal}}
     __attribute__((atomic_reads("P1:R3")))  // expected-warning{{effect summary is not minimal}}
     __attribute__((atomic_writes("P1:R3"))) // expected-warning{{effect summary is not minimal}}
     __attribute__((writes("P1:R3"))) 
@@ -184,7 +177,7 @@ public:
     money += cash; // expected-warning {{effect not covered by effect summary}}
   }
 
-  char* name __attribute__((arg("P1"), arg("P1")));
+  char* name __attribute__((arg("P1, P1")));
 };
 #endif
 

@@ -45,12 +45,13 @@ namespace ASPTutorial {
   class [[asap::param("R")]] Data {
   public:
     int x [[asap::arg("R")]];
+    int y [[asap::arg("R")]];
   };
 
   class [[asap::region("First"), asap::region("Second"), asap::region("Links")]]
     DataPairPtr {
-    Data *first [[asap::arg("Links"), asap::arg("First")]];
-    Data *second [[asap::arg("Links"), asap::arg("Second")]];
+    Data *first [[asap::arg("Links, First")]];
+    Data *second [[asap::arg("Links, Second")]];
 
   public:
     // Do we need to report effects here?
@@ -70,7 +71,7 @@ namespace ASPTutorial {
     }
 
     void updateBoth [[asap::reads("Links"), 
-                      asap::writes("First"), asap::writes("Second")]]
+                      asap::writes("First, Second")]]
       (int firstX, int secondX) {
       // FIXME: cobegin
       first->x = firstX;

@@ -7,7 +7,7 @@ class
 C {
 private:
   /// Fields
-  float *p [[asap::arg("Links"), asap::arg("Pc:Data")]];
+  float *p [[asap::arg("Links, Pc:Data")]];
   float fdata [[asap::arg("Pc:FData")]];
 
 public:
@@ -51,7 +51,7 @@ __attribute__((param(("Pc")), region("Links"), region("Data"), region("FData") )
 C {
 private:
   /// Fields
-  float *p __attribute__((arg("Links"), arg("Pc:Data")));
+  float *p __attribute__((arg("Links, Pc:Data")));
   float fdata __attribute__((arg("Pc:FData")));
 
 public:
