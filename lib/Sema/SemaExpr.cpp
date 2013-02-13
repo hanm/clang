@@ -482,6 +482,14 @@ ExprResult Sema::DefaultLvalueConversion(Expr *E) {
   if (T->isVoidType())
     return Owned(E);
 
+  // OpenCL usually rejects direct accesses to values of 'half' type.
+  if (getLangOpts().OpenCL && !getOpenCLOptions().cl_khr_fp16 &&
+      T->isHalfType()) {
+    Diag(E->getExprLoc(), diag::err_opencl_half_load_store)
+      << 0 << T;
+    return ExprError();
+  }
+
   CheckForNullPointerDereference(*this, E);
 
   // C++ [conv.lval]p1:
@@ -1165,6 +1173,12 @@ Sema::CreateGenericSelectionExpr(SourceLocation KeyLoc,
                                  TypeSourceInfo **Types,
                                  Expr **Exprs,
                                  unsigned NumAssocs) {
+  if (ControllingExpr->getType()->isPlaceholderType()) {
+    ExprResult result = CheckPlaceholderExpr(ControllingExpr);
+    if (result.isInvalid()) return ExprError();
+    ControllingExpr = result.take();
+  }
+
   bool TypeErrorFound = false,
        IsResultDependent = ControllingExpr->isTypeDependent(),
        ContainsUnexpandedParameterPack
@@ -2025,7 +2039,7 @@ Sema::LookupInObjCMethod(LookupResult &Lookup, Scope *S,
       if (SelfExpr.isInvalid())
         return ExprError();
 
-      MarkAnyDeclReferenced(Loc, IV);
+      MarkAnyDeclReferenced(Loc, IV, true);
       
       ObjCMethodFamily MF = CurMethod->getMethodFamily();
       if (MF != OMF_init && MF != OMF_dealloc && MF != OMF_finalize)
@@ -3487,13 +3501,6 @@ Sema::CreateBuiltinArraySubscriptExpr(Expr *Base, SourceLocation LLoc,
                           diag::err_subscript_incomplete_type, BaseExpr))
     return ExprError();
 
-  if (ResultType->isHalfType() && getLangOpts().OpenCL &&
-      !getOpenCLOptions().cl_khr_fp16) {
-    Diag(BaseExpr->getLocStart(), diag::err_opencl_half_subscript) << ResultType
-      << BaseExpr->getType() << BaseExpr->getSourceRange();
-    return ExprError();
-  }
-
   assert(VK == VK_RValue || LangOpts.CPlusPlus ||
          !ResultType.isCForbiddenLValueType());
 
@@ -3720,7 +3727,8 @@ bool Sema::GatherArgumentsForCall(SourceLocation CallLoc,
                                   Expr **Args, unsigned NumArgs,
                                   SmallVector<Expr *, 8> &AllArgs,
                                   VariadicCallType CallType,
-                                  bool AllowExplicit) {
+                                  bool AllowExplicit,
+                                  bool IsListInitialization) {
   unsigned NumArgsInProto = Proto->getNumArgs();
   unsigned NumArgsToCheck = NumArgs;
   bool Invalid = false;
@@ -3760,7 +3768,7 @@ bool Sema::GatherArgumentsForCall(SourceLocation CallLoc,
       ExprResult ArgE = PerformCopyInitialization(Entity,
                                                   SourceLocation(),
                                                   Owned(Arg),
-                                                  /*TopLevelOfInitList=*/false,
+                                                  IsListInitialization,
                                                   AllowExplicit);
       if (ArgE.isInvalid())
         return true;
@@ -4626,10 +4634,15 @@ ExprResult Sema::BuildVectorLiteral(SourceLocation LParenLoc,
   Expr **exprs;
   unsigned numExprs;
   Expr *subExpr;
+  SourceLocation LiteralLParenLoc, LiteralRParenLoc;
   if (ParenListExpr *PE = dyn_cast<ParenListExpr>(E)) {
+    LiteralLParenLoc = PE->getLParenLoc();
+    LiteralRParenLoc = PE->getRParenLoc();
     exprs = PE->getExprs();
     numExprs = PE->getNumExprs();
-  } else {
+  } else { // isa<ParenExpr> by assertion at function entrance
+    LiteralLParenLoc = cast<ParenExpr>(E)->getLParen();
+    LiteralRParenLoc = cast<ParenExpr>(E)->getRParen();
     subExpr = cast<ParenExpr>(E)->getSubExpr();
     exprs = &subExpr;
     numExprs = 1;
@@ -4686,8 +4699,8 @@ ExprResult Sema::BuildVectorLiteral(SourceLocation LParenLoc,
   }
   // FIXME: This means that pretty-printing the final AST will produce curly
   // braces instead of the original commas.
-  InitListExpr *initE = new (Context) InitListExpr(Context, LParenLoc,
-                                                   initExprs, RParenLoc);
+  InitListExpr *initE = new (Context) InitListExpr(Context, LiteralLParenLoc,
+                                                   initExprs, LiteralRParenLoc);
   initE->setType(Ty);
   return BuildCompoundLiteralExpr(LParenLoc, TInfo, RParenLoc, initE);
 }
@@ -5656,7 +5669,6 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
   // them.
   LHSType = Context.getCanonicalType(LHSType).getUnqualifiedType();
   RHSType = Context.getCanonicalType(RHSType).getUnqualifiedType();
-
 
   // Common case: no conversion required.
   if (LHSType == RHSType) {
@@ -6964,11 +6976,12 @@ static void diagnoseObjCLiteralComparison(Sema &S, SourceLocation Loc,
       hasIsEqualMethod(S, LHS.get(), RHS.get())) {
     SourceLocation Start = LHS.get()->getLocStart();
     SourceLocation End = S.PP.getLocForEndOfToken(RHS.get()->getLocEnd());
-    SourceRange OpRange(Loc, S.PP.getLocForEndOfToken(Loc));
+    CharSourceRange OpRange =
+      CharSourceRange::getCharRange(Loc, S.PP.getLocForEndOfToken(Loc));
 
     S.Diag(Loc, diag::note_objc_literal_comparison_isequal)
       << FixItHint::CreateInsertion(Start, Opc == BO_EQ ? "[" : "![")
-      << FixItHint::CreateReplacement(OpRange, "isEqual:")
+      << FixItHint::CreateReplacement(OpRange, " isEqual:")
       << FixItHint::CreateInsertion(End, "]");
   }
 }
@@ -8032,7 +8045,9 @@ static QualType CheckAddressOfOperand(Sema &S, ExprResult &OrigOp,
   if (const BuiltinType *PTy = OrigOp.get()->getType()->getAsPlaceholderType()){
     if (PTy->getKind() == BuiltinType::Overload) {
       if (!isa<OverloadExpr>(OrigOp.get()->IgnoreParens())) {
-        S.Diag(OpLoc, diag::err_typecheck_invalid_lvalue_addrof)
+        assert(cast<UnaryOperator>(OrigOp.get()->IgnoreParens())->getOpcode()
+                 == UO_AddrOf);
+        S.Diag(OpLoc, diag::err_typecheck_invalid_lvalue_addrof_addrof_function)
           << OrigOp.get()->getSourceRange();
         return QualType();
       }
@@ -8076,10 +8091,10 @@ static QualType CheckAddressOfOperand(Sema &S, ExprResult &OrigOp,
   Expr::LValueClassification lval = op->ClassifyLValue(S.Context);
   unsigned AddressOfError = AO_No_Error;
 
-  if (lval == Expr::LV_ClassTemporary) { 
+  if (lval == Expr::LV_ClassTemporary || lval == Expr::LV_ArrayTemporary) { 
     bool sfinae = S.isSFINAEContext();
-    S.Diag(OpLoc, sfinae ? diag::err_typecheck_addrof_class_temporary
-                         : diag::ext_typecheck_addrof_class_temporary)
+    S.Diag(OpLoc, sfinae ? diag::err_typecheck_addrof_temporary
+                         : diag::ext_typecheck_addrof_temporary)
       << op->getType() << op->getSourceRange();
     if (sfinae)
       return QualType();
@@ -8127,9 +8142,8 @@ static QualType CheckAddressOfOperand(Sema &S, ExprResult &OrigOp,
       if (isa<PseudoObjectExpr>(op)) {
         AddressOfError = AO_Property_Expansion;
       } else {
-        // FIXME: emit more specific diag...
         S.Diag(OpLoc, diag::err_typecheck_invalid_lvalue_addrof)
-          << op->getSourceRange();
+          << op->getType() << op->getSourceRange();
         return QualType();
       }
     }
@@ -8230,13 +8244,6 @@ static QualType CheckIndirectionOperand(Sema &S, Expr *Op, ExprValueKind &VK,
 
   if (Result.isNull()) {
     S.Diag(OpLoc, diag::err_typecheck_indirection_requires_pointer)
-      << OpTy << Op->getSourceRange();
-    return QualType();
-  }
-
-  if (Result->isHalfType() && S.getLangOpts().OpenCL &&
-      !S.getOpenCLOptions().cl_khr_fp16) {
-    S.Diag(OpLoc, diag::err_opencl_half_dereferencing)
       << OpTy << Op->getSourceRange();
     return QualType();
   }
@@ -11151,13 +11158,13 @@ void Sema::MarkVariableReferenced(SourceLocation Loc, VarDecl *Var) {
 }
 
 static void MarkExprReferenced(Sema &SemaRef, SourceLocation Loc,
-                               Decl *D, Expr *E) {
+                               Decl *D, Expr *E, bool OdrUse) {
   if (VarDecl *Var = dyn_cast<VarDecl>(D)) {
     DoMarkVarDeclReferenced(SemaRef, Loc, Var, E);
     return;
   }
 
-  SemaRef.MarkAnyDeclReferenced(Loc, D);
+  SemaRef.MarkAnyDeclReferenced(Loc, D, OdrUse);
 
   // If this is a call to a method via a cast, also mark the method in the
   // derived class used in case codegen can devirtualize the call.
@@ -11174,12 +11181,19 @@ static void MarkExprReferenced(Sema &SemaRef, SourceLocation Loc,
   CXXMethodDecl *DM = MD->getCorrespondingMethodInClass(MostDerivedClassDecl);
   if (!DM)
     return;
-  SemaRef.MarkAnyDeclReferenced(Loc, DM);
+  SemaRef.MarkAnyDeclReferenced(Loc, DM, OdrUse);
 } 
 
 /// \brief Perform reference-marking and odr-use handling for a DeclRefExpr.
 void Sema::MarkDeclRefReferenced(DeclRefExpr *E) {
-  MarkExprReferenced(*this, E->getLocation(), E->getDecl(), E);
+  // TODO: update this with DR# once a defect report is filed.
+  // C++11 defect. The address of a pure member should not be an ODR use, even
+  // if it's a qualified reference.
+  bool OdrUse = true;
+  if (CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(E->getDecl()))
+    if (Method->isVirtual())
+      OdrUse = false;
+  MarkExprReferenced(*this, E->getLocation(), E->getDecl(), E, OdrUse);
 }
 
 /// \brief Perform reference-marking and odr-use handling for a MemberExpr.
@@ -11190,25 +11204,33 @@ void Sema::MarkMemberReferenced(MemberExpr *E) {
   //   overload resolution when referred to from a potentially-evaluated
   //   expression, is odr-used, unless it is a pure virtual function and its
   //   name is not explicitly qualified.
+  bool OdrUse = true;
   if (!E->hasQualifier()) {
     if (CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(E->getMemberDecl()))
       if (Method->isPure())
-        return;
+        OdrUse = false;
   }
-  MarkExprReferenced(*this, E->getMemberLoc(), E->getMemberDecl(), E);
+  SourceLocation Loc = E->getMemberLoc().isValid() ?
+                            E->getMemberLoc() : E->getLocStart();
+  MarkExprReferenced(*this, Loc, E->getMemberDecl(), E, OdrUse);
 }
 
 /// \brief Perform marking for a reference to an arbitrary declaration.  It
 /// marks the declaration referenced, and performs odr-use checking for functions
 /// and variables. This method should not be used when building an normal
 /// expression which refers to a variable.
-void Sema::MarkAnyDeclReferenced(SourceLocation Loc, Decl *D) {
-  if (VarDecl *VD = dyn_cast<VarDecl>(D))
-    MarkVariableReferenced(Loc, VD);
-  else if (FunctionDecl *FD = dyn_cast<FunctionDecl>(D))
-    MarkFunctionReferenced(Loc, FD);
-  else
-    D->setReferenced();
+void Sema::MarkAnyDeclReferenced(SourceLocation Loc, Decl *D, bool OdrUse) {
+  if (OdrUse) {
+    if (VarDecl *VD = dyn_cast<VarDecl>(D)) {
+      MarkVariableReferenced(Loc, VD);
+      return;
+    }
+    if (FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+      MarkFunctionReferenced(Loc, FD);
+      return;
+    }
+  }
+  D->setReferenced();
 }
 
 namespace {
@@ -11233,7 +11255,7 @@ bool MarkReferencedDecls::TraverseTemplateArgument(
   const TemplateArgument &Arg) {
   if (Arg.getKind() == TemplateArgument::Declaration) {
     if (Decl *D = Arg.getAsDecl())
-      S.MarkAnyDeclReferenced(Loc, D);
+      S.MarkAnyDeclReferenced(Loc, D, true);
   }
 
   return Inherited::TraverseTemplateArgument(Arg);

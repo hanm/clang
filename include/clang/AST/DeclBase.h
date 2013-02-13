@@ -337,7 +337,10 @@ protected:
   static void *AllocateDeserializedDecl(const ASTContext &Context,
                                         unsigned ID,
                                         unsigned Size);
-  
+
+  /// \brief Update a potentially out-of-date declaration.
+  void updateOutOfDate(IdentifierInfo &II) const;
+
 public:
 
   /// \brief Source range that this declaration covers.
@@ -952,19 +955,26 @@ class DeclContext {
   /// \brief Whether this declaration context also has some external
   /// storage that contains additional declarations that are lexically
   /// part of this context.
-  mutable unsigned ExternalLexicalStorage : 1;
+  mutable bool ExternalLexicalStorage : 1;
 
   /// \brief Whether this declaration context also has some external
   /// storage that contains additional declarations that are visible
   /// in this context.
-  mutable unsigned ExternalVisibleStorage : 1;
+  mutable bool ExternalVisibleStorage : 1;
+
+  /// \brief Whether this declaration context has had external visible
+  /// storage added since the last lookup. In this case, \c LookupPtr's
+  /// invariant may not hold and needs to be fixed before we perform
+  /// another lookup.
+  mutable bool NeedToReconcileExternalVisibleStorage : 1;
 
   /// \brief Pointer to the data structure used to lookup declarations
   /// within this context (or a DependentStoredDeclsMap if this is a
   /// dependent context), and a bool indicating whether we have lazily
   /// omitted any declarations from the map. We maintain the invariant
-  /// that, if the map contains an entry for a DeclarationName, then it
-  /// contains all relevant entries for that name.
+  /// that, if the map contains an entry for a DeclarationName (and we
+  /// haven't lazily omitted anything), then it contains all relevant
+  /// entries for that name.
   mutable llvm::PointerIntPair<StoredDeclsMap*, 1, bool> LookupPtr;
 
 protected:
@@ -987,10 +997,11 @@ protected:
   static std::pair<Decl *, Decl *>
   BuildDeclChain(ArrayRef<Decl*> Decls, bool FieldsAlreadyLoaded);
 
-   DeclContext(Decl::Kind K)
-     : DeclKind(K), ExternalLexicalStorage(false),
-       ExternalVisibleStorage(false), LookupPtr(0, false), FirstDecl(0),
-       LastDecl(0) { }
+  DeclContext(Decl::Kind K)
+      : DeclKind(K), ExternalLexicalStorage(false),
+        ExternalVisibleStorage(false),
+        NeedToReconcileExternalVisibleStorage(false), LookupPtr(0, false),
+        FirstDecl(0), LastDecl(0) {}
 
 public:
   ~DeclContext();
@@ -1490,9 +1501,9 @@ public:
   // Low-level accessors
     
   /// \brief Mark the lookup table as needing to be built.  This should be
-  /// used only if setHasExternalLexicalStorage() has been called.
+  /// used only if setHasExternalLexicalStorage() has been called on any
+  /// decl context for which this is the primary context.
   void setMustBuildLookupTable() {
-    assert(ExternalLexicalStorage && "Requires external lexical storage");
     LookupPtr.setInt(true);
   }
 
@@ -1521,6 +1532,8 @@ public:
   /// declarations visible in this context.
   void setHasExternalVisibleStorage(bool ES = true) {
     ExternalVisibleStorage = ES;
+    if (ES && LookupPtr.getPointer())
+      NeedToReconcileExternalVisibleStorage = true;
   }
 
   /// \brief Determine whether the given declaration is stored in the list of
@@ -1536,6 +1549,7 @@ public:
   LLVM_ATTRIBUTE_USED void dumpDeclContext() const;
 
 private:
+  void reconcileExternalVisibleStorage();
   void LoadLexicalDeclsFromExternalStorage() const;
 
   /// @brief Makes a declaration visible within this context, but

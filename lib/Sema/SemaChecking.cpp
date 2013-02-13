@@ -24,6 +24,7 @@
 #include "clang/AST/StmtCXX.h"
 #include "clang/AST/StmtObjC.h"
 #include "clang/Analysis/Analyses/FormatString.h"
+#include "clang/Basic/CharInfo.h"
 #include "clang/Basic/TargetBuiltins.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/Preprocessor.h"
@@ -5777,10 +5778,11 @@ static bool IsTailPaddedMemberArray(Sema &S, llvm::APInt Size,
       TInfo = TDL->getTypeSourceInfo();
       continue;
     }
-    ConstantArrayTypeLoc CTL = cast<ConstantArrayTypeLoc>(TL);
-    const Expr *SizeExpr = dyn_cast<IntegerLiteral>(CTL.getSizeExpr());
-    if (!SizeExpr || SizeExpr->getExprLoc().isMacroID())
-      return false;
+    if (const ConstantArrayTypeLoc *CTL = dyn_cast<ConstantArrayTypeLoc>(&TL)) {
+      const Expr *SizeExpr = dyn_cast<IntegerLiteral>(CTL->getSizeExpr());
+      if (!SizeExpr || SizeExpr->getExprLoc().isMacroID())
+        return false;
+    }
     break;
   }
 
@@ -6171,7 +6173,7 @@ static bool isSetterLikeSelector(Selector sel) {
     return false;
 
   if (str.empty()) return true;
-  return !islower(str.front());
+  return !isLowercase(str.front());
 }
 
 /// Check a message send to see if it's likely to cause a retain cycle.
