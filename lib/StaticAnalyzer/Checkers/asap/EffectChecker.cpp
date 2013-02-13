@@ -49,7 +49,8 @@ private:
 
     const Rpl *ToRpl = Type->getSubstArg(DerefNum);
     assert(ToRpl);
-    //OS << "DEBUG:: gonna substitute...\n";
+    OS << "DEBUG:: gonna substitute... " << FromEl->getName()
+       << "->" << ToRpl->toString() << "\n";
 
     if (FromEl->getName().compare(ToRpl->toString())) {
       // if (from != to) then substitute
@@ -61,7 +62,7 @@ private:
         (*I)->substitute(*FromEl, *ToRpl);
       }
     }
-    //OS << "   DONE\n";
+    OS << "   DONE\n";
   }
 
   /// \brief adds effects to TmpEffects and returns the number of effects added

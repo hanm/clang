@@ -247,8 +247,8 @@ private:
       firstIdx = 0;
       lastIdx = rpl.RplElements.size()-1;
     }
-    /// Printing
-    void printElements(raw_ostream& OS) {
+    /// Printing (Rpl Ref)
+    void print(raw_ostream& OS) const {
       int I = firstIdx;
       for (; I < lastIdx; ++I) {
         OS << rpl.RplElements[I]->getName() << RPL_SPLIT_CHARACTER;
@@ -258,11 +258,11 @@ private:
         OS << rpl.RplElements[I]->getName();
     }
 
-    std::string toString() {
-      std::string sbuf;
-      llvm::raw_string_ostream os(sbuf);
-      printElements(os);
-      return std::string(os.str());
+    inline std::string toString() {
+      std::string SBuf;
+      llvm::raw_string_ostream OS(SBuf);
+      print(OS);
+      return std::string(OS.str());
     }
 
     /// Getters
@@ -366,23 +366,23 @@ private:
                                               String.slice(Idx+1, String.size()));
   }
 
-  /// Printing
-  void printElements(raw_ostream& os) const {
+  /// Printing (Rpl)
+  void print(raw_ostream &OS) const {
     RplElementVector::const_iterator I = RplElements.begin();
     RplElementVector::const_iterator E = RplElements.end();
     for (; I < E-1; I++) {
-      os << (*I)->getName() << Rpl::RPL_SPLIT_CHARACTER;
+      OS << (*I)->getName() << Rpl::RPL_SPLIT_CHARACTER;
     }
     // print last element
-    if (I==E-1)
-      os << (*I)->getName();
+    if (I < E)
+      OS << (*I)->getName();
   }
 
-  std::string toString() const {
-    std::string sbuf;
-    llvm::raw_string_ostream os(sbuf);
-    printElements(os);
-    return std::string(os.str());
+  inline std::string toString() const {
+    std::string SBuf;
+    llvm::raw_string_ostream OS(SBuf);
+    print(OS);
+    return std::string(OS.str());
   }
 
   /// Getters
@@ -440,27 +440,27 @@ private:
   /// Substitution (Rpl)
   void substitute(const RplElement& From, const Rpl& To) {
     os << "DEBUG:: before substitution(" << From.getName() << "<-";
-    To.printElements(os);
+    To.print(os);
     os <<"): ";
     assert(RplElements.size()>0);
-    printElements(os);
+    print(os);
     os << "\n";
     /// A parameter is only allowed at the head of an Rpl
     RplElementVector::iterator I = RplElements.begin();
     if (*(*I) == From) {
       OSv2 << "DEBUG:: found '" << From.getName()
         << "' replaced with '" ;
-      To.printElements(OSv2);
+      To.print(OSv2);
       I = RplElements.erase(I);
       I = RplElements.insert(I, To.RplElements.begin(), To.RplElements.end());
       OSv2 << "' == '";
-      printElements(OSv2);
+      print(OSv2);
       OSv2 << "'\n";
     }
     os << "DEBUG:: after substitution(" << From.getName() << "<-";
-    To.printElements(os);
+    To.print(os);
     os << "): ";
-    printElements(os);
+    print(os);
     os << "\n";
   }
 
@@ -535,11 +535,11 @@ class RplVector {
   public:
   /// Constructor
   RplVector() {}
-  RplVector(Rpl &R) {
+  RplVector(const Rpl &R) {
     RplV.push_back(new Rpl(R));
   }
 
-  RplVector(RplVector &RV) {
+  RplVector(const RplVector &RV) {
     for (Rpl::RplVector::const_iterator
             I = RV.RplV.begin(),
             E = RV.RplV.end();
@@ -563,35 +563,32 @@ class RplVector {
 
   inline Rpl::RplVector::iterator end () { return RplV.end(); }
 
-  inline int size () { return RplV.size(); }
+  inline Rpl::RplVector::const_iterator begin () const { return RplV.begin(); }
 
-  inline void push_back (Rpl *R) {
+  inline Rpl::RplVector::const_iterator end () const { return RplV.end(); }
+
+  inline size_t size () const { return RplV.size(); }
+
+  inline void push_back (const Rpl *R) {
     assert(R);
     RplV.push_back(new Rpl(*R));
   }
 
-  inline void push_front (Rpl *R) {
+  inline void push_front (const Rpl *R) {
     assert(R);
-    RplV.insert(RplV.begin(), R);
+    RplV.insert(RplV.begin(), new Rpl(*R));
   }
 
-  inline const Rpl *getRplAt(size_t idx) {
+  Rpl *pop_front() {
+    assert(RplV.size() > 0);
+    Rpl *Result = RplV.front();
+    RplV.erase(RplV.begin());
+    return Result;
+  }
+
+  inline const Rpl *getRplAt(size_t idx) const {
     assert(idx>=0 && idx < RplV.size());
     return RplV[idx];
-  }
-
-  std::string toString() {
-    std::string SBuf;
-    llvm::raw_string_ostream OS(SBuf);
-    Rpl::RplVector::const_iterator
-      I = RplV.begin(),
-      E = RplV.end();
-    for ( ; I < E; ++I) {
-      OS << (*I)->toString() << " ";
-    }
-    if (I != E)
-      OS << (*I)->toString();
-    return std::string(OS.str());
   }
 
   /// \brief joins this to That
@@ -674,6 +671,71 @@ class RplVector {
     }
     return Result;
   }
+
+  /// Print (RplVector)
+  void print(raw_ostream &OS) const {
+    Rpl::RplVector::const_iterator
+      I = RplV.begin(),
+      E = RplV.end();
+    for(; I < E-1; ++I) {
+      (*I)->print(OS);
+      OS << ", ";
+    }
+    // print last one
+    if (I != E)
+      (*I)->print(OS);
+  }
+
+  inline std::string toString() const {
+    std::string SBuf;
+    llvm::raw_string_ostream OS(SBuf);
+    print(OS);
+    return std::string(OS.str());
+  }
+
+  /// \brief returns the union of two RPL Vectors by copying its inputs
+  static RplVector *merge(const RplVector *A, const RplVector *B) {
+    if (!A && !B)
+      return 0;
+    if (!A && B)
+      return new RplVector(*B);
+    if (A && !B)
+      return new RplVector(*A);
+    // invariant henceforth A!=null && B!=null
+    RplVector *LHS;
+    const RplVector *RHS;
+    OSv2 << "DEBUG:: RplVector::merge : both Vectors are non-null!\n";
+    (A->size() >= B->size()) ? ( LHS = new RplVector(*A), RHS = B)
+                             : ( LHS = new RplVector(*B), RHS = A);
+    // fold RHS into LHS
+    Rpl::RplVector::const_iterator RHSI = RHS->begin(), RHSE = RHS->end();
+    while (RHSI != RHSE) {
+      LHS->push_back(*RHSI);
+      ++RHSI;
+    }
+    return LHS;
+  }
+
+  /// \brief returns the union of two RPL Vectors but destroys its inputs
+  static RplVector *destructiveMerge(RplVector *&A, RplVector *&B) {
+    if (!A)
+      return B;
+    if (!B)
+      return A;
+    // invariant henceforth A!=null && B!=null
+    RplVector *LHS, *RHS;
+    (A->size() >= B->size()) ? ( LHS = A, RHS = B)
+                             : ( LHS = B, RHS = A);
+    // fold RHS into LHS
+    Rpl::RplVector::iterator RHSI = RHS->begin(), RHSE = RHS->end();
+    while (RHSI != RHSE) {
+      LHS->RplV.push_back(*RHSI);
+      RHSI = RHS->RplV.erase(RHSI);
+    }
+    delete RHS;
+    A = B = 0;
+    return LHS;
+  }
 }; // end class RplVector
 ///-///////////////////////////////////////////////////////////////////////////
 /// Effect Class
@@ -752,8 +814,8 @@ public:
     delete R;
   }
 
-  /// Printing
-  inline bool printEffectKind(raw_ostream& OS) const {
+  /// Printing (Effect)
+  inline bool printEffectKind(raw_ostream &OS) const {
     bool HasRpl = true;
     switch(Kind) {
     case EK_NoEffect: OS << "Pure Effect"; HasRpl = false; break;
@@ -765,12 +827,12 @@ public:
     return HasRpl;
   }
 
-  void print(raw_ostream& OS) const {
+  void print(raw_ostream &OS) const {
     bool HasRpl = printEffectKind(OS);
     if (HasRpl) {
       OS << " on ";
       assert(R && "NULL RPL in non-pure effect");
-      R->printElements(OS);
+      R->print(OS);
     }
   }
 
@@ -784,7 +846,7 @@ public:
     }
   }
 
-  std::string toString() const {
+  inline std::string toString() const {
     std::string SBuf;
     llvm::raw_string_ostream OS(SBuf);
     print(OS);
@@ -806,9 +868,9 @@ public:
   /// Getters
   inline EffectKind getEffectKind() const { return Kind; }
 
-  inline const Rpl* getRpl() { return R; }
+  inline const Rpl *getRpl() { return R; }
 
-  inline const Attr* getAttr() { return Attribute; }
+  inline const Attr *getAttr() { return Attribute; }
 
   inline SourceLocation getLocation() { return Attribute->getLocation();}
 
@@ -824,7 +886,7 @@ public:
    * ~~~~~~~~~~~~~~~~~~~~~~~~~
    *    E1(rpl1) <= E2(rpl2)
    */
-  bool isSubEffectOf(const Effect& E) const {
+  bool isSubEffectOf(const Effect &E) const {
     bool Result = (isNoEffect() ||
             (isSubEffectKindOf(E) && R->isIncludedIn(*(E.R))));
     OSv2  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "

@@ -2220,7 +2220,7 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
   IdentifierInfo *Platform = Attr.getParameterName();
   SourceLocation PlatformLoc = Attr.getParameterLoc();
   unsigned Index = Attr.getAttributeSpellingListIndex();
-  
+
   if (AvailabilityAttr::getPrettyPlatformName(Platform->getName()).empty())
     S.Diag(PlatformLoc, diag::warn_availability_unknown_platform)
       << Platform;
@@ -2290,7 +2290,7 @@ static void handleVisibilityAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 
   StringRef TypeStr = Str->getString();
   VisibilityAttr::VisibilityType type;
-  
+
   if (TypeStr == "default")
     type = VisibilityAttr::Default;
   else if (TypeStr == "hidden")
@@ -2735,7 +2735,7 @@ static void handleSectionAttr(Sema &S, Decl *D, const AttributeList &Attr) {
     S.Diag(SE->getLocStart(), diag::err_attribute_section_local_variable);
     return;
   }
-  
+
   unsigned Index = Attr.getAttributeSpellingListIndex();
   SectionAttr *NewAttr = S.mergeSectionAttr(D, Attr.getRange(),
                                             SE->getString(), Index);
@@ -3261,7 +3261,7 @@ static void handleAnnotateAttr(Sema &S, Decl *D, const AttributeList &Attr) {
       if ((*i)->getAnnotation() == SE->getString())
           return;
   }
-  
+
   D->addAttr(::new (S.Context)
              AnnotateAttr(Attr.getRange(), S.Context, SE->getString(),
                           Attr.getAttributeSpellingListIndex()));
@@ -3877,7 +3877,7 @@ static void handleOpenCLKernelAttr(Sema &S, Decl *D, const AttributeList &Attr){
   D->addAttr(::new (S.Context) OpenCLKernelAttr(Attr.getRange(), S.Context));
 }
 
-bool Sema::CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC, 
+bool Sema::CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC,
                                 const FunctionDecl *FD) {
   if (attr.isInvalid())
     return true;
@@ -3932,7 +3932,7 @@ bool Sema::CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC,
 
     TargetInfo::CallingConvMethodType MT = TargetInfo::CCMT_Unknown;
     if (FD)
-      MT = FD->isCXXInstanceMember() ? TargetInfo::CCMT_Member : 
+      MT = FD->isCXXInstanceMember() ? TargetInfo::CCMT_Member :
                                     TargetInfo::CCMT_NonMember;
     CC = TI.getDefaultCallingConv(MT);
   }
@@ -4595,7 +4595,7 @@ static void handleSafeParRegionParamAttr(Sema &S, Decl *D,
     return;
   }
 
-  // Only a single parameter annotation per type is allowed
+  // Only a single region parameter annotation is allowed per type
   if (D->hasAttr<RegionParamAttr>()) {
     S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_duplicate_attribute)
       << Attr.getName();
@@ -4614,8 +4614,6 @@ static void handleSafeParRegionParamAttr(Sema &S, Decl *D,
 static void handleSafeParRegionArgAttr(Sema &S, Decl *D,
                                        const AttributeList &Attr) {
   assert(!Attr.isInvalid());
-  // FIXME: the number of arguments should be equal to the number of
-  // region parameters of the annotated type
   if (!checkAttributeNumArgs(S, Attr, 1))
     return;
 
@@ -4623,6 +4621,14 @@ static void handleSafeParRegionArgAttr(Sema &S, Decl *D,
       !isa<ParmVarDecl>(D)) {
     S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
       << Attr.getName() << SafeParExpectedFieldOrParamOrVariable;
+    return;
+  }
+
+  // Only a single region argument annotation is allowed per declaration.
+  // The arg may contain multiple Rpls, however.
+  if (D->hasAttr<RegionArgAttr>()) {
+    S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_duplicate_attribute)
+      << Attr.getName();
     return;
   }
 

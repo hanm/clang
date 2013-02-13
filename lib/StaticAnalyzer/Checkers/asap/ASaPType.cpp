@@ -11,8 +11,9 @@ class ASaPType {
 
   public:
   /// Constructors
-  ASaPType (QualType QT, RplVector *ArgV, Rpl *InRpl = 0)
+  ASaPType (QualType QT, RplVector *ArgV, Rpl *InRpl = 0, bool Simple=false)
            : QT(QT) {
+    // 1. Set InRpl & ArgV
     if (InRpl)
       this->InRpl = new Rpl(*InRpl);
     else
@@ -21,11 +22,24 @@ class ASaPType {
       this->ArgV = new RplVector(*ArgV);
     else
       this->ArgV = 0;
+    if (!Simple) {
+      // 2. If QT is a function type, we're really interested in the
+      // return type
+      if (QT->isFunctionType()) {
+        const FunctionType *FT = dyn_cast<FunctionType>(QT.getTypePtr());
+        QT = FT->getResultType();
+      }
+      // 3. Check if we might need to set InRpl
+      if (!this->InRpl) {
+        // Figure out based on QT if we need an InRpl
+        if (QT->isScalarType() && !QT->isReferenceType()) {
+          // get it from the head of ArgV
+          assert(this->ArgV && this->ArgV->size() > 0);
+          this->InRpl = this->ArgV->pop_front();
+        }
+      }
+    } // end if (!Simple)
   }
-
-  /*ASaPType (ASaPType &T)  {
-    ASaPType(T.QT, T.ArgV, T.InRpl);
-  }*/
 
   ASaPType (const ASaPType &T) : QT(T.QT) {
     this->QT = T.QT;
@@ -118,10 +132,8 @@ class ASaPType {
 
   /// \brief Set the InAnnotation to NULL (and free the Rpl)
   void dropInRpl() {
-    if (InRpl) {
-      delete InRpl;
-      InRpl = 0;
-    }
+    delete InRpl;
+    InRpl = 0;
   }
 
   std::string toString(ASTContext &Ctx) const {

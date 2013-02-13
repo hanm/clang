@@ -1,13 +1,8 @@
-// TODO
-// (b ? x : y) = (c ? w : z)
-// (b = exp1 ? x : y) = (c = exp2 ? w :z)
-// x = x + q.v // don't gather regions from q.v
-
 /// Find assignments and call Typechecking on them. Assignments include
 /// * simple assignments: a = b
-/// * complex assignments: a = b (where a and b are compound objects) TODO
-/// * assignment of actuals to formals: f(a) TODO
-/// * return statements assigning expr to formal return type TODO
+/// * complex assignments: a = b (where a and b are not scalars) TODO
+/// * assignment of actuals to formals: f(a)
+/// * return statements assigning expr to formal return type
 /// * ...stay tuned, more to come
 
 class AssignmentCheckerVisitor
@@ -220,7 +215,7 @@ private:
     helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
   }
 
-}; // end class
+}; // end class AssignmentCheckerVisitor
 
 ///-///////////////////////////////////////////////////////////////////////////
 /// Stmt Visitor Classes
@@ -272,7 +267,8 @@ private:
 
     const Rpl *ToRpl = T->getSubstArg(DerefNum);
     assert(ToRpl);
-    OS << "DEBUG:: gonna substitute...\n";
+    OS << "DEBUG:: gonna substitute... " << FromEl->getName()
+       << "->" << ToRpl->toString() << "\n";
 
     if (FromEl->getName().compare(ToRpl->toString())) {
       OS <<" GO!!\n";
@@ -404,8 +400,8 @@ public:
     if (!IsBase) {
       assert(!Type);
       // Add parameter as implicit argument
-      CXXRecordDecl *RecDecl = const_cast<CXXRecordDecl*>(E->
-                                                     getBestDynamicClassType());
+      CXXRecordDecl *RecDecl =
+        const_cast<CXXRecordDecl*>(E->getBestDynamicClassType());
       assert(RecDecl);
 
       /* Keeping this code below as an example of how to add nodes to the AST
@@ -440,7 +436,12 @@ public:
       Rpl R(*ParamEl);
       RplVector RV(R);
 
-      Type = new ASaPType(ThisQT, &RV, 0);
+      OS << "DEBUG:: adding 'this' type : ";
+      ThisQT.print(OS, Ctx.getPrintingPolicy());
+      OS << "\n";
+      Type = new ASaPType(ThisQT, &RV, 0, true);
+      OS << "DEBUG:: type actually added: " << Type->toString(Ctx) << "\n";
+
       //TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));
     }
     OS << "DEBUG:: DONE visiting 'this' expression\n";
@@ -669,7 +670,7 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
 
 void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   Expr *RetExp = Ret->getRetValue();
-  OS << "DEBUG:: Visiting ReturnStmt:";
+  OS << "DEBUG:: Visiting ReturnStmt: ";
   RetExp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
 

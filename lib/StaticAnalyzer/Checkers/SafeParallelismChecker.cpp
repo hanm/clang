@@ -29,15 +29,6 @@
 using namespace clang;
 using namespace ento;
 
-// The following definition selects code that uses the
-// specific_attr_reverse_iterator functionality. This option is kept around
-// because I suspect *not* using it may actually perform better... The
-// alternative being to build an llvm::SmallVector using the fwd iterator,
-// then traversing it through the reverse iterator. The reason this might be
-// preferable is because after building it, the SmallVector is 'reverse
-// iterated' multiple times.
-#define ATTR_REVERSE_ITERATOR_SUPPORTED
-
 #define ASAP_DEBUG
 #define ASAP_DEBUG_VERBOSE2
 
@@ -113,8 +104,8 @@ namespace {
 typedef std::map<const Attr*, RplElement*> RplElementAttrMapTy;
 /// FIXME it might be better to map declarations to vectors of Rpls
 /// and RplElements as we did for effect summaries...
-typedef std::map<const Attr*, Rpl*> RplAttrMapTy;
-typedef std::map<const Decl*, ASaPType*> ASaPTypeDeclMapTy; /// TODO: populate
+typedef std::map<const Attr*, RplVector*> RplAttrMapTy;
+typedef std::map<const Decl*, ASaPType*> ASaPTypeDeclMapTy;
 typedef std::map<const FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
 
 
@@ -132,7 +123,7 @@ void destroyEffectSummaryMap(EffectSummaryMapTy &EffectSummaryMap) {
 void destroyRplAttrMap(RplAttrMapTy &RplAttrMap) {
   for(RplAttrMapTy::iterator I = RplAttrMap.begin(),
       E = RplAttrMap.end(); I != E;) {
-    Rpl *R = (*I).second;
+    RplVector *R = (*I).second;
     delete R;
     RplAttrMap.erase(I++);
   }

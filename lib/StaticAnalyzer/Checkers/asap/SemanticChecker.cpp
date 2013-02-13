@@ -30,12 +30,12 @@ private:
 
   /// Private Methods
   void addASaPTypeToMap(ASaPTypeDeclMapTy &Map, ValueDecl* D,
-                        RplVector &RV, Rpl *InRpl) {
-    assert(!ASaPTypeDeclMap[D]);
-    ASaPType *T = new ASaPType(D->getType(), &RV, InRpl);
-    OS << "Debug:: RV.size=" << RV.size() << ", T.RV.size="
-        << T->getArgVSize() << "\n";
-    ASaPTypeDeclMap[D] = T;
+                        RplVector *RV, Rpl *InRpl) {
+    assert(!Map[D]);
+    ASaPType *T = new ASaPType(D->getType(), RV, InRpl);
+    OS << "Debug:: RV.size=" << (RV ? RV->size() : 0)
+       << ", T.RV.size=" << T->getArgVSize() << "\n";
+    Map[D] = T;
     OS << "Debug :: adding type: " << T->toString(Ctx) << "\n";
   }
 
@@ -104,182 +104,21 @@ private:
     helperEmitDeclarationWarning(D, strbuf.str(), bugName);
   }
 
-#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
-  #define ITERATOR_TYPE specific_attr_reverse_iterator<RegionArgAttr>
-#else
-  #define ITERATOR_TYPE llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator
-#endif
-  /// Returns 0 if no further action is needed (i.e., error, or complete type)
-  /// Returns *Rpl if the scalar was a pointer (i.e., further action is needed)
-  Rpl *checkScalarTypeRegionArgs(ValueDecl *D,
-                                 QualType &QT,
-                                 Rpl *ImplicitInAnnot,
-                                 ITERATOR_TYPE &ArgIt,
-                                 ITERATOR_TYPE ArgEnd) {
-    Rpl *InAnnot;
-    assert(QT->isScalarType());
-    OS << "Debug: type is scalar\n";
-    if (ImplicitInAnnot) {
-      InAnnot = ImplicitInAnnot;
-    } else if (ArgIt == ArgEnd) {
-      emitMissingRegionArgs(D);
-      FatalError = true;
-      return 0;
-    } else { // isScalar && !ImplicitInAnnot && ArgIt!=ArgEnd
-      InAnnot = RplAttrMap[*ArgIt];
-      assert(InAnnot || FatalError);
-      ArgIt++;
-    }
-    /// Now InAnnot is set (or we have returned with an error)
-    /// Check if we are done... (i.e., if this is a non Pointer Scalar)
-    if (!QT->isPointerType()) { // scalar but not pointer
-      /// our job here is done
-      OS << "Debug:: type is (scalar and) not a pointer\n";
-      RplVector RV;
-      addASaPTypeToMap(ASaPTypeDeclMap, D, RV, InAnnot);
-      emitRemainingArgsAreSuperfluous(D, ArgIt, ArgEnd);
-      return 0;
-    } else {
-      QT = QT->getPointeeType();
-      return InAnnot;
-    }
-  }
-
-  void checkClassTypeRegionArgs(ValueDecl *D,
-                                   QualType &QT,
-                                   Rpl *ImplicitInAnnot,
-                                   ITERATOR_TYPE &ArgIt,
-                                   ITERATOR_TYPE ArgEnd) {
-    assert(QT->isClassType());
-    Rpl *InAnnot = 0; /// FIXME: we may need to substitute P1<-Implicit,
-                     /// P2<-Implicit, ...
-    RplVector RV;
-    if (ImplicitInAnnot)
-      RV.push_back(ImplicitInAnnot);
-    else {
-      if (ArgIt == ArgEnd) {
-        emitMissingRegionArgs(D);
-        FatalError = true;
-        return;
-      } else { // !isScalar && !ImplicitInAnnot && ArgIt!=ArgEnd
-        checkIsValidTypeForArg(D, QT, *ArgIt);
-        Rpl *R = RplAttrMap[*ArgIt];
-        assert(R || FatalError);
-        RV.push_back(R);
-        ArgIt++;
-      }
-    }
-    addASaPTypeToMap(ASaPTypeDeclMap, D, RV, InAnnot);
-    /// unless Arg != End
-    emitRemainingArgsAreSuperfluous(D, ArgIt, ArgEnd);
-    return;
-  }
-
-  void checkRestRegionArgs(ValueDecl *D,
-                           QualType &QT,
-                           Rpl *InAnnot,
-                           ITERATOR_TYPE &ArgIt,
-                           ITERATOR_TYPE ArgEnd) {
-    /// Grab args for multiple pointer levels
-    RplVector RV;
-    while (ArgIt != ArgEnd && QT->isPointerType()) {
-      checkIsValidTypeForArg(D, QT, *ArgIt);
-      Rpl *R = RplAttrMap[*ArgIt];
-      assert(R || FatalError);
-      RV.push_back(R);
-      ArgIt ++;
-      QT = QT->getPointeeType();
-    }
-    /// At this point there are 3 possibilities:
-    /// 1. There are too few annotations in which case ArgIt==ArgEnd
-    /// 2. The number of annotations is correct in which case
-    ///    ArgIt+1==ArgEnd && !QT->isPointerType()
-    /// 3. There are too many annotations in which case ArgIt+1 < ArgEnd
-
-    /// 1. too few args
-    if (ArgIt == ArgEnd) {
-      /// TODO attach default annotations
-      emitMissingRegionArgs(D);
-      FatalError = true;
-    } else { /// 2. enough arguments, hopefully not too many
-      checkIsValidTypeForArg(D, QT, *ArgIt);
-      Rpl *R = RplAttrMap[*ArgIt];
-      assert(R || FatalError);
-      OS << "Debug: pushing Rpl to ArgV before creating ASaPType (Rpl:"
-        << R->toString() << "\n";
-      RV.push_back(R);
-      /// Add ASaP Type to map
-      addASaPTypeToMap(ASaPTypeDeclMap, D, RV, InAnnot);
-      ArgIt ++;
-    }
-    /// 3. check if there were too many arguments
-    emitRemainingArgsAreSuperfluous(D, ArgIt, ArgEnd);
-  }
-
-  void checkTypeRegionArgs(ValueDecl *D,
-                           QualType &QT,
-                           Rpl *ImplicitInAnnot,
-                           ITERATOR_TYPE ArgIt,
-                           ITERATOR_TYPE ArgEnd) {
-    if (QT->isReferenceType()) {
-      OS << "DEBUG:: found reference type...\n";
-      QT = QT.getNonReferenceType();
-      checkTypeRegionArgs(D, QT, 0, ArgIt, ArgEnd);
-    } else if (QT->isFunctionType()) {
-      const FunctionType *FT = dyn_cast<FunctionType>(QT.getTypePtr());
-      QualType ResultQT = FT->getResultType();
-      OS << "Debug:: Found function type (" << QT.getAsString()
-        << ") with return type = " << ResultQT.getAsString() << "\n";
-      checkTypeRegionArgs(D, ResultQT, ImplicitInAnnot, ArgIt, ArgEnd);
-    } else if (QT->isScalarType()) {
-      Rpl *InAnnot = checkScalarTypeRegionArgs(D, QT, ImplicitInAnnot,
-                                               ArgIt, ArgEnd);
-      if (InAnnot)
-        checkRestRegionArgs(D, QT, InAnnot, ArgIt, ArgEnd);
-    } else if (QT->isClassType()) {
-      // drop ImplicitInAnnot
-      checkClassTypeRegionArgs(D, QT, 0, ArgIt, ArgEnd);
-    } else if (QT->isVoidType()) {
-      emitRemainingArgsAreSuperfluous(D, ArgIt, ArgEnd);
-    } else {
-      OS << "DEBUG:: unexpected type: " << QT.getAsString() << "\n";
-      OS << "DEBUG:: isReferenceType=" << QT->isReferenceType() << "\n";
-      OS << "DEBUG:: isAggregateType=" << QT->isAggregateType() << "\n";
-      OS << "DEBUG:: isClassType=" << QT->isClassType() << "\n";
-      FatalError = true;
-    }
-  }
-
-  /// \brief calls emitSuperfluousRegionArg for the rest of the args
-  void emitRemainingArgsAreSuperfluous(ValueDecl * D,
-                                       ITERATOR_TYPE &ArgIt,
-                                       ITERATOR_TYPE ArgEnd) {
-    while (ArgIt != ArgEnd) {
-      emitSuperfluousRegionArg(D, *ArgIt);
-      FatalError = true;
-      ArgIt ++;
-    }
-  }
-  /// \brief Region argument A on declaration D is superfluous for type of D.
-  void emitSuperfluousRegionArg(Decl *D, RegionArgAttr *A) {
-    std::string bugName = "superfluous region argument";
+  /// \brief  Declaration D is missing region argument(s)
+  void emitUnknownNumberOfRegionParamsForType(Decl *D) {
+    std::string bugName = "unknown number of region parameters for type";
 
     std::string sbuf;
     llvm::raw_string_ostream strbuf(sbuf);
-    A->printPretty(strbuf, Ctx.getPrintingPolicy());
+    D->print(strbuf, Ctx.getPrintingPolicy());
 
-    helperEmitAttributeWarning(D, A, strbuf.str(), bugName);
+    helperEmitDeclarationWarning(D, strbuf.str(), bugName);
   }
 
-  /// \brief Wrong number of region arguments for type
-  void emitWrongNumberOfArguments(Decl *D, RegionArgAttr *Attr) {
-    std::string BugName = "wrong number of region arguments for type";
-
-    std::string sbuf;
-    llvm::raw_string_ostream StrBuf(sbuf);
-    Attr->printPretty(StrBuf, Ctx.getPrintingPolicy());
-
-    helperEmitAttributeWarning(D, Attr, StrBuf.str(), BugName);
+  /// \brief Region arguments Str on declaration D are superfluous for its type
+  void emitSuperfluousRegionArg(Decl *D, StringRef Str) {
+    std::string bugName = "superfluous region argument(s)";
+    helperEmitDeclarationWarning(D, Str, bugName);
   }
 
   /// \brief Region name or parameter contains illegal characters
@@ -311,57 +150,32 @@ private:
     helperEmitAttributeWarning(D, E1->getAttr(), BugStr, BugName);
   }
 
-  // FIXME
-  inline bool isValidArgForType(const QualType Qt,
-                                const RegionArgAttr *RegionArg) {
-    bool Result = true;
-    // TODO what about function pointers, incomplete types, ...
-    if (Qt->isClassType()) {
-      // alt. isRecordType = isClassType || isStructureType || isInterfaceType
-      // TODO is the number of args the same as that of the params on the decl.
-      // (currently we only support a single parameter per type.)
+  /// \brief return the number of In/Arg annotations needed for type or -1
+  /// if unknown
+  long getRegionParamCount(QualType QT) {
+    if (isNonPointerScalarType(QT)) {
+      return 1;
+    } else if (QT->isPointerType()) {
+      long Result = getRegionParamCount(QT->getPointeeType());
+      return (Result == -1) ? Result : Result + 1;
+    } else if (QT->isReferenceType()) {
+      return getRegionParamCount(QT->getPointeeType());
+    } else if (QT->isStructureOrClassType()) {
+      // FIXME allow different numbers of parameters on class types
+      const RecordType *RT = QT->getAs<RecordType>();
+      assert(RT);
+      //RegionParamVector *RPV = ParamVectorDeclMap[RT->getDecl()];
+      return 1;
+    } else if (QT->isFunctionType()) {
+      const FunctionType *FT = dyn_cast<FunctionType>(QT.getTypePtr());
+      QualType ResultQT = FT->getResultType();
+      return getRegionParamCount(ResultQT);
+    } else if (QT->isVoidType()) {
+      return 0;
+    } else {
+      // This should not happen: unknown number of region arguments for type
+      return -1;
     }
-    return Result;
-  }
-
-  /// \brief Check that the number of region arguments matches the number
-  ///        of region parameters
-  void checkIsValidTypeForArg(Decl *D, QualType QT, RegionArgAttr *Attr) {
-    if (!isValidArgForType(QT, Attr)) {
-      emitWrongNumberOfArguments(D, Attr);
-    }
-  }
-
-  /**
-   *  check that the Type T of Decl D has the proper region arg annotations
-   *  Types of errors to find
-   *  1. Too many arg annotations for type
-   *  2. Incompatible arg annotation for type (invalid #of RPLs)
-   *  3. Not enough arg annotations for type
-   */
-  void checkTypeRegionArgs(ValueDecl *D, Rpl *ImplicitInAnnot) {
-    QualType QT = D->getType();
-    RplVector RV;
-    // here we need a reverse iterator over RegionArgAttr
-#ifdef ATTR_REVERSE_ITERATOR_SUPPORTED
-    specific_attr_reverse_iterator<RegionArgAttr>
-      ArgIt = D->specific_attr_rbegin<RegionArgAttr>(),
-      ArgEnd = D->specific_attr_rend<RegionArgAttr>();
-#else
-    llvm::SmallVector<RegionArgAttr*, 8> argv;
-    for (specific_attr_iterator<RegionArgAttr>
-            ArgIt = D->specific_attr_begin<RegionArgAttr>(),
-            ArgEnd = D->specific_attr_end<RegionArgAttr>();
-         ArgIt!=ArgEnd; ++ArgIt){
-        argv.push_back(*ArgIt);
-    }
-
-    llvm::SmallVector<RegionArgAttr*, 8>::reverse_iterator
-      ArgIt = argv.rbegin(),
-      ArgEnd = argv.rend();
-#endif
-    /// Compute In Annotation
-    checkTypeRegionArgs(D, QT, ImplicitInAnnot, ArgIt, ArgEnd);
   }
 
   /// \brief Print to the debug output stream (os) the attribute
@@ -380,7 +194,6 @@ private:
    * Return the string name of the region or region parameter declaration
    * based on the Kind of the Attribute (RegionAttr or RegionParamAttr)
    */
-  // FIXME
   inline StringRef getRegionOrParamName(const Attr *Attribute) {
     StringRef Result = "";
     switch(Attribute->getKind()) {
@@ -439,8 +252,6 @@ private:
   template<typename AttrType>
   RplElement* scanAttributes(Decl* D, const StringRef &Name)
   {
-    //AttrType *A; /// Assertion fails on a null pointer...
-    //assert(isa<RegionParamAttr>(A) || isa<RegionAttr>(A));
     for (specific_attr_iterator<AttrType>
          I = D->specific_attr_begin<AttrType>(),
          E = D->specific_attr_end<AttrType>();
@@ -488,7 +299,6 @@ private:
     return Result;
   }
 
-  /// \brief Looks for 'Name' in the declaration 'D' and its parent scopes.
   RplElement *findRegionOrParamName(Decl *D, StringRef Name) {
     if (!D)
       return 0;
@@ -496,6 +306,13 @@ private:
     RplElement *Result = scanAttributes<RegionAttr>(D, Name);
     if (!Result)
       Result = scanAttributes<RegionParamAttr>(D, Name);
+    return Result;
+  }
+  /// \brief Looks for 'Name' in the declaration 'D' and its parent scopes.
+  RplElement *recursiveFindRegionOrParamName(Decl *D, StringRef Name) {
+
+    /// 1. try to find among regions or region parameters of function
+    RplElement *Result = findRegionOrParamName(D, Name);
     if (Result)
       return Result;
 
@@ -505,15 +322,15 @@ private:
       if (DC->isFunctionOrMethod()) {
         FunctionDecl* FD = dyn_cast<FunctionDecl>(DC);
         assert(FD);
-        return findRegionOrParamName(FD, Name);
+        return recursiveFindRegionOrParamName(FD, Name);
       } else if (DC->isRecord()) {
         RecordDecl* RD = dyn_cast<RecordDecl>(DC);
         assert(RD);
-        return findRegionOrParamName(RD, Name);
+        return recursiveFindRegionOrParamName(RD, Name);
       } else if (DC->isNamespace()) {
         NamespaceDecl *ND = dyn_cast<NamespaceDecl>(DC);
         assert(ND);
-        return findRegionOrParamName(ND, Name);
+        return recursiveFindRegionOrParamName(ND, Name);
       } else {
         /// no ASaP annotations on other types of declarations
         DC = DC->getParent();
@@ -523,19 +340,104 @@ private:
     return 0;
   }
 
+  void checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
+    RegionArgAttr *A = D->getAttr<RegionArgAttr>();
+    RplVector *RV = (A) ? RplAttrMap[A] : 0;
+    if (A && !RV && FatalError)
+      return; // don't check an error already occured
+
+    QualType QT = D->getType();
+    // How many In/Arg annotations does the type require?
+    OS << "DEBUG:: calling 'getRegionParamCount(QT)'...";
+    int ParamCount = getRegionParamCount(QT);
+    OS << "(" << ParamCount << ") DONE!\n";
+    long Size = (RV) ? RV->size() : 0;
+    OS << "size = " << Size << "\n";
+
+    if (ParamCount < 0) {
+      FatalError = true;
+      emitUnknownNumberOfRegionParamsForType(D);
+    } else if (ParamCount > Size &&
+               ParamCount > Size + (DefaultInRpl?1:0)) {
+      FatalError = true;
+      emitMissingRegionArgs(D);
+    } else if (ParamCount < Size &&
+               ParamCount < Size + (DefaultInRpl?1:0)) {
+      std::string SBuf;
+      llvm::raw_string_ostream BufStream(SBuf);
+      int I = ParamCount;
+      for (; I < Size-1; ++I) {
+        RV->getRplAt(I)->print(BufStream);
+        BufStream << ", ";
+      }
+      if (I <Size)
+        RV->getRplAt(I)->print(BufStream);
+      FatalError = true;
+      emitSuperfluousRegionArg(D, BufStream.str());
+    } else if (ParamCount > 0) {
+      RplVector *RplVec = (RV) ? new RplVector(*RV) : 0;
+      if (ParamCount > Size) {
+        assert(DefaultInRpl);
+        if (RplVec) {
+          RplVec->push_front(DefaultInRpl);
+        } else {
+          RplVec = new RplVector(*DefaultInRpl);
+        }
+      }
+      assert(ParamCount == 0 ||
+             (size_t)ParamCount == RplVec->size());
+
+      addASaPTypeToMap(ASaPTypeDeclMap, D, RplVec, 0);
+      delete RplVec;
+    }
+    OS << "DEBUG:: DONE checkTypeRegionArgs\n";
+  }
+
+  /// \brief Check that the annotations of type AttrType of declaration
+  /// D have RPLs whose elements have been declared, and if so, add RPL
+  /// to the map from Attrs to Rpls.
+  bool checkRpls(Decl *D, Attr *A, StringRef RplsStr) {
+    /// First check that we have not already parsed this attribute's RPL
+    RplVector *RV = RplAttrMap[A];
+    if (RV)
+      return new RplVector(*RV);
+    /// else
+    bool Failed = false;
+
+    RV = new RplVector();
+    llvm::SmallVector<StringRef, 8> RplVec;
+    RplsStr.split(RplVec, ",");
+
+    for (size_t I = 0 ; !Failed && I != RplVec.size(); ++I) {
+      Rpl *R = checkRpl(D, A, RplVec[I].trim());
+      if (R) {
+        RV->push_back(R);
+      } else {
+        Failed = true;
+      }
+    }
+    if (Failed) {
+      delete RV;
+      RV = 0;
+      return false;
+    } else {
+      RplAttrMap[A] = RV;
+      return true;
+    }
+  }
+
   /// \brief Check that the annotations of type AttrType of declaration
   /// D have RPLs whose elements have been declared, and if so, add RPL
   /// to the map from Attrs to Rpls.
   Rpl* checkRpl(Decl *D, Attr *A, StringRef RplStr) {
     /// First check that we have not already parsed this attribute's RPL
-    Rpl *R = RplAttrMap[A];
-    if (R)
-      return R;
-    /// else
+
     bool Result = true;
+
+
     int Count = 0;
 
-    R = new Rpl();
+    Rpl *R = new Rpl();
     while(RplStr.size() > 0) { /// for all RPL elements of the RPL
       const RplElement *RplEl = 0;
       std::pair<StringRef,StringRef> Pair = Rpl::splitRpl(RplStr);
@@ -545,93 +447,45 @@ private:
       OS << "DEBUG:: Vec.size = " << Vec.size() << ", Vec.back() = " << Vec.back() <<"\n";
 
       if (Vec.size() > 1) {
-        // TODO Vec - Vec.back() is the qualified decl id
-        StringRef First = Vec.front();
-        StringRef Second = (Vec.size()>1) ? Vec[1] : "";
-
-        std::string sbuf;
-        llvm::raw_string_ostream StrBuf(sbuf);
-        StrBuf << First << "::" << Second;
-        StringRef FirstTwo(StrBuf.str());
-
-        IdentifierInfo& IImain = Ctx.Idents.get("main");
-        IdentifierInfo& IIfirst = Ctx.Idents.get(First);
-        IdentifierInfo& IIsecond = Ctx.Idents.get(Second);
-        IdentifierInfo& IIfirstTwo = Ctx.Idents.get(FirstTwo);
-        IdentifierInfo& IIwhole = Ctx.Idents.get(Head);
-        IdentifierInfo *IIp = &IIfirst;
-        OS << "DEBUG:: (First) IdentifierInfo.getName = " << IIfirst.getName() << "\n";
-        OS << "DEBUG:: (Second) IdentifierInfo.getName = " << IIsecond.getName() << "\n";
-        OS << "DEBUG:: (FirstTwo) String = " << FirstTwo << "\n";
-        OS << "DEBUG:: (FirstTwo) String = " << StrBuf.str() << "\n";
-        OS << "DEBUG:: (FirstTwo) IdentifierInfo.getName = " << IIfirstTwo.getName() << "\n";
-        OS << "DEBUG:: (Whole) IdentifierInfo.getName = " << IIwhole.getName() << "\n";
-
+        // Find the specified declaration
         DeclContext *DC = D->getDeclContext();
-        DeclarationName DN(IIp);
-        DeclContextLookupResult Res = DC->lookup(DN);
-        OS << "DEBUG:: Lookup Result Size = " << Res.size() << "\n";
-
-        NamedDecl *ND = Res[0];
-        ND->print(OS, Ctx.getPrintingPolicy()); OS << "\n";
-
-        // set DeclContext
-        /*if (NamespaceDecl *NSD = dyn_cast<NamespaceDecl>(ND)) {
-          DC = NamespaceDecl::castToDeclContext(NSD);
-        } else if (TagDecl *TD = dyn_cast<TagDecl>(ND)) {
-          DC = TagDecl::castToDeclContext(TD);
-        } else {
-          assert("Unexpected kind of NamedDecl" && false);
-        }*/
+        DeclContextLookupResult Res;
+        IdentifierInfo &II = Ctx.Idents.get(Vec[0]);
+        DeclarationName DN(&II);
+        OS << "DEBUG:: IdentifierInfo.getName = " << II.getName() << "\n";
+        OS << "DEBUG:: DeclContext: ";
+        //DC->printPretty(OS, Ctx.getPrintingPolicy());
+        OS << "\n";
+        while (DC && Res.size() == 0) {
+          Res = DC->lookup(DN);
+          OS << "DEBUG:: Lookup Result Size = " << Res.size() << "\n";
+          DC = DC->getParent();
+        }
+        assert(Res.size() == 1); //emit warning
         DC = Decl::castToDeclContext(Res[0]);
         assert(DC);
 
-        for (DeclContext::decl_iterator
-                I = DC->decls_begin(), E = DC->decls_end();
-             I != E; ++I) {
-          Decl *Dec = *I;
-          OS << "DEBUG:: decl :";
-          Dec->print(OS, Ctx.getPrintingPolicy());
+        for(size_t I = 1; I < Vec.size() - 1; ++I) {
+          IdentifierInfo &II = Ctx.Idents.get(Vec[I]);
+          DeclarationName DN(&II);
+          OS << "DEBUG:: IdentifierInfo.getName = " << II.getName() << "\n";
+          OS << "DEBUG:: DeclContext: ";
+          //DC->printPretty(OS, Ctx.getPrintingPolicy());
           OS << "\n";
+          Res = DC->lookup(DN);
+          OS << "DEBUG:: Lookup Result Size = " << Res.size() << "\n";
+          assert(Res.size() == 1); //emit warning
+          DC = Decl::castToDeclContext(Res[0]);
+          assert(DC);
         }
-        IIp = & IIfirstTwo;
-        DeclarationName DN2(IIp);
-        DeclContextLookupResult Res2 = DC->lookup(DN2);
-        OS << "DEBUG:: Lookup Result Size (" << IIp->getName() << ") = " << Res2.size() << "\n";
-
-        IIp = & IIsecond;
-        DeclarationName DNsec(IIp);
-        DeclContextLookupResult ResSec = DC->lookup(DNsec);
-        OS << "DEBUG:: Lookup Result Size (" << IIp->getName() << ") = " << ResSec.size() << "\n";
-
-        IIp = & IImain;
-        DeclarationName DNmain(IIp);
-        DeclContextLookupResult ResMain = DC->lookup(DNmain);
-        OS << "DEBUG:: Lookup Result Size (" << IIp->getName() << ") = " << ResMain.size() << "\n";
-
-        NestedNameSpecifier *NNS = NestedNameSpecifier::Create(Ctx, IIp); // TODO init
-        assert(NNS);
-        OS << "DEBUG:: NNS = ";
-        NNS->print(OS, Ctx.getPrintingPolicy());
-        OS << "\n";
-        OS << "DEBUG:: NNS as Identifier.getName = " << NNS->getAsIdentifier()->getName() << "\n";
-        NestedNameSpecifier *NNSPrefix = NNS->getPrefix();
-        QualType QT = QualType(NNS->getAsType(), 0);
-        OS << "DEBUG:: NNS As QualType = ";
-        QT.print(OS, Ctx.getPrintingPolicy());
-        OS << "\n";
-
-        RplEl = findRegionOrParamName(ResSec[0], Vec.back());
-        //assert(NNSPrefix);
-        //Ctx.getDependentNameType(ETK_None, NNSPrefix, NNS->getAsIdentifier());
-        // find the decl from First and the ASTcontex perhaps?
+        RplEl = findRegionOrParamName(Res[0], Vec.back());
       } else {
         assert(Vec.size() == 1);
         Head = Vec.back();
         /// head: is it a special RPL element? if not, is it declared?
         RplEl = getSpecialRplElement(Head);
         if (!RplEl)
-          RplEl = findRegionOrParamName(D, Head);
+          RplEl = recursiveFindRegionOrParamName(D, Head);
       }
       if (!RplEl) {
         // Emit bug report!
@@ -648,22 +502,12 @@ private:
       /// Proceed to next iteration
       RplStr = Pair.second;
       ++Count;
-    }
+    } // end while RplStr
     if (Result == false) {
       delete(R);
-      FatalError = true;
-      return 0;
-    } else {
-      RplAttrMap[A] = R;
-
-      //std::string sbuf;
-      //llvm::raw_string_ostream StrBuf(sbuf);
-      //A->printPretty(StrBuf, Ctx.getPrintingPolicy());
-      //OS << "DEBUG:: adding " << R->toString() << "to Map under "
-      //  << StrBuf.str() << "\n";
-
-      return R;
+      R = 0;
     }
+    return R;
   }
 
 
@@ -672,15 +516,20 @@ private:
   /// AttrType must implement getRpl (i.e., RegionArgAttr, & Effect Attributes)
   template<typename AttrType>
   bool checkRpls(Decl* D) {
-    bool Result = true;
+    bool Success = true;
+    const RplVector *RV = 0;
     for (specific_attr_iterator<AttrType>
          I = D->specific_attr_begin<AttrType>(),
          E = D->specific_attr_end<AttrType>();
          I != E; ++I) {
-      if (!checkRpl(D, *I, (*I)->getRpl()))
-        Result = false;
+      Success &= checkRpls(D, *I, (*I)->getRpl());
     }
-    return Result;
+    if (!Success) {
+      delete RV;
+      RV = 0;
+      FatalError = true;
+    }
+    return Success;
   }
 
   /// Map AttrType to Effect Kind
@@ -709,11 +558,13 @@ private:
          E = D->specific_attr_end<AttrType>();
          I != E; ++I) {
       Effect::EffectKind EK = getEffectKind(*I);
-      Rpl* Tmp = RplAttrMap[*I];
+      RplVector *Tmp = RplAttrMap[*I];
 
       if (Tmp) { /// Tmp may be NULL if the RPL was ill formed (e.g., contained
                  /// undeclared RPL elements).
-        EV.push_back(new Effect(EK, Tmp, *I));
+        for (size_t Idx = 0; Idx < Tmp->size(); ++Idx) {
+          EV.push_back(new Effect(EK, Tmp->getRplAt(Idx), *I));
+        }
       }
     }
   }
@@ -808,26 +659,35 @@ public:
     /// B.1 Check Regions & Params
     checkRegionOrParamDecls<RegionAttr>(D);
     checkRegionOrParamDecls<RegionParamAttr>(D);
-    /// B.2 Check ReturnType and Effect RPLs
-    checkRpls<RegionArgAttr>(D); // ReturnType
-    checkRpls<ReadsEffectAttr>(D);
-    checkRpls<WritesEffectAttr>(D);
-    checkRpls<AtomicReadsEffectAttr>(D);
-    checkRpls<AtomicWritesEffectAttr>(D);
+    /// B.2 Check ReturnType
+    bool Success = checkRpls<RegionArgAttr>(D); // ReturnType
+    if (Success) {
+      Rpl Local(*LOCALRplElmt);
+      checkTypeRegionArgs(D, &Local); // check return type
+    }
 
-    /// C. Check effect summary
-    /// C.1. Build Effect Summary
-    Effect::EffectVector *EV = new Effect::EffectVector();
-    Effect::EffectVector &EffectSummary = *EV;
-    buildEffectSummary(D, EffectSummary);
-    OS << "Effect Summary from annotation:\n";
-    Effect::printEffectSummary(EffectSummary, OS);
+    /// B.3 Check Effect RPLs
+    Success = true;
+    Success &= checkRpls<ReadsEffectAttr>(D);
+    Success &= checkRpls<WritesEffectAttr>(D);
+    Success &= checkRpls<AtomicReadsEffectAttr>(D);
+    Success &= checkRpls<AtomicWritesEffectAttr>(D);
 
-    /// C.2. Check Effect Summary is minimal
-    checkEffectSummary(D, EffectSummary);
-    OS << "Minimal Effect Summary:\n";
-    Effect::printEffectSummary(EffectSummary, OS);
-    EffectSummaryMap[D] = EV;
+    if (Success) {
+      /// C. Check effect summary
+      /// C.1. Build Effect Summary
+      Effect::EffectVector *EV = new Effect::EffectVector();
+      Effect::EffectVector &EffectSummary = *EV;
+      buildEffectSummary(D, EffectSummary);
+      OS << "Effect Summary from annotation:\n";
+      Effect::printEffectSummary(EffectSummary, OS);
+
+      /// C.2. Check Effect Summary is minimal
+      checkEffectSummary(D, EffectSummary);
+      OS << "Minimal Effect Summary:\n";
+      Effect::printEffectSummary(EffectSummary, OS);
+      EffectSummaryMap[D] = EV;
+    }
     return true;
   }
 
@@ -868,10 +728,12 @@ public:
     helperPrintAttributes<RegionArgAttr>(D); /// in region
 
     /// B. Check RPLs
-    checkRpls<RegionArgAttr>(D);
+    bool Success = checkRpls<RegionArgAttr>(D);
 
     /// C. Check validity of annotations
-    checkTypeRegionArgs(D, 0);
+    if (Success)
+      checkTypeRegionArgs(D, 0);
+
     return true;
   }
 
@@ -884,19 +746,20 @@ public:
     helperPrintAttributes<RegionArgAttr>(D); /// in region
 
     /// B. Check RPLs
-    checkRpls<RegionArgAttr>(D);
+    bool Success = checkRpls<RegionArgAttr>(D);
 
     /// C. Check validity of annotations
-    Rpl Local(*LOCALRplElmt);
-    checkTypeRegionArgs(D, &Local);
+    if (Success) {
+      Rpl Local(*LOCALRplElmt);
+      checkTypeRegionArgs(D, &Local);
+    }
+
     return true;
   }
 
   bool VisitCXXMethodDecl(clang::CXXMethodDecl *D) {
     // ATTENTION This is called after VisitFunctionDecl
     OS << "DEBUG:: VisitCXXMethodDecl\n";
-    Rpl Local(*LOCALRplElmt);
-    checkTypeRegionArgs(D, &Local); // check return type
     return true;
   }
 
