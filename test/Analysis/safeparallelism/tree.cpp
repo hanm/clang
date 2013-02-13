@@ -9,9 +9,9 @@ class [[asap::param("P"), asap::region("R1")]]
 
 private:
   long Value [[asap::arg("P")]];
-  TreeNode *LeftChild [[asap::arg("P"), asap::arg("P:Left")]],
+  TreeNode *LeftChild [[asap::arg("P, P:Left")]],
            // TODO make implicit asap::arg("P:LeftChild") and P:RightChild
-           *RightChild [[asap::arg("P"), asap::arg("P:Right")]];
+           *RightChild [[asap::arg("P, P:Right")]];
 
 public:
   /// Constructor
@@ -19,9 +19,7 @@ public:
 
   /// \brief returns true if Value added, false if it already existed
   /// TODO move implementation outside declaration. I.e., TreeNode::add...
-  bool add [[asap::writes("P:Left:*")]] 
-    [[asap::writes("P:Right:*")]] 
-    [[asap::writes("P")]] (long V) //[[asap::writes("P:*")]]
+  bool add [[asap::writes("P, P:Right:*, P:Left:*")]] (long V) 
   {
     if (V == Value) return false;
     else if (V < Value) 
@@ -40,9 +38,7 @@ public:
       }
   }
   
-  bool operator += [[asap::writes("P:Left:*")]] 
-    [[asap::writes("P:Right:*")]] 
-    [[asap::writes("P")]] 
+  bool operator += [[asap::writes("P, P:Right:*, P:Left:*")]] 
     (long V)
   {
     return add(V);
