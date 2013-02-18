@@ -21,10 +21,7 @@ private:
   AnalysisDeclContext *AC;
   raw_ostream &OS;
 
-  RplElementAttrMapTy &RplElementMap;
-  RplAttrMapTy &RplAttrMap;
-  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
-  EffectSummaryMapTy &EffectSummaryMap;
+  SymbolTable &SymT;
 
   bool FatalError;
 
@@ -122,13 +119,12 @@ private:
   }
 
   /// \brief Region name or parameter contains illegal characters
-  void emitIllFormedRegionNameOrParameter(Decl *D, Attr *A) {
-    StringRef Name = getRegionOrParamName(A);
+  void emitIllFormedRegionNameOrParameter(Decl *D, Attr *A, StringRef Name) {
     std::string AttrTypeStr = "";
     if (isa<RegionAttr>(A))
       AttrTypeStr = "region";
-    else if
-      (isa<RegionParamAttr>(A)) AttrTypeStr = "region parameter";
+    else if (isa<RegionParamAttr>(A))
+      AttrTypeStr = "region parameter";
     std::string BugName = "invalid ";
     BugName.append(AttrTypeStr);
     BugName.append(" name");
@@ -208,22 +204,21 @@ private:
     return Result;
   }
 
-  /// FIXME probably the source of a memory leak
-  inline RplElement *createRegionOrParamElement(const Attr *Attribute) {
+  /*inline RplElement *createRegionOrParamElement(const Attr *Attribute) {
     RplElement* Result = 0;
     switch(Attribute->getKind()) {
     case attr::Region:
       Result = new NamedRplElement(dyn_cast<RegionAttr>(Attribute)->getName());
       break;
     case attr::RegionParam:
-      Result = new ParamRplElement(dyn_cast<RegionParamAttr>(Attribute)->
-                                   getName());
+      Result = new ParamRplElement(dyn_cast<RegionParamAttr>(Attribute)
+                                    ->getName());
       break;
     default:
       Result = 0;
     }
     return Result;
-  }
+  }*/
 
   /**
    *  Return true if any of the attributes of type AttrType of the
@@ -284,16 +279,34 @@ private:
          E = D->specific_attr_end<AttrType>();
          I != E; ++I) {
       assert(isa<RegionAttr>(*I) || isa<RegionParamAttr>(*I));
-      const StringRef Name = getRegionOrParamName(*I);
+      const StringRef ElmtNames = getRegionOrParamName(*I);
       OS << "DEBUG:: checking RPL Element called " << Name << "\n";
-      if (isValidRegionName(Name)) {
-        /// Add it to the map
-        OS << "DEBUG:: creating RPL Element called " << Name << "\n";
-        RplElementMap[*I] = createRegionOrParamElement(*I);
-      } else {
-        /// Emit bug report: ill formed region or parameter name
-        emitIllFormedRegionNameOrParameter(D, *I);
-        Result = false;
+
+      bool Failed = false;
+
+      RplElementVector *RLV = new RplElementVector();
+      llvm::SmallVector<StringRef, 8> RplElmtVec;
+      ElmtNames.split(RplElmtVec, ",");
+      for (size_t I = 0 ; !Failed && I != RplElmtVec.size(); ++I) {
+        StringRef Name = RplElmVec[I].trim();
+        if (isValidRegionName(Name)) {
+          /// Add it to the vector
+          OS << "DEBUG:: creating RPL Element called " << Name << "\n";
+          if (isa<RegionAttr>(*I))
+            RLV->push_back(new NamedRplElement(Name));
+          else if (isa<RegionParamAttr>(*I))
+            RLV->push_back(new NamedRplElement(Name));
+        } else {
+          /// Emit bug report: ill formed region or parameter name
+          emitIllFormedRegionNameOrParameter(D, *I, Name);
+          Result = false;
+        }
+      } // end for each Element of Attribute
+      if (Result) {
+        if (isa<RegionAttr>(*I))
+          RegionMap[D] = RLV;
+        else if (isa<RegionParamAttr>(*I))
+          ParamMap[D] = RLV;
       }
     }
     return Result;
@@ -609,18 +622,12 @@ public:
   explicit ASaPSemanticCheckerTraverser (
     ento::BugReporter &BR, ASTContext &Ctx,
     AnalysisDeclContext *AC, raw_ostream &OS,
-    RplElementAttrMapTy &RplElementMap,
-    RplAttrMapTy &RplAttrMap,
-    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
-    EffectSummaryMapTy &EffectSummaryMap
+    SymbolTable &SymT,
     ) : BR(BR),
         Ctx(Ctx),
         AC(AC),
         OS(OS),
-        RplElementMap(RplElementMap),
-        RplAttrMap(RplAttrMap),
-        ASaPTypeDeclMap(ASaPTypeDeclMap),
-        EffectSummaryMap(EffectSummaryMap),
+        SymT(SymT),
         FatalError(false)
   {}
 

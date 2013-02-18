@@ -210,7 +210,53 @@ public:
   #define RPL_ELEMENT_VECTOR_SIZE 8
 #endif
 typedef llvm::SmallVector<const RplElement*,
-                          RPL_ELEMENT_VECTOR_SIZE> RplElementVector;
+                          RPL_ELEMENT_VECTOR_SIZE> RplElementVectorTy;
+
+class ParameterVector {
+private:
+  // Fields
+#ifndef PARAM_VECTOR_SIZE
+#define PARAM_VECTOR_SIZE 8
+  typedef llvm::SmallVector<const ParamRplElement*, PARAM_VECTOR_SIZE> ParamVecTy;
+#undef PARAM_VECTOR_SIZE
+#endif
+  ParamVecTy ParamVec;
+public:
+  // Constructor
+  // Destructor
+  ~ParameterVector() {
+    for(ParamVecTy::iterator I = ParamVec.begin(), E = ParamVec.end();
+        I != E; ++I) {
+      delete (*I);
+    }
+  }
+  // Methods
+  inline void push_back(ParamRplElement *E) { ParamVec.push_back(E); }
+
+}; // end class ParameterVector
+
+class RegionNameSet {
+private:
+  // Fields
+#ifndef REGION_NAME_SET_SIZE
+#define REGION_NAME_SET_SIZE 8
+  typedef llvm::SmallPtrSet<const NamedRplElement*, REGION_NAME_SET_SIZE> RegnNameSetTy;
+#undef REGION_NAME_SET_SIZE
+#endif
+  RegnNameSetTy RegnNameSet; // TODO pick a better data structure (set instead of vector)
+public:
+  // Destructor
+  ~RegionNameSet() {
+    for (RegnNameSetTy::iterator
+           I = RegnNameSet.begin(),
+           E = RegnNameSet.end();
+         I != E; ++I) {
+      delete (*I);
+    }
+  }
+  // Methods
+  inline void insert(NamedRplElement *E) { RegnNameSet.insert(E); }
+}; // end class RegionNameSet
 
 ///-///////////////////////////////////////////////////////////////////////////
 /// Rpl Class
@@ -224,13 +270,13 @@ public:
 #ifndef RPL_VECTOR_SIZE
   #define RPL_VECTOR_SIZE 4
 #endif
-  typedef llvm::SmallVector<Rpl*, RPL_VECTOR_SIZE> RplVector;
+  typedef llvm::SmallVector<Rpl*, RPL_VECTOR_SIZE> RplVectorTy;
 
 private:
   /// Fields
   /// Note: RplElements are not owned by Rpl class.
   /// They are *NOT* destroyed with the Rpl.
-  RplElementVector RplElements;
+  RplElementVectorTy RplElements;
   bool FullySpecified;
 
   /// RplRef class
@@ -368,8 +414,8 @@ private:
 
   /// Printing (Rpl)
   void print(raw_ostream &OS) const {
-    RplElementVector::const_iterator I = RplElements.begin();
-    RplElementVector::const_iterator E = RplElements.end();
+    RplElementVectorTy::const_iterator I = RplElements.begin();
+    RplElementVectorTy::const_iterator E = RplElements.end();
     for (; I < E-1; I++) {
       OS << (*I)->getName() << Rpl::RPL_SPLIT_CHARACTER;
     }
@@ -446,7 +492,7 @@ private:
     print(os);
     os << "\n";
     /// A parameter is only allowed at the head of an Rpl
-    RplElementVector::iterator I = RplElements.begin();
+    RplElementVectorTy::iterator I = RplElements.begin();
     if (*(*I) == From) {
       OSv2 << "DEBUG:: found '" << From.getName()
         << "' replaced with '" ;
@@ -484,7 +530,7 @@ private:
     assert(That);
     Rpl Result;
     /// join from the left
-    RplElementVector::const_iterator
+    RplElementVectorTy::const_iterator
             ThisI = this->RplElements.begin(),
             ThatI = That->RplElements.begin(),
             ThisE = this->RplElements.end(),
@@ -498,7 +544,7 @@ private:
       assert(ThatI != ThatE);
       Result.appendElement(STARRplElmt);
       Result.FullySpecified = false;
-      RplElementVector::const_reverse_iterator
+      RplElementVectorTy::const_reverse_iterator
           ThisI = this->RplElements.rbegin(),
           ThatI = That->RplElements.rbegin(),
           ThisE = this->RplElements.rend(),
@@ -530,7 +576,7 @@ class RplVector {
   friend class RplVector;
   private:
   /// Fields
-  Rpl::RplVector RplV;
+  Rpl::RplVectorTy RplV;
 
   public:
   /// Constructor
@@ -540,7 +586,7 @@ class RplVector {
   }
 
   RplVector(const RplVector &RV) {
-    for (Rpl::RplVector::const_iterator
+    for (Rpl::RplVectorTy::const_iterator
             I = RV.RplV.begin(),
             E = RV.RplV.end();
          I != E; ++I) {
@@ -550,7 +596,7 @@ class RplVector {
 
   /// Destructor
   ~RplVector() {
-    for (Rpl::RplVector::const_iterator
+    for (Rpl::RplVectorTy::const_iterator
             I = RplV.begin(),
             E = RplV.end();
          I != E; ++I) {
@@ -559,13 +605,13 @@ class RplVector {
   }
 
   /// Methods
-  inline Rpl::RplVector::iterator begin () { return RplV.begin(); }
+  inline Rpl::RplVectorTy::iterator begin () { return RplV.begin(); }
 
-  inline Rpl::RplVector::iterator end () { return RplV.end(); }
+  inline Rpl::RplVectorTy::iterator end () { return RplV.end(); }
 
-  inline Rpl::RplVector::const_iterator begin () const { return RplV.begin(); }
+  inline Rpl::RplVectorTy::const_iterator begin () const { return RplV.begin(); }
 
-  inline Rpl::RplVector::const_iterator end () const { return RplV.end(); }
+  inline Rpl::RplVectorTy::const_iterator end () const { return RplV.end(); }
 
   inline size_t size () const { return RplV.size(); }
 
@@ -596,7 +642,7 @@ class RplVector {
     assert(That);
     assert(That->size() == this->size());
 
-    Rpl::RplVector::iterator
+    Rpl::RplVectorTy::iterator
             ThatI = That->begin(),
             ThisI = this->begin(),
             ThatE = That->end(),
@@ -615,11 +661,11 @@ class RplVector {
   }
 
   /// \brief return true when this <= That, false otherwise
-  bool isIncludedIn (RplVector &That) {
+  bool isIncludedIn (const RplVector &That) const {
     bool Result = true;
     assert(That.RplV.size() == this->RplV.size());
 
-    Rpl::RplVector::const_iterator
+    Rpl::RplVectorTy::const_iterator
             ThatI = That.begin(),
             ThisI = this->begin(),
             ThatE = That.end(),
@@ -641,7 +687,7 @@ class RplVector {
 
   /// substitution (RplVector)
   void substitute(const RplElement &FromEl, const Rpl &ToRpl) {
-    for(Rpl::RplVector::const_iterator
+    for(Rpl::RplVectorTy::const_iterator
             I = RplV.begin(),
             E = RplV.end();
          I != E; ++I) {
@@ -660,7 +706,7 @@ class RplVector {
   Rpl *deref(size_t DerefNum) {
     Rpl *Result = 0;
     assert(DerefNum >=0 && DerefNum < RplV.size());
-    for (Rpl::RplVector::iterator
+    for (Rpl::RplVectorTy::iterator
             I = RplV.begin(),
             E = RplV.end();
          DerefNum > 0 && I != E; ++I, --DerefNum) {
@@ -674,7 +720,7 @@ class RplVector {
 
   /// Print (RplVector)
   void print(raw_ostream &OS) const {
-    Rpl::RplVector::const_iterator
+    Rpl::RplVectorTy::const_iterator
       I = RplV.begin(),
       E = RplV.end();
     for(; I < E-1; ++I) {
@@ -708,7 +754,7 @@ class RplVector {
     (A->size() >= B->size()) ? ( LHS = new RplVector(*A), RHS = B)
                              : ( LHS = new RplVector(*B), RHS = A);
     // fold RHS into LHS
-    Rpl::RplVector::const_iterator RHSI = RHS->begin(), RHSE = RHS->end();
+    Rpl::RplVectorTy::const_iterator RHSI = RHS->begin(), RHSE = RHS->end();
     while (RHSI != RHSE) {
       LHS->push_back(*RHSI);
       ++RHSI;
@@ -727,7 +773,7 @@ class RplVector {
     (A->size() >= B->size()) ? ( LHS = A, RHS = B)
                              : ( LHS = B, RHS = A);
     // fold RHS into LHS
-    Rpl::RplVector::iterator RHSI = RHS->begin(), RHSE = RHS->end();
+    Rpl::RplVectorTy::iterator RHSI = RHS->begin(), RHSE = RHS->end();
     while (RHSI != RHSE) {
       LHS->RplV.push_back(*RHSI);
       RHSI = RHS->RplV.erase(RHSI);
@@ -905,3 +951,8 @@ public:
   }
 
 }; // end class Effect
+
+/// Implements a Set of Effects
+class EffectSummary {
+
+}; // end class EffectSummary

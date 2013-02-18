@@ -1,6 +1,6 @@
 ///-///////////////////////////////////////////////////////////////////////////
 /// ASapType Class
-
+//namespace ASaP {
 class ASaPType {
   friend class ASaPType;
   private:
@@ -69,7 +69,7 @@ class ASaPType {
     return this->ArgV->getRplAt(DerefNum-1);
   }
 
-  const Rpl *getSubstArg(int DerefNum) {
+  const Rpl *getSubstArg(int DerefNum) const {
     assert(DerefNum >= -1);
     if (DerefNum == -1) return InRpl;
     if (InRpl)
@@ -78,9 +78,9 @@ class ASaPType {
       return this->ArgV->getRplAt(DerefNum);
   }
 
-  inline QualType getQT() { return QT; };
+  inline QualType getQT() const { return QT; };
 
-  QualType getQT(int DerefNum) {
+  QualType getQT(int DerefNum) const {
     assert(DerefNum >= 0);
     QualType Result = QT;
     while (DerefNum > 0) {
@@ -93,7 +93,7 @@ class ASaPType {
 
   /// \brief if this is a function type, return its return type;
   /// else return null
-  ASaPType *getReturnType() {
+  ASaPType *getReturnType() const {
     if (QT->isFunctionType()) {
       const FunctionType *FT = dyn_cast<FunctionType>(QT.getTypePtr());
       QualType ResultQT = FT->getResultType();
@@ -151,10 +151,10 @@ class ASaPType {
   }
 
   /// \brief  true when 'this' is a subtype (derived type) of 'that'
-  inline bool subtype(const ASaPType &That) { return *this <= That; }
+  inline bool subtype(const ASaPType &That) const { return *this <= That; }
 
   /// \brief true when 'this' is a subtype (derived type) of 'that'
-  bool operator <= (const ASaPType &That) {
+  bool operator <= (const ASaPType &That) const {
     if (this->QT!=That.QT) {
       /// Typechecking has passed so we assume that this->QT <= that->QT
       /// but we have to find follow the mapping and substitute Rpls....
@@ -197,4 +197,4 @@ class ASaPType {
   /// Private Methods
 
 }; // end class ASaPType
-
+//} // end namespace ASaP

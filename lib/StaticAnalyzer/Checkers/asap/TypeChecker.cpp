@@ -16,10 +16,7 @@ private:
   AnalysisDeclContext *AC;
   raw_ostream &OS;
 
-  RplElementAttrMapTy &RplElementMap;
-  RplAttrMapTy &RplMap;
-  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
-  EffectSummaryMapTy &EffectSummaryMap;
+  SymbolTable &SymT;
 
   const FunctionDecl *Def;
   bool FatalError;
@@ -34,10 +31,7 @@ public:
     AnalysisManager &Mgr,
     AnalysisDeclContext *AC,
     raw_ostream &OS,
-    RplElementAttrMapTy &RplElementMap,
-    RplAttrMapTy &RplMap,
-    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
-    EffectSummaryMapTy &EffectSummaryMap,
+    SymbolTable &SymT,
     const FunctionDecl *Def,
     Stmt *S
     ) : BR(BR),
@@ -45,10 +39,7 @@ public:
         Mgr(Mgr),
         AC(AC),
         OS(OS),
-        RplElementMap(RplElementMap),
-        RplMap(RplMap),
-        ASaPTypeDeclMap(ASaPTypeDeclMap),
-        EffectSummaryMap(EffectSummaryMap),
+        SymT(SymT),
         Def(Def),
         FatalError(false), Type(0) {
 
@@ -122,13 +113,13 @@ public:
 
 private:
   /// private helper methods
-  ASaPType *getReturnType(const FunctionDecl *Def) {
-    ASaPType *T = ASaPTypeDeclMap[Def];
+  const ASaPType *getReturnType(const FunctionDecl *Def) {
+    const ASaPType *T = SymT.getType(Def);
     assert(T);
     return T;
   }
   /// Private Methods
-  bool typecheck(ASaPType *LHSType, ASaPType *RHSType) {
+  bool typecheck(const ASaPType *LHSType, const ASaPType *RHSType) {
     assert(LHSType);
     if (RHSType && !RHSType->subtype(*LHSType) )
       return false;
@@ -231,10 +222,7 @@ private:
   AnalysisDeclContext *AC;
   raw_ostream &OS;
 
-  RplElementAttrMapTy &RplElementMap;
-  RplAttrMapTy &RplMap;
-  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
-  EffectSummaryMapTy &EffectSummaryMap;
+  SymbolTable &SymT;
 
   const FunctionDecl *Def;
   bool FatalError;
@@ -252,7 +240,7 @@ private:
     OS << "DEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
     OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
 
-    ASaPType *T = ASaPTypeDeclMap[FieldD];
+    const ASaPType *T = SymT.getType(FieldD);
     assert(T);
     OS << "DEBUG:: Type = " << T->toString(Ctx) << "\n";
 
@@ -280,7 +268,7 @@ private:
 
   /// \brief collect the region arguments for a field
   void setType(const ValueDecl *D) {
-    ASaPType *T = ASaPTypeDeclMap[D];
+    const ASaPType *T = SymT.getType(D);
     assert(T);
 
     assert(!Type);
@@ -302,10 +290,7 @@ public:
     AnalysisManager &Mgr,
     AnalysisDeclContext *AC,
     raw_ostream &OS,
-    RplElementAttrMapTy &RplElementMap,
-    RplAttrMapTy &RplMap,
-    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
-    EffectSummaryMapTy &EffectSummaryMap,
+    SymbolTable &SymT,
     const FunctionDecl *Def,
     Expr *E
     ) : BR(BR),
@@ -313,10 +298,7 @@ public:
         Mgr(Mgr),
         AC(AC),
         OS(OS),
-        RplElementMap(RplElementMap),
-        RplMap(RplMap),
-        ASaPTypeDeclMap(ASaPTypeDeclMap),
-        EffectSummaryMap(EffectSummaryMap),
+        SymT(SymT),
         Def(Def),
         FatalError(false),
         IsBase(false),
@@ -519,9 +501,7 @@ public:
     Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
 
-    AssignmentCheckerVisitor ACV(BR, Ctx, Mgr, AC, OS, RplElementMap,
-                                RplMap, ASaPTypeDeclMap, EffectSummaryMap,
-                                Def, Exp);
+    AssignmentCheckerVisitor ACV(BR, Ctx, Mgr, AC, OS, SymT, Def, Exp);
     assert(!Type);
     Type = ACV.stealType();
     assert(Type);
@@ -532,9 +512,7 @@ public:
     Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
     AssignmentCheckerVisitor ACV(BR, Ctx, Mgr, AC, OS,
-                                RplElementMap, RplMap,
-                                ASaPTypeDeclMap, EffectSummaryMap,
-                                Def, Exp->getCond());
+                                 SymT, Def, Exp->getCond());
     FatalError |= ACV.encounteredFatalError();
 
     assert(!Type);
@@ -589,16 +567,12 @@ class AssignmentDetectorVisitor :
     AnalysisDeclContext *AC,
     raw_ostream &OS,
 
-    RplElementAttrMapTy &RplElementMap,
-    RplAttrMapTy &RplMap,
-    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
-    EffectSummaryMapTy &EffectSummaryMap,
+    SymbolTable &SymT,
 
     const FunctionDecl *Def,
     Stmt *S)
       : ASaPStmtVisitorBase//<AssignmentDetectorVisitor>
-                           (BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
-                            ASaPTypeDeclMap, EffectSummaryMap, Def, S),
+                           (BR, Ctx, Mgr, AC, OS, SymT, Def, S),
         Type(0) {
     Visit(S);
   }
@@ -623,8 +597,7 @@ class AssignmentDetectorVisitor :
     OS << "DEBUG:: >>>>>>>>>> TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
-    TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
-                           ASaPTypeDeclMap, EffectSummaryMap, Def,
+    TypeCheckerVisitor TCV(BR, Ctx, Mgr, AC, OS, SymT, Def,
                            E, E->getLHS(), E->getRHS());
   }
 
@@ -638,12 +611,8 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
   OS << "DEBUG:: >>>>>>>>>> TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";
   E->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-  TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
-                          ASaPTypeDeclMap, EffectSummaryMap, Def,
-                          E->getRHS());
-  TypeBuilderVisitor TBVL(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
-                          ASaPTypeDeclMap, EffectSummaryMap, Def,
-                          E->getLHS());
+  TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, SymT, Def, E->getRHS());
+  TypeBuilderVisitor TBVL(BR, Ctx, Mgr, AC, OS, SymT, Def, E->getLHS());
   OS << "DEBUG:: Ran type builder on RHS & LHS\n";
   E->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
@@ -674,12 +643,10 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   RetExp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
 
-  TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
-                          ASaPTypeDeclMap, EffectSummaryMap, Def,
-                          RetExp);
-  ASaPType *LHSType = ASaPTypeDeclMap[Def];
+  TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, SymT, Def, RetExp);
+  const ASaPType *LHSType = SymT.getType(Def);
   if (LHSType)
-    LHSType = LHSType->getReturnType();
+    LHSType = LHSType->getReturnType(); // FIXME memory leak
   assert(LHSType);
   ASaPType *RHSType = TBVR.getType();
   if (! typecheck(LHSType, RHSType)) {
@@ -694,10 +661,8 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
 void AssignmentCheckerVisitor::helperTypecheckDeclWithInit(
                                                            const VarDecl *VD,
                                                            Expr *Init) {
-  TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
-                          ASaPTypeDeclMap, EffectSummaryMap, Def,
-                          Init);
-  ASaPType *LHSType = ASaPTypeDeclMap[VD];
+  TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, SymT, Def, Init);
+  const ASaPType *LHSType = SymT.getType(VD);
   ASaPType *RHSType = TBVR.getType();
   if (! typecheck(LHSType, RHSType)) {
     OS << "DEBUG:: invalid assignment: gonna emit an error\n";
@@ -709,9 +674,8 @@ void AssignmentCheckerVisitor::helperTypecheckDeclWithInit(
 
 bool AssignmentCheckerVisitor::typecheckParamAssignment(ParmVarDecl *Param,
                                                         Expr *Arg) {
-    TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, RplElementMap, RplMap,
-                            ASaPTypeDeclMap, EffectSummaryMap, Def, Arg);
-    ASaPType *LHSType = ASaPTypeDeclMap[Param];
+    TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, SymT, Def, Arg);
+    const ASaPType *LHSType = SymT.getType(Param);
     ASaPType *RHSType = TBVR.getType();
     if (! typecheck(LHSType, RHSType)) {
       OS << "DEBUG:: invalid argument to parameter assignment: "

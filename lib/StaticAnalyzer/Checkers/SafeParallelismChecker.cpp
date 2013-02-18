@@ -61,8 +61,10 @@ static void destroyVectorVector(T &V) {
 inline bool isNonPointerScalarType(QualType QT) {
   return (QT->isScalarType() && !QT->isPointerType());
 }
+
 #include "asap/RplsAndEffects.cpp"
 #include "asap/ASaPType.cpp"
+#include "asap/ASaPSymbolTable.cpp"
 
 namespace {
   /// \brief The default region parameter "P" used for implicitly boxed types
@@ -101,14 +103,17 @@ namespace {
     return Result;
   }
 
-typedef std::map<const Attr*, RplElement*> RplElementAttrMapTy;
+
+
+//typedef std::map<const Decl*, RplElementVector*> RplElementAttrMapTy;
 /// FIXME it might be better to map declarations to vectors of Rpls
 /// and RplElements as we did for effect summaries...
-typedef std::map<const Attr*, RplVector*> RplAttrMapTy;
-typedef std::map<const Decl*, ASaPType*> ASaPTypeDeclMapTy;
-typedef std::map<const FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
+// maps arg and effect attributes to their RPLs
+//typedef std::map<const Attr*, RplVector*> RplAttrMapTy;
+//typedef std::map<const Decl*, ASaPType*> ASaPTypeDeclMapTy;
+//typedef std::map<const FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
 
-
+/*
 void destroyEffectSummaryMap(EffectSummaryMapTy &EffectSummaryMap) {
   for(EffectSummaryMapTy::iterator I = EffectSummaryMap.begin(),
       E = EffectSummaryMap.end(); I != E;) {
@@ -138,10 +143,12 @@ void destroyRplElementAttrMap(RplElementAttrMapTy &RplElementAttrMap) {
     RplElementAttrMap.erase(I++);
   }
   assert(RplElementAttrMap.size() == 0);
-}
+}*/
 
 ///-///////////////////////////////////////////////////////////////////
 /// GENERIC VISITORS
+using ASaP::SymbolTable;
+
 /// 1. Wrapper pass that calls a Stmt visitor on each function definition.
 template<typename StmtVisitorTy>
 class StmtVisitorInvoker :
@@ -155,10 +162,7 @@ private:
   AnalysisDeclContext *AC;
   raw_ostream &OS;
 
-  RplElementAttrMapTy RplElementMap;
-  RplAttrMapTy &RplAttrMap;
-  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
-  EffectSummaryMapTy &EffectSummaryMap;
+  SymbolTable &SymT;
 
   bool FatalError;
 
@@ -167,17 +171,13 @@ public:
   explicit StmtVisitorInvoker(
     ento::BugReporter &BR, ASTContext &Ctx,
     AnalysisManager &Mgr, AnalysisDeclContext *AC, raw_ostream &OS,
-    RplElementAttrMapTy RplElementMap, RplAttrMapTy &RplAttrMap,
-    ASaPTypeDeclMapTy &ASaPTypeDeclMap, EffectSummaryMapTy &ESM)
+    SymbolTable &SymT)
       : BR(BR),
         Ctx(Ctx),
         Mgr(Mgr),
         AC(AC),
         OS(OS),
-        RplElementMap(RplElementMap),
-        RplAttrMap(RplAttrMap),
-        ASaPTypeDeclMap(ASaPTypeDeclMap),
-        EffectSummaryMap(ESM),
+        SymT(SymT),
         FatalError(false)
   {}
 
@@ -191,9 +191,8 @@ public:
       Stmt* S = Definition->getBody();
       assert(S);
 
-      StmtVisitorTy StmtVisitor(BR, Ctx, Mgr, AC, OS,
-                                RplElementMap, RplAttrMap, ASaPTypeDeclMap,
-                                EffectSummaryMap, Definition, S);
+      StmtVisitorTy StmtVisitor(BR, Ctx, Mgr, AC, OS, SymT, Definition, S);
+
       FatalError |= StmtVisitor.encounteredFatalError();
     }
     return true;
@@ -216,10 +215,7 @@ protected:
   AnalysisDeclContext *AC;
   raw_ostream &OS;
 
-  RplElementAttrMapTy &RplElementMap;
-  RplAttrMapTy &RplMap;
-  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
-  EffectSummaryMapTy &EffectSummaryMap;
+  SymbolTable &SymT;
 
   const FunctionDecl *Def;
   bool FatalError;
@@ -232,10 +228,7 @@ public:
     AnalysisManager &Mgr,
     AnalysisDeclContext *AC,
     raw_ostream &OS,
-    RplElementAttrMapTy &RplElementMap,
-    RplAttrMapTy &RplMap,
-    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
-    EffectSummaryMapTy &EffectSummaryMap,
+    SymbolTable &SymT,
     const FunctionDecl *Def,
     Stmt *S
     ) : BR(BR),
@@ -243,10 +236,7 @@ public:
         Mgr(Mgr),
         AC(AC),
         OS(OS),
-        RplElementMap(RplElementMap),
-        RplMap(RplMap),
-        ASaPTypeDeclMap(ASaPTypeDeclMap),
-        EffectSummaryMap(EffectSummaryMap),
+        SymT(SymT),
         Def(Def),
         FatalError(false) {
       //Visit(S);
@@ -285,14 +275,13 @@ public:
       RegionParamAttr(D->getSourceRange(), D->getASTContext(), "P");
 
     /** initialize traverser */
-    RplElementAttrMapTy RplElementMap;
-    RplAttrMapTy RplMap;
-    ASaPTypeDeclMapTy ASaPTypeMap;
-    EffectSummaryMapTy EffectsMap;
+    SymbolTable SymT;
+    ASTContext &Ctx = D->getASTContext();
+    AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(D);
+
+
     ASaPSemanticCheckerTraverser
-      SemanticChecker(BR, D->getASTContext(),
-                      Mgr.getAnalysisDeclContext(D),
-                      os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);
+      SemanticChecker(BR, Ctx, AC, os, SymT);
     /** run checker */
     SemanticChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     os << "##############################################\n";
@@ -302,9 +291,7 @@ public:
     } else {
       // else continue with Typechecking
       StmtVisitorInvoker<AssignmentCheckerVisitor>
-        TypeChecker(BR, D->getASTContext(), Mgr,
-                    Mgr.getAnalysisDeclContext(D),
-                    os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);
+        TypeChecker(BR, Ctx, Mgr, AC, os, SymT);
       TypeChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
       os << "##############################################\n";
       os << "DEBUG:: done running ASaP Type Checker\n\n";
@@ -315,9 +302,7 @@ public:
         // else continue with Effects Checking
         // Check that Effect Summaries cover effects
         StmtVisitorInvoker<EffectCollectorVisitor>
-          EffectChecker(BR, D->getASTContext(), Mgr,
-                        Mgr.getAnalysisDeclContext(D),
-                        os, RplElementMap, RplMap, ASaPTypeMap, EffectsMap);
+          EffectChecker(BR, Ctx, Mgr, AC, os, SymT);
 
         EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
         os << "##############################################\n";
@@ -329,13 +314,14 @@ public:
     }
 
     /// Clean-Up
-    destroyEffectSummaryMap(EffectsMap);
-    destroyRplAttrMap(RplMap); // FIXME: tries to free freed memory (sometimes)
-    destroyRplElementAttrMap(RplElementMap);
+    //destroyEffectSummaryMap(EffectsMap);
+    //destroyRplAttrMap(RplMap); // FIXME: tries to free freed memory (sometimes)
+    //destroyRplElementAttrMap(RplElementMap);
     /// TODO: deallocate BuiltinDefaulrRegionParam
     delete ROOTRplElmt;
     delete LOCALRplElmt;
     delete STARRplElmt;
+    // Note: implicit deallocation of SymT
   }
 }; // end class SafeParallelismChecker
 } // end unnamed namespace

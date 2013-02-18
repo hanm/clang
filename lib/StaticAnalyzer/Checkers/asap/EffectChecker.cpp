@@ -13,10 +13,7 @@ private:
   AnalysisDeclContext *AC;
   raw_ostream &OS;
 
-  RplElementAttrMapTy &RplElementMap;
-  RplAttrMapTy &RplMap;
-  ASaPTypeDeclMapTy &ASaPTypeDeclMap;
-  EffectSummaryMapTy &EffectSummaryMap;
+  SymbolTable &SymT;
 
   const FunctionDecl *Def;
   bool FatalError;
@@ -213,10 +210,7 @@ public:
     AnalysisManager &Mgr,
     AnalysisDeclContext *AC,
     raw_ostream &OS,
-    RplElementAttrMapTy &RplElementMap,
-    RplAttrMapTy &RplMap,
-    ASaPTypeDeclMapTy &ASaPTypeDeclMap,
-    EffectSummaryMapTy &EffectSummaryMap,
+    SymbolTable &SymT,
     const FunctionDecl* Def,
     Stmt *S
     ) : BR(BR),
@@ -224,10 +218,7 @@ public:
         Mgr(Mgr),
         AC(AC),
         OS(OS),
-        RplElementMap(RplElementMap),
-        RplMap(RplMap),
-        ASaPTypeDeclMap(ASaPTypeDeclMap),
-        EffectSummaryMap(EffectSummaryMap),
+        SymT(SymT),
         Def(Def),
         FatalError(false),
         HasWriteSemantics(false),
