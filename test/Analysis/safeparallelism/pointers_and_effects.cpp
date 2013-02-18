@@ -60,7 +60,7 @@ Rectangle {
   Rectangle ** pnextstar [[asap::arg("Links, Pr:Links, Pr:*:Next")]];
 
   void do_pointer_stuff
-    [[asap::writes("Pr:R1:X, Pr:R1:Y, Pr:R2:*, Pr:*:Links, Links")]]
+    [[asap::writes("Pr:R1:Point::X, Pr:R1:Point::Y, Pr:R2:*, Pr:*:Links, Links")]]
     [[asap::reads("Pr:Next")]]
     (int _x, int _y, bool b)
   {
