@@ -19,6 +19,7 @@ private:
   bool FatalError;
 
   Effect::EffectVector EffectsTmp;
+
   /// true when visiting an expression that is being written to
   bool HasWriteSemantics;
   /// true when visiting a base expression (e.g., B in B.f, or B->f)
@@ -28,20 +29,17 @@ private:
 
   bool IsCoveredBySummary;
 
-  Effect::EffectVector *EffectSummary;
+  const EffectSummary *EffSummary;
 
   /// Private Methods
   /// \brief using Type with DerefNum perform substitution on all TmpEffects
-  void memberSubstitute(ASaPType *Type, int DerefNum) {
+  void memberSubstitute(const ASaPType *Type, int DerefNum) {
     assert(Type);
-
     QualType QT = Type->getQT(DerefNum);
 
-    const RegionParamAttr* RPA = getRegionParamAttr(QT.getTypePtr());
-    assert(RPA);
-    RplElement *RplEl = RplElementMap[RPA];
-    assert(RplEl);
-    const ParamRplElement *FromEl = dyn_cast<ParamRplElement>(RplEl);
+    const ParameterVector *ParamVec = SymT.getParameterVectorFromQualType(QT);
+    // TODO support multiple Parameters
+    const ParamRplElement *FromEl = ParamVec->getParamAt(0);
     assert(FromEl);
 
     const Rpl *ToRpl = Type->getSubstArg(DerefNum);
@@ -112,17 +110,17 @@ private:
 
   /// \brief Copy the effect summary of FunD and push it to the TmpEffects
   int copyAndPushEffects(FunctionDecl *FunD) {
-    Effect::EffectVector *EV = EffectSummaryMap[FunD];
-    assert(EV);
+    const EffectSummary *FunEffects = SymT.getEffectSummary(FunD);
+    assert(FunEffects);
     // Must make copies because we will substitute, cannot use append:
     //EffectsTmp.append(EV->size(), (*EV->begin()));
-    for(Effect::EffectVector::const_iterator
-            I = EV->begin(),
-            E = EV->end();
+    for(EffectSummary::const_iterator
+            I = FunEffects->begin(),
+            E = FunEffects->end();
          I != E; ++I) {
         EffectsTmp.push_back(new Effect(*(*I)));
     }
-    return EV->size();
+    return FunEffects->size();
   }
 
   /// \brief Check that the 'N' last effects are covered by the summary
@@ -131,7 +129,7 @@ private:
     for (int I=0; I<N; ++I){
       Effect* E = EffectsTmp.pop_back_val();
       OS << "### "; E->print(OS); OS << "\n";
-      if (!E->isCoveredBy(*EffectSummary)) {
+      if (!E->isCoveredBy(*EffSummary)) {
         std::string Str = E->toString();
         helperEmitEffectNotCoveredWarning(Exp, D, Str);
         Result = false;
@@ -191,7 +189,7 @@ private:
     OS <<")\n";
 
     bool SavedHWS = HasWriteSemantics;
-    HasWriteSemantics = false;  // TODO hm... is this right?
+    HasWriteSemantics = false;
     Visit(E->getRHS());
 
     HasWriteSemantics = true;
@@ -226,8 +224,8 @@ public:
         DerefNum(0),
         IsCoveredBySummary(true) {
 
-    EffectSummary = EffectSummaryMap[Def];
-    assert(EffectSummary);
+    EffSummary = SymT.getEffectSummary(this->Def);
+    assert(EffSummary);
 
     Visit(S);
   }
@@ -282,7 +280,7 @@ public:
     const FieldDecl* FieldD  = dyn_cast<FieldDecl>(VD);
     if (FieldD) {
 
-      ASaPType *T = ASaPTypeDeclMap[FieldD];
+      const ASaPType *T = SymT.getType(FieldD);
       assert(T);
       if (IsBase)
         memberSubstitute(T, DerefNum);

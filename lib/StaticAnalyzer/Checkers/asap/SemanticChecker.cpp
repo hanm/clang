@@ -1,20 +1,20 @@
-/**
- *  Traversal that checks semantic properties of the ASaP Annotations
- *  1. Region and parameter declarations are well formed
- *  2. Rpls are valid
- *  2.a Rpl Elements are declared
- *  2.b Parameters only appear at the first position
- *  3. Correct number of region argument
- *  4. Declaration has too many region arguments
- *  5. Declaration has too few region arguments (ignored when default
- *     arguments are enabled).
- *  6. Check that effect summaries are minimal
- *  7. Build map from FunctionDecl to effect summaries
- */
+/// Traversal that checks semantic properties of the ASaP Annotations
+/// 1. Region and parameter declarations are well formed
+/// 2. Rpls are valid
+/// 2.a Rpl Elements are declared
+/// 2.b Parameters only appear at the first position
+/// 3. Correct number of region argument
+/// 4. Declaration has too many region arguments
+/// 5. Declaration has too few region arguments (ignored when default
+///    arguments are enabled).
+/// 6. Check that effect summaries are minimal
+/// 7. Build map from FunctionDecl to effect summaries
+
 class ASaPSemanticCheckerTraverser :
   public RecursiveASTVisitor<ASaPSemanticCheckerTraverser> {
 
 private:
+  typedef llvm::DenseMap<const Attr*, RplVector*> RplVecAttrMapT;
   /// Fields
   ento::BugReporter &BR;
   ASTContext &Ctx;
@@ -23,16 +23,16 @@ private:
 
   SymbolTable &SymT;
 
+  RplVecAttrMapT RplVecAttrMap;
   bool FatalError;
 
   /// Private Methods
-  void addASaPTypeToMap(ASaPTypeDeclMapTy &Map, ValueDecl* D,
-                        RplVector *RV, Rpl *InRpl) {
-    assert(!Map[D]);
+  void addASaPTypeToMap(ValueDecl* D, RplVector *RV, Rpl *InRpl) {
+    assert(!SymT.hasType(D));
     ASaPType *T = new ASaPType(D->getType(), RV, InRpl);
     OS << "Debug:: RV.size=" << (RV ? RV->size() : 0)
        << ", T.RV.size=" << T->getArgVSize() << "\n";
-    Map[D] = T;
+    SymT.setType(D, T);
     OS << "Debug :: adding type: " << T->toString(Ctx) << "\n";
   }
 
@@ -58,11 +58,15 @@ private:
   void helperEmitAttributeWarning(const Decl *D,
                                   const Attr *attr,
                                   const StringRef &str,
-                                  std::string bugName) {
+                                  std::string bugName,
+                                  bool AddQuotes = true) {
 
-    std::string description_std = "'";
+    std::string description_std = "";
+    if (AddQuotes)
+      description_std.append("'");
     description_std.append(str);
-    description_std.append("' ");
+    if (AddQuotes)
+      description_std.append("' ");
     description_std.append(bugName);
     StringRef bugCategory = "Safe Parallelism";
     StringRef bugStr = description_std;
@@ -121,6 +125,7 @@ private:
   /// \brief Region name or parameter contains illegal characters
   void emitIllFormedRegionNameOrParameter(Decl *D, Attr *A, StringRef Name) {
     std::string AttrTypeStr = "";
+    assert(A);
     if (isa<RegionAttr>(A))
       AttrTypeStr = "region";
     else if (isa<RegionParamAttr>(A))
@@ -132,18 +137,25 @@ private:
   }
 
   /// \brief Effect summary not minimal: effect E1 is covered by effect E2
-  void emitEffectCovered(Decl *D, Effect *E1, Effect *E2) {
-    // warning: e is covered by *J
+  void emitEffectCovered(Decl *D, const Effect *E1, const Effect *E2) {
+    // warning: e1 is covered by e2
     StringRef BugName = "effect summary is not minimal";
     std::string sbuf;
     llvm::raw_string_ostream StrBuf(sbuf);
     StrBuf << "'"; E1->print(StrBuf);
     StrBuf << "' covered by '";
     E2->print(StrBuf); StrBuf << "': ";
-    StrBuf << BugName;
+    //StrBuf << BugName;
 
     StringRef BugStr = StrBuf.str();
-    helperEmitAttributeWarning(D, E1->getAttr(), BugStr, BugName);
+    helperEmitAttributeWarning(D, E1->getAttr(), BugStr, BugName, false);
+  }
+
+  void emitNoEffectInNonEmptyEffectSummary(Decl *D, const Attr *A) {
+    StringRef BugName = "no_effect is illegal in non-empty effect summary";
+    StringRef BugStr = "";
+
+    helperEmitAttributeWarning(D, A, BugStr, BugName, false);
   }
 
   /// \brief return the number of In/Arg annotations needed for type or -1
@@ -204,128 +216,57 @@ private:
     return Result;
   }
 
-  /*inline RplElement *createRegionOrParamElement(const Attr *Attribute) {
-    RplElement* Result = 0;
-    switch(Attribute->getKind()) {
-    case attr::Region:
-      Result = new NamedRplElement(dyn_cast<RegionAttr>(Attribute)->getName());
-      break;
-    case attr::RegionParam:
-      Result = new ParamRplElement(dyn_cast<RegionParamAttr>(Attribute)
-                                    ->getName());
-      break;
-    default:
-      Result = 0;
-    }
-    return Result;
-  }*/
-
-  /**
-   *  Return true if any of the attributes of type AttrType of the
-   *  declaration Decl* D have a region name or a param name that is
-   *  the same as the 'name' provided as the second argument
-   */
-  template<typename AttrType>
-  bool scanAttributesBool(Decl* D, const StringRef &Name)
-  {
-    //AttrType *A;  /// Assertion fails on a null pointer...
-    //assert(isa<RegionParamAttr>(A) || isa<RegionAttr>(A));
-    for (specific_attr_iterator<AttrType>
-         I = D->specific_attr_begin<AttrType>(),
-         E = D->specific_attr_end<AttrType>();
-         I != E; ++I) {
-      if (getRegionOrParamName(*I) == Name)
-        return true;
-    }
-
-    return false;
-  }
-
-  /// \brief  Return an RplElement if any of the attributes of type AttrType
-  /// of the declaration Decl* D have a region name or a param name that is
-  /// the same as the 'name' provided as the 2nd argument.
-  template<typename AttrType>
-  RplElement* scanAttributes(Decl* D, const StringRef &Name)
-  {
-    for (specific_attr_iterator<AttrType>
-         I = D->specific_attr_begin<AttrType>(),
-         E = D->specific_attr_end<AttrType>();
-         I != E; ++ I) {
-      if (getRegionOrParamName(*I) == Name) {
-        RplElement *El = RplElementMap[*I];
-
-        std::string sbuf;
-        llvm::raw_string_ostream StrBuf(sbuf);
-        (*I)->printPretty(StrBuf, Ctx.getPrintingPolicy());
-        OS << "DEBUG:: " << StrBuf.str() << " maps to " <<
-          (El? El->getName() :"NULL") << "\n";
-        assert(El);
-        return El;
-      }
-    }
-
-    return 0;
-  }
-
-  /// \brief Check that the region and region parameter declarations
-  ///        of D are well formed (don't contain illegal characters)
-  ///        and add an RplElement to the corresponding map.
+  /// \brief Check that the region name and region parameter declarations
+  /// of D are well formed (don't contain illegal characters)
   template<typename AttrType>
   bool checkRegionOrParamDecls(Decl* D) {
     bool Result = true;
 
-    for (specific_attr_iterator<AttrType>
-         I = D->specific_attr_begin<AttrType>(),
-         E = D->specific_attr_end<AttrType>();
-         I != E; ++I) {
+    specific_attr_iterator<AttrType>
+        I = D->specific_attr_begin<AttrType>(),
+        E = D->specific_attr_end<AttrType>();
+    for ( ; I != E; ++I) {
       assert(isa<RegionAttr>(*I) || isa<RegionParamAttr>(*I));
       const StringRef ElmtNames = getRegionOrParamName(*I);
-      OS << "DEBUG:: checking RPL Element called " << Name << "\n";
 
-      bool Failed = false;
-
-      RplElementVector *RLV = new RplElementVector();
       llvm::SmallVector<StringRef, 8> RplElmtVec;
       ElmtNames.split(RplElmtVec, ",");
-      for (size_t I = 0 ; !Failed && I != RplElmtVec.size(); ++I) {
-        StringRef Name = RplElmVec[I].trim();
+      for (size_t Idx = 0 ; Idx != RplElmtVec.size(); ++Idx) {
+        StringRef Name = RplElmtVec[Idx].trim();
         if (isValidRegionName(Name)) {
           /// Add it to the vector
           OS << "DEBUG:: creating RPL Element called " << Name << "\n";
           if (isa<RegionAttr>(*I))
-            RLV->push_back(new NamedRplElement(Name));
+            SymT.addRegionName(D, Name);
+            //RegNameSet->insert(new NamedRplElement(Name));
           else if (isa<RegionParamAttr>(*I))
-            RLV->push_back(new NamedRplElement(Name));
+            SymT.addParameterName(D, Name);
+            //ParamVec->push_back(new ParamRplElement(Name));
         } else {
           /// Emit bug report: ill formed region or parameter name
           emitIllFormedRegionNameOrParameter(D, *I, Name);
           Result = false;
         }
       } // end for each Element of Attribute
-      if (Result) {
-        if (isa<RegionAttr>(*I))
-          RegionMap[D] = RLV;
-        else if (isa<RegionParamAttr>(*I))
-          ParamMap[D] = RLV;
-      }
-    }
+    } // end for each Attribute of type AttrType
+
     return Result;
   }
 
-  RplElement *findRegionOrParamName(Decl *D, StringRef Name) {
+  const RplElement *findRegionOrParamName(Decl *D, StringRef Name) {
     if (!D)
       return 0;
-    /// 1. try to find among regions or region parameters of function
-    RplElement *Result = scanAttributes<RegionAttr>(D, Name);
+    /// 1. try to find among regions or region parameters
+    const RplElement *Result = SymT.lookupParameterName(D, Name);
     if (!Result)
-      Result = scanAttributes<RegionParamAttr>(D, Name);
+      Result = SymT.lookupRegionName(D, Name);
     return Result;
   }
   /// \brief Looks for 'Name' in the declaration 'D' and its parent scopes.
-  RplElement *recursiveFindRegionOrParamName(Decl *D, StringRef Name) {
+  const RplElement *recursiveFindRegionOrParamName(Decl *D, StringRef Name) {
 
     /// 1. try to find among regions or region parameters of function
-    RplElement *Result = findRegionOrParamName(D, Name);
+    const RplElement *Result = findRegionOrParamName(D, Name);
     if (Result)
       return Result;
 
@@ -355,8 +296,8 @@ private:
 
   void checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
     RegionArgAttr *A = D->getAttr<RegionArgAttr>();
-    RplVector *RV = (A) ? RplAttrMap[A] : 0;
-    if (A && !RV && FatalError)
+    RplVector *RplVec = (A) ? RplVecAttrMap[A] : 0;
+    if (A && !RplVec && FatalError)
       return; // don't check an error already occured
 
     QualType QT = D->getType();
@@ -364,7 +305,7 @@ private:
     OS << "DEBUG:: calling 'getRegionParamCount(QT)'...";
     int ParamCount = getRegionParamCount(QT);
     OS << "(" << ParamCount << ") DONE!\n";
-    long Size = (RV) ? RV->size() : 0;
+    long Size = (RplVec) ? RplVec->size() : 0;
     OS << "size = " << Size << "\n";
 
     if (ParamCount < 0) {
@@ -380,15 +321,14 @@ private:
       llvm::raw_string_ostream BufStream(SBuf);
       int I = ParamCount;
       for (; I < Size-1; ++I) {
-        RV->getRplAt(I)->print(BufStream);
+        RplVec->getRplAt(I)->print(BufStream);
         BufStream << ", ";
       }
-      if (I <Size)
-        RV->getRplAt(I)->print(BufStream);
+      if (I < Size)
+        RplVec->getRplAt(I)->print(BufStream);
       FatalError = true;
       emitSuperfluousRegionArg(D, BufStream.str());
     } else if (ParamCount > 0) {
-      RplVector *RplVec = (RV) ? new RplVector(*RV) : 0;
       if (ParamCount > Size) {
         assert(DefaultInRpl);
         if (RplVec) {
@@ -400,8 +340,7 @@ private:
       assert(ParamCount == 0 ||
              (size_t)ParamCount == RplVec->size());
 
-      addASaPTypeToMap(ASaPTypeDeclMap, D, RplVec, 0);
-      delete RplVec;
+      addASaPTypeToMap(D, RplVec, 0);
     }
     OS << "DEBUG:: DONE checkTypeRegionArgs\n";
   }
@@ -411,10 +350,10 @@ private:
   /// to the map from Attrs to Rpls.
   bool checkRpls(Decl *D, Attr *A, StringRef RplsStr) {
     /// First check that we have not already parsed this attribute's RPL
-    RplVector *RV = RplAttrMap[A];
+    RplVector *RV = RplVecAttrMap[A];
     if (RV)
       return new RplVector(*RV);
-    /// else
+    // else:
     bool Failed = false;
 
     RV = new RplVector();
@@ -434,7 +373,7 @@ private:
       RV = 0;
       return false;
     } else {
-      RplAttrMap[A] = RV;
+      RplVecAttrMap[A] = RV;
       return true;
     }
   }
@@ -443,10 +382,7 @@ private:
   /// D have RPLs whose elements have been declared, and if so, add RPL
   /// to the map from Attrs to Rpls.
   Rpl* checkRpl(Decl *D, Attr *A, StringRef RplStr) {
-    /// First check that we have not already parsed this attribute's RPL
-
     bool Result = true;
-
 
     int Count = 0;
 
@@ -565,53 +501,40 @@ private:
   /// Called with AttrType being one of ReadsEffectAttr, WritesEffectAttr,
   /// ΑtomicReadsEffectAttr, or AtomicWritesEffectAttr.
   template<typename AttrType>
-  void buildPartialEffectSummary(FunctionDecl* D, Effect::EffectVector& EV) {
+  void buildPartialEffectSummary(FunctionDecl* D, EffectSummary &ES) {
     for (specific_attr_iterator<AttrType>
          I = D->specific_attr_begin<AttrType>(),
          E = D->specific_attr_end<AttrType>();
          I != E; ++I) {
       Effect::EffectKind EK = getEffectKind(*I);
-      RplVector *Tmp = RplAttrMap[*I];
+      RplVector *Tmp = RplVecAttrMap[*I];
 
       if (Tmp) { /// Tmp may be NULL if the RPL was ill formed (e.g., contained
                  /// undeclared RPL elements).
         for (size_t Idx = 0; Idx < Tmp->size(); ++Idx) {
-          EV.push_back(new Effect(EK, Tmp->getRplAt(Idx), *I));
+          const Effect *E = new Effect(EK, Tmp->getRplAt(Idx), *I);
+          bool Success = ES.insert(E);
+          assert(Success);
         }
       }
     }
   }
 
-  void buildEffectSummary(FunctionDecl* D, Effect::EffectVector& EV) {
-    buildPartialEffectSummary<ReadsEffectAttr>(D, EV);
-    buildPartialEffectSummary<WritesEffectAttr>(D, EV);
-    buildPartialEffectSummary<AtomicReadsEffectAttr>(D, EV);
-    buildPartialEffectSummary<AtomicWritesEffectAttr>(D, EV);
+  void buildEffectSummary(FunctionDecl* D, EffectSummary &ES) {
+    buildPartialEffectSummary<ReadsEffectAttr>(D, ES);
+    buildPartialEffectSummary<WritesEffectAttr>(D, ES);
+    buildPartialEffectSummary<AtomicReadsEffectAttr>(D, ES);
+    buildPartialEffectSummary<AtomicWritesEffectAttr>(D, ES);
     if (const NoEffectAttr* Attr = D->getAttr<NoEffectAttr>()) {
-      Effect* E = new Effect(Effect::EK_NoEffect, 0, Attr);
-      EV.push_back(E);
+      if (ES.size() > 0) {
+        // "no effect" not compatible with other effects
+        emitNoEffectInNonEmptyEffectSummary(D, Attr);
+      } else {
+        Effect* E = new Effect(Effect::EK_NoEffect, 0, Attr);
+        bool Success = ES.insert(E);
+        assert(Success);
+      }
     }
-  }
-
-
-  /// \brief Check that an effect summary is minimal and, if not, remove
-  /// superluous effects
-  void checkEffectSummary(Decl* D, Effect::EffectVector& EV) {
-    Effect::EffectVector::iterator I = EV.begin(); // not a const iterator
-    while (I != EV.end()) { // EV.end() is not loop invariant
-      bool found = false;
-      for (Effect::EffectVector::iterator
-            J = EV.begin(); J != EV.end(); ++J) {
-        if (I != J && (*I)->isSubEffectOf(*(*J))) {
-          emitEffectCovered(D, *I, *J);
-          found = true;
-          break;
-        } // end if
-      } // end inner for loop
-      /// optimization: remove e from effect Summary
-      if (found) I = EV.erase(I);
-      else       ++I;
-    } // end while loop
   }
 
 public:
@@ -622,14 +545,24 @@ public:
   explicit ASaPSemanticCheckerTraverser (
     ento::BugReporter &BR, ASTContext &Ctx,
     AnalysisDeclContext *AC, raw_ostream &OS,
-    SymbolTable &SymT,
-    ) : BR(BR),
+    SymbolTable &SymT)
+      : BR(BR),
         Ctx(Ctx),
         AC(AC),
         OS(OS),
         SymT(SymT),
         FatalError(false)
   {}
+
+  /// Destructor
+  virtual ~ASaPSemanticCheckerTraverser () {
+    for(RplVecAttrMapT::const_iterator
+          I = RplVecAttrMap.begin(),
+          E = RplVecAttrMap.end();
+        I != E; ++I) {
+      delete (*I).second;
+    }
+  }
 
   /// Getters & Setters
   inline bool encounteredFatalError() { return FatalError; }
@@ -683,17 +616,25 @@ public:
     if (Success) {
       /// C. Check effect summary
       /// C.1. Build Effect Summary
-      Effect::EffectVector *EV = new Effect::EffectVector();
-      Effect::EffectVector &EffectSummary = *EV;
-      buildEffectSummary(D, EffectSummary);
-      OS << "Effect Summary from annotation:\n";
-      Effect::printEffectSummary(EffectSummary, OS);
+      EffectSummary *ES = new EffectSummary();
+      buildEffectSummary(D, *ES);
+      OS << "Effect Summary from source file:\n";
+      ES->print(OS);
 
       /// C.2. Check Effect Summary is minimal
-      checkEffectSummary(D, EffectSummary);
+      EffectSummary::EffectCoverageVector ECV;
+      ES->makeMinimal(ECV);
+      while(ECV.size() > 0) {
+        std::pair<const Effect*, const Effect*> *PairPtr = ECV.pop_back_val();
+        const Effect *E1 = PairPtr->first, *E2 = PairPtr->second;
+        emitEffectCovered(D, E1, E2);
+        delete E1;
+        delete PairPtr;
+      }
       OS << "Minimal Effect Summary:\n";
-      Effect::printEffectSummary(EffectSummary, OS);
-      EffectSummaryMap[D] = EV;
+      ES->print(OS);
+      bool Success = SymT.setEffectSummary(D, ES);
+      assert(Success);
     }
     return true;
   }

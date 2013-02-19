@@ -43,9 +43,6 @@ public:
         Def(Def),
         FatalError(false), Type(0) {
 
-    //ResultType = getReturnType(Def);
-    //Effect::EffectVector *EffectSummary = EffectSummaryMap[Def];
-    //assert(EffectSummary);
     OS << "DEBUG:: ******** INVOKING AssignmentCheckerVisitor...\n";
     S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
@@ -245,12 +242,10 @@ private:
     OS << "DEBUG:: Type = " << T->toString(Ctx) << "\n";
 
     QualType QT = T->getQT(DerefNum);
-    const RegionParamAttr* RPA = getRegionParamAttr(QT.getTypePtr());
-    assert(RPA);
+
+    const ParameterVector *ParamVec = SymT.getParameterVectorFromQualType(QT);
     // TODO support multiple Parameters
-    RplElement *RplEl = RplElementMap[RPA];
-    assert(RplEl);
-    const ParamRplElement *FromEl = dyn_cast<ParamRplElement>(RplEl);
+    const ParamRplElement *FromEl = ParamVec->getParamAt(0);
     assert(FromEl);
 
     const Rpl *ToRpl = T->getSubstArg(DerefNum);
@@ -348,10 +343,6 @@ public:
     Exp->getType().print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
 
-    //OS << "  and subExpr Type = ";
-    //Exp->getSubExpr()->getType().print(OS, Ctx.getPrintingPolicy());
-    //OS << "\n";
-
     RefQT = Exp->getType();
     assert(RefQT->isPointerType());
 
@@ -406,17 +397,19 @@ public:
       Rpl *Tmp = RplMap[Arg];
       assert(Tmp);
       TmpRegions->push_back(new Rpl(Tmp));*/
-      const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
-      assert(Param);
+
+      //const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
+      //assert(Param);
+
+      //RplElement *El = RplElementMap[Param];
+      //assert(El);
+      //ParamRplElement *ParamEl = dyn_cast<ParamRplElement>(El);
+      //assert(ParamEl);
+
+      const ParameterVector *ParamVec = SymT.getParameterVector(RecDecl);
       QualType ThisQT = E->getType();
 
-      RplElement *El = RplElementMap[Param];
-      assert(El);
-      ParamRplElement *ParamEl = dyn_cast<ParamRplElement>(El);
-      assert(ParamEl);
-
-      Rpl R(*ParamEl);
-      RplVector RV(R);
+      RplVector RV(*ParamVec);
 
       OS << "DEBUG:: adding 'this' type : ";
       ThisQT.print(OS, Ctx.getPrintingPolicy());

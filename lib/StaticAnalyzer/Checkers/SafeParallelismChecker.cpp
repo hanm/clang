@@ -62,89 +62,14 @@ inline bool isNonPointerScalarType(QualType QT) {
   return (QT->isScalarType() && !QT->isPointerType());
 }
 
-#include "asap/RplsAndEffects.cpp"
+#include "asap/RplElement.cpp"
+#include "asap/Rpl.cpp"
+#include "asap/Effect.cpp"
+
 #include "asap/ASaPType.cpp"
 #include "asap/ASaPSymbolTable.cpp"
 
 namespace {
-  /// \brief The default region parameter "P" used for implicitly boxed types
-  /// such as int or pointers.
-  RegionParamAttr *BuiltinDefaulrRegionParam;
-
-
-  // TODO pass arg attr as parameter
-  /*
-  inline bool hasValidRegionParamAttr(const Type* T) {
-    bool result = false;
-    if (const TagType* tt = dyn_cast<TagType>(T)) {
-      const TagDecl* td = tt->getDecl();
-      const RegionParamAttr* rpa = td->getAttr<RegionParamAttr>();
-      // TODO check the number of params is equal to arg attr.
-      if (rpa) result = true;
-    } else if (T->isBuiltinType() || T->isPointerType()) {
-      // TODO check the number of parameters of the arg attr to be 1
-      result = true;
-    }
-    return result;
-  }*/
-
-  // FIXME
-  inline const RegionParamAttr *getRegionParamAttr(const Type* T) {
-    const RegionParamAttr* Result = 0; // null
-    if (const TagType* TT = dyn_cast<TagType>(T)) {
-      const TagDecl* TD = TT->getDecl();
-      Result = TD->getAttr<RegionParamAttr>();
-      // TODO check the number of params is equal to arg attr.
-    } else if (T->isBuiltinType() || T->isPointerType()) {
-      // TODO check the number of parameters of the arg attr to be 1
-      Result = BuiltinDefaulrRegionParam;
-    } /// else result = NULL;
-
-    return Result;
-  }
-
-
-
-//typedef std::map<const Decl*, RplElementVector*> RplElementAttrMapTy;
-/// FIXME it might be better to map declarations to vectors of Rpls
-/// and RplElements as we did for effect summaries...
-// maps arg and effect attributes to their RPLs
-//typedef std::map<const Attr*, RplVector*> RplAttrMapTy;
-//typedef std::map<const Decl*, ASaPType*> ASaPTypeDeclMapTy;
-//typedef std::map<const FunctionDecl*, Effect::EffectVector*> EffectSummaryMapTy;
-
-/*
-void destroyEffectSummaryMap(EffectSummaryMapTy &EffectSummaryMap) {
-  for(EffectSummaryMapTy::iterator I = EffectSummaryMap.begin(),
-      E = EffectSummaryMap.end(); I != E;) {
-    Effect::EffectVector *EV = (*I).second;
-    destroyVector(*EV);
-    delete EV;
-    EffectSummaryMap.erase(I++);
-  }
-  assert(EffectSummaryMap.size() == 0);
-}
-
-void destroyRplAttrMap(RplAttrMapTy &RplAttrMap) {
-  for(RplAttrMapTy::iterator I = RplAttrMap.begin(),
-      E = RplAttrMap.end(); I != E;) {
-    RplVector *R = (*I).second;
-    delete R;
-    RplAttrMap.erase(I++);
-  }
-  assert(RplAttrMap.size() == 0);
-}
-
-void destroyRplElementAttrMap(RplElementAttrMapTy &RplElementAttrMap) {
-  for(RplElementAttrMapTy::iterator I = RplElementAttrMap.begin(),
-      E = RplElementAttrMap.end(); I != E;) {
-    RplElement *RpEl = (*I).second;
-    delete RpEl;
-    RplElementAttrMap.erase(I++);
-  }
-  assert(RplElementAttrMap.size() == 0);
-}*/
-
 ///-///////////////////////////////////////////////////////////////////
 /// GENERIC VISITORS
 using ASaP::SymbolTable;
@@ -260,19 +185,21 @@ public:
 }; // end class StmtVisitor
 
 /// FIXME temporarily just using pre-processor to concatenate code here... UGLY
+#include "asap/SemanticChecker.cpp"
 #include "asap/TypeChecker.cpp"
 #include "asap/EffectChecker.cpp"
-#include "asap/SemanticChecker.cpp"
 
 class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
 
 public:
-  void checkASTDecl(const TranslationUnitDecl *D, AnalysisManager &Mgr,
+  void checkASTDecl(const TranslationUnitDecl *D,
+                    AnalysisManager &Mgr,
                     BugReporter &BR) const {
     os << "DEBUG:: starting ASaP Semantic Checker\n";
-    BuiltinDefaulrRegionParam = ::new(D->getASTContext())
-      RegionParamAttr(D->getSourceRange(), D->getASTContext(), "P");
+
+    //BuiltinDefaulrRegionParam = ::new(D->getASTContext())
+      //RegionParamAttr(D->getSourceRange(), D->getASTContext(), "P");
 
     /** initialize traverser */
     SymbolTable SymT;
@@ -313,11 +240,7 @@ public:
       }
     }
 
-    /// Clean-Up
-    //destroyEffectSummaryMap(EffectsMap);
-    //destroyRplAttrMap(RplMap); // FIXME: tries to free freed memory (sometimes)
-    //destroyRplElementAttrMap(RplElementMap);
-    /// TODO: deallocate BuiltinDefaulrRegionParam
+    // Clean-Up
     delete ROOTRplElmt;
     delete LOCALRplElmt;
     delete STARRplElmt;
