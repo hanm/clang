@@ -219,16 +219,21 @@ public:
   // Types
   typedef ParamVecT::const_iterator const_iterator;
   // Methods
+  /// \brief Appends a ParamRplElement to the tail of the vector.
   inline void push_back(ParamRplElement *Elm) { ParamVec.push_back(Elm); }
+  /// \brief Returns the size of the vector.
   inline size_t size() const { return ParamVec.size(); }
+  /// \brief Returns a const_iterator to the begining of the vector.
   inline const_iterator begin() const { return ParamVec.begin(); }
+  /// \brief Returns a const_iterator to the end of the vector.
   inline const_iterator end() const { return ParamVec.end(); }
 
+  /// \brief Returns the Parameter at position Idx
   const ParamRplElement *getParamAt(size_t Idx) const {
     assert(Idx < ParamVec.size());
     return ParamVec[Idx];
   }
-
+  /// \brief Returns the ParamRplElement with name=Name or null.
   const ParamRplElement *lookup(StringRef Name) const {
     for(ParamVecT::const_iterator
           I = ParamVec.begin(),
@@ -261,9 +266,12 @@ public:
     }
   }
   // Methods
-  inline void insert(NamedRplElement *E) { RegnNameSet.insert(E); }
+  /// \brief Inserts an element to the set and returns true upon success.
+  inline bool insert(NamedRplElement *E) { return RegnNameSet.insert(E); }
+  /// \brief Returns the number of elements in the set.
   inline size_t size() const { return RegnNameSet.size(); }
 
+  /// \brief Returns the NamedRplElement with name=Name or null.
   const NamedRplElement *lookup (StringRef Name) {
     for (RegnNameSetTy::iterator
            I = RegnNameSet.begin(),

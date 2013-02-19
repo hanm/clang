@@ -1,4 +1,4 @@
-///-///////////////////////////////////////////////////////////////////////////
+///-//////////////////////////////////////////////////////////////////////
 /// Rpl Class
 class Rpl {
   friend class Rpl;
@@ -10,7 +10,7 @@ public:
 #ifndef RPL_VECTOR_SIZE
   #define RPL_VECTOR_SIZE 4
 #endif
-  typedef llvm::SmallVector<Rpl*, RPL_VECTOR_SIZE> RplVectorTy;
+  typedef llvm::SmallVector<Rpl*, RPL_VECTOR_SIZE> RplVectorT;
 
 private:
   /// Fields
@@ -170,91 +170,99 @@ private:
     return std::string(OS.str());
   }
 
-  /// Getters
-  inline const RplElement* getLastElement() {
+  // Getters
+  /// \brief Returns the last of the RPL elements of this RPL.
+  inline const RplElement* getLastElement() const {
     return RplElements.back();
   }
-
+  /// \brief Returns the first of the RPL elements of this RPL.
   inline const RplElement* getFirstElement() {
     return RplElements.front();
   }
 
-  /** returns the number of RPL elements */
+  /// \brief Returns the number of RPL elements.
   inline size_t length() {
     return RplElements.size();
   }
-  /// Setters
-  inline void appendElement(const RplElement* rplElm) {
-    RplElements.push_back(rplElm);
-    if (rplElm->isFullySpecified() == false)
+  // Setters
+  /// \brief Appends an RPL element to this RPL.
+  inline void appendElement(const RplElement* RplElm) {
+    RplElements.push_back(RplElm);
+    if (RplElm->isFullySpecified() == false)
       FullySpecified = false;
   }
-  /// Predicates
+  // Predicates
   inline bool isFullySpecified() { return FullySpecified; }
   inline bool isEmpty() { return RplElements.empty(); }
 
-  /// Nesting (Under)
-  bool isUnder(const Rpl& rhsRpl) const {
+  // Nesting (Under)
+  /// \brief Returns true iff this is under That
+  bool isUnder(const Rpl& That) const {
     const CaptureRplElement *cap = dyn_cast<CaptureRplElement>(RplElements.front());
     if (cap) {
-      cap->upperBound().isUnder(rhsRpl);
+      cap->upperBound().isUnder(That);
     }
 
-    RplRef* lhs = new RplRef(*this);
-    RplRef* rhs = new RplRef(rhsRpl);
-    bool result = lhs->isIncludedIn(*rhs);
-    delete lhs; delete rhs;
-    return result;
+    RplRef* LHS = new RplRef(*this);
+    RplRef* RHS = new RplRef(That);
+    bool Result = LHS->isIncludedIn(*RHS);
+    delete LHS; delete RHS;
+    return Result;
   }
-  /// Inclusion
-  bool isIncludedIn(const Rpl& rhsRpl) const {
+  // Inclusion
+  /// \brief Returns true iff this RPL is included in That
+  bool isIncludedIn(const Rpl& That) const {
     const CaptureRplElement *cap = dyn_cast<CaptureRplElement>(RplElements.front());
     if (cap) {
-      cap->upperBound().isIncludedIn(rhsRpl);
+      cap->upperBound().isIncludedIn(That);
     }
 
-    RplRef* lhs = new RplRef(*this);
-    RplRef* rhs = new RplRef(rhsRpl);
-    bool result = lhs->isIncludedIn(*rhs);
-    delete lhs; delete rhs;
+    RplRef* LHS = new RplRef(*this);
+    RplRef* RHS = new RplRef(That);
+    bool Result = LHS->isIncludedIn(*RHS);
+    delete LHS; delete RHS;
     OSv2 << "DEBUG:: ~~~~~ isIncludedIn[RPL](" << this->toString() << ", "
-        << rhsRpl.toString() << ")=" << (result ? "true" : "false") << "\n";
-    return result;
+        << That.toString() << ")=" << (Result ? "true" : "false") << "\n";
+    return Result;
   }
 
-  /// Substitution (Rpl)
-  void substitute(const RplElement& From, const Rpl& To) {
-    os << "DEBUG:: before substitution(" << From.getName() << "<-";
-    To.print(os);
+  // Substitution (Rpl)
+  /// \brief this[FromEl <- ToRpl]
+  void substitute(const RplElement& FromEl, const Rpl& ToRpl) {
+    os << "DEBUG:: before substitution(" << FromEl.getName() << "<-";
+    ToRpl.print(os);
     os <<"): ";
     assert(RplElements.size()>0);
     print(os);
     os << "\n";
     /// A parameter is only allowed at the head of an Rpl
     RplElementVectorTy::iterator I = RplElements.begin();
-    if (*(*I) == From) {
-      OSv2 << "DEBUG:: found '" << From.getName()
+    if (*(*I) == FromEl) {
+      OSv2 << "DEBUG:: found '" << FromEl.getName()
         << "' replaced with '" ;
-      To.print(OSv2);
+      ToRpl.print(OSv2);
       I = RplElements.erase(I);
-      I = RplElements.insert(I, To.RplElements.begin(), To.RplElements.end());
+      I = RplElements.insert(I, ToRpl.RplElements.begin(),
+                                ToRpl.RplElements.end());
       OSv2 << "' == '";
       print(OSv2);
       OSv2 << "'\n";
     }
-    os << "DEBUG:: after substitution(" << From.getName() << "<-";
-    To.print(os);
+    os << "DEBUG:: after substitution(" << FromEl.getName() << "<-";
+    ToRpl.print(os);
     os << "): ";
     print(os);
     os << "\n";
   }
 
-  /// Append to this Rpl the argument Rpl without its head element
+  /// \brief Append to this RPL the argument Rpl but without its head element.
   inline void appendRplTail(Rpl* That) {
+    if (!That)
+      return;
     if (That->length()>1)
       RplElements.append(That->length()-1, (*(That->RplElements.begin() + 1)));
   }
-
+  /// \brief Return the upper bound of an RPL (different when RPL is captured).
   Rpl *upperBound() {
     if (isEmpty() || !isa<CaptureRplElement>(RplElements.front()))
       return this;
@@ -264,11 +272,11 @@ private:
     return upperBound;
   }
 
-  /// \brief join this to That
+  /// \brief Join this to That.
   Rpl *join(Rpl* That) {
     assert(That);
     Rpl Result;
-    /// join from the left
+    // join from the left
     RplElementVectorTy::const_iterator
             ThisI = this->RplElements.begin(),
             ThatI = That->RplElements.begin(),
@@ -279,7 +287,7 @@ private:
       Result.appendElement(*ThisI);
     }
     if (ThisI != ThisE) {
-      /// put a star in the middle and join from the right
+      // put a star in the middle and join from the right
       assert(ThatI != ThatE);
       Result.appendElement(STARRplElmt);
       Result.FullySpecified = false;
@@ -296,12 +304,12 @@ private:
                       *(RplElements.begin() + RplElements.size() - ElNum));
       }
     }
-    /// return
+    // return
     this->RplElements = Result.RplElements;
     return this;
   }
 
-  /// Capture
+  // Capture
   // TODO: caller must deallocate Rpl and its element
   inline Rpl* capture() {
     if (this->isFullySpecified()) return this;
@@ -310,12 +318,13 @@ private:
 
 }; // end class Rpl
 
-
+//////////////////////////////////////////////////////////////////////////
+// Rpl Vector
 class RplVector {
   friend class RplVector;
   private:
   /// Fields
-  Rpl::RplVectorTy RplV;
+  Rpl::RplVectorT RplV;
 
   public:
   /// Constructor
@@ -334,7 +343,7 @@ class RplVector {
   }
 
   RplVector(const RplVector &RV) {
-    for (Rpl::RplVectorTy::const_iterator
+    for (Rpl::RplVectorT::const_iterator
             I = RV.RplV.begin(),
             E = RV.RplV.end();
          I != E; ++I) {
@@ -344,7 +353,7 @@ class RplVector {
 
   /// Destructor
   ~RplVector() {
-    for (Rpl::RplVectorTy::const_iterator
+    for (Rpl::RplVectorT::const_iterator
             I = RplV.begin(),
             E = RplV.end();
          I != E; ++I) {
@@ -352,45 +361,64 @@ class RplVector {
     }
   }
 
-  /// Methods
-  inline Rpl::RplVectorTy::iterator begin () { return RplV.begin(); }
-
-  inline Rpl::RplVectorTy::iterator end () { return RplV.end(); }
-
-  inline Rpl::RplVectorTy::const_iterator begin () const { return RplV.begin(); }
-
-  inline Rpl::RplVectorTy::const_iterator end () const { return RplV.end(); }
-
+  // Methods
+  /// \brief Return an iterator at the first RPL of the vector.
+  inline Rpl::RplVectorT::iterator begin () { return RplV.begin(); }
+  /// \brief Return an iterator past the last RPL of the vector.
+  inline Rpl::RplVectorT::iterator end () { return RplV.end(); }
+  /// \brief Return a const_iterator at the first RPL of the vector.
+  inline Rpl::RplVectorT::const_iterator begin () const { return RplV.begin(); }
+  /// \brief Return a const_iterator past the last RPL of the vector.
+  inline Rpl::RplVectorT::const_iterator end () const { return RplV.end(); }
+  /// \brief Return the size of the RPL vector.
   inline size_t size () const { return RplV.size(); }
-
+  /// \brief Append the argument RPL to the RPL vector.
   inline void push_back (const Rpl *R) {
     assert(R);
     RplV.push_back(new Rpl(*R));
   }
-
+  /// \brief Add the argument RPL to the front of the RPL vector.
   inline void push_front (const Rpl *R) {
     assert(R);
     RplV.insert(RplV.begin(), new Rpl(*R));
   }
-
+  /// \brief Remove and return the first RPL in the vector.
   Rpl *pop_front() {
     assert(RplV.size() > 0);
     Rpl *Result = RplV.front();
     RplV.erase(RplV.begin());
     return Result;
   }
-
-  inline const Rpl *getRplAt(size_t idx) const {
-    assert(idx>=0 && idx < RplV.size());
-    return RplV[idx];
+  /// \brief Remove and return the first RPL in the vector.
+  inline Rpl *deref() { return pop_front(); }
+  /// \brief Same as performing deref() DerefNum times.
+  Rpl *deref(size_t DerefNum) {
+    Rpl *Result = 0;
+    assert(DerefNum >=0 && DerefNum < RplV.size());
+    for (Rpl::RplVectorT::iterator
+            I = RplV.begin(),
+            E = RplV.end();
+         DerefNum > 0 && I != E; ++I, --DerefNum) {
+      if (Result)
+        delete Result;
+      Result = *I;
+      I = RplV.erase(I);
+    }
+    return Result;
   }
 
-  /// \brief joins this to That
+  /// \brief Return a pointer to the RPL at position Idx in the vector.
+  inline const Rpl *getRplAt(size_t Idx) const {
+    assert(Idx>=0 && Idx < RplV.size());
+    return RplV[Idx];
+  }
+
+  /// \brief Joins this to That.
   RplVector *join(RplVector *That) {
     assert(That);
     assert(That->size() == this->size());
 
-    Rpl::RplVectorTy::iterator
+    Rpl::RplVectorT::iterator
             ThatI = That->begin(),
             ThisI = this->begin(),
             ThatE = That->end(),
@@ -408,12 +436,12 @@ class RplVector {
     return this;
   }
 
-  /// \brief return true when this <= That, false otherwise
+  /// \brief Return true when this is included in That, false otherwise.
   bool isIncludedIn (const RplVector &That) const {
     bool Result = true;
     assert(That.RplV.size() == this->RplV.size());
 
-    Rpl::RplVectorTy::const_iterator
+    Rpl::RplVectorT::const_iterator
             ThatI = That.begin(),
             ThisI = this->begin(),
             ThatE = That.end(),
@@ -433,9 +461,9 @@ class RplVector {
     return Result;
   }
 
-  /// substitution (RplVector)
+  /// \brief Substitution this[FromEl <- ToRpl] (over RPL vector)
   void substitute(const RplElement &FromEl, const Rpl &ToRpl) {
-    for(Rpl::RplVectorTy::const_iterator
+    for(Rpl::RplVectorT::const_iterator
             I = RplV.begin(),
             E = RplV.end();
          I != E; ++I) {
@@ -443,32 +471,9 @@ class RplVector {
         (*I)->substitute(FromEl, ToRpl);
     }
   }
-
-  Rpl *deref() {
-    assert(RplV.size() > 0);
-    Rpl *Result = RplV.front();
-    RplV.erase(RplV.begin());
-    return Result;
-  }
-
-  Rpl *deref(size_t DerefNum) {
-    Rpl *Result = 0;
-    assert(DerefNum >=0 && DerefNum < RplV.size());
-    for (Rpl::RplVectorTy::iterator
-            I = RplV.begin(),
-            E = RplV.end();
-         DerefNum > 0 && I != E; ++I, --DerefNum) {
-      if (Result)
-        delete Result;
-      Result = *I;
-      I = RplV.erase(I);
-    }
-    return Result;
-  }
-
-  /// Print (RplVector)
+  /// \brief Print RPL vector
   void print(raw_ostream &OS) const {
-    Rpl::RplVectorTy::const_iterator
+    Rpl::RplVectorT::const_iterator
       I = RplV.begin(),
       E = RplV.end();
     for(; I < E-1; ++I) {
@@ -479,7 +484,7 @@ class RplVector {
     if (I != E)
       (*I)->print(OS);
   }
-
+  /// \brief Return a string for the RPL vector.
   inline std::string toString() const {
     std::string SBuf;
     llvm::raw_string_ostream OS(SBuf);
@@ -487,7 +492,7 @@ class RplVector {
     return std::string(OS.str());
   }
 
-  /// \brief returns the union of two RPL Vectors by copying its inputs
+  /// \brief Returns the union of two RPL Vectors by copying its inputs.
   static RplVector *merge(const RplVector *A, const RplVector *B) {
     if (!A && !B)
       return 0;
@@ -502,7 +507,7 @@ class RplVector {
     (A->size() >= B->size()) ? ( LHS = new RplVector(*A), RHS = B)
                              : ( LHS = new RplVector(*B), RHS = A);
     // fold RHS into LHS
-    Rpl::RplVectorTy::const_iterator RHSI = RHS->begin(), RHSE = RHS->end();
+    Rpl::RplVectorT::const_iterator RHSI = RHS->begin(), RHSE = RHS->end();
     while (RHSI != RHSE) {
       LHS->push_back(*RHSI);
       ++RHSI;
@@ -510,7 +515,7 @@ class RplVector {
     return LHS;
   }
 
-  /// \brief returns the union of two RPL Vectors but destroys its inputs
+  /// \brief Returns the union of two RPL Vectors but destroys its inputs.
   static RplVector *destructiveMerge(RplVector *&A, RplVector *&B) {
     if (!A)
       return B;
@@ -521,7 +526,7 @@ class RplVector {
     (A->size() >= B->size()) ? ( LHS = A, RHS = B)
                              : ( LHS = B, RHS = A);
     // fold RHS into LHS
-    Rpl::RplVectorTy::iterator RHSI = RHS->begin(), RHSE = RHS->end();
+    Rpl::RplVectorT::iterator RHSI = RHS->begin(), RHSE = RHS->end();
     while (RHSI != RHSE) {
       LHS->RplV.push_back(*RHSI);
       RHSI = RHS->RplV.erase(RHSI);

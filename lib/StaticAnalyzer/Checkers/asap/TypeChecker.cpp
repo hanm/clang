@@ -109,12 +109,6 @@ public:
   }
 
 private:
-  /// private helper methods
-  const ASaPType *getReturnType(const FunctionDecl *Def) {
-    const ASaPType *T = SymT.getType(Def);
-    assert(T);
-    return T;
-  }
   /// Private Methods
   bool typecheck(const ASaPType *LHSType, const ASaPType *RHSType) {
     assert(LHSType);
@@ -647,6 +641,7 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
     helperEmitInvalidReturnTypeWarning(Ret, LHSType, RHSType);
     FatalError = true;
   }
+  delete LHSType;
   delete Type;
   Type = 0;
 }

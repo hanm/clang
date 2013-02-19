@@ -58,17 +58,20 @@ class ASaPType {
     delete ArgV;
   }
   /// Methods
-  inline int getArgVSize() { return ArgV->size(); }
-
-  inline const Rpl *getInRpl() { return InRpl; }
-
-  const Rpl *getInRpl(int DerefNum) {
+  /// \brief Return the size of the ArgsVector.
+  inline int getArgVSize() const { return ArgV->size(); }
+  /// \brief Return the In RPL which can be null.
+  inline const Rpl *getInRpl() const { return InRpl; }
+  /// \brief Return the In RPL of this after DerefNum dereferences.
+  const Rpl *getInRpl(int DerefNum) const {
     assert(DerefNum >= -1);
     if (DerefNum == -1) return 0;
     if (DerefNum == 0) return InRpl;
     return this->ArgV->getRplAt(DerefNum-1);
   }
 
+  /// \brief Return the Argument for substitution after DerefNum dereferences.
+  /// FIXME: support multiple region parameters per class type.
   const Rpl *getSubstArg(int DerefNum) const {
     assert(DerefNum >= -1);
     if (DerefNum == -1) return InRpl;
@@ -77,9 +80,10 @@ class ASaPType {
     else
       return this->ArgV->getRplAt(DerefNum);
   }
-
+  /// \brief Return the QualType of this ASapType
   inline QualType getQT() const { return QT; };
 
+  /// \brief Return the QualType of this after DerefNum dereferences.
   QualType getQT(int DerefNum) const {
     assert(DerefNum >= 0);
     QualType Result = QT;
@@ -91,8 +95,7 @@ class ASaPType {
     return Result;
   }
 
-  /// \brief if this is a function type, return its return type;
-  /// else return null
+  /// \brief If this is a function type, return its return type; else null.
   ASaPType *getReturnType() const {
     if (QT->isFunctionType()) {
       const FunctionType *FT = dyn_cast<FunctionType>(QT.getTypePtr());
@@ -102,7 +105,7 @@ class ASaPType {
       return 0;
   }
 
-  /// \brief dereference this type DerefNum times
+  /// \brief Dereferences this type DerefNum times.
   void deref(int DerefNum) {
     assert(DerefNum >= 0);
     if (DerefNum == 0)
@@ -117,7 +120,7 @@ class ASaPType {
       DerefNum--;
     }
   }
-
+  /// \brief Modifies this type as if its address were taken.
   void addrOf(QualType RefQT) {
     assert(RefQT->isPointerType());
     QualType TestQT = RefQT->getPointeeType();
@@ -135,7 +138,7 @@ class ASaPType {
     delete InRpl;
     InRpl = 0;
   }
-
+  /// \brief Returns a string describing this ASaPType
   std::string toString(ASTContext &Ctx) const {
     std::string SBuf;
     llvm::raw_string_ostream OS(SBuf);
@@ -168,7 +171,7 @@ class ASaPType {
     return this->ArgV->isIncludedIn(*That.ArgV);
   }
 
-  /// \brief joins this to That.
+  /// \brief Joins this to That.
   /// Join returns the smallest common supertype (Base Type)
   ASaPType *join(ASaPType *That) {
     if (!That) return this;
@@ -185,7 +188,8 @@ class ASaPType {
     return this;
   }
 
-  /// Substitution (ASaPType)
+  // Substitution (ASaPType)
+  /// \brief Performs substitution on type: this[FromEl <- ToRpl]
   void substitute(const RplElement &FromEl, const Rpl &ToRpl) {
     if (InRpl)
       InRpl->substitute(FromEl, ToRpl);
@@ -194,7 +198,7 @@ class ASaPType {
   }
 
   private:
-  /// Private Methods
+  // Private Methods
 
 }; // end class ASaPType
 //} // end namespace ASaP

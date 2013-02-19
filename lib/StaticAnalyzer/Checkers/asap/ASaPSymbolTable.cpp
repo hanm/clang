@@ -56,27 +56,28 @@ public:
     return SymTable.lookup(D)->hasEffectSummary();
   }
   // Getters
+  /// \brief Returns the ASaP Type for D or null.
   const ASaPType *getType(const Decl* D) const {
     if (!SymTable.lookup(D))
       return 0;
     else
       return SymTable.lookup(D)->getType();
   }
-
+  /// \brief Retuns the parameter vector for D or null.
   const ParameterVector *getParameterVector(const Decl *D) const {
     if (!SymTable.lookup(D))
       return 0;
     else
       return SymTable.lookup(D)->getParameterVector();
   }
-
+  /// \brief Returns the region names declarations for D or null.
   const RegionNameSet *getRegionNameSet(const Decl *D) const {
     if (!SymTable.lookup(D))
       return 0;
     else
       return SymTable.lookup(D)->getRegionNameSet();
   }
-
+  /// \brief Returns the effect summmary for D or null.
   const EffectSummary *getEffectSummary(const Decl *D) const {
     if (!SymTable.lookup(D))
       return 0;
@@ -84,7 +85,7 @@ public:
       return SymTable.lookup(D)->getEffectSummary();
   }
   // Setters
-  /// \brief returns true iff the type for D was not already set
+  /// \brief Returns true iff the type for D was not already set.
   bool setType(const Decl* D, ASaPType *T) {
     if (!SymTable[D])
       SymTable[D] = new SymbolTableEntry();
@@ -96,7 +97,7 @@ public:
       return true;
     }
   }
-  /// \brief returns true iff the parameter vectr for D was not already set
+  /// \brief Returns true iff the parameter vector for D was not already set.
   bool setParameterVector(const Decl *D, ParameterVector *PV) {
     if (!SymTable[D])
       SymTable[D] = new SymbolTableEntry();
@@ -108,7 +109,7 @@ public:
       return true;
     }
   }
-  /// \brief returns true iff the parameter vectr for D was not already set
+  /// \brief Returns true iff the region names for D were not already set.
   bool setRegionNameSet(const Decl *D, RegionNameSet *RNS) {
     if (!SymTable[D])
       SymTable[D] = new SymbolTableEntry();
@@ -120,7 +121,7 @@ public:
       return true;
     }
   }
-  /// \brief returns true iff the parameter vectr for D was not already set
+  /// \brief Returns true iff the effect summary for D was not already set.
   bool setEffectSummary(const Decl *D, EffectSummary *ES) {
     if (!SymTable[D])
       SymTable[D] = new SymbolTableEntry();
@@ -133,30 +134,33 @@ public:
     }
   }
   // Lookup
+  /// \brief Returns a named RPL element of the same name or null.
   const NamedRplElement *lookupRegionName(const Decl* D, StringRef Name) {
     if (!SymTable.lookup(D))
       return 0;
     return SymTable.lookup(D)->lookupRegionName(Name);
   }
-
+  /// \brief Returns a parameter RPL element of the same name or null.
   const ParamRplElement *lookupParameterName(const Decl *D, StringRef Name) {
     if (!SymTable.lookup(D))
       return 0;
     return SymTable.lookup(D)->lookupParameterName(Name);
   }
   // Others
+  /// \brief Returns true iff D has a declared region-name Name.
   inline bool hasRegionName(const Decl *D, StringRef Name) {
     return lookupRegionName(D, Name) ? true : false;
   }
+  /// \brief Returns true iff D has a declared region parameter Name.
   inline bool hasParameterName(const Decl *D, StringRef Name) {
     return lookupParameterName(D, Name) ? true : false;
   }
-
+  /// \brief Returns true iff D has a declared region-name or parameter Name.
   inline bool hasRegionOrParameterName(const Decl *D, StringRef Name) {
     return hasRegionName(D, Name) || hasParameterName(D, Name);
   }
 
-  /// \brief Add a region name to declaration D. Return false if name exists.
+  /// \brief Adds a region name to declaration D. Return false if name exists.
   bool addRegionName(const Decl *D, StringRef Name) {
     if (hasRegionOrParameterName(D, Name))
       return false;
@@ -166,7 +170,7 @@ public:
     SymTable[D]->addRegionName(Name);
     return true;
   }
-  /// \brief
+  /// \brief Adds a region parameter to D. Return false if name exists.
   bool addParameterName(const Decl *D, StringRef Name) {
     if (hasRegionOrParameterName(D, Name))
       return false;

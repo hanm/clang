@@ -75,7 +75,7 @@ public:
     delete R;
   }
 
-  /// Printing (Effect)
+  /// \brief Print Effect Kind to raw output stream.
   inline bool printEffectKind(raw_ostream &OS) const {
     bool HasRpl = true;
     switch(Kind) {
@@ -87,7 +87,7 @@ public:
     }
     return HasRpl;
   }
-
+  /// \brief Print Effect to raw output stream.
   void print(raw_ostream &OS) const {
     bool HasRpl = printEffectKind(OS);
     if (HasRpl) {
@@ -96,7 +96,7 @@ public:
       R->print(OS);
     }
   }
-
+  /// \brief Return a string for this Effect.
   inline std::string toString() const {
     std::string SBuf;
     llvm::raw_string_ostream OS(SBuf);
@@ -104,49 +104,50 @@ public:
     return std::string(OS.str());
   }
 
-  /// Predicates
+  // Predicates
+  /// \brief Returns true iff this is a no_effect.
   inline bool isNoEffect() const {
     return (Kind == EK_NoEffect) ? true : false;
   }
-
+  /// \brief Returns true iff this effect has RPL argument.
   inline bool hasRplArgument() const { return !isNoEffect(); }
-
+  /// \brief Returns true if this effect is atomic.
   inline bool isAtomic() const {
     return (Kind==EK_AtomicReadsEffect ||
             Kind==EK_AtomicWritesEffect) ? true : false;
   }
 
-  /// Getters
+  // Getters
+  /// \brief Return effect kind.
   inline EffectKind getEffectKind() const { return Kind; }
-
+  /// \brief Return RPL (which may be null for no_effect).
   inline const Rpl *getRpl() const { return R; }
-
+  /// \brief Return corresponding Attribute.
   inline const Attr *getAttr() const { return Attribute; }
-
+  /// \brief Return source location.
   inline SourceLocation getLocation() const {
     return Attribute->getLocation();
   }
 
-  /// Substitution (Effect)
+  /// \brief substitute (Effect) this[FromEl <- ToRpl]
   inline void substitute(const RplElement &FromElm, const Rpl &ToRpl) {
     if (R)
       R->substitute(FromElm, ToRpl);
   }
 
-  /// SubEffect: true if this <= e
-  /**
-   *  rpl1 c= rpl2   E1 c= E2
-   * ~~~~~~~~~~~~~~~~~~~~~~~~~
-   *    E1(rpl1) <= E2(rpl2)
-   */
-  bool isSubEffectOf(const Effect &E) const {
+  /// \brief SubEffect Rule: true if this <= e
+  ///
+  ///  RPL1 c= RPL2   E1 c= E2
+  /// ~~~~~~~~~~~~~~~~~~~~~~~~~
+  ///    E1(RPL1) <= E2(RPL2)
+  bool isSubEffectOf(const Effect &That) const {
     bool Result = (isNoEffect() ||
-            (isSubEffectKindOf(E) && R->isIncludedIn(*(E.R))));
+            (isSubEffectKindOf(That) && R->isIncludedIn(*(That.R))));
     OSv2  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
-        << E.toString() << ")=" << (Result ? "true" : "false") << "\n";
+        << That.toString() << ")=" << (Result ? "true" : "false") << "\n";
     return Result;
   }
-  /// isCoveredBy
+  /// \brief Returns covering effect in effect summary or null.
   inline const Effect *isCoveredBy(const EffectSummary &ES);
 
 }; // end class Effect
@@ -157,9 +158,8 @@ private:
   // Fields
 #ifndef EFFECT_SUMMARY_SIZE
 #define EFFECT_SUMMARY_SIZE 8
-  typedef llvm::SmallPtrSet<const Effect*, EFFECT_SUMMARY_SIZE> EffectSummarySetT;
-#undef EFFECT_SUMMARY_SIZE
 #endif
+  typedef llvm::SmallPtrSet<const Effect*, EFFECT_SUMMARY_SIZE> EffectSummarySetT;
   EffectSummarySetT EffectSum;
 public:
   // Constructor
@@ -177,12 +177,14 @@ public:
   typedef EffectSummarySetT::const_iterator const_iterator;
 
   // Methods
-  /// \brief covering effect E' if E is covered by the effect summary
+  /// \brief Returns the size of the EffectSummary
   inline size_t size() const { return EffectSum.size(); }
+  /// \brief Returns a const_iterator at the first element of the summary.
   inline const_iterator begin() const { return EffectSum.begin(); }
+  /// \brief Returns a const_iterator past the last element of the summary.
   inline const_iterator end() const { return EffectSum.end(); }
 
-  /// \brief returns the effect that covers Eff or Null otherwise
+  /// \brief Returns the effect that covers Eff or null otherwise.
   const Effect *covers(const Effect *Eff) const {
     if (EffectSum.count(Eff))
       return Eff;
@@ -196,14 +198,15 @@ public:
     }
     return 0;
   }
-
+  /// \brief Returns true iff insertion was successful.
   inline bool insert(const Effect *Eff) {
     return EffectSum.insert(Eff);
   }
 
   typedef llvm::SmallVector<std::pair<const Effect*, const Effect*> *, 8>
     EffectCoverageVector;
-  /// \brief removes covered effects from summary and adds them to EffCovVec
+  /// \brief Makes effect summary minimal by removing covered effects.
+  /// The caller is responsible for deallocating the EffectCoverageVector.
   void makeMinimal(EffectCoverageVector &ECV) {
     EffectSummarySetT::iterator I = EffectSum.begin(); // not a const iterator
     while (I != EffectSum.end()) { // EffectSum.end() is not loop invariant
@@ -226,7 +229,7 @@ public:
       else       ++I;
     } // end while loop
   }
-
+  /// \brief Prints effect summary to raw output stream.
   void print(raw_ostream &OS, char Separator='\n') const {
     EffectSummarySetT::const_iterator
       I = EffectSum.begin(),
@@ -236,7 +239,7 @@ public:
       OS << Separator;
     }
   }
-
+  /// \brief Returns a string with the effect summary.
   inline std::string toString() const {
     std::string SBuf;
     llvm::raw_string_ostream OS(SBuf);

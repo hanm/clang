@@ -75,9 +75,9 @@ namespace {
 using ASaP::SymbolTable;
 
 /// 1. Wrapper pass that calls a Stmt visitor on each function definition.
-template<typename StmtVisitorTy>
+template<typename StmtVisitorT>
 class StmtVisitorInvoker :
-  public RecursiveASTVisitor<StmtVisitorInvoker<StmtVisitorTy> > {
+  public RecursiveASTVisitor<StmtVisitorInvoker<StmtVisitorT> > {
 
 private:
   /// Private Fields
@@ -106,6 +106,9 @@ public:
         FatalError(false)
   {}
 
+  bool shouldVisitTemplateInstantiations() const { return true; }
+  bool shouldVisitImplicitCode() const { return true; }
+
   /// Getters & Setters
   inline bool encounteredFatalError() { return FatalError; }
 
@@ -116,7 +119,7 @@ public:
       Stmt* S = Definition->getBody();
       assert(S);
 
-      StmtVisitorTy StmtVisitor(BR, Ctx, Mgr, AC, OS, SymT, Definition, S);
+      StmtVisitorT StmtVisitor(BR, Ctx, Mgr, AC, OS, SymT, Definition, S);
 
       FatalError |= StmtVisitor.encounteredFatalError();
     }

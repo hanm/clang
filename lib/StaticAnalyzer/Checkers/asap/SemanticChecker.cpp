@@ -161,6 +161,9 @@ private:
   /// \brief return the number of In/Arg annotations needed for type or -1
   /// if unknown
   long getRegionParamCount(QualType QT) {
+    OS << "DEBUG:: calling getRegionParamCount on type: ";
+    QT.print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
     if (isNonPointerScalarType(QT)) {
       return 1;
     } else if (QT->isPointerType()) {
@@ -538,7 +541,7 @@ private:
   }
 
 public:
-
+  // Type
   typedef RecursiveASTVisitor<ASaPSemanticCheckerTraverser> BaseClass;
 
   /// Constructor
@@ -563,6 +566,9 @@ public:
       delete (*I).second;
     }
   }
+
+  bool shouldVisitTemplateInstantiations() const { return true; }
+  bool shouldVisitImplicitCode() const { return true; }
 
   /// Getters & Setters
   inline bool encounteredFatalError() { return FatalError; }
