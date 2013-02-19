@@ -70,7 +70,7 @@ public:
     [[asap::atomic_reads("P1:R3")]]  // expected-warning{{effect summary is not minimal}}
     [[asap::atomic_writes("P1:R3")]] // expected-warning{{effect summary is not minimal}}
     [[asap::writes("P1:R3")]] 
-    [[asap::no_effect]]                   // expected-warning{{effect summary is not minimal}}
+    [[asap::no_effect]]              // expected-warning{{no_effect is illegal in non-empty effect summary}}
     (int cash)
   {
     money = 42;                 // writes P1:R3 
@@ -159,7 +159,7 @@ public:
     __attribute__((atomic_reads("P1:R3")))  // expected-warning{{effect summary is not minimal}}
     __attribute__((atomic_writes("P1:R3"))) // expected-warning{{effect summary is not minimal}}
     __attribute__((writes("P1:R3"))) 
-    __attribute__((no_effect))                   // expected-warning{{effect summary is not minimal}}
+    __attribute__((no_effect))              // expected-warning{{no_effect is illegal in non-empty effect summary}}
   { 
     cash += next->money;        // reads P1, P1:R2:R3
     cash -= next->next->money;  // reads P1, P1:R2, P1:R2:R2:R3

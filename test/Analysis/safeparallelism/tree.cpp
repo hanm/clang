@@ -21,7 +21,8 @@ public:
   /// TODO move implementation outside declaration. I.e., TreeNode::add...
   bool add [[asap::writes("P, P:Right:*, P:Left:*")]] (long V) 
   {
-    if (V == Value) return false;
+    if (V == Value) 
+      return false;
     else if (V < Value) 
       if (LeftChild) 
         return LeftChild->add(V);
