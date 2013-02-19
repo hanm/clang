@@ -11,7 +11,7 @@ Coo {
 public:
   Coo (): money(70) {}
 
-  int get_some() __attribute__ ((no_effect)){ 
+  int get_some() __attribute__ ((no_effect)) { 
     return money;
   }
 
@@ -21,8 +21,7 @@ public:
 };
 
 
-__attribute__((region("Roo")))  
-__attribute__((region("Raa")))
+__attribute__((region("Roo, Raa")))  
 int main (void) {
   Coo c __attribute__((arg("Roo"))) __attribute__((arg("Raa"))); // expected-warning {{duplicate attribute not allowed:}}
   c.set_money(17);
@@ -50,8 +49,7 @@ public:
 };
 
 
-[[asap::region("Roo")]] 
-[[asap::region("Raa")]]
+[[asap::region("Roo, Raa")]] 
 int main (void) {
   Coo c [[asap::arg("Roo")]] [[asap::arg("Raa")]]; // expected-warning {{duplicate attribute not allowed:}}
   c.set_money(17);
