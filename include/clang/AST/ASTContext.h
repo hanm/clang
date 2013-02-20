@@ -57,28 +57,12 @@ namespace clang {
   class TargetInfo;
   class CXXABI;
   // Decls
-  class DeclContext;
-  class CXXConversionDecl;
-  class CXXMethodDecl;
-  class CXXRecordDecl;
-  class Decl;
-  class FieldDecl;
   class MangleContext;
   class ObjCIvarDecl;
-  class ObjCIvarRefExpr;
   class ObjCPropertyDecl;
-  class ParmVarDecl;
-  class RecordDecl;
-  class StoredDeclsMap;
-  class TagDecl;
-  class TemplateTemplateParmDecl;
-  class TemplateTypeParmDecl;
-  class TranslationUnitDecl;
-  class TypeDecl;
-  class TypedefNameDecl;
+  class UnresolvedSetIterator;
   class UsingDecl;
   class UsingShadowDecl;
-  class UnresolvedSetIterator;
 
   namespace Builtin { class Context; }
 
@@ -1039,7 +1023,7 @@ public:
                                             const TemplateArgument *Args) const;
 
   QualType getPackExpansionType(QualType Pattern,
-                                llvm::Optional<unsigned> NumExpansions);
+                                Optional<unsigned> NumExpansions);
 
   QualType getObjCInterfaceType(const ObjCInterfaceDecl *Decl,
                                 ObjCInterfaceDecl *PrevDecl = 0) const;
@@ -2119,7 +2103,8 @@ private:
                                   bool EncodingProperty = false,
                                   bool StructField = false,
                                   bool EncodeBlockParameters = false,
-                                  bool EncodeClassNames = false) const;
+                                  bool EncodeClassNames = false,
+                                  bool EncodePointerToObjCTypedef = false) const;
 
   // Adds the encoding of the structure's members.
   void getObjCEncodingForStructureImpl(RecordDecl *RD, std::string &S,

@@ -44,9 +44,6 @@ namespace clang {
     unsigned &Idx;
     TypeID TypeIDForTypeDecl;
     
-    DeclID DeclContextIDForTemplateParmDecl;
-    DeclID LexicalDeclContextIDForTemplateParmDecl;
-
     bool HasPendingBody;
 
     uint64_t GetCurrentCursorOffset();
@@ -329,14 +326,6 @@ void ASTDeclReader::Visit(Decl *D) {
       Reader.PendingBodies[FD] = GetCurrentCursorOffset();
       HasPendingBody = true;
     }
-  } else if (D->isTemplateParameter()) {
-    // If we have a fully initialized template parameter, we can now
-    // set its DeclContext.
-    DeclContext *SemaDC = cast<DeclContext>(
-                              Reader.GetDecl(DeclContextIDForTemplateParmDecl));
-    DeclContext *LexicalDC = cast<DeclContext>(
-                       Reader.GetDecl(LexicalDeclContextIDForTemplateParmDecl));
-    D->setDeclContextsImpl(SemaDC, LexicalDC, Reader.getContext());
   }
 }
 
@@ -346,8 +335,11 @@ void ASTDeclReader::VisitDecl(Decl *D) {
     // parameter immediately, because the template parameter might be
     // used in the formulation of its DeclContext. Use the translation
     // unit DeclContext as a placeholder.
-    DeclContextIDForTemplateParmDecl = ReadDeclID(Record, Idx);
-    LexicalDeclContextIDForTemplateParmDecl = ReadDeclID(Record, Idx);
+    GlobalDeclID SemaDCIDForTemplateParmDecl = ReadDeclID(Record, Idx);
+    GlobalDeclID LexicalDCIDForTemplateParmDecl = ReadDeclID(Record, Idx);
+    Reader.addPendingDeclContextInfo(D,
+                                     SemaDCIDForTemplateParmDecl,
+                                     LexicalDCIDForTemplateParmDecl);
     D->setDeclContext(Reader.getContext().getTranslationUnitDecl()); 
   } else {
     DeclContext *SemaDC = ReadDeclAs<DeclContext>(Record, Idx);
@@ -1814,6 +1806,30 @@ ASTDeclReader::FindExistingResult ASTDeclReader::findExisting(NamedDecl *D) {
   
   if (DC->isTranslationUnit() && Reader.SemaObj) {
     IdentifierResolver &IdResolver = Reader.SemaObj->IdResolver;
+
+    // Temporarily consider the identifier to be up-to-date. We don't want to
+    // cause additional lookups here.
+    class UpToDateIdentifierRAII {
+      IdentifierInfo *II;
+      bool WasOutToDate;
+
+    public:
+      explicit UpToDateIdentifierRAII(IdentifierInfo *II)
+        : II(II), WasOutToDate(false)
+      {
+        if (II) {
+          WasOutToDate = II->isOutOfDate();
+          if (WasOutToDate)
+            II->setOutOfDate(false);
+        }
+      }
+
+      ~UpToDateIdentifierRAII() {
+        if (WasOutToDate)
+          II->setOutOfDate(true);
+      }
+    } UpToDate(Name.getAsIdentifierInfo());
+
     for (IdentifierResolver::iterator I = IdResolver.begin(Name), 
                                    IEnd = IdResolver.end();
          I != IEnd; ++I) {

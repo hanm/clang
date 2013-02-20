@@ -43,8 +43,9 @@ CodeGenFunction::CodeGenFunction(CodeGenModule &cgm, bool suppressNewContext)
     FirstBlockInfo(0), EHResumeBlock(0), ExceptionSlot(0), EHSelectorSlot(0),
     DebugInfo(0), DisableDebugInfo(false), DidCallStackSave(false),
     IndirectBranch(0), SwitchInsn(0), CaseRangeBlock(0), UnreachableBlock(0),
-    CXXABIThisDecl(0), CXXABIThisValue(0), CXXThisValue(0), CXXVTTDecl(0),
-    CXXVTTValue(0), OutermostConditional(0), TerminateLandingPad(0),
+    CXXABIThisDecl(0), CXXABIThisValue(0), CXXThisValue(0),
+    CXXStructorImplicitParamDecl(0), CXXStructorImplicitParamValue(0),
+    OutermostConditional(0), TerminateLandingPad(0),
     TerminateHandler(0), TrapBB(0) {
   if (!suppressNewContext)
     CGM.getCXXABI().getMangleContext().startNewFunction();
@@ -559,6 +560,11 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
     // The lambda "__invoke" function is special, because it forwards or
     // clones the body of the function call operator (but is actually static).
     EmitLambdaStaticInvokeFunction(cast<CXXMethodDecl>(FD));
+  } else if (FD->isDefaulted() && isa<CXXMethodDecl>(FD) &&
+             cast<CXXMethodDecl>(FD)->isCopyAssignmentOperator()) {
+    // Implicit copy-assignment gets the same special treatment as implicit
+    // copy-constructors.
+    emitImplicitAssignmentOperatorBody(Args);
   }
   else
     EmitFunctionBody(Args);

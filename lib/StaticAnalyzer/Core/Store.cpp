@@ -223,7 +223,32 @@ const MemRegion *StoreManager::castRegion(const MemRegion *R, QualType CastToTy)
   llvm_unreachable("unreachable");
 }
 
+static bool regionMatchesCXXRecordType(SVal V, QualType Ty) {
+  const MemRegion *MR = V.getAsRegion();
+  if (!MR)
+    return true;
+
+  const TypedValueRegion *TVR = dyn_cast<TypedValueRegion>(MR);
+  if (!TVR)
+    return true;
+
+  const CXXRecordDecl *RD = TVR->getValueType()->getAsCXXRecordDecl();
+  if (!RD)
+    return true;
+
+  const CXXRecordDecl *Expected = Ty->getPointeeCXXRecordDecl();
+  if (!Expected)
+    Expected = Ty->getAsCXXRecordDecl();
+
+  return Expected->getCanonicalDecl() == RD->getCanonicalDecl();
+}
+
 SVal StoreManager::evalDerivedToBase(SVal Derived, const CastExpr *Cast) {
+  // Sanity check to avoid doing the wrong thing in the face of
+  // reinterpret_cast.
+  if (!regionMatchesCXXRecordType(Derived, Cast->getSubExpr()->getType()))
+    return UnknownVal();
+
   // Walk through the cast path to create nested CXXBaseRegions.
   SVal Result = Derived;
   for (CastExpr::path_const_iterator I = Cast->path_begin(),
@@ -245,7 +270,8 @@ SVal StoreManager::evalDerivedToBase(SVal Derived, const CXXBasePath &Path) {
 }
 
 SVal StoreManager::evalDerivedToBase(SVal Derived, QualType BaseType) {
-  loc::MemRegionVal *DerivedRegVal = dyn_cast<loc::MemRegionVal>(&Derived);
+  Optional<loc::MemRegionVal> DerivedRegVal =
+      Derived.getAs<loc::MemRegionVal>();
   if (!DerivedRegVal)
     return Derived;
 
@@ -264,7 +290,7 @@ SVal StoreManager::evalDynamicCast(SVal Base, QualType DerivedType,
                                    bool &Failed) {
   Failed = false;
 
-  loc::MemRegionVal *BaseRegVal = dyn_cast<loc::MemRegionVal>(&Base);
+  Optional<loc::MemRegionVal> BaseRegVal = Base.getAs<loc::MemRegionVal>();
   if (!BaseRegVal)
     return UnknownVal();
   const MemRegion *BaseRegion = BaseRegVal->stripCasts(/*StripBases=*/false);
@@ -348,12 +374,12 @@ SVal StoreManager::getLValueFieldOrIvar(const Decl *D, SVal Base) {
   if (Base.isUnknownOrUndef())
     return Base;
 
-  Loc BaseL = cast<Loc>(Base);
+  Loc BaseL = Base.castAs<Loc>();
   const MemRegion* BaseR = 0;
 
   switch (BaseL.getSubKind()) {
   case loc::MemRegionKind:
-    BaseR = cast<loc::MemRegionVal>(BaseL).getRegion();
+    BaseR = BaseL.castAs<loc::MemRegionVal>().getRegion();
     break;
 
   case loc::GotoLabelKind:
@@ -390,16 +416,16 @@ SVal StoreManager::getLValueElement(QualType elementType, NonLoc Offset,
   // FIXME: For absolute pointer addresses, we just return that value back as
   //  well, although in reality we should return the offset added to that
   //  value.
-  if (Base.isUnknownOrUndef() || isa<loc::ConcreteInt>(Base))
+  if (Base.isUnknownOrUndef() || Base.getAs<loc::ConcreteInt>())
     return Base;
 
-  const MemRegion* BaseRegion = cast<loc::MemRegionVal>(Base).getRegion();
+  const MemRegion* BaseRegion = Base.castAs<loc::MemRegionVal>().getRegion();
 
   // Pointer of any type can be cast and used as array base.
   const ElementRegion *ElemR = dyn_cast<ElementRegion>(BaseRegion);
 
   // Convert the offset to the appropriate size and signedness.
-  Offset = cast<NonLoc>(svalBuilder.convertToArrayIndex(Offset));
+  Offset = svalBuilder.convertToArrayIndex(Offset).castAs<NonLoc>();
 
   if (!ElemR) {
     //
@@ -417,15 +443,16 @@ SVal StoreManager::getLValueElement(QualType elementType, NonLoc Offset,
 
   SVal BaseIdx = ElemR->getIndex();
 
-  if (!isa<nonloc::ConcreteInt>(BaseIdx))
+  if (!BaseIdx.getAs<nonloc::ConcreteInt>())
     return UnknownVal();
 
-  const llvm::APSInt& BaseIdxI = cast<nonloc::ConcreteInt>(BaseIdx).getValue();
+  const llvm::APSInt &BaseIdxI =
+      BaseIdx.castAs<nonloc::ConcreteInt>().getValue();
 
   // Only allow non-integer offsets if the base region has no offset itself.
   // FIXME: This is a somewhat arbitrary restriction. We should be using
   // SValBuilder here to add the two offsets without checking their types.
-  if (!isa<nonloc::ConcreteInt>(Offset)) {
+  if (!Offset.getAs<nonloc::ConcreteInt>()) {
     if (isa<ElementRegion>(BaseRegion->StripCasts()))
       return UnknownVal();
 
@@ -434,7 +461,7 @@ SVal StoreManager::getLValueElement(QualType elementType, NonLoc Offset,
                                                     Ctx));
   }
 
-  const llvm::APSInt& OffI = cast<nonloc::ConcreteInt>(Offset).getValue();
+  const llvm::APSInt& OffI = Offset.castAs<nonloc::ConcreteInt>().getValue();
   assert(BaseIdxI.isSigned());
 
   // Compute the new index.
