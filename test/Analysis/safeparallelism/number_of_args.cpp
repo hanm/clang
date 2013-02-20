@@ -5,9 +5,7 @@
 // Correct number of arg annotations for the annotated types
 class 
   [[asap::param("P")]]
-  [[asap::region("R")]]
-  [[asap::region("L")]]
-  [[asap::region("Links")]]
+  [[asap::region("R, L, Links")]]
     C0 {
 
   int data [[asap::arg("P")]];
@@ -33,9 +31,7 @@ class
 // Too many arg annotations
 class 
   [[asap::param("P")]]
-  [[asap::region("R")]]
-  [[asap::region("L")]]
-  [[asap::region("Links")]]
+  [[asap::region("R, L, Links")]]
     C1 {
 
   int data [[asap::arg("P:R, P, P:L")]];   // expected-warning{{superfluous region argument}}
@@ -58,9 +54,7 @@ class
 // or will be inferred)
 class 
   [[asap::param("P")]]
-  [[asap::region("R")]]
-  [[asap::region("L")]]
-  [[asap::region("Links")]]
+  [[asap::region("R, L, Links")]]
     C2 {
 
   int data; // expected-warning{{missing region argument(s)}}
@@ -80,9 +74,7 @@ class
 // Correct number of arg annotations for the annotated types
 class 
   __attribute__((param("P")))
-  __attribute__((region("R")))
-  __attribute__((region("L")))
-  __attribute__((region("Links")))
+  __attribute__((region("R, L, Links")))
     C0 {
 
   int __attribute__((arg("P"))) data;
@@ -100,9 +92,7 @@ class
 // Too many arg annotations
 class 
   __attribute__((param("P")))
-  __attribute__((region("R")))
-  __attribute__((region("L")))
-  __attribute__((region("Links")))
+  __attribute__((region("R, L, Links")))
     C1 {
 
   int data __attribute__((arg("P, P:R, P:L")));   // expected-warning{{superfluous region argument}}
@@ -121,9 +111,7 @@ class
 // or will be inferred)
 class 
   __attribute__((param("P"))) 
-  __attribute__((region("R")))
-  __attribute__((region("L")))
-  __attribute__((region("Links")))
+  __attribute__((region("R, L, Links")))
     C2 {
 
   int data; // expected-warning{{missing region argument(s)}}

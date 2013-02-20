@@ -2,9 +2,7 @@
 //
 
 class
-[[asap::region("R2")]]
-[[asap::region("R3")]]
-[[asap::param("P1")]]
+[[asap::param("P1"), asap::region("R2, R3")]]
 C1 { 
   int money [[asap::arg("P1:R1")]]; // expected-warning {{RPL element was not declared}} 
   int money1 [[asap::arg("P1:R3")]]; 

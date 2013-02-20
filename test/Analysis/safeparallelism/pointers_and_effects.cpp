@@ -23,8 +23,7 @@ class B: public A {
 #endif
 
 class
-[[asap::region("X")]]
-[[asap::region("Y")]]
+[[asap::region("X, Y")]]
 [[asap::param("Pp")]]
 Point {
 public:
@@ -35,8 +34,7 @@ public:
 class
 //[[asap::param("P, P<=Pool")]]
 [[asap::param("Pr")]]
-[[asap::region("R1"), asap::region("R2"), 
-  asap::region("Next"), asap::region("Links"), asap::region("Pool")]]
+[[asap::region("R1, R2, Next, Links, Pool")]]
 Rectangle {
 
   // Fields
@@ -120,8 +118,7 @@ Rectangle {
 namespace Shapes __attribute__((region("Pool"))) {
 
 class
-__attribute__((region("X")))
-__attribute__((region("Y")))
+__attribute__((region("X, Y")))
 __attribute__((param("Pp")))
 Point {
 public:
@@ -132,7 +129,7 @@ public:
 class
 //__attribute__((region_param("P, P<=Pool")))
 __attribute__((param("Pr")))
-__attribute__((region("R1"), region("R2"), region("Next"), region("Links") ))
+__attribute__((region("R1, R2, Next, Links")))
 Rectangle {
 
   // Fields

@@ -6,14 +6,12 @@
 class 
 [[asap::region("1R1")]]        //expected-warning {{invalid region name}}
 [[asap::param("1P1")]]  // expected-warning {{invalid region parameter name}} 
-[[asap::region("R1"), asap::region("R2"), asap::region("R3"), 
-               asap::region("_R2"), asap::region("R_2"), asap::region("R_2_c")]]
+[[asap::region("R1, R2, R3, _R2, R_2, R_2_c")]]
 C0 { 
 };
 
 class
-[[asap::region("R2")]]
-[[asap::region("R3")]]
+[[asap::region("R2, R3")]]
 [[asap::param("P1")]]
 C1 { 
   int money [[asap::arg("P1:R3")]];
@@ -101,15 +99,12 @@ public:
 class 
 __attribute__((region("1R1")))        //expected-warning {{invalid region name}}
 __attribute__((param("1P1")))  // expected-warning {{invalid region parameter name}} 
-__attribute__((region("R1"), region("R2"), region("R3"), 
-               region("_R2"), region("R_2"), region("R_2_c")))
+__attribute__((region("R1, R2, R3, _R2, R_2, R_2_c")))
 C0 { 
 };
 
 class
-__attribute__((region("R2")))
-__attribute__((region("R3")))
-__attribute__((param("P1")))
+__attribute__((region("R2, R3"), param("P1")))
 C1 { 
   // TODO: check that money is not annotated with an arg annotation
   int money __attribute__((arg("P1:R3"))); 

@@ -3,8 +3,7 @@
 
 /// Unbalanced Sorted tree
 /// expected-no-diagnostics
-class [[asap::param("P"), asap::region("R1")]] 
-      [[asap::region("Left"), asap::region("Right")]] 
+class [[asap::param("P"), asap::region("R1, Left, Right")]] 
                                                       TreeNode {
 
 private:

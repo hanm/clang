@@ -6,7 +6,7 @@
 /// expected-no-diagnostics
 namespace ASPTutorial {
   // 2.1 Basic Concepts.
-  class [[asap::region("Rx"), asap::region("Ry")]]
+  class [[asap::region("Rx, Ry")]]
     Point {
     double X [[asap::arg("Rx")]];
     double Y [[asap::arg("Ry")]];
@@ -20,7 +20,7 @@ namespace ASPTutorial {
       Y = y;
     }
 
-    void setXY [[asap::writes("Rx"), asap::writes("Ry")]]
+    void setXY [[asap::writes("Rx, Ry")]]
       (double x, double y) {
         // TODO - cobegin kind of parallel syntax support in asp
         this->setX(x);
@@ -29,7 +29,7 @@ namespace ASPTutorial {
   };
 
   // 2.2 Region Path List
-  class [[asap::region("A"), asap::region("B"), asap::region("C")]]
+  class [[asap::region("A, B, C")]]
     RPLExample {
     int X [[asap::arg("A:B")]];
     int Y [[asap::arg("A:C")]];
@@ -48,7 +48,7 @@ namespace ASPTutorial {
     int y [[asap::arg("R")]];
   };
 
-  class [[asap::region("First"), asap::region("Second"), asap::region("Links")]]
+  class [[asap::region("First, Second, Links")]]
     DataPairPtr {
     Data *first [[asap::arg("Links, First")]];
     Data *second [[asap::arg("Links, Second")]];
@@ -80,7 +80,7 @@ namespace ASPTutorial {
   };
 
   // A version of DataPair using references
-  class [[asap::region("First"), asap::region("Second"), asap::region("Links")]]
+  class [[asap::region("First, Second, Links")]]
     DataPairRef {
     Data &first [[asap::arg("First")]];
     Data &second [[asap::arg("Second")]];
@@ -95,7 +95,8 @@ namespace ASPTutorial {
 
   };
   // A version of DataPair using embedded objects
-  class [[asap::region("First"), asap::region("Second"), asap::region("Links")]]
+
+  class [[asap::region("First, Second, Links")]]
     DataPair {
     Data first [[asap::arg("First")]];
     Data second [[asap::arg("Second")]];
@@ -110,5 +111,5 @@ namespace ASPTutorial {
       second = Second;
     }
 
-  };
+  }; // end class DataPair 
 }
