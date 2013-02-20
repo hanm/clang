@@ -57,7 +57,9 @@ class ASaPType {
     delete InRpl;
     delete ArgV;
   }
-  /// Methods
+  // Methods
+  /// \brief Returns true iff this is of FunctionType.
+  inline bool isFunctionType() const { return QT->isFunctionType(); }
   /// \brief Return the size of the ArgsVector.
   inline int getArgVSize() const { return ArgV->size(); }
   /// \brief Return the In RPL which can be null.
@@ -94,7 +96,6 @@ class ASaPType {
     }
     return Result;
   }
-
   /// \brief If this is a function type, return its return type; else null.
   ASaPType *getReturnType() const {
     if (QT->isFunctionType()) {

@@ -72,7 +72,7 @@ public:
   }
 
   void VisitStmt(Stmt *S) {
-    OS << "DEBUG:: GENERIC:: Visiting Stmt/Expr = ";
+    OS << "DEBUG:: GENERIC:: Visiting Stmt/Expr = \n";
     S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
     VisitChildren(S);
@@ -105,7 +105,7 @@ public:
           helperTypecheckDeclWithInit(VD, VD->getInit());
         }
       }
-    }
+    } // end for each declaration
   }
 
 private:
@@ -226,14 +226,20 @@ private:
   ASaPType *Type;
   QualType RefQT;
 
-  /// \brief substitute region parameters in TmpT with arguments.
-  void memberSubstitute(const FieldDecl *FieldD) {
+  /// \brief substitute region parameters in Type with arguments.
+  void memberSubstitute(const ValueDecl *D) {
+    OS << "DEBUG:: in TypeBuilder::memberSubstitute:\n";
     OS << "DEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
     OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
 
-    const ASaPType *T = SymT.getType(FieldD);
+    const ASaPType *T = SymT.getType(D);
     assert(T);
-    OS << "DEBUG:: Type = " << T->toString(Ctx) << "\n";
+    bool NeedsCleanup = false;
+    if (T->isFunctionType()) {
+      NeedsCleanup = true;
+      T = T->getReturnType();
+    }
+    OS << "DEBUG:: Type used for substitution = " << T->toString(Ctx) << "\n";
 
     QualType QT = T->getQT(DerefNum);
 
@@ -245,7 +251,7 @@ private:
     const Rpl *ToRpl = T->getSubstArg(DerefNum);
     assert(ToRpl);
     OS << "DEBUG:: gonna substitute... " << FromEl->getName()
-       << "->" << ToRpl->toString() << "\n";
+       << "<-" << ToRpl->toString() << "\n";
 
     if (FromEl->getName().compare(ToRpl->toString())) {
       OS <<" GO!!\n";
@@ -253,15 +259,22 @@ private:
       Type->substitute(*FromEl, *ToRpl);
     }
     OS << "   DONE\n";
+    if (NeedsCleanup) {
+      //delete T;
+    }
   }
 
   /// \brief collect the region arguments for a field
   void setType(const ValueDecl *D) {
+    OS << "DEBUG:: in TypeBuilder::setType:\n";
     const ASaPType *T = SymT.getType(D);
     assert(T);
 
     assert(!Type);
-    Type = new ASaPType(*T); // make a copy
+    if (T->isFunctionType())
+      Type = T->getReturnType(); // makes a copy
+    else
+      Type = new ASaPType(*T); // make a copy
     if (DerefNum == -1)
       Type->addrOf(RefQT);
     else {
@@ -269,6 +282,7 @@ private:
       Type->deref(DerefNum);
       OS << "DEBUG :: DONE calling ASaPType::deref\n";
     }
+    OS << "DEBUG :: set TypeBuilder::Type = " << Type->toString(Ctx) << "\n";
   }
 
 public:
@@ -327,6 +341,9 @@ public:
   }
 
   void VisitStmt(Stmt *S) {
+    OS << "DEBUG:: GENERIC:: Visiting Stmt/Expr = \n";
+    S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
     VisitChildren(S);
   }
 
@@ -442,6 +459,13 @@ public:
 
     /// 1. VD is a FunctionDecl
     /// TODO: For Michael ;-)
+    const FunctionDecl *FunD = dyn_cast<FunctionDecl>(VD);
+    if (FunD) {
+      if (IsBase)
+        memberSubstitute(FunD);
+      else
+        setType(FunD);
+    }
 
     ///-//////////////////////////////////////////////
     /// 2. vd is a FieldDecl
@@ -453,16 +477,16 @@ public:
         memberSubstitute(FieldD);
       else // not IsBase --> HEAD
         setType(FieldD);
-
+    } // end if FieldDecl
       /// 2.3. Visit Base with read semantics, then restore write semantics
-      bool SavedIsBase = IsBase; // probably not needed to save
+      bool SavedIsBase = IsBase; // probably not necessary to save & restore
       int SavedDerefNum = DerefNum;
       DerefNum = Exp->isArrow() ? 1 : 0;
       IsBase = true;
       Visit(Exp->getBase());
       IsBase = SavedIsBase;
       DerefNum = SavedDerefNum;
-    } // end if FieldDecl
+
   } // end VisitMemberExpr
 
   void helperBinAddSub(Expr *LHS, Expr* RHS) {
@@ -526,9 +550,39 @@ public:
     // TODO?
   }
 
+  void VisitCXXNewExpr(CXXNewExpr *Exp) {
+  }
+
+  void VisitCallExpr(CallExpr *Exp) {
+    // Don't visit call arguments. Typechecking those is initiated
+    // by the AssignmentCheckerVisitor.
+    OS << "DEBUG:: VisitCXXNewExpr:";
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\nNOTHING TODO HERE!";
+    return;
+  }
+  /*void VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
+    // Don't visit call arguments. Typechecking those is initiated
+    // by the AssignmentCheckerVisitor.
+    OS << "DEBUG:: VisitCXXMemberCallExpr:";
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\nNOTHING TODO HERE!";
+    return;
+  }
+  void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
+    // Don't visit call arguments. Typechecking those is initiated
+    // by the AssignmentCheckerVisitor.
+    OS << "DEBUG:: VisitCXXOperatorCallExpr:";
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\nNOTHING TODO HERE!";
+    return;
+  }*/
+
   void VisitReturnStmt(ReturnStmt *Ret) {
-    //Expr *RHS = Ret->getRetValue();
-    /// TODO
+    assert(false);
+    // Don't visit call arguments. Typechecking those is initiated
+    // by the AssignmentCheckerVisitor.
+    return;
   }
 
 }; // end class TypeBuilderVisitor
