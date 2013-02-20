@@ -454,38 +454,21 @@ public:
     else
       OS << "not LV_Valid\n";*/
     ValueDecl* VD = Exp->getMemberDecl();
-    VD->print(OS, Ctx.getPrintingPolicy());
-    OS << "\n";
+    //VD->print(OS, Ctx.getPrintingPolicy());
+    //OS << "\n";
+    if (IsBase)
+      memberSubstitute(VD);
+    else
+      setType(VD);
 
-    /// 1. VD is a FunctionDecl
-    /// TODO: For Michael ;-)
-    const FunctionDecl *FunD = dyn_cast<FunctionDecl>(VD);
-    if (FunD) {
-      if (IsBase)
-        memberSubstitute(FunD);
-      else
-        setType(FunD);
-    }
-
-    ///-//////////////////////////////////////////////
-    /// 2. vd is a FieldDecl
-    /// Type_vd <args> vd
-    const FieldDecl* FieldD  = dyn_cast<FieldDecl>(VD);
-    if (FieldD) {
-      //StringRef S;
-      if (IsBase)
-        memberSubstitute(FieldD);
-      else // not IsBase --> HEAD
-        setType(FieldD);
-    } // end if FieldDecl
-      /// 2.3. Visit Base with read semantics, then restore write semantics
-      bool SavedIsBase = IsBase; // probably not necessary to save & restore
-      int SavedDerefNum = DerefNum;
-      DerefNum = Exp->isArrow() ? 1 : 0;
-      IsBase = true;
-      Visit(Exp->getBase());
-      IsBase = SavedIsBase;
-      DerefNum = SavedDerefNum;
+    // Visit Base with read semantics, then restore write semantics
+    bool SavedIsBase = IsBase;
+    int SavedDerefNum = DerefNum;
+    DerefNum = Exp->isArrow() ? 1 : 0;
+    IsBase = true;
+    Visit(Exp->getBase());
+    IsBase = SavedIsBase;
+    DerefNum = SavedDerefNum;
 
   } // end VisitMemberExpr
 
