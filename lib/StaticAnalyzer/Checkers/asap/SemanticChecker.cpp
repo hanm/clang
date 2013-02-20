@@ -26,6 +26,8 @@ private:
   RplVecAttrMapT RplVecAttrMap;
   bool FatalError;
 
+  bool NextFunctionIsATemplatePattern;
+
   /// Private Methods
   void addASaPTypeToMap(ValueDecl* D, RplVector *RV, Rpl *InRpl) {
     assert(!SymT.hasType(D));
@@ -182,6 +184,8 @@ private:
       QualType ResultQT = FT->getResultType();
       return getRegionParamCount(ResultQT);
     } else if (QT->isVoidType()) {
+      return 0;
+    } else if (QT->isTemplateTypeParmType()) {
       return 0;
     } else {
       // This should not happen: unknown number of region arguments for type
@@ -554,7 +558,8 @@ public:
         AC(AC),
         OS(OS),
         SymT(SymT),
-        FatalError(false)
+        FatalError(false),
+        NextFunctionIsATemplatePattern(false)
   {}
 
   /// Destructor
@@ -579,10 +584,17 @@ public:
     OS << "DEBUG:: VisitValueDecl : ";
     D->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
+    OS << "DEBUG:: it is " << (D->isTemplateDecl() ? "" : "NOT ")
+       << "a template\n";
     return true;
   }
 
   bool VisitFunctionDecl(FunctionDecl* D) {
+    if (NextFunctionIsATemplatePattern) {
+      NextFunctionIsATemplatePattern = false;
+      //return true; // skip this function
+    }
+
     OS << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
        << "DEBUG:: printing ASaP attributes for method or function '";
     D->getDeclName().printName(OS);
@@ -695,6 +707,10 @@ public:
     OS << "DEBUG:: VisitVarDecl: ";
     D->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
+    OS << "DEBUG:: it is " << (D->isTemplateDecl() ? "" : "NOT ")
+       << "a template\n";
+    OS << "DEBUG:: it is " << (D->isTemplateParameter() ? "" : "NOT ")
+       << "a template PARAMETER\n";
 
     /// A. Detect Region In & Arg annotations
     helperPrintAttributes<RegionArgAttr>(D); /// in region
@@ -733,6 +749,17 @@ public:
     return true;
   }
 
+  bool VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
+    OS << "DEBUG:: VisitFunctionTemplateDecl:";
+    D->print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+    OS << "DEBUG:: it is " << (D->isTemplateDecl() ? "" : "NOT ")
+       << "a template\n";
+    NextFunctionIsATemplatePattern = true;
+    return true;
+  }
+
+
   /*bool VisitCastExpr(CastExpr* E) {
     OS << "DEBUG:: VisitCastExpr: ";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -766,9 +793,5 @@ public:
     return true;
   }
 */
-  /*bool VisitAssignmentExpression() {
-    OS << "DEBUG:: VisitAssignmentExpression\n"
-    return true;
-  }*/
 
 }; // end class ASaPSemanticCheckerTraverser

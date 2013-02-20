@@ -224,10 +224,14 @@ public:
         DerefNum(0),
         IsCoveredBySummary(true) {
 
+    OS << "DEBUG:: ******** INVOKING EffectCheckerVisitor...\n";
+    S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
     EffSummary = SymT.getEffectSummary(this->Def);
     assert(EffSummary);
 
     Visit(S);
+    OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
   }
 
   /// Destructor

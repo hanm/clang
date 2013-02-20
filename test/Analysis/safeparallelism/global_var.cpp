@@ -50,13 +50,16 @@ public:
 
 namespace tbb {
   template<typename Func0, typename Func1>
-  void parallel_invoke(const Func0& f0, const Func1& f1) {
+  void parallel_invoke
+    //[[asap::invokes("f0 || f1")]]
+    [[asap::writes("ASaP::Globals::R")]] // until we support effect polymorphism
+    (const Func0 &f0, const Func1 &f1) {
     f0();
     f1();
   }
 } // end namespace tbb
 
-int main() {
+int main [[asap::writes("ASaP::Globals::R")]] () {
     ASaP::Globals::GlobalVar = 0;
     // No warning if they are invoked sequentially
     FooFunctor foo;
