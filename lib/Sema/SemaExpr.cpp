@@ -1976,6 +1976,10 @@ Sema::LookupInObjCMethod(LookupResult &Lookup, Scope *S,
                          IdentifierInfo *II, bool AllowBuiltinCreation) {
   SourceLocation Loc = Lookup.getNameLoc();
   ObjCMethodDecl *CurMethod = getCurMethodDecl();
+  
+  // Check for error condition which is already reported.
+  if (!CurMethod)
+    return ExprError();
 
   // There are two cases to handle here.  1) scoped lookup could have failed,
   // in which case we should look for an ivar.  2) scoped lookup could have
@@ -2042,7 +2046,8 @@ Sema::LookupInObjCMethod(LookupResult &Lookup, Scope *S,
       MarkAnyDeclReferenced(Loc, IV, true);
       
       ObjCMethodFamily MF = CurMethod->getMethodFamily();
-      if (MF != OMF_init && MF != OMF_dealloc && MF != OMF_finalize)
+      if (MF != OMF_init && MF != OMF_dealloc && MF != OMF_finalize &&
+          !IvarBacksCurrentMethodAccessor(IFace, CurMethod, IV))
         Diag(Loc, diag::warn_direct_ivar_access) << IV->getDeclName();
 
       ObjCIvarRefExpr *Result = new (Context) ObjCIvarRefExpr(IV, IV->getType(),
@@ -3831,9 +3836,9 @@ bool Sema::GatherArgumentsForCall(SourceLocation CallLoc,
 
 static void DiagnoseCalleeStaticArrayParam(Sema &S, ParmVarDecl *PVD) {
   TypeLoc TL = PVD->getTypeSourceInfo()->getTypeLoc();
-  if (ArrayTypeLoc *ATL = dyn_cast<ArrayTypeLoc>(&TL))
+  if (ArrayTypeLoc ATL = TL.getAs<ArrayTypeLoc>())
     S.Diag(PVD->getLocation(), diag::note_callee_static_array)
-      << ATL->getLocalSourceRange();
+      << ATL.getLocalSourceRange();
 }
 
 /// CheckStaticArrayArgument - If the given argument corresponds to a static
@@ -6845,18 +6850,18 @@ static bool isObjCObjectLiteral(ExprResult &E) {
 }
 
 static bool hasIsEqualMethod(Sema &S, const Expr *LHS, const Expr *RHS) {
-  // Get the LHS object's interface type.
-  QualType Type = LHS->getType();
-  QualType InterfaceType;
-  if (const ObjCObjectPointerType *PTy = Type->getAs<ObjCObjectPointerType>()) {
-    InterfaceType = PTy->getPointeeType();
-    if (const ObjCObjectType *iQFaceTy =
-        InterfaceType->getAsObjCQualifiedInterfaceType())
-      InterfaceType = iQFaceTy->getBaseType();
-  } else {
-    // If this is not actually an Objective-C object, bail out.
+  const ObjCObjectPointerType *Type =
+    LHS->getType()->getAs<ObjCObjectPointerType>();
+
+  // If this is not actually an Objective-C object, bail out.
+  if (!Type)
     return false;
-  }
+
+  // Get the LHS object's interface type.
+  QualType InterfaceType = Type->getPointeeType();
+  if (const ObjCObjectType *iQFaceTy =
+      InterfaceType->getAsObjCQualifiedInterfaceType())
+    InterfaceType = iQFaceTy->getBaseType();
 
   // If the RHS isn't an Objective-C object, bail out.
   if (!RHS->getType()->isObjCObjectPointerType())
@@ -6875,8 +6880,7 @@ static bool hasIsEqualMethod(Sema &S, const Expr *LHS, const Expr *RHS) {
                                                   /*warn=*/false);
     } else {
       // Check protocols.
-      Method = S.LookupMethodInQualifiedType(IsEqualSel,
-                                             cast<ObjCObjectPointerType>(Type),
+      Method = S.LookupMethodInQualifiedType(IsEqualSel, Type,
                                              /*instance=*/true);
     }
   }
@@ -9433,8 +9437,7 @@ void Sema::ActOnBlockArguments(SourceLocation CaretLoc, Declarator &ParamInfo,
   FunctionProtoTypeLoc ExplicitSignature;
 
   TypeLoc tmp = Sig->getTypeLoc().IgnoreParens();
-  if (isa<FunctionProtoTypeLoc>(tmp)) {
-    ExplicitSignature = cast<FunctionProtoTypeLoc>(tmp);
+  if ((ExplicitSignature = tmp.getAs<FunctionProtoTypeLoc>())) {
 
     // Check whether that explicit signature was synthesized by
     // GetTypeForDeclarator.  If so, don't save that as part of the
@@ -11179,7 +11182,7 @@ static void MarkExprReferenced(Sema &SemaRef, SourceLocation Loc,
   if (!MostDerivedClassDecl)
     return;
   CXXMethodDecl *DM = MD->getCorrespondingMethodInClass(MostDerivedClassDecl);
-  if (!DM)
+  if (!DM || DM->isPure())
     return;
   SemaRef.MarkAnyDeclReferenced(Loc, DM, OdrUse);
 } 

@@ -673,7 +673,7 @@ TEST(HasDescendant, MatchesDescendantsOfTypes) {
                       qualType(hasDescendant(
                           pointerType(pointee(builtinType()))))));
   EXPECT_TRUE(matches("void f() { int*** i; }",
-                      typeLoc(hasDescendant(builtinTypeLoc()))));
+                      typeLoc(hasDescendant(loc(builtinType())))));
 
   EXPECT_TRUE(matchAndVerifyResultTrue(
       "void f() { int*** i; }",
@@ -816,6 +816,14 @@ TEST(HasDeclaration, HasDeclarationOfEnumType) {
   EXPECT_TRUE(matches("enum X {}; void y(X *x) { x; }",
                       expr(hasType(pointsTo(
                           qualType(hasDeclaration(enumDecl(hasName("X")))))))));
+}
+
+TEST(HasDeclaration, HasDeclarationOfTypeWithDecl) {
+  EXPECT_TRUE(matches("typedef int X; X a;",
+                      varDecl(hasName("a"),
+                              hasType(typedefType(hasDeclaration(decl()))))));
+
+  // FIXME: Add tests for other types with getDecl() (e.g. RecordType)
 }
 
 TEST(HasType, TakesQualTypeMatcherAndMatchesExpr) {
@@ -3279,7 +3287,7 @@ TEST(TypeMatching, PointerTypes) {
   //    new VerifyIdIsBoundTo<TypeLoc>("loc", 1)));
   EXPECT_TRUE(matches(
       "int** a;",
-      pointerTypeLoc(pointeeLoc(loc(qualType())))));
+      loc(pointerType(pointee(qualType())))));
   EXPECT_TRUE(matches(
       "int** a;",
       loc(pointerType(pointee(pointerType())))));
@@ -3324,7 +3332,7 @@ TEST(TypeMatching, PointeeTypes) {
   EXPECT_TRUE(matches("int *a;", pointerType(pointee(builtinType()))));
 
   EXPECT_TRUE(matches("int *a;",
-                      pointerTypeLoc(pointeeLoc(loc(builtinType())))));
+                      loc(pointerType(pointee(builtinType())))));
 
   EXPECT_TRUE(matches(
       "int const *A;",
@@ -3338,10 +3346,10 @@ TEST(TypeMatching, MatchesPointersToConstTypes) {
   EXPECT_TRUE(matches("int b; int * const a = &b;",
                       loc(pointerType())));
   EXPECT_TRUE(matches("int b; int * const a = &b;",
-                      pointerTypeLoc()));
+                      loc(pointerType())));
   EXPECT_TRUE(matches(
       "int b; const int * a = &b;",
-      pointerTypeLoc(pointeeLoc(builtinTypeLoc()))));
+      loc(pointerType(pointee(builtinType())))));
   EXPECT_TRUE(matches(
       "int b; const int * a = &b;",
       pointerType(pointee(builtinType()))));
@@ -3350,10 +3358,6 @@ TEST(TypeMatching, MatchesPointersToConstTypes) {
 TEST(TypeMatching, MatchesTypedefTypes) {
   EXPECT_TRUE(matches("typedef int X; X a;", varDecl(hasName("a"),
                                                      hasType(typedefType()))));
-
-  EXPECT_TRUE(matches("typedef int X; X a;",
-                      varDecl(hasName("a"),
-                              hasType(typedefType(hasDecl(decl()))))));
 }
 
 TEST(NNS, MatchesNestedNameSpecifiers) {

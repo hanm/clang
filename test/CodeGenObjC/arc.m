@@ -9,7 +9,7 @@
 // ARC-ALIEN: declare extern_weak i8* @objc_retain(i8*)
 // ARC-ALIEN: declare extern_weak void @objc_storeStrong(i8**, i8*)
 // ARC-ALIEN: declare extern_weak i8* @objc_autoreleaseReturnValue(i8*)
-// ARC-ALIEN: declare i8* @objc_msgSend(i8*, i8*, ...) nonlazybind
+// ARC-ALIEN: declare i8* @objc_msgSend(i8*, i8*, ...) #1
 // ARC-ALIEN: declare extern_weak void @objc_release(i8*)
 // ARC-ALIEN: declare extern_weak i8* @objc_retainAutoreleasedReturnValue(i8*)
 // ARC-ALIEN: declare extern_weak i8* @objc_initWeak(i8**, i8*)
@@ -19,11 +19,11 @@
 // ARC-ALIEN: declare extern_weak i8* @objc_autorelease(i8*)
 // ARC-ALIEN: declare extern_weak i8* @objc_retainAutorelease(i8*)
 
-// ARC-NATIVE: declare i8* @objc_retain(i8*) nonlazybind
+// ARC-NATIVE: declare i8* @objc_retain(i8*) #1
 // ARC-NATIVE: declare void @objc_storeStrong(i8**, i8*)
 // ARC-NATIVE: declare i8* @objc_autoreleaseReturnValue(i8*)
-// ARC-NATIVE: declare i8* @objc_msgSend(i8*, i8*, ...) nonlazybind
-// ARC-NATIVE: declare void @objc_release(i8*) nonlazybind
+// ARC-NATIVE: declare i8* @objc_msgSend(i8*, i8*, ...) #1
+// ARC-NATIVE: declare void @objc_release(i8*) #1
 // ARC-NATIVE: declare i8* @objc_retainAutoreleasedReturnValue(i8*)
 // ARC-NATIVE: declare i8* @objc_initWeak(i8**, i8*)
 // ARC-NATIVE: declare i8* @objc_storeWeak(i8**, i8*)
@@ -676,7 +676,7 @@ void test21(unsigned n) {
 @implementation Test29
 static id _test29_allocator = 0;
 - (id) init {
-// CHECK:    define internal i8* @"\01-[Test29 init]"([[TEST29:%.*]]* {{%.*}},
+// CHECK:    define internal i8* @"\01-[Test29 init]"([[TEST29:%[^*]*]]* {{%.*}},
 // CHECK:      [[SELF:%.*]] = alloca [[TEST29]]*, align 8
 // CHECK-NEXT: [[CMD:%.*]] = alloca i8*, align 8
 // CHECK-NEXT: [[CLEANUP:%.*]] = alloca i32
@@ -786,7 +786,7 @@ typedef struct Test30_helper Test30_helper;
 char *helper;
 }
 - (id) init {
-// CHECK:    define internal i8* @"\01-[Test30 init]"([[TEST30:%.*]]* {{%.*}},
+// CHECK:    define internal i8* @"\01-[Test30 init]"([[TEST30:%[^*]*]]* {{%.*}},
 // CHECK:      [[RET:%.*]] = alloca [[TEST30]]*
 // CHECK-NEXT: alloca i8*
 // CHECK-NEXT: alloca i32
@@ -1483,3 +1483,8 @@ void test70(id i) {
     [2] = i
   };
 }
+
+// CHECK: attributes #0 = { nounwind "target-features"={{.*}} }
+// CHECK: attributes #1 = { nonlazybind }
+// CHECK: attributes #2 = { "target-features"={{.*}} }
+// CHECK: attributes #3 = { nounwind }

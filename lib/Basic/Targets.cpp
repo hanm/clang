@@ -3119,6 +3119,8 @@ class DarwinX86_64TargetInfo : public DarwinTargetInfo<X86_64TargetInfo> {
 public:
   DarwinX86_64TargetInfo(const std::string& triple)
       : DarwinTargetInfo<X86_64TargetInfo>(triple) {
+    IntMaxType = SignedLongLong;
+    UIntMaxType = UnsignedLongLong;
     Int64Type = SignedLongLong;
     MaxVectorAlign = 256;
   }
@@ -3166,6 +3168,10 @@ public:
 
     WCharType = UnsignedInt;
     LongDoubleFormat = &llvm::APFloat::IEEEquad;
+
+    // AArch64 backend supports 64-bit operations at the moment. In principle
+    // 128-bit is possible if register-pairs are used.
+    MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 64;
 
     TheCXXABI.set(TargetCXXABI::GenericAArch64);
   }
