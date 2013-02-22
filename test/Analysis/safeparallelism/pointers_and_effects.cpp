@@ -82,8 +82,6 @@ Rectangle {
     ppstar1 = &p2;      // expected-warning{{invalid assignment:}}
     pppstar = &ppstar1;
   
-    *pppstar = &p2;     // reads Links, writes Pr:Links   expected-warning{{cannot modify aliasing through pointer to partly specified region}}
-  
     *ppp = *&pp;        // reads Links, writes Pr:Links + reads Pr:Links
     *ppp = next->pp;    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
     *ppp = *&(next->pp);    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
@@ -173,8 +171,6 @@ Rectangle {
     ppstar1 = &p1;
     ppstar1 = &p2;      // expected-warning{{invalid assignment:}}
     pppstar = &ppstar1;
-
-    *pppstar = &p2;     // reads Links, writes Pr:Links   expected-warning{{cannot modify aliasing through pointer to partly specified region}}
 
     *ppp = *&pp;        // reads Links, writes Pr:Links + reads Pr:Links
     *ppp = next->pp;    // reads Links, writes Pr:Links + reads Pr:Links, Pr:Next:Links
