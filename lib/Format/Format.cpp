@@ -258,6 +258,12 @@ private:
   tooling::Replacements Replaces;
 };
 
+static bool isVarDeclName(const AnnotatedToken &Tok) {
+  return Tok.Parent != NULL && Tok.is(tok::identifier) &&
+         (Tok.Parent->Type == TT_PointerOrReference ||
+          Tok.Parent->is(tok::identifier));
+}
+
 class UnwrappedLineFormatter {
 public:
   UnwrappedLineFormatter(const FormatStyle &Style, SourceManager &SourceMgr,
@@ -266,8 +272,7 @@ public:
                          WhitespaceManager &Whitespaces, bool StructuralError)
       : Style(Style), SourceMgr(SourceMgr), Line(Line),
         FirstIndent(FirstIndent), RootToken(RootToken),
-        Whitespaces(Whitespaces), Count(0) {
-  }
+        Whitespaces(Whitespaces), Count(0) {}
 
   /// \brief Formats an \c UnwrappedLine.
   ///
@@ -326,8 +331,7 @@ private:
           BreakBeforeClosingBrace(false), QuestionColumn(0),
           AvoidBinPacking(AvoidBinPacking), BreakBeforeParameter(false),
           HasMultiParameterLine(HasMultiParameterLine), ColonPos(0),
-          BreakBeforeThirdOperand(false) {
-    }
+          BreakBeforeThirdOperand(false) {}
 
     /// \brief The position to which a specific parenthesis level needs to be
     /// indented.
@@ -512,7 +516,7 @@ private:
           State.Stack.back().ColonPos =
               State.Column + Current.FormatTok.TokenLength;
         }
-      } else if (Previous.Type == TT_ObjCMethodExpr) {
+      } else if (Previous.Type == TT_ObjCMethodExpr || isVarDeclName(Current)) {
         State.Column = State.Stack.back().Indent + 4;
       } else {
         State.Column = State.Stack.back().Indent;
@@ -610,7 +614,9 @@ private:
           (!Style.AllowAllParametersOfDeclarationOnNextLine &&
            Line.MustBeDeclaration))
         State.Stack.back().BreakBeforeParameter = true;
+    }
 
+    if (Newline) {
       // Any break on this level means that the parent level has been broken
       // and we need to avoid bin packing there.
       for (unsigned i = 0, e = State.Stack.size() - 1; i != e; ++i) {
@@ -634,13 +640,10 @@ private:
       State.Stack.back().FirstLessLess = State.Column;
     if (Current.is(tok::question))
       State.Stack.back().QuestionColumn = State.Column;
-    if (Current.Type == TT_CtorInitializerColon &&
-        Style.ConstructorInitializerAllOnOneLineOrOnePerLine)
-      State.Stack.back().AvoidBinPacking = true;
-    if (Current.is(tok::l_brace) && Current.MatchingParen != NULL &&
-        !Current.MatchingParen->MustBreakBefore) {
-      if (getLengthToMatchingParen(Current) + State.Column > getColumnLimit())
-        State.Stack.back().BreakBeforeParameter = true;
+    if (Current.Type == TT_CtorInitializerColon) {
+      if (Style.ConstructorInitializerAllOnOneLineOrOnePerLine)
+        State.Stack.back().AvoidBinPacking = true;
+      State.Stack.back().BreakBeforeParameter = false;
     }
 
     // Insert scopes created by fake parenthesis.
@@ -761,8 +764,7 @@ private:
   /// inserting a newline dependent on the \c NewLine.
   struct StateNode {
     StateNode(const LineState &State, bool NewLine, StateNode *Previous)
-        : State(State), NewLine(NewLine), Previous(Previous) {
-    }
+        : State(State), NewLine(NewLine), Previous(Previous) {}
     LineState State;
     bool NewLine;
     StateNode *Previous;
@@ -908,7 +910,8 @@ private:
     if (State.NextToken->Parent->is(tok::comma) &&
         State.Stack.back().BreakBeforeParameter &&
         !isTrailingComment(*State.NextToken) &&
-        State.NextToken->isNot(tok::r_paren))
+        State.NextToken->isNot(tok::r_paren) &&
+        State.NextToken->isNot(tok::r_brace))
       return true;
     // FIXME: Comparing LongestObjCSelectorName to 0 is a hacky way of finding
     // out whether it is the first parameter. Clean this up.
@@ -1032,8 +1035,7 @@ public:
             SourceManager &SourceMgr,
             const std::vector<CharSourceRange> &Ranges)
       : Diag(Diag), Style(Style), Lex(Lex), SourceMgr(SourceMgr),
-        Whitespaces(SourceMgr), Ranges(Ranges) {
-  }
+        Whitespaces(SourceMgr), Ranges(Ranges) {}
 
   virtual ~Formatter() {}
 
@@ -1193,18 +1195,14 @@ private:
   void tryFitMultipleLinesInOne(unsigned Indent,
                                 std::vector<AnnotatedLine>::iterator &I,
                                 std::vector<AnnotatedLine>::iterator E) {
-    unsigned Limit = Style.ColumnLimit - (I->InPPDirective ? 1 : 0) - Indent;
-
     // We can never merge stuff if there are trailing line comments.
     if (I->Last->Type == TT_LineComment)
       return;
 
-    // Check whether the UnwrappedLine can be put onto a single line. If
-    // so, this is bound to be the optimal solution (by definition) and we
-    // don't need to analyze the entire solution space.
-    if (I->Last->TotalLength > Limit)
-      return;
-    Limit -= I->Last->TotalLength;
+    unsigned Limit = Style.ColumnLimit - (I->InPPDirective ? 1 : 0) - Indent;
+    // If we already exceed the column limit, we set 'Limit' to 0. The different
+    // tryMerge..() functions can then decide whether to still do merging.
+    Limit = I->Last->TotalLength > Limit ? 0 : Limit - I->Last->TotalLength;
 
     if (I + 1 == E || (I + 1)->Type == LT_Invalid)
       return;
@@ -1223,6 +1221,8 @@ private:
   void tryMergeSimplePPDirective(std::vector<AnnotatedLine>::iterator &I,
                                  std::vector<AnnotatedLine>::iterator E,
                                  unsigned Limit) {
+    if (Limit == 0)
+      return;
     AnnotatedLine &Line = *I;
     if (!(I + 1)->InPPDirective || (I + 1)->First.FormatTok.HasUnescapedNewline)
       return;
@@ -1237,6 +1237,8 @@ private:
   void tryMergeSimpleIf(std::vector<AnnotatedLine>::iterator &I,
                         std::vector<AnnotatedLine>::iterator E,
                         unsigned Limit) {
+    if (Limit == 0)
+      return;
     if (!Style.AllowShortIfStatementsOnASingleLine)
       return;
     if ((I + 1)->InPPDirective != I->InPPDirective ||
@@ -1276,11 +1278,13 @@ private:
 
     AnnotatedToken *Tok = &(I + 1)->First;
     if (Tok->Children.empty() && Tok->is(tok::r_brace) &&
-        !Tok->MustBreakBefore && Tok->TotalLength <= Limit) {
+        !Tok->MustBreakBefore) {
+      // We merge empty blocks even if the line exceeds the column limit.
       Tok->SpacesRequiredBefore = 0;
+      Tok->CanBreakBefore = true;
       join(Line, *(I + 1));
       I += 1;
-    } else {
+    } else if (Limit != 0) {
       // Check that we still have three lines and they fit into the limit.
       if (I + 2 == E || (I + 2)->Type == LT_Invalid ||
           !nextTwoLinesFitInto(I, Limit))
@@ -1315,9 +1319,11 @@ private:
   }
 
   void join(AnnotatedLine &A, const AnnotatedLine &B) {
+    unsigned LengthA = A.Last->TotalLength + B.First.SpacesRequiredBefore;
     A.Last->Children.push_back(B.First);
     while (!A.Last->Children.empty()) {
       A.Last->Children[0].Parent = A.Last;
+      A.Last->Children[0].TotalLength += LengthA;
       A.Last = &A.Last->Children[0];
     }
   }

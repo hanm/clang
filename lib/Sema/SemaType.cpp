@@ -2580,6 +2580,8 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
           // definition.
           S.Diag(FTI.ArgInfo[0].IdentLoc, diag::err_ident_list_in_fn_declaration);
           D.setInvalidType(true);
+          // Recover by creating a K&R-style function type.
+          T = Context.getFunctionNoProtoType(T);
           break;
         }
 
@@ -2889,7 +2891,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
           << T <<  D.getSourceRange();
         D.setEllipsisLoc(SourceLocation());
       } else {
-        T = Context.getPackExpansionType(T, Optional<unsigned>());
+        T = Context.getPackExpansionType(T, None);
       }
       break;
 
@@ -2903,7 +2905,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       // parameter packs in the type of the non-type template parameter, then
       // it expands those parameter packs.
       if (T->containsUnexpandedParameterPack())
-        T = Context.getPackExpansionType(T, Optional<unsigned>());
+        T = Context.getPackExpansionType(T, None);
       else
         S.Diag(D.getEllipsisLoc(),
                LangOpts.CPlusPlus11

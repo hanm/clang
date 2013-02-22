@@ -279,6 +279,10 @@ static bool ParseMigratorArgs(MigratorOptions &Opts, ArgList &Args) {
   return true;
 }
 
+static void ParseCommentArgs(CommentOptions &Opts, ArgList &Args) {
+  Opts.BlockCommandNames = Args.getAllArgValues(OPT_fcomment_block_commands);
+}
+
 static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
                              DiagnosticsEngine &Diags) {
   using namespace options;
@@ -1221,6 +1225,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
                                                     Diags);
   Opts.ConstexprCallDepth = Args.getLastArgIntValue(OPT_fconstexpr_depth, 512,
                                                     Diags);
+  Opts.BracketDepth = Args.getLastArgIntValue(OPT_fbracket_depth, 256, Diags);
   Opts.DelayedTemplateParsing = Args.hasArg(OPT_fdelayed_template_parsing);
   Opts.NumLargeByValueCopy = Args.getLastArgIntValue(OPT_Wlarge_by_value_copy_EQ,
                                                     0, Diags);
@@ -1521,6 +1526,7 @@ bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
   ParseDependencyOutputArgs(Res.getDependencyOutputOpts(), *Args);
   Success = ParseDiagnosticArgs(Res.getDiagnosticOpts(), *Args, &Diags)
             && Success;
+  ParseCommentArgs(Res.getLangOpts()->CommentOpts, *Args);
   ParseFileSystemArgs(Res.getFileSystemOpts(), *Args);
   // FIXME: We shouldn't have to pass the DashX option around here
   InputKind DashX = ParseFrontendArgs(Res.getFrontendOpts(), *Args, Diags);
