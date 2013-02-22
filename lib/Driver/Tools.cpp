@@ -1705,6 +1705,47 @@ static void addDebugCompDirArg(const ArgList &Args, ArgStringList &CmdArgs) {
   }
 }
 
+void Clang::SplitDebugInfo(Compilation &C, const JobAction &JA,
+                           const ArgList &Args,
+                           const InputInfoList &Inputs,
+                           const InputInfo &Output,
+                           const char *LinkingOutput) const {
+  ArgStringList ExtractArgs;
+  ExtractArgs.push_back("--extract-dwo");
+
+  ArgStringList StripArgs;
+  StripArgs.push_back("--strip-dwo");
+
+  // Grabbing the output of the earlier compile step.
+  StripArgs.push_back(Output.getFilename());
+  ExtractArgs.push_back(Output.getFilename());
+
+  // Add an output for the extract.
+  Arg *FinalOutput = C.getArgs().getLastArg(options::OPT_o);
+  const char *OutFile;
+  if (FinalOutput && C.getArgs().hasArg(options::OPT_c)) {
+    SmallString<128> T(FinalOutput->getValue());
+    llvm::sys::path::replace_extension(T, "dwo");
+    OutFile = Args.MakeArgString(T);
+  } else {
+    // Use the compilation dir.
+    SmallString<128> T(Args.getLastArgValue(options::OPT_fdebug_compilation_dir));
+    T += llvm::sys::path::stem(Inputs[0].getBaseInput());
+    llvm::sys::path::replace_extension(T, "dwo");
+    OutFile = Args.MakeArgString(T);
+  }
+  ExtractArgs.push_back(OutFile);
+
+  const char *Exec =
+    Args.MakeArgString(getToolChain().GetProgramPath("objcopy"));
+
+  // First extract the dwo sections.
+  C.addCommand(new Command(JA, *this, Exec, ExtractArgs));
+
+  // Then remove them from the original .o file.
+  C.addCommand(new Command(JA, *this, Exec, StripArgs));
+}
+
 void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                          const InputInfo &Output,
                          const InputInfoList &Inputs,
@@ -2270,7 +2311,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   // -gsplit-dwarf should turn on -g and enable the backend dwarf
   // splitting and extraction.
-  if (Args.hasArg(options::OPT_gsplit_dwarf)) {
+  // FIXME: Currently only works on Linux.
+  if (getToolChain().getTriple().getOS() == llvm::Triple::Linux &&
+      Args.hasArg(options::OPT_gsplit_dwarf)) {
     CmdArgs.push_back("-g");
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-split-dwarf=Enable");
@@ -2292,9 +2335,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       C.getArgs().hasArg(options::OPT_S)) {
     if (Output.isFilename()) {
       CmdArgs.push_back("-coverage-file");
-      SmallString<128> absFilename(Output.getFilename());
-      llvm::sys::fs::make_absolute(absFilename);
-      CmdArgs.push_back(Args.MakeArgString(absFilename));
+      SmallString<128> CoverageFilename(Output.getFilename());
+      if (!C.getArgs().hasArg(options::OPT_no_canonical_prefixes))
+        llvm::sys::fs::make_absolute(CoverageFilename);
+      CmdArgs.push_back(Args.MakeArgString(CoverageFilename));
     }
   }
 
@@ -2473,6 +2517,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (Arg *A = Args.getLastArg(options::OPT_fconstexpr_depth_EQ)) {
     CmdArgs.push_back("-fconstexpr-depth");
+    CmdArgs.push_back(A->getValue());
+  }
+
+  if (Arg *A = Args.getLastArg(options::OPT_fbracket_depth_EQ)) {
+    CmdArgs.push_back("-fbracket-depth");
     CmdArgs.push_back(A->getValue());
   }
 
@@ -3152,6 +3201,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasArg(options::OPT_fretain_comments_from_system_headers))
     CmdArgs.push_back("-fretain-comments-from-system-headers");
 
+  // Forward -fcomment-block-commands to -cc1.
+  Args.AddAllArgs(CmdArgs, options::OPT_fcomment_block_commands);
+
   // Forward -Xclang arguments to -cc1, and -mllvm arguments to the LLVM option
   // parser.
   Args.AddAllArgValues(CmdArgs, options::OPT_Xclang);
@@ -3214,6 +3266,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   // Finally add the command to the compilation.
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
+
+  // Handle the debug info splitting at object creation time.
+  // TODO: Currently only works on linux with newer objcopy.
+  if (Args.hasArg(options::OPT_gsplit_dwarf) &&
+      getToolChain().getTriple().getOS() == llvm::Triple::Linux &&
+      isa<AssembleJobAction>(JA))
+    SplitDebugInfo(C, JA, Args, Inputs, Output, LinkingOutput);
 
   if (Arg *A = Args.getLastArg(options::OPT_pg))
     if (Args.hasArg(options::OPT_fomit_frame_pointer))
@@ -3998,7 +4057,7 @@ void darwin::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (getToolChain().getTriple().getArch() != llvm::Triple::x86_64 &&
       (((Args.hasArg(options::OPT_mkernel) ||
-	 Args.hasArg(options::OPT_fapple_kext)) &&
+         Args.hasArg(options::OPT_fapple_kext)) &&
         (!getDarwinToolChain().isTargetIPhoneOS() ||
          getDarwinToolChain().isIPhoneOSVersionLT(6, 0))) ||
        Args.hasArg(options::OPT_static)))
@@ -5867,42 +5926,6 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   addProfileRT(getToolChain(), Args, CmdArgs, getToolChain().getTriple());
 
   C.addCommand(new Command(JA, *this, ToolChain.Linker.c_str(), CmdArgs));
-}
-
-void linuxtools::SplitDebug::ConstructJob(Compilation &C, const JobAction &JA,
-                                          const InputInfo &Output,
-                                          const InputInfoList &Inputs,
-                                          const ArgList &Args,
-                                          const char *LinkingOutput) const {
-  // Assert some invariants.
-  assert(Inputs.size() == 1 && "Unable to handle multiple inputs.");
-  const InputInfo &Input = Inputs[0];
-  assert(Input.isFilename() && "Unexpected verify input");
-
-  ArgStringList ExtractArgs;
-  ExtractArgs.push_back("--extract-dwo");
-
-  ArgStringList StripArgs;
-  StripArgs.push_back("--strip-dwo");
-
-  // Grabbing the output of the earlier compile step.
-  StripArgs.push_back(Input.getFilename());
-  ExtractArgs.push_back(Input.getFilename());
-
-  // Add an output for the extract.
-  SmallString<128> T(Inputs[0].getBaseInput());
-  llvm::sys::path::replace_extension(T, "dwo");
-  const char *OutFile = Args.MakeArgString(T);
-  ExtractArgs.push_back(OutFile);
-
-  const char *Exec =
-    Args.MakeArgString(getToolChain().GetProgramPath("objcopy"));
-
-  // First extract the dwo sections.
-  C.addCommand(new Command(JA, *this, Exec, ExtractArgs));
-
-  // Then remove them from the original .o file.
-  C.addCommand(new Command(JA, *this, Exec, StripArgs));
 }
 
 void minix::Assemble::ConstructJob(Compilation &C, const JobAction &JA,

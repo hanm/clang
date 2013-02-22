@@ -557,16 +557,16 @@ bool CursorVisitor::VisitBlockDecl(BlockDecl *B) {
   return false;
 }
 
-llvm::Optional<bool> CursorVisitor::shouldVisitCursor(CXCursor Cursor) {
+Optional<bool> CursorVisitor::shouldVisitCursor(CXCursor Cursor) {
   if (RegionOfInterest.isValid()) {
     SourceRange Range = getFullCursorExtent(Cursor, AU->getSourceManager());
     if (Range.isInvalid())
-      return llvm::Optional<bool>();
+      return None;
     
     switch (CompareRegionOfInterest(Range)) {
     case RangeBefore:
       // This declaration comes before the region of interest; skip it.
-      return llvm::Optional<bool>();
+      return None;
 
     case RangeAfter:
       // This declaration comes after the region of interest; we're done.
@@ -617,7 +617,7 @@ bool CursorVisitor::VisitDeclContext(DeclContext *DC) {
         Cursor = MakeCursorObjCProtocolRef(PD, PD->getLocation(), TU);
     }
 
-    const llvm::Optional<bool> &V = shouldVisitCursor(Cursor);
+    const Optional<bool> &V = shouldVisitCursor(Cursor);
     if (!V.hasValue())
       continue;
     if (!V.getValue())
@@ -981,7 +981,7 @@ bool CursorVisitor::VisitObjCContainerDecl(ObjCContainerDecl *D) {
   for (SmallVectorImpl<Decl*>::iterator I = DeclsInContainer.begin(),
          E = DeclsInContainer.end(); I != E; ++I) {
     CXCursor Cursor = MakeCXCursor(*I, TU, RegionOfInterest);
-    const llvm::Optional<bool> &V = shouldVisitCursor(Cursor);
+    const Optional<bool> &V = shouldVisitCursor(Cursor);
     if (!V.hasValue())
       continue;
     if (!V.getValue())
@@ -3422,10 +3422,10 @@ CXString clang_getCursorDisplayName(CXCursor C) {
     if (TypeSourceInfo *TSInfo = ClassSpec->getTypeAsWritten())
       return cxstring::createDup(TSInfo->getType().getAsString(Policy));
     
-    SmallString<64> Str;
+    SmallString<128> Str;
     llvm::raw_svector_ostream OS(Str);
     OS << *ClassSpec;
-    OS << TemplateSpecializationType::PrintTemplateArgumentList(
+    TemplateSpecializationType::PrintTemplateArgumentList(OS,
                                       ClassSpec->getTemplateArgs().data(),
                                       ClassSpec->getTemplateArgs().size(),
                                                                 Policy);
@@ -5741,12 +5741,14 @@ static CXVersion convertVersion(VersionTuple In) {
 
   Out.Major = In.getMajor();
   
-  if (llvm::Optional<unsigned> Minor = In.getMinor())
+  Optional<unsigned> Minor = In.getMinor();
+  if (Minor.hasValue())
     Out.Minor = *Minor;
   else
     return Out;
 
-  if (llvm::Optional<unsigned> Subminor = In.getSubminor())
+  Optional<unsigned> Subminor = In.getSubminor();
+  if (Subminor.hasValue())
     Out.Subminor = *Subminor;
   
   return Out;

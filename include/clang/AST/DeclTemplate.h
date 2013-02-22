@@ -419,6 +419,10 @@ public:
     return (TemplateSpecializationKind)(MemberAndTSK.getInt() + 1);
   }
 
+  bool isExplicitSpecialization() const {
+    return getTemplateSpecializationKind() == TSK_ExplicitSpecialization;
+  }
+
   /// \brief Set the template specialization kind.
   void setTemplateSpecializationKind(TemplateSpecializationKind TSK) {
     assert(TSK != TSK_Undeclared &&
@@ -1428,7 +1432,7 @@ public:
   static ClassTemplateSpecializationDecl *
   CreateDeserialized(ASTContext &C, unsigned ID);
 
-  virtual void getNameForDiagnostic(std::string &S,
+  virtual void getNameForDiagnostic(raw_ostream &OS,
                                     const PrintingPolicy &Policy,
                                     bool Qualified) const;
 

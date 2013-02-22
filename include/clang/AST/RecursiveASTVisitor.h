@@ -1259,6 +1259,8 @@ DEF_TRAVERSE_DECL(BlockDecl, {
     return true;
   })
 
+DEF_TRAVERSE_DECL(EmptyDecl, { })
+
 DEF_TRAVERSE_DECL(FileScopeAsmDecl, {
     TRY_TO(TraverseStmt(D->getAsmString()));
   })

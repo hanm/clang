@@ -77,7 +77,7 @@ void DeclToIndex::computeMap(const DeclContext &dc) {
 Optional<unsigned> DeclToIndex::getValueIndex(const VarDecl *d) const {
   llvm::DenseMap<const VarDecl *, unsigned>::const_iterator I = map.find(d);
   if (I == map.end())
-    return Optional<unsigned>();
+    return None;
   return I->second;
 }
 
@@ -746,8 +746,8 @@ static bool runOnBlock(const CFGBlock *block, const CFG &cfg,
   TransferFunctions tf(vals, cfg, block, ac, classification, handler);
   for (CFGBlock::const_iterator I = block->begin(), E = block->end(); 
        I != E; ++I) {
-    if (const CFGStmt *cs = dyn_cast<CFGStmt>(&*I)) {
-      tf.Visit(const_cast<Stmt*>(cs->getStmt()));
+    if (CFGStmt cs = I->getAs<CFGStmt>()) {
+      tf.Visit(const_cast<Stmt*>(cs.getStmt()));
     }
   }
   return vals.updateValueVectorWithScratch(block);

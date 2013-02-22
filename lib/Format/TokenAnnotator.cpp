@@ -517,8 +517,7 @@ private:
         : BindingStrength(BindingStrength), LongestObjCSelectorName(0),
           ColonIsForRangeExpr(false), ColonIsObjCMethodExpr(false),
           FirstObjCSelectorName(NULL), IsExpression(IsExpression),
-          LookForFunctionName(false) {
-    }
+          LookForFunctionName(false) {}
 
     unsigned BindingStrength;
     unsigned LongestObjCSelectorName;
@@ -886,9 +885,8 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
   }
 
   // In for-loops, prefer breaking at ',' and ';'.
-  if (Line.First.is(tok::kw_for) &&
-      (Left.isNot(tok::comma) && Left.isNot(tok::semi)))
-    return 20;
+  if (Line.First.is(tok::kw_for) && Left.is(tok::equal))
+    return 4;
 
   if (Left.is(tok::semi))
     return 0;
@@ -1066,6 +1064,8 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
   if (Left.Type == TT_RangeBasedForLoopColon ||
       Left.Type == TT_InheritanceColon)
     return true;
+  if (Right.Type == TT_RangeBasedForLoopColon)
+    return false;
   if (Left.Type == TT_PointerOrReference || Left.Type == TT_TemplateCloser ||
       Left.Type == TT_UnaryOperator || Left.Type == TT_ConditionalExpr ||
       Left.is(tok::question) || Left.is(tok::kw_operator))
@@ -1077,6 +1077,12 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
     // We rely on MustBreakBefore being set correctly here as we should not
     // change the "binding" behavior of a comment.
     return false;
+
+  // FIXME: We can probably remove this special case once we have implemented
+  // breaking after types in general.
+  if (Line.First.is(tok::kw_for) && !Right.Children.empty() &&
+      Right.Children[0].is(tok::equal))
+    return true;
 
   // Allow breaking after a trailing 'const', e.g. after a method declaration,
   // unless it is follow by ';', '{' or '='.
