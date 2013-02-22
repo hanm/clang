@@ -94,8 +94,10 @@ namespace ASPTutorial {
     }
 
   };
-  // A version of DataPair using embedded objects
 
+  // A version of DataPair using embedded objects
+#if 0 
+// Needs checker support for implicit functions
   class [[asap::region("First, Second, Links")]]
     DataPair {
     Data first [[asap::arg("First")]];
@@ -112,4 +114,5 @@ namespace ASPTutorial {
     }
 
   }; // end class DataPair 
+#endif 
 }
