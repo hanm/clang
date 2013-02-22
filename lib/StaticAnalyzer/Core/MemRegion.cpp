@@ -1044,7 +1044,7 @@ RegionRawOffset ElementRegion::getAsArrayOffset() const {
 
     // FIXME: generalize to symbolic offsets.
     SVal index = ER->getIndex();
-    if (nonloc::ConcreteInt *CI = dyn_cast<nonloc::ConcreteInt>(&index)) {
+    if (Optional<nonloc::ConcreteInt> CI = index.getAs<nonloc::ConcreteInt>()) {
       // Update the offset.
       int64_t i = CI->getValue().getSExtValue();
 
@@ -1080,16 +1080,37 @@ RegionOffset MemRegion::getAsOffset() const {
 
   while (1) {
     switch (R->getKind()) {
-    default:
-      return RegionOffset(R, RegionOffset::Symbolic);
+    case GenericMemSpaceRegionKind:
+    case StackLocalsSpaceRegionKind:
+    case StackArgumentsSpaceRegionKind:
+    case HeapSpaceRegionKind:
+    case UnknownSpaceRegionKind:
+    case StaticGlobalSpaceRegionKind:
+    case GlobalInternalSpaceRegionKind:
+    case GlobalSystemSpaceRegionKind:
+    case GlobalImmutableSpaceRegionKind:
+      // Stores can bind directly to a region space to set a default value.
+      assert(Offset == 0 && !SymbolicOffsetBase);
+      goto Finish;
+
+    case FunctionTextRegionKind:
+    case BlockTextRegionKind:
+    case BlockDataRegionKind:
+      // These will never have bindings, but may end up having values requested
+      // if the user does some strange casting.
+      if (Offset != 0)
+        SymbolicOffsetBase = R;
+      goto Finish;
 
     case SymbolicRegionKind:
     case AllocaRegionKind:
     case CompoundLiteralRegionKind:
     case CXXThisRegionKind:
     case StringRegionKind:
+    case ObjCStringRegionKind:
     case VarRegionKind:
     case CXXTempObjectRegionKind:
+      // Usual base regions.
       goto Finish;
 
     case ObjCIvarRegionKind:
@@ -1150,7 +1171,8 @@ RegionOffset MemRegion::getAsOffset() const {
       }
 
       SVal Index = ER->getIndex();
-      if (const nonloc::ConcreteInt *CI=dyn_cast<nonloc::ConcreteInt>(&Index)) {
+      if (Optional<nonloc::ConcreteInt> CI =
+              Index.getAs<nonloc::ConcreteInt>()) {
         // Don't bother calculating precise offsets if we already have a
         // symbolic offset somewhere in the chain. 
         if (SymbolicOffsetBase)
