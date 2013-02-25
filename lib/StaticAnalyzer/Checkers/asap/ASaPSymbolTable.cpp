@@ -184,7 +184,10 @@ public:
   /// \brief Get parameter vector from Clang::Type
   const ParameterVector *getParameterVectorFromQualType(QualType QT) {
     const ParameterVector *ParamVec = 0;
-    if (const TagType* TT = dyn_cast<TagType>(QT.getTypePtr())) {
+    if (QT->isReferenceType()) {
+      ParamVec = getParameterVectorFromQualType(QT->getPointeeType());
+    } else if (const TagType* TT = dyn_cast<TagType>(QT.getTypePtr())) {
+      OSv2 << "getParameterVectorFromQualType::TagType\n";
       const TagDecl* TD = TT->getDecl();
       ParamVec = getParameterVector(TD);
     } else if (QT->isBuiltinType() || QT->isPointerType()) {

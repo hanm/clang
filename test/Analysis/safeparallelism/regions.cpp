@@ -26,11 +26,10 @@ public:
 
   [[asap::param("Pc")]]
   [[asap::reads("Pc:*")]]
-  [[asap::writes("P1:*")]]
-  C1 (C1& c [[asap::arg("Pc")]])
+  C1 (C1& ccc [[asap::arg("Pc")]])
     :
-    money(c.money) ,
-    next(c.next)
+    money(ccc.money),
+    next(0)
   {}
 
   int get_money [[asap::reads("P1:R3")]] ()
@@ -117,10 +116,9 @@ public:
   __attribute__((param("Pc")))
   C1 (C1& __attribute__((arg("Pc"))) c)
     __attribute__((reads("Pc:*")))
-    __attribute__((writes("P1:*")))
     :
-    money(c.money) ,
-    next(c.next)
+    money(c.money),
+    next(0)
   {}
 
   int get_money() __attribute__((reads("P1:R3"))) 

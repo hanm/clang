@@ -34,8 +34,11 @@ private:
     ASaPType *T = new ASaPType(D->getType(), RV, InRpl);
     OS << "Debug:: RV.size=" << (RV ? RV->size() : 0)
        << ", T.RV.size=" << T->getArgVSize() << "\n";
-    SymT.setType(D, T);
-    OS << "Debug :: adding type: " << T->toString(Ctx) << "\n";
+    bool Result = SymT.setType(D, T);
+    OS << "Debug :: adding type: " << T->toString(Ctx) << " to Decl: ";
+    D->print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+    assert(Result);
   }
 
   /// \brief Issues Warning: '<str>' <bugName> on Declaration

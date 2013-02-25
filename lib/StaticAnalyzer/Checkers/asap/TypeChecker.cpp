@@ -46,6 +46,9 @@ public:
     OS << "DEBUG:: ******** INVOKING AssignmentCheckerVisitor...\n";
     S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
+    if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
+      helperVisitCXXConstructorDecl(D);
+    }
     Visit(S);
     OS << "DEBUG:: ******** DONE INVOKING AssignmentCheckerVisitor ***\n";
   }
@@ -86,12 +89,19 @@ public:
 
   void VisitDesignatedInitExpr(DesignatedInitExpr *Exp) {
     OS << "Designated INIT Expr!!\n";
-    // TODO
+    // TODO?
   }
 
   void VisitCXXScalarValueInitExpr(CXXScalarValueInitExpr *Exp) {
     OS << "CXX Scalar Value INIT Expr!!\n";
-    // TODO
+    // TODO?
+  }
+
+  void VisitInitListExpr(InitListExpr *Exp) {
+    OS << "DEBUG:: VisitInitListExpr: ";
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    // TODO?
   }
 
   void VisitDeclStmt(DeclStmt *S) {
@@ -117,9 +127,10 @@ private:
     else
       return true;
   }
+
   bool typecheckParamAssignment(ParmVarDecl *Param, Expr *Arg);
 
-  void helperTypecheckDeclWithInit(const VarDecl *VD, Expr *Init);
+  void helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init);
 
   void helperEmitInvalidAliasingModificationWarning(Stmt *S, Decl *D,
                                                     const StringRef &Str) {
@@ -197,6 +208,18 @@ private:
     helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
   }
 
+  void helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
+    CXXConstructorDecl::init_const_iterator
+      I = D->init_begin(),
+      E = D->init_end();
+    for(; I != E; ++I) {
+      CXXCtorInitializer *Init = *I;
+      if (Init->isMemberInitializer()) {
+        helperTypecheckDeclWithInit(Init->getMember(), Init->getInit());
+      }
+    }
+  }
+
 }; // end class AssignmentCheckerVisitor
 
 ///-///////////////////////////////////////////////////////////////////////////
@@ -244,6 +267,8 @@ private:
     QualType QT = T->getQT(DerefNum);
 
     const ParameterVector *ParamVec = SymT.getParameterVectorFromQualType(QT);
+    //const ParameterVector *ParamVec = SymT.getParameterVector(D);
+
     // TODO support multiple Parameters
     const ParamRplElement *FromEl = ParamVec->getParamAt(0);
     assert(FromEl);
@@ -266,7 +291,10 @@ private:
 
   /// \brief collect the region arguments for a field
   void setType(const ValueDecl *D) {
-    OS << "DEBUG:: in TypeBuilder::setType:\n";
+    OS << "DEBUG:: in TypeBuilder::setType: ";
+    D->print(OS, Ctx.getPrintingPolicy());
+    OS << "\n Decl pointer address:" << D;
+    OS << "\n";
     const ASaPType *T = SymT.getType(D);
     assert(T);
 
@@ -374,7 +402,10 @@ public:
     OS << "\n";
     ValueDecl* VD = E->getDecl();
     assert(VD);
-    setType(VD);
+    if (IsBase)
+      memberSubstitute(VD);
+    else
+      setType(VD);
   }
 
   void VisitCXXThisExpr(CXXThisExpr *E) {
@@ -684,8 +715,8 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
 }
 
 void AssignmentCheckerVisitor::helperTypecheckDeclWithInit(
-                                                           const VarDecl *VD,
-                                                           Expr *Init) {
+                                                    const ValueDecl *VD,
+                                                    Expr *Init) {
   TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, SymT, Def, Init);
   const ASaPType *LHSType = SymT.getType(VD);
   ASaPType *RHSType = TBVR.getType();
@@ -729,6 +760,8 @@ void AssignmentCheckerVisitor::VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
     typecheckParamAssignment(ParamDecl, ArgExpr);
   }
 }
+
+
 
 /*  void VisitCallExpr(CallExpr *Exp) {
     //TODO
