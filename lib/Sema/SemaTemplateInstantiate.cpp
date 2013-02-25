@@ -492,14 +492,16 @@ void Sema::PrintInstantiationStack() {
 
     case ActiveTemplateInstantiation::DefaultTemplateArgumentInstantiation: {
       TemplateDecl *Template = cast<TemplateDecl>(Active->Entity);
-      std::string TemplateArgsStr
-        = TemplateSpecializationType::PrintTemplateArgumentList(
+      SmallVector<char, 128> TemplateArgsStr;
+      llvm::raw_svector_ostream OS(TemplateArgsStr);
+      Template->printName(OS);
+      TemplateSpecializationType::PrintTemplateArgumentList(OS,
                                                          Active->TemplateArgs,
                                                       Active->NumTemplateArgs,
                                                       getPrintingPolicy());
       Diags.Report(Active->PointOfInstantiation,
                    diag::note_default_arg_instantiation_here)
-        << (Template->getNameAsString() + TemplateArgsStr)
+        << OS.str()
         << Active->InstantiationRange;
       break;
     }
@@ -544,14 +546,16 @@ void Sema::PrintInstantiationStack() {
       ParmVarDecl *Param = cast<ParmVarDecl>(Active->Entity);
       FunctionDecl *FD = cast<FunctionDecl>(Param->getDeclContext());
 
-      std::string TemplateArgsStr
-        = TemplateSpecializationType::PrintTemplateArgumentList(
+      SmallVector<char, 128> TemplateArgsStr;
+      llvm::raw_svector_ostream OS(TemplateArgsStr);
+      FD->printName(OS);
+      TemplateSpecializationType::PrintTemplateArgumentList(OS,
                                                          Active->TemplateArgs,
                                                       Active->NumTemplateArgs,
                                                       getPrintingPolicy());
       Diags.Report(Active->PointOfInstantiation,
                    diag::note_default_function_arg_instantiation_here)
-        << (FD->getNameAsString() + TemplateArgsStr)
+        << OS.str()
         << Active->InstantiationRange;
       break;
     }
@@ -628,7 +632,7 @@ Optional<TemplateDeductionInfo *> Sema::isSFINAEContext() const {
     case ActiveTemplateInstantiation::DefaultFunctionArgumentInstantiation:
     case ActiveTemplateInstantiation::ExceptionSpecInstantiation:
       // This is a template instantiation, so there is no SFINAE.
-      return Optional<TemplateDeductionInfo *>();
+      return None;
 
     case ActiveTemplateInstantiation::DefaultTemplateArgumentInstantiation:
     case ActiveTemplateInstantiation::PriorTemplateArgumentSubstitution:
@@ -647,7 +651,7 @@ Optional<TemplateDeductionInfo *> Sema::isSFINAEContext() const {
     }
   }
 
-  return Optional<TemplateDeductionInfo *>();
+  return None;
 }
 
 /// \brief Retrieve the depth and index of a parameter pack.

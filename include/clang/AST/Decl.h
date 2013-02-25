@@ -169,13 +169,13 @@ public:
   /// specializations are printed with their template arguments.
   ///
   /// TODO: use an API that doesn't require so many temporary strings
-  virtual void getNameForDiagnostic(std::string &S,
+  virtual void getNameForDiagnostic(raw_ostream &OS,
                                     const PrintingPolicy &Policy,
                                     bool Qualified) const {
     if (Qualified)
-      S += getQualifiedNameAsString(Policy);
+      OS << getQualifiedNameAsString(Policy);
     else
-      S += getNameAsString();
+      printName(OS);
   }
 
   /// declarationReplaces - Determine whether this declaration, if
@@ -1606,7 +1606,7 @@ public:
     return DeclarationNameInfo(getDeclName(), getLocation(), DNLoc);
   }
 
-  virtual void getNameForDiagnostic(std::string &S,
+  virtual void getNameForDiagnostic(raw_ostream &OS,
                                     const PrintingPolicy &Policy,
                                     bool Qualified) const;
 
@@ -1919,7 +1919,9 @@ public:
   /// \brief If this function is an instantiation of a member function of a
   /// class template specialization, retrieves the member specialization
   /// information.
-  MemberSpecializationInfo *getMemberSpecializationInfo() const;
+  MemberSpecializationInfo *getMemberSpecializationInfo() const {
+    return TemplateOrSpecialization.dyn_cast<MemberSpecializationInfo*>();
+  }
 
   /// \brief Specify that this record is an instantiation of the
   /// member function FD.
@@ -3295,7 +3297,21 @@ public:
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
   static bool classofKind(Kind K) { return K == Import; }
 };
-  
+
+/// \brief Represents an empty-declaration.
+class EmptyDecl : public Decl {
+  virtual void anchor();
+  EmptyDecl(DeclContext *DC, SourceLocation L)
+    : Decl(Empty, DC, L) { }
+
+public:
+  static EmptyDecl *Create(ASTContext &C, DeclContext *DC,
+                           SourceLocation L);
+  static EmptyDecl *CreateDeserialized(ASTContext &C, unsigned ID);
+
+  static bool classof(const Decl *D) { return classofKind(D->getKind()); }
+  static bool classofKind(Kind K) { return K == Empty; }
+};
 
 /// Insertion operator for diagnostics.  This allows sending NamedDecl's
 /// into a diagnostic with <<.

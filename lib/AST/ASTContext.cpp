@@ -654,7 +654,7 @@ ASTContext::ASTContext(LangOptions& LOpts, SourceManager &SM,
     DeclarationNames(*this),
     ExternalSource(0), Listener(0),
     Comments(SM), CommentsLoaded(false),
-    CommentCommandTraits(BumpAlloc),
+    CommentCommandTraits(BumpAlloc, LOpts.CommentOpts),
     LastSDM(0, 0),
     UniqueBlockByRefTypeID(0)
 {
@@ -5142,13 +5142,11 @@ void ASTContext::getObjCEncodingForTypeImpl(QualType T, std::string& S,
       if (ClassTemplateSpecializationDecl *Spec
           = dyn_cast<ClassTemplateSpecializationDecl>(RDecl)) {
         const TemplateArgumentList &TemplateArgs = Spec->getTemplateArgs();
-        std::string TemplateArgsStr
-          = TemplateSpecializationType::PrintTemplateArgumentList(
+        llvm::raw_string_ostream OS(S);
+        TemplateSpecializationType::PrintTemplateArgumentList(OS,
                                             TemplateArgs.data(),
                                             TemplateArgs.size(),
                                             (*this).getPrintingPolicy());
-
-        S += TemplateArgsStr;
       }
     } else {
       S += '?';

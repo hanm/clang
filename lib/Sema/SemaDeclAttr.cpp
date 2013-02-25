@@ -1097,7 +1097,11 @@ static void handleAllocSizeAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   // In C++ the implicit 'this' function parameter also counts, and they are
   // counted from one.
   bool HasImplicitThisParam = isInstanceMethod(D);
-  unsigned NumArgs = getFunctionOrMethodNumArgs(D) + HasImplicitThisParam;
+  unsigned NumArgs;
+  if (hasFunctionProto(D))
+    NumArgs = getFunctionOrMethodNumArgs(D) + HasImplicitThisParam;
+  else
+    NumArgs = 0;
 
   SmallVector<unsigned, 8> SizeArgs;
 
@@ -3311,27 +3315,28 @@ static void handleAlignedAttr(Sema &S, Decl *D, const AttributeList &Attr) {
     return;
   }
 
-  // FIXME: The C++11 version of this attribute should error out when it is
-  //        used to specify a weaker alignment, rather than being silently
-  //        ignored. This constraint cannot be applied until we have seen
-  //        all the attributes which apply to the variable.
-
   if (Attr.getNumArgs() == 0) {
     D->addAttr(::new (S.Context) AlignedAttr(Attr.getRange(), S.Context,
                true, 0, Attr.getAttributeSpellingListIndex()));
     return;
   }
 
-  S.AddAlignedAttr(Attr.getRange(), D, Attr.getArg(0),
-                   Attr.getAttributeSpellingListIndex());
+  Expr *E = Attr.getArg(0);
+  if (Attr.isPackExpansion() && !E->containsUnexpandedParameterPack()) {
+    S.Diag(Attr.getEllipsisLoc(),
+           diag::err_pack_expansion_without_parameter_packs);
+    return;
+  }
+
+  if (!Attr.isPackExpansion() && S.DiagnoseUnexpandedParameterPack(E))
+    return;
+
+  S.AddAlignedAttr(Attr.getRange(), D, E, Attr.getAttributeSpellingListIndex(),
+                   Attr.isPackExpansion());
 }
 
 void Sema::AddAlignedAttr(SourceRange AttrRange, Decl *D, Expr *E,
-                          unsigned SpellingListIndex) {
-  // FIXME: Handle pack-expansions here.
-  if (DiagnoseUnexpandedParameterPack(E))
-    return;
-
+                          unsigned SpellingListIndex, bool IsPackExpansion) {
   AlignedAttr TmpAttr(AttrRange, Context, true, E, SpellingListIndex);
   SourceLocation AttrLoc = AttrRange.getBegin();
 
@@ -3368,15 +3373,16 @@ void Sema::AddAlignedAttr(SourceRange AttrRange, Decl *D, Expr *E,
     }
     if (DiagKind != -1) {
       Diag(AttrLoc, diag::err_alignas_attribute_wrong_decl_type)
-        << (TmpAttr.isC11() ? "'_Alignas'" : "'alignas'")
-        << DiagKind;
+        << TmpAttr.isC11() << DiagKind;
       return;
     }
   }
 
   if (E->isTypeDependent() || E->isValueDependent()) {
     // Save dependent expressions in the AST to be instantiated.
-    D->addAttr(::new (Context) AlignedAttr(TmpAttr));
+    AlignedAttr *AA = ::new (Context) AlignedAttr(TmpAttr);
+    AA->setPackExpansion(IsPackExpansion);
+    D->addAttr(AA);
     return;
   }
 
@@ -3411,17 +3417,20 @@ void Sema::AddAlignedAttr(SourceRange AttrRange, Decl *D, Expr *E,
     }
   }
 
-  D->addAttr(::new (Context) AlignedAttr(AttrRange, Context, true,
-                                         ICE.take(), SpellingListIndex));
+  AlignedAttr *AA = ::new (Context) AlignedAttr(AttrRange, Context, true,
+                                                ICE.take(), SpellingListIndex);
+  AA->setPackExpansion(IsPackExpansion);
+  D->addAttr(AA);
 }
 
 void Sema::AddAlignedAttr(SourceRange AttrRange, Decl *D, TypeSourceInfo *TS,
-                          unsigned SpellingListIndex) {
+                          unsigned SpellingListIndex, bool IsPackExpansion) {
   // FIXME: Cache the number on the Attr object if non-dependent?
   // FIXME: Perform checking of type validity
-  D->addAttr(::new (Context) AlignedAttr(AttrRange, Context, false, TS,
-                                         SpellingListIndex));
-  return;
+  AlignedAttr *AA = ::new (Context) AlignedAttr(AttrRange, Context, false, TS,
+                                                SpellingListIndex);
+  AA->setPackExpansion(IsPackExpansion);
+  D->addAttr(AA);
 }
 
 void Sema::CheckAlignasUnderalignment(Decl *D) {
@@ -3432,7 +3441,7 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
     Ty = VD->getType();
   else
     Ty = Context.getTagDeclType(cast<TagDecl>(D));
-  if (Ty->isDependentType())
+  if (Ty->isDependentType() || Ty->isIncompleteType())
     return;
 
   // C++11 [dcl.align]p5, C11 6.7.5/4:

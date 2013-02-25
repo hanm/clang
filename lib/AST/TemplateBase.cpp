@@ -229,7 +229,7 @@ Optional<unsigned> TemplateArgument::getNumTemplateExpansions() const {
   if (TemplateArg.NumExpansions)
     return TemplateArg.NumExpansions - 1;
   
-  return Optional<unsigned>();
+  return None; 
 }
 
 void TemplateArgument::Profile(llvm::FoldingSetNodeID &ID,
@@ -347,9 +347,7 @@ void TemplateArgument::print(const PrintingPolicy &Policy,
   case Type: {
     PrintingPolicy SubPolicy(Policy);
     SubPolicy.SuppressStrongLifetime = true;
-    std::string TypeStr;
-    getAsType().getAsStringInternal(TypeStr, SubPolicy);
-    Out << TypeStr;
+    getAsType().print(Out, SubPolicy);
     break;
   }
     

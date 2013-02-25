@@ -3012,9 +3012,6 @@ public:
   bool isSugared() const { return false; }
   QualType desugar() const { return QualType(this, 0); }
 
-  // FIXME: Remove the string version.
-  void printExceptionSpecification(std::string &S, 
-                                   const PrintingPolicy &Policy) const;
   void printExceptionSpecification(raw_ostream &OS, 
                                    const PrintingPolicy &Policy) const;
 
@@ -3656,21 +3653,6 @@ public:
 
   /// \brief Print a template argument list, including the '<' and '>'
   /// enclosing the template arguments.
-  // FIXME: remove the string ones.
-  static std::string PrintTemplateArgumentList(const TemplateArgument *Args,
-                                               unsigned NumArgs,
-                                               const PrintingPolicy &Policy,
-                                               bool SkipBrackets = false);
-
-  static std::string PrintTemplateArgumentList(const TemplateArgumentLoc *Args,
-                                               unsigned NumArgs,
-                                               const PrintingPolicy &Policy);
-
-  static std::string PrintTemplateArgumentList(const TemplateArgumentListInfo &,
-                                               const PrintingPolicy &Policy);
-
-  /// \brief Print a template argument list, including the '<' and '>'
-  /// enclosing the template arguments.
   static void PrintTemplateArgumentList(raw_ostream &OS,
                                         const TemplateArgument *Args,
                                         unsigned NumArgs,
@@ -4155,7 +4137,7 @@ public:
     if (NumExpansions)
       return NumExpansions - 1;
 
-    return Optional<unsigned>();
+    return None;
   }
 
   bool isSugared() const { return false; }
@@ -4168,7 +4150,7 @@ public:
   static void Profile(llvm::FoldingSetNodeID &ID, QualType Pattern,
                       Optional<unsigned> NumExpansions) {
     ID.AddPointer(Pattern.getAsOpaquePtr());
-    ID.AddBoolean(NumExpansions);
+    ID.AddBoolean(NumExpansions.hasValue());
     if (NumExpansions)
       ID.AddInteger(*NumExpansions);
   }

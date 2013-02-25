@@ -30,23 +30,17 @@ void ExprEngine::CreateCXXTemporaryObject(const MaterializeTemporaryExpr *ME,
   ProgramStateRef state = Pred->getState();
   const LocationContext *LCtx = Pred->getLocationContext();
 
-  // Bind the temporary object to the value of the expression. Then bind
-  // the expression to the location of the object.
   SVal V = state->getSVal(tempExpr, LCtx);
 
   // If the value is already a CXXTempObjectRegion, it is fine as it is.
   // Otherwise, create a new CXXTempObjectRegion, and copy the value into it.
   const MemRegion *MR = V.getAsRegion();
-  if (!MR || !isa<CXXTempObjectRegion>(MR)) {
-    const MemRegion *R =
-      svalBuilder.getRegionManager().getCXXTempObjectRegion(ME, LCtx);
+  if (MR && isa<CXXTempObjectRegion>(MR))
+    state = state->BindExpr(ME, LCtx, V);
+  else
+    state = createTemporaryRegionIfNeeded(state, LCtx, tempExpr, ME);
 
-    SVal L = loc::MemRegionVal(R);
-    state = state->bindLoc(L, V);
-    V = L;
-  }
-
-  Bldr.generateNode(ME, Pred, state->BindExpr(ME, LCtx, V));
+  Bldr.generateNode(ME, Pred, state);
 }
 
 void ExprEngine::performTrivialCopy(NodeBuilder &Bldr, ExplodedNode *Pred,
@@ -96,8 +90,8 @@ void ExprEngine::VisitCXXConstructExpr(const CXXConstructExpr *CE,
       CFGElement Next = (*B)[currStmtIdx+1];
 
       // Is this a constructor for a local variable?
-      if (const CFGStmt *StmtElem = dyn_cast<CFGStmt>(&Next)) {
-        if (const DeclStmt *DS = dyn_cast<DeclStmt>(StmtElem->getStmt())) {
+      if (CFGStmt StmtElem = Next.getAs<CFGStmt>()) {
+        if (const DeclStmt *DS = dyn_cast<DeclStmt>(StmtElem.getStmt())) {
           if (const VarDecl *Var = dyn_cast<VarDecl>(DS->getSingleDecl())) {
             if (Var->getInit()->IgnoreImplicit() == CE) {
               QualType Ty = Var->getType();
@@ -119,8 +113,8 @@ void ExprEngine::VisitCXXConstructExpr(const CXXConstructExpr *CE,
       }
       
       // Is this a constructor for a member?
-      if (const CFGInitializer *InitElem = dyn_cast<CFGInitializer>(&Next)) {
-        const CXXCtorInitializer *Init = InitElem->getInitializer();
+      if (CFGInitializer InitElem = Next.getAs<CFGInitializer>()) {
+        const CXXCtorInitializer *Init = InitElem.getInitializer();
         assert(Init->isAnyMemberInitializer());
 
         const CXXMethodDecl *CurCtor = cast<CXXMethodDecl>(LCtx->getDecl());
@@ -161,8 +155,10 @@ void ExprEngine::VisitCXXConstructExpr(const CXXConstructExpr *CE,
       Target = ThisVal.getAsRegion();
     } else {
       // Cast to the base type.
-      QualType BaseTy = CE->getType();
-      SVal BaseVal = getStoreManager().evalDerivedToBase(ThisVal, BaseTy);
+      bool IsVirtual =
+        (CE->getConstructionKind() == CXXConstructExpr::CK_VirtualBase);
+      SVal BaseVal = getStoreManager().evalDerivedToBase(ThisVal, CE->getType(),
+                                                         IsVirtual);
       Target = BaseVal.getAsRegion();
     }
     break;
