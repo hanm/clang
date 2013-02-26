@@ -54,10 +54,6 @@ namespace tools {
     void AddSparcTargetArgs(const ArgList &Args, ArgStringList &CmdArgs) const;
     void AddX86TargetArgs(const ArgList &Args, ArgStringList &CmdArgs) const;
     void AddHexagonTargetArgs (const ArgList &Args, ArgStringList &CmdArgs) const;
-    void SplitDebugInfo(Compilation &C, const JobAction &JA,
-                        const ArgList &Args, const InputInfoList &Inputs,
-                        const InputInfo &Output,
-                        const char *LinkingOutput) const;
 
     enum RewriteKind { RK_None, RK_Fragile, RK_NonFragile };
 
@@ -81,6 +77,7 @@ namespace tools {
   /// \brief Clang integrated assembler tool.
   class LLVM_LIBRARY_VISIBILITY ClangAs : public Tool {
     void AddARMTargetArgs(const ArgList &Args, ArgStringList &CmdArgs) const;
+    void AddX86TargetArgs(const ArgList &Args, ArgStringList &CmdArgs) const;
   public:
     ClangAs(const ToolChain &TC) : Tool("clang::as",
                                         "clang integrated assembler", TC) {}

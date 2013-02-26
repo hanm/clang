@@ -34,12 +34,17 @@ void ExprEngine::CreateCXXTemporaryObject(const MaterializeTemporaryExpr *ME,
 
   // If the value is already a CXXTempObjectRegion, it is fine as it is.
   // Otherwise, create a new CXXTempObjectRegion, and copy the value into it.
+  // This is an optimization for when an rvalue is constructed and then
+  // immediately materialized.
   const MemRegion *MR = V.getAsRegion();
-  if (MR && isa<CXXTempObjectRegion>(MR))
-    state = state->BindExpr(ME, LCtx, V);
-  else
-    state = createTemporaryRegionIfNeeded(state, LCtx, tempExpr, ME);
+  if (const CXXTempObjectRegion *TR =
+        dyn_cast_or_null<CXXTempObjectRegion>(MR)) {
+    if (getContext().hasSameUnqualifiedType(TR->getValueType(), ME->getType()))
+      state = state->BindExpr(ME, LCtx, V);
+  }
 
+  if (state == Pred->getState())
+    state = createTemporaryRegionIfNeeded(state, LCtx, tempExpr, ME);
   Bldr.generateNode(ME, Pred, state);
 }
 
@@ -90,8 +95,8 @@ void ExprEngine::VisitCXXConstructExpr(const CXXConstructExpr *CE,
       CFGElement Next = (*B)[currStmtIdx+1];
 
       // Is this a constructor for a local variable?
-      if (CFGStmt StmtElem = Next.getAs<CFGStmt>()) {
-        if (const DeclStmt *DS = dyn_cast<DeclStmt>(StmtElem.getStmt())) {
+      if (Optional<CFGStmt> StmtElem = Next.getAs<CFGStmt>()) {
+        if (const DeclStmt *DS = dyn_cast<DeclStmt>(StmtElem->getStmt())) {
           if (const VarDecl *Var = dyn_cast<VarDecl>(DS->getSingleDecl())) {
             if (Var->getInit()->IgnoreImplicit() == CE) {
               QualType Ty = Var->getType();
@@ -113,8 +118,8 @@ void ExprEngine::VisitCXXConstructExpr(const CXXConstructExpr *CE,
       }
       
       // Is this a constructor for a member?
-      if (CFGInitializer InitElem = Next.getAs<CFGInitializer>()) {
-        const CXXCtorInitializer *Init = InitElem.getInitializer();
+      if (Optional<CFGInitializer> InitElem = Next.getAs<CFGInitializer>()) {
+        const CXXCtorInitializer *Init = InitElem->getInitializer();
         assert(Init->isAnyMemberInitializer());
 
         const CXXMethodDecl *CurCtor = cast<CXXMethodDecl>(LCtx->getDecl());

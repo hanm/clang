@@ -306,6 +306,11 @@ TEST_F(FormatTest, FormatsForLoop) {
       "                                           aaaaaaaaaaaaaaaa);\n"
       "     aaaaaaaaaaa++, bbbbbbbbbbbbbbbbb++) {\n"
       "}");
+  verifyGoogleFormat(
+      "for (std::vector<UnwrappedLine>::iterator I = UnwrappedLines.begin(),\n"
+      "                                          E = UnwrappedLines.end();\n"
+      "     I != E;\n"
+      "     ++I) {\n}");
 }
 
 TEST_F(FormatTest, RangeBasedForLoops) {
@@ -1127,6 +1132,10 @@ TEST_F(FormatTest, ConstructorInitializers) {
                "    : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
                "          aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) {}");
 
+  verifyFormat("Constructor(int Parameter = 0)\n"
+               "    : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaa),\n"
+               "      aaaaaaaaaaaa(aaaaaaaaaaaaaaaaa) {}");
+
   // Here a line could be saved by splitting the second initializer onto two
   // lines, but that is not desireable.
   verifyFormat(
@@ -1397,9 +1406,14 @@ TEST_F(FormatTest, BreaksConditionalExpressions) {
   verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
                "    ? aaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
                "    : aaaaaaaaaaaaaaaaaaaaaaaaaaa;");
-
-  // FIXME: The trailing third parameter here is kind of hidden. Prefer putting
-  // it on the next line.
+  verifyFormat(
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa == aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "    ? aaaaaaaaaaaaaaa\n"
+      "    : aaaaaaaaaaaaaaa;");
+  verifyFormat("f(aaaaaaaaaaaaaaaa == // force break\n"
+               "  aaaaaaaaa\n"
+               "      ? b\n"
+               "      : c);");
   verifyFormat(
       "unsigned Indent =\n"
       "    format(TheLine.First, IndentForLevel[TheLine.Level] >= 0\n"
@@ -1408,6 +1422,14 @@ TEST_F(FormatTest, BreaksConditionalExpressions) {
       "           TheLine.InPPDirective, PreviousEndOfLineColumn);",
       getLLVMStyleWithColumns(70));
 
+  verifyGoogleFormat(
+      "void f() {\n"
+      "  g(aaa,\n"
+      "    aaaaaaaaaa == aaaaaaaaaa ? aaaa : aaaaa,\n"
+      "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa == aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "        ? aaaaaaaaaaaaaaa\n"
+      "        : aaaaaaaaaaaaaaa);\n"
+      "}");
 }
 
 TEST_F(FormatTest, DeclarationsOfMultipleVariables) {
@@ -1460,6 +1482,11 @@ TEST_F(FormatTest, AlignsStringLiterals) {
   verifyFormat("a = a + \"a\"\n"
                "        \"a\"\n"
                "        \"a\";");
+
+  verifyFormat(
+      "#define LL_FORMAT \"ll\"\n"
+      "printf(\"aaaaa: %d, bbbbbb: %\" LL_FORMAT \"d, cccccccc: %\" LL_FORMAT\n"
+      "       \"d, ddddddddd: %\" LL_FORMAT \"d\");");
 }
 
 TEST_F(FormatTest, AlignsPipes) {
@@ -1723,10 +1750,12 @@ TEST_F(FormatTest, UndestandsOverloadedOperators) {
 }
 
 TEST_F(FormatTest, UnderstandsNewAndDelete) {
-  verifyFormat("A *a = new A;");
-  verifyFormat("A *a = new (placement) A;");
-  verifyFormat("delete a;");
-  verifyFormat("delete (A *)a;");
+  verifyFormat("void f() {\n"
+               "  A *a = new A;\n"
+               "  A *a = new (placement) A;\n"
+               "  delete a;\n"
+               "  delete (A *)a;\n"
+               "}");
 }
 
 TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
@@ -1890,6 +1919,11 @@ TEST_F(FormatTest, FormatsCasts) {
   verifyFormat("void f(int i = (kA * kB) & kMask) {}");
   verifyFormat("int a = sizeof(int) * b;");
   verifyFormat("int a = alignof(int) * b;");
+  
+  // These are not casts, but at some point were confused with casts.
+  verifyFormat("virtual void foo(int *) override;");
+  verifyFormat("virtual void foo(char &) const;");
+  verifyFormat("virtual void foo(int *a, char *) const;");
 }
 
 TEST_F(FormatTest, FormatsFunctionTypes) {
@@ -1901,13 +1935,24 @@ TEST_F(FormatTest, FormatsFunctionTypes) {
   verifyFormat("int(*func)(void *);");
 }
 
-TEST_F(FormatTest, BreaksFunctionDeclarations) {
+TEST_F(FormatTest, BreaksLongDeclarations) {
   verifyFormat("int *someFunction(int LoooooooooooooooooooongParam1,\n"
                "                  int LoooooooooooooooooooongParam2) {}");
   verifyFormat(
       "TypeSpecDecl *\n"
       "TypeSpecDecl::Create(ASTContext &C, DeclContext *DC, SourceLocation L,\n"
       "                     IdentifierIn *II, Type *T) {}");
+  verifyFormat("ReallyLongReturnType<TemplateParam1, TemplateParam2>\n"
+               "ReallyReallyLongFunctionName(\n"
+               "    const std::string &SomeParameter,\n"
+               "    const SomeType<string, SomeOtherTemplateParameter> &\n"
+               "        ReallyReallyLongParameterName,\n"
+               "    const SomeType<string, SomeOtherTemplateParameter> &\n"
+               "        AnotherLongParameterName) {}");
+  verifyFormat(
+      "aaaaaaaaaaaaaaaa::aaaaaaaaaaaaaaaa<aaaaaaaaaaaaa, aaaaaaaaaaaa>\n"
+      "aaaaaaaaaaaaaaaaaaaaaaa;");
+
   verifyGoogleFormat(
       "TypeSpecDecl* TypeSpecDecl::Create(\n"
       "    ASTContext& C, DeclContext* DC, SourceLocation L) {}");
@@ -1933,7 +1978,9 @@ TEST_F(FormatTest, HandlesIncludeDirectives) {
                "#include \"string.h\"\n"
                "#include \"string.h\"\n"
                "#include <a-a>\n"
-               "#include < path with space >\n");
+               "#include < path with space >\n"
+               "#include \"some very long include paaaaaaaaaaaaaaaaaaaaaaath\"",
+               getLLVMStyleWithColumns(35));
 
   verifyFormat("#import <string>");
   verifyFormat("#import <a/b/c.h>");

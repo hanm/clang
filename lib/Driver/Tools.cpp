@@ -1705,11 +1705,27 @@ static void addDebugCompDirArg(const ArgList &Args, ArgStringList &CmdArgs) {
   }
 }
 
-void Clang::SplitDebugInfo(Compilation &C, const JobAction &JA,
-                           const ArgList &Args,
-                           const InputInfoList &Inputs,
-                           const InputInfo &Output,
-                           const char *LinkingOutput) const {
+static const char *SplitDebugName(const ArgList &Args,
+                                  const InputInfoList &Inputs) {
+  Arg *FinalOutput = Args.getLastArg(options::OPT_o);
+  if (FinalOutput && Args.hasArg(options::OPT_c)) {
+    SmallString<128> T(FinalOutput->getValue());
+    llvm::sys::path::replace_extension(T, "dwo");
+    return Args.MakeArgString(T);
+  } else {
+    // Use the compilation dir.
+    SmallString<128> T(Args.getLastArgValue(options::OPT_fdebug_compilation_dir));
+    SmallString<128> F(llvm::sys::path::stem(Inputs[0].getBaseInput()));
+    llvm::sys::path::replace_extension(F, "dwo");
+    T += F;
+    return Args.MakeArgString(F);
+  }
+}
+
+static void SplitDebugInfo(const ToolChain &TC, Compilation &C,
+                           const Tool &T, const JobAction &JA,
+                           const ArgList &Args, const InputInfo &Output,
+                           const char *OutFile) {
   ArgStringList ExtractArgs;
   ExtractArgs.push_back("--extract-dwo");
 
@@ -1719,31 +1735,16 @@ void Clang::SplitDebugInfo(Compilation &C, const JobAction &JA,
   // Grabbing the output of the earlier compile step.
   StripArgs.push_back(Output.getFilename());
   ExtractArgs.push_back(Output.getFilename());
-
-  // Add an output for the extract.
-  Arg *FinalOutput = C.getArgs().getLastArg(options::OPT_o);
-  const char *OutFile;
-  if (FinalOutput && C.getArgs().hasArg(options::OPT_c)) {
-    SmallString<128> T(FinalOutput->getValue());
-    llvm::sys::path::replace_extension(T, "dwo");
-    OutFile = Args.MakeArgString(T);
-  } else {
-    // Use the compilation dir.
-    SmallString<128> T(Args.getLastArgValue(options::OPT_fdebug_compilation_dir));
-    T += llvm::sys::path::stem(Inputs[0].getBaseInput());
-    llvm::sys::path::replace_extension(T, "dwo");
-    OutFile = Args.MakeArgString(T);
-  }
   ExtractArgs.push_back(OutFile);
 
   const char *Exec =
-    Args.MakeArgString(getToolChain().GetProgramPath("objcopy"));
+    Args.MakeArgString(TC.GetProgramPath("objcopy"));
 
   // First extract the dwo sections.
-  C.addCommand(new Command(JA, *this, Exec, ExtractArgs));
+  C.addCommand(new Command(JA, T, Exec, ExtractArgs));
 
   // Then remove them from the original .o file.
-  C.addCommand(new Command(JA, *this, Exec, StripArgs));
+  C.addCommand(new Command(JA, T, Exec, StripArgs));
 }
 
 void Clang::ConstructJob(Compilation &C, const JobAction &JA,
@@ -3264,15 +3265,26 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(Flags.str()));
   }
 
-  // Finally add the command to the compilation.
+  // Add the split debug info name to the command lines here so we
+  // can propagate it to the backend.
+  bool SplitDwarf = Args.hasArg(options::OPT_gsplit_dwarf) &&
+    (getToolChain().getTriple().getOS() == llvm::Triple::Linux) &&
+    (isa<AssembleJobAction>(JA) || isa<CompileJobAction>(JA));
+  const char *SplitDwarfOut;
+  if (SplitDwarf) {
+    CmdArgs.push_back("-split-dwarf-file");
+    SplitDwarfOut = SplitDebugName(Args, Inputs);
+    CmdArgs.push_back(SplitDwarfOut);
+  }
+
+  // Finally add the compile command to the compilation.
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 
-  // Handle the debug info splitting at object creation time.
+  // Handle the debug info splitting at object creation time if we're
+  // creating an object.
   // TODO: Currently only works on linux with newer objcopy.
-  if (Args.hasArg(options::OPT_gsplit_dwarf) &&
-      getToolChain().getTriple().getOS() == llvm::Triple::Linux &&
-      isa<AssembleJobAction>(JA))
-    SplitDebugInfo(C, JA, Args, Inputs, Output, LinkingOutput);
+  if (SplitDwarf && !isa<CompileJobAction>(JA))
+    SplitDebugInfo(getToolChain(), C, *this, JA, Args, Output, SplitDwarfOut);
 
   if (Arg *A = Args.getLastArg(options::OPT_pg))
     if (Args.hasArg(options::OPT_fomit_frame_pointer))
@@ -3312,6 +3324,15 @@ void ClangAs::AddARMTargetArgs(const ArgList &Args,
   // Honor -mfpmath=.
   if (const Arg *A = Args.getLastArg(options::OPT_mfpmath_EQ))
     addFPMathArgs(D, A, Args, CmdArgs, getARMTargetCPU(Args, Triple));
+}
+
+void ClangAs::AddX86TargetArgs(const ArgList &Args,
+                               ArgStringList &CmdArgs) const {
+  // Set the CPU based on -march=.
+  if (const char *CPUName = getX86TargetCPU(Args, getToolChain().getTriple())) {
+    CmdArgs.push_back("-target-cpu");
+    CmdArgs.push_back(CPUName);
+  }
 }
 
 /// Add options related to the Objective-C runtime/ABI.
@@ -3488,6 +3509,11 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::arm:
   case llvm::Triple::thumb:
     AddARMTargetArgs(Args, CmdArgs);
+    break;
+
+  case llvm::Triple::x86:
+  case llvm::Triple::x86_64:
+    AddX86TargetArgs(Args, CmdArgs);
     break;
   }
 

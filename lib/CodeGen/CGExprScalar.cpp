@@ -986,7 +986,12 @@ Value *ScalarExprEmitter::VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
   // integer value.
   Value *Base = Visit(E->getBase());
   Value *Idx  = Visit(E->getIdx());
-  bool IdxSigned = E->getIdx()->getType()->isSignedIntegerOrEnumerationType();
+  QualType IdxTy = E->getIdx()->getType();
+
+  if (CGF.SanOpts->Bounds)
+    CGF.EmitBoundsCheck(E, E->getBase(), Idx, IdxTy, /*Accessed*/true);
+
+  bool IdxSigned = IdxTy->isSignedIntegerOrEnumerationType();
   Idx = Builder.CreateIntCast(Idx, CGF.Int32Ty, IdxSigned, "vecidxcast");
   return Builder.CreateExtractElement(Base, Idx, "vecext");
 }
@@ -2134,6 +2139,10 @@ static Value *emitPointerArithmetic(CodeGenFunction &CGF,
   if (isSubtraction)
     index = CGF.Builder.CreateNeg(index, "idx.neg");
 
+  if (CGF.SanOpts->Bounds)
+    CGF.EmitBoundsCheck(op.E, pointerOperand, index, indexOperand->getType(),
+                        /*Accessed*/ false);
+
   const PointerType *pointerType
     = pointerOperand->getType()->getAs<PointerType>();
   if (!pointerType) {
@@ -2398,13 +2407,17 @@ Value *ScalarExprEmitter::EmitShl(const BinOpInfo &Ops) {
   if (CGF.SanOpts->Shift && !CGF.getLangOpts().OpenCL &&
       isa<llvm::IntegerType>(Ops.LHS->getType())) {
     llvm::Value *WidthMinusOne = GetWidthMinusOneValue(Ops.LHS, RHS);
-    // FIXME: Emit the branching explicitly rather than emitting the check
-    // twice.
-    EmitBinOpCheck(Builder.CreateICmpULE(RHS, WidthMinusOne), Ops);
+    llvm::Value *Valid = Builder.CreateICmpULE(RHS, WidthMinusOne);
 
     if (Ops.Ty->hasSignedIntegerRepresentation()) {
+      llvm::BasicBlock *Orig = Builder.GetInsertBlock();
+      llvm::BasicBlock *Cont = CGF.createBasicBlock("cont");
+      llvm::BasicBlock *CheckBitsShifted = CGF.createBasicBlock("check");
+      Builder.CreateCondBr(Valid, CheckBitsShifted, Cont);
+
       // Check whether we are shifting any non-zero bits off the top of the
       // integer.
+      CGF.EmitBlock(CheckBitsShifted);
       llvm::Value *BitsShiftedOff =
         Builder.CreateLShr(Ops.LHS,
                            Builder.CreateSub(WidthMinusOne, RHS, "shl.zeros",
@@ -2419,8 +2432,15 @@ Value *ScalarExprEmitter::EmitShl(const BinOpInfo &Ops) {
         BitsShiftedOff = Builder.CreateLShr(BitsShiftedOff, One);
       }
       llvm::Value *Zero = llvm::ConstantInt::get(BitsShiftedOff->getType(), 0);
-      EmitBinOpCheck(Builder.CreateICmpEQ(BitsShiftedOff, Zero), Ops);
+      llvm::Value *SecondCheck = Builder.CreateICmpEQ(BitsShiftedOff, Zero);
+      CGF.EmitBlock(Cont);
+      llvm::PHINode *P = Builder.CreatePHI(Valid->getType(), 2);
+      P->addIncoming(Valid, Orig);
+      P->addIncoming(SecondCheck, CheckBitsShifted);
+      Valid = P;
     }
+
+    EmitBinOpCheck(Valid, Ops);
   }
   // OpenCL 6.3j: shift values are effectively % word size of LHS.
   if (CGF.getLangOpts().OpenCL)
