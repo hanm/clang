@@ -89,6 +89,20 @@ private:
                        BugStr, VDLoc, Attr->getRange());
   }
 
+  /// \brief Emit error for redeclared region name within scope
+  inline void emitRedeclaredRegionName(const Decl *D, const StringRef &Str) {
+    StringRef BugName = "Region name already declared at this scope";
+    helperEmitDeclarationWarning(D, Str, BugName);
+    // Not a Fatal Error
+  }
+
+  /// \brief Emit error for redeclared region parameter name within scope
+  inline void emitRedeclaredRegionParameter(const Decl *D, const StringRef &Str) {
+    FatalError = true;
+    StringRef BugName = "Region name already declared at this scope";
+    helperEmitDeclarationWarning(D, Str, BugName);
+  }
+
   /// \brief Emit error for misplaced region parameter within RPL.
   void emitMisplacedRegionParameter(const Decl *D,
                                     const Attr* A,
@@ -109,6 +123,7 @@ private:
 
   /// \brief  Declaration D is missing region argument(s)
   void emitMissingRegionArgs(Decl *D) {
+    FatalError = true;
     std::string bugName = "missing region argument(s)";
 
     std::string sbuf;
@@ -120,6 +135,7 @@ private:
 
   /// \brief  Declaration D is missing region argument(s)
   void emitUnknownNumberOfRegionParamsForType(Decl *D) {
+    FatalError = true;
     std::string bugName = "unknown number of region parameters for type";
 
     std::string sbuf;
@@ -131,12 +147,14 @@ private:
 
   /// \brief Region arguments Str on declaration D are superfluous for its type
   void emitSuperfluousRegionArg(Decl *D, StringRef Str) {
+    FatalError = true;
     std::string bugName = "superfluous region argument(s)";
     helperEmitDeclarationWarning(D, Str, bugName);
   }
 
   /// \brief Region name or parameter contains illegal characters
   void emitIllFormedRegionNameOrParameter(Decl *D, Attr *A, StringRef Name) {
+    // Not a fatal error (e.g., if region name is not actually used)
     std::string AttrTypeStr = "";
     assert(A);
     if (isa<RegionAttr>(A))
@@ -254,12 +272,24 @@ private:
         if (isValidRegionName(Name)) {
           /// Add it to the vector
           OS << "DEBUG:: creating RPL Element called " << Name << "\n";
-          if (isa<RegionAttr>(*I))
-            SymT.addRegionName(D, Name);
-            //RegNameSet->insert(new NamedRplElement(Name));
+          if (isa<RegionAttr>(*I)) {
+            const Decl* ScopeDecl = D;
+            if (isa<EmptyDecl>(D)) {
+              ScopeDecl = getDeclFromContext(D->getDeclContext());
+              assert(ScopeDecl);
+            }
+            if (!SymT.addRegionName(ScopeDecl, Name)) {
+              // Region name already declared at this scope
+              emitRedeclaredRegionName(D, Name);
+              Result = false;
+            }
+          }
           else if (isa<RegionParamAttr>(*I))
-            SymT.addParameterName(D, Name);
-            //ParamVec->push_back(new ParamRplElement(Name));
+            if (!SymT.addParameterName(D, Name)) {
+              // Region parameter already declared at this scope
+              emitRedeclaredRegionParameter(D, Name);
+              Result = false;
+            }
         } else {
           /// Emit bug report: ill formed region or parameter name
           emitIllFormedRegionNameOrParameter(D, *I, Name);
@@ -271,7 +301,7 @@ private:
     return Result;
   }
 
-  const RplElement *findRegionOrParamName(Decl *D, StringRef Name) {
+  const RplElement *findRegionOrParamName(const Decl *D, StringRef Name) {
     if (!D)
       return 0;
     /// 1. try to find among regions or region parameters
@@ -280,8 +310,24 @@ private:
       Result = SymT.lookupRegionName(D, Name);
     return Result;
   }
+
+  /// \brief Return a Decl type (or null) from a DeclContext.
+  const Decl *getDeclFromContext(const DeclContext *DC) {
+    assert(DC);
+    const Decl *D = 0;
+    if (DC->isFunctionOrMethod())
+      D = dyn_cast<FunctionDecl>(DC);
+    else if (DC->isRecord())
+      D = dyn_cast<RecordDecl>(DC);
+    else if (DC->isNamespace())
+      D = dyn_cast<NamespaceDecl>(DC);
+    else if (DC->isTranslationUnit())
+      D = dyn_cast<TranslationUnitDecl>(DC);
+    return D;
+  }
+
   /// \brief Looks for 'Name' in the declaration 'D' and its parent scopes.
-  const RplElement *recursiveFindRegionOrParamName(Decl *D, StringRef Name) {
+  const RplElement *recursiveFindRegionOrParamName(const Decl *D, StringRef Name) {
 
     /// 1. try to find among regions or region parameters of function
     const RplElement *Result = findRegionOrParamName(D, Name);
@@ -289,24 +335,13 @@ private:
       return Result;
 
     /// if not found, search parent DeclContexts
-    DeclContext *DC = D->getDeclContext();
+    const DeclContext *DC = D->getDeclContext();
     while (DC) {
-      if (DC->isFunctionOrMethod()) {
-        FunctionDecl* FD = dyn_cast<FunctionDecl>(DC);
-        assert(FD);
-        return recursiveFindRegionOrParamName(FD, Name);
-      } else if (DC->isRecord()) {
-        RecordDecl* RD = dyn_cast<RecordDecl>(DC);
-        assert(RD);
-        return recursiveFindRegionOrParamName(RD, Name);
-      } else if (DC->isNamespace()) {
-        NamespaceDecl *ND = dyn_cast<NamespaceDecl>(DC);
-        assert(ND);
-        return recursiveFindRegionOrParamName(ND, Name);
-      } else {
-        /// no ASaP annotations on other types of declarations
+      const Decl *EnclosingDecl = getDeclFromContext(DC);
+      if (EnclosingDecl)
+        return recursiveFindRegionOrParamName(EnclosingDecl, Name);
+      else
         DC = DC->getParent();
-      }
     }
 
     return 0;
@@ -327,11 +362,9 @@ private:
     OS << "size = " << Size << "\n";
 
     if (ParamCount < 0) {
-      FatalError = true;
       emitUnknownNumberOfRegionParamsForType(D);
     } else if (ParamCount > Size &&
                ParamCount > Size + (DefaultInRpl?1:0)) {
-      FatalError = true;
       emitMissingRegionArgs(D);
     } else if (ParamCount < Size &&
                ParamCount < Size + (DefaultInRpl?1:0)) {
@@ -344,7 +377,6 @@ private:
       }
       if (I < Size)
         RplVec->getRplAt(I)->print(BufStream);
-      FatalError = true;
       emitSuperfluousRegionArg(D, BufStream.str());
     } else if (ParamCount > 0) {
       if (ParamCount > Size) {
@@ -683,6 +715,17 @@ public:
     return true;
   }
 
+  bool VisitEmptyDecl(EmptyDecl *D) {
+    OS << "DEBUG:: printing ASaP attributes for empty declaration.\n'";
+    /// A. Detect Region & Param Annotations
+    helperPrintAttributes<RegionAttr>(D);
+
+    /// B. Check Region & Param Names
+    checkRegionOrParamDecls<RegionAttr>(D);
+
+    return true;
+  }
+
   bool VisitNamespaceDecl (NamespaceDecl *D) {
     OS << "DEBUG:: printing ASaP attributes for namespace '";
     D->getDeclName().printName(OS);
@@ -769,7 +812,6 @@ public:
     NextFunctionIsATemplatePattern = true;
     return true;
   }
-
 
   /*bool VisitCastExpr(CastExpr* E) {
     OS << "DEBUG:: VisitCastExpr: ";

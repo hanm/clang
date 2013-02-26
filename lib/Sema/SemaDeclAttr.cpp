@@ -4594,11 +4594,11 @@ static void handleForceInlineAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 // Safe Parallelism specific attribute handlers.
 //===----------------------------------------------------------------------===//
 
-enum SafeParallelismAttributeDeclKind {
-  SafeParExpectedClassOrFunctionOrNamespace,  // region (region_name)
-  SafeParExpectedClassOrFunction, 	      // param(region_name)
-  SafeParExpectedFieldOrParamOrVariable,      // arg(RPL)
-  SafeParExpectedFunction 		      // Effects
+enum SafeParallelismAttributeDeclKind {      // Type of Attribute
+  SafeParExpectedClassOrFunctionOrFloating,  // region (region_name)
+  SafeParExpectedClassOrFunction, 	         // param(region_name)
+  SafeParExpectedFieldOrParamOrVariable,     // arg(RPL)
+  SafeParExpectedFunction 		               // Effects
 };
 
 
@@ -4610,12 +4610,11 @@ static void handleSafeParRegionAttr(Sema &S, Decl *D,
   assert(!Attr.isInvalid());
   if (!checkAttributeNumArgs(S, Attr, 1))
     return;
-  // TODO region name declarations should be allowed at global scope,
-  // and possibly at block scope.
-  if (!isa<RecordDecl>(D) && !isa<FunctionDecl>(D)
-      && !isa<FunctionTemplateDecl>(D) && !isa<NamespaceDecl>(D)) {
+  if (!isa<RecordDecl>(D)
+      && !isa<FunctionDecl>(D) && !isa<FunctionTemplateDecl>(D)
+      && !isa<NamespaceDecl>(D) && !isa<EmptyDecl>(D)) {
     S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
-      << Attr.getName() << SafeParExpectedClassOrFunctionOrNamespace;;
+      << Attr.getName() << SafeParExpectedClassOrFunctionOrFloating;
     return;
   }
 

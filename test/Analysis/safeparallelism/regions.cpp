@@ -25,7 +25,7 @@ public:
   C1 (): money(70) {} 
 
   [[asap::param("Pc")]]
-  [[asap::reads("Pc:*")]]
+  [[asap::reads("Pc:R3")]]
   C1 (C1& ccc [[asap::arg("Pc")]])
     :
     money(ccc.money),

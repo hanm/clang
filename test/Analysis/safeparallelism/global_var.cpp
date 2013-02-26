@@ -1,15 +1,17 @@
 // RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
-// expected-no-diagnostics
+
+[[asap::region("R")]];
+int GlobalVar [[asap::arg("R")]];
 
 // Declare region.
 namespace ASaP {
-
+[[asap::region("R")]];
 class
 [[asap::region("R")]]
 Globals {
 public:
   // GlobalVar is in region R.
-  static int GlobalVar [[asap::arg("R")]];
+  static int GlobalVar [[asap::arg("ASaP::R")]];
   int FieldVar [[asap::arg("R")]];
 };
 } // end namespace ASaP
@@ -18,7 +20,8 @@ public:
 class FooFunctor {
 public:
   // function foo writes to region R.
-  void operator () [[asap::writes("ASaP::Globals::R")]] () const {
+  void operator () [[asap::writes("R, ASaP::R")]] () const {
+    GlobalVar = 1;
     ASaP::Globals::GlobalVar = 1;
   }
 }; // end class FooFunctor
@@ -26,7 +29,7 @@ public:
 class BarFunctor {
 public:
   // function bar writes to region R.
-  void operator () [[asap::writes("ASaP::Globals::R")]] () const {
+  void operator () [[asap::writes("ASaP::R")]] () const {
     ASaP::Globals::GlobalVar = 2;
   }
 }; // end class BarFunctor
@@ -34,7 +37,7 @@ public:
 class CallsBarFunctor {
 public:
   // function bar writes to region R.
-  void operator () [[asap::writes("ASaP::Globals::R")]] () const {
+  void operator () [[asap::writes("ASaP::R")]] () const {
     BarFunctor bar [[asap::arg("Local")]];
     bar();
   }
@@ -43,23 +46,31 @@ public:
 class ZooFunctor {
 public:
   // funciton zoo reads region R.
-  void operator () [[asap::reads("ASaP::Globals::R")]] () const {
-    int x [[asap::arg("Local")]] = ASaP::Globals::GlobalVar;
+  void operator () [[asap::reads("ASaP::R")]] () const {
+    int x [[asap::arg("Local")]] = ASaP::Globals::GlobalVar; 
   }
 }; // end class ZooFunctor
+
+class BadFunctor {
+public:
+  // funciton bad reads region ASaP::R.
+  void operator () [[asap::reads("ASaP::Globals::R")]] () const {
+    int x [[asap::arg("Local")]] = ASaP::Globals::GlobalVar; // expected-warning{{effect not covered by effect summary}}
+  }
+}; // end class BadFunctor
 
 namespace tbb {
   template<typename Func0, typename Func1>
   void parallel_invoke
     //[[asap::invokes("f0 || f1")]]
-    [[asap::writes("ASaP::Globals::R")]] // until we support effect polymorphism
+    [[asap::writes("ASaP::R, R")]] // until we support effect polymorphism
     (const Func0 &f0, const Func1 &f1) {
     f0();
     f1();
   }
 } // end namespace tbb
 
-int main [[asap::writes("ASaP::Globals::R")]] () {
+int main [[asap::writes("ASaP::R, R")]] () {
     ASaP::Globals::GlobalVar = 0;
     // No warning if they are invoked sequentially
     FooFunctor foo;

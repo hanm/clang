@@ -10,7 +10,7 @@ Coo {
 
   int money __attribute__((arg("P:Money")))
             __attribute__ ((param("P")))      // expected-warning {{attribute only applies to classes and structs and functions}}
-            __attribute__((region("Honey"))); // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
+            __attribute__((region("Honey"))); // expected-warning {{attribute only applies to classes and structs and functions and empty declarations}}
 
 public:
   Coo () __attribute__((no_effect)) 
@@ -20,7 +20,7 @@ public:
         : money(0) {}
 
   Coo (int cash __attribute__((arg("P:Money"))) 
-                __attribute__((region("Money"))) )  // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
+                __attribute__((region("Money"))) )  // expected-warning {{attribute only applies to classes and structs and functions and empty declarations}}
        __attribute__((no_effect)) : money(cash) {}
 
   int get_some() __attribute__((reads("P:Money"))){ 
@@ -59,7 +59,7 @@ Coo {
 
   int money [[asap::arg("P:Money")]]
             [[asap::param("P")]]        // expected-warning {{attribute only applies to classes and structs and functions}}
-            [[asap::region("Honey")]] ; // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
+            [[asap::region("Honey")]] ; // expected-warning {{attribute only applies to classes and structs and functions and empty declarations}}
 
 public:
   [[asap::no_effect]] 
@@ -71,7 +71,7 @@ public:
 
   [[asap::no_effect]]
   Coo (int cash [[asap::arg("P:Money")]] 
-                [[asap::region("Money")]] )  // expected-warning {{attribute only applies to classes and structs and functions and namespaces}}
+                [[asap::region("Money")]] )  // expected-warning {{attribute only applies to classes and structs and functions and empty declarations}}
        : money(cash) {}
 
   int get_some [[asap::reads("P:Money")]] () { 
