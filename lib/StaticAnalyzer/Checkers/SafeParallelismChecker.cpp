@@ -44,12 +44,14 @@ static raw_ostream& OSv2 = llvm::errs();
 static raw_ostream& OSv2 = llvm::nulls();
 #endif
 
+
 template<typename T>
 static void destroyVector(T &V) {
   for (typename T::const_iterator I = V.begin(), E = V.end(); I != E; ++I)
     delete(*I);
 }
 
+#if 0
 template<typename T>
 static void destroyVectorVector(T &V) {
   for (typename T::const_iterator I = V.begin(), E = V.end(); I != E; ++I) {
@@ -57,6 +59,7 @@ static void destroyVectorVector(T &V) {
     delete(*I);
   }
 }
+#endif
 
 inline bool isNonPointerScalarType(QualType QT) {
   return (QT->isScalarType() && !QT->isPointerType());
@@ -244,6 +247,7 @@ public:
     }
 
     // Clean-Up
+    delete WritesLocal;
     delete ROOTRplElmt;
     delete LOCALRplElmt;
     delete STARRplElmt;

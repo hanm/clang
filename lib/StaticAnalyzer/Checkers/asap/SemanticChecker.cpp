@@ -43,42 +43,50 @@ private:
 
   /// \brief Issues Warning: '<str>' <bugName> on Declaration
   void helperEmitDeclarationWarning(const Decl *D,
-                                    const StringRef &str,
-                                    std::string bugName) {
+                                    const StringRef &Str,
+                                    std::string BugName,
+                                    bool AddQuotes = true) {
 
-    std::string description_std = "'";
-    description_std.append(str);
-    description_std.append("' ");
-    description_std.append(bugName);
-    StringRef bugCategory = "Safe Parallelism";
-    StringRef bugStr = description_std;
+    std::string Description = "";
+    if (AddQuotes)
+      Description.append("'");
+    Description.append(Str);
+    if (AddQuotes)
+      Description.append("' ");
+    else
+      Description.append(" ");
+    Description.append(BugName);
+    StringRef BugCategory = "Safe Parallelism";
+    StringRef BugStr = Description;
 
     PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
-    BR.EmitBasicReport(D, bugName, bugCategory,
-                       bugStr, VDLoc, D->getSourceRange());
+    BR.EmitBasicReport(D, BugName, BugCategory,
+                       BugStr, VDLoc, D->getSourceRange());
 
   }
 
   /// \brief Issues Warning: '<str>' <bugName> on Attribute
   void helperEmitAttributeWarning(const Decl *D,
-                                  const Attr *attr,
-                                  const StringRef &str,
-                                  std::string bugName,
+                                  const Attr *Attr,
+                                  const StringRef &Str,
+                                  std::string BugName,
                                   bool AddQuotes = true) {
 
-    std::string description_std = "";
+    std::string Description = "";
     if (AddQuotes)
-      description_std.append("'");
-    description_std.append(str);
+      Description.append("'");
+    Description.append(Str);
     if (AddQuotes)
-      description_std.append("' ");
-    description_std.append(bugName);
-    StringRef bugCategory = "Safe Parallelism";
-    StringRef bugStr = description_std;
+      Description.append("' ");
+    else
+      Description.append(" ");
+    Description.append(BugName);
+    StringRef BugCategory = "Safe Parallelism";
+    StringRef BugStr = Description;
 
-    PathDiagnosticLocation VDLoc(attr->getLocation(), BR.getSourceManager());
-    BR.EmitBasicReport(D, bugName, bugCategory,
-                       bugStr, VDLoc, attr->getRange());
+    PathDiagnosticLocation VDLoc(Attr->getLocation(), BR.getSourceManager());
+    BR.EmitBasicReport(D, BugName, BugCategory,
+                       BugStr, VDLoc, Attr->getRange());
   }
 
   /// \brief Emit error for misplaced region parameter within RPL.

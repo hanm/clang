@@ -226,7 +226,8 @@ public:
         assert(Success);
         I = EffectSum.begin();
       }
-      else       ++I;
+      else
+        ++I;
     } // end while loop
   }
   /// \brief Prints effect summary to raw output stream.
@@ -249,6 +250,13 @@ public:
 
 }; // end class EffectSummary
 
+static const Effect *WritesLocal = new Effect(Effect::EK_WritesEffect,
+                                              new Rpl(*LOCALRplElmt));
+
 inline const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
-  return ES.covers(this);
+  bool Result = this->isSubEffectOf(*WritesLocal);
+  if (Result)
+    return WritesLocal;
+  else
+    return ES.covers(this);
 }

@@ -33,8 +33,11 @@ private:
 
   /// Private Methods
   /// \brief using Type with DerefNum perform substitution on all TmpEffects
-  void memberSubstitute(const ASaPType *Type, int DerefNum) {
+  void memberSubstitute(const ValueDecl *D) {
+    assert(D);
+    const ASaPType *Type = SymT.getType(D);
     assert(Type);
+
     QualType QT = Type->getQT(DerefNum);
 
     const ParameterVector *ParamVec = SymT.getParameterVectorFromQualType(QT);
@@ -61,9 +64,22 @@ private:
   }
 
   /// \brief adds effects to TmpEffects and returns the number of effects added
-  int collectEffects(const ASaPType *T, int DerefNum, bool IsBase) {
-    if (DerefNum < 0) return 0;
-    assert(T);
+  int collectEffects(const ValueDecl *D) {
+    if (DerefNum < 0)
+      return 0;
+    OS << "DEBUG:: in EffectChecker::collectEffects: ";
+    D->print(OS, Ctx.getPrintingPolicy());
+    OS << "\nDEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
+    OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
+
+    assert(D);
+    const ASaPType *T = SymT.getType(D);
+    if (!T) // e.g., method returning null
+      return 0;
+
+    OS << "DEBUG:: Type used for collecting effects = "
+       << T->toString(Ctx) << "\n";
+
     int EffectNr = 0;
     ASaPType *Type = new ASaPType(*T); // Make a copy of T
 
@@ -81,12 +97,37 @@ private:
       Effect::EffectKind EK = (HasWriteSemantics) ?
                               Effect::EK_WritesEffect : Effect::EK_ReadsEffect;
       const Rpl *InRpl = Type->getInRpl();
-      assert(InRpl);
-      EffectsTmp.push_back(new Effect(EK, InRpl));
-      EffectNr++;
+      if (InRpl) {
+        EffectsTmp.push_back(new Effect(EK, InRpl));
+        EffectNr++;
+      }
     }
     delete Type;
     return EffectNr;
+  }
+
+  /// \brief Issues Warning: '<str>' <bugName> on Declaration
+  void helperEmitDeclarationWarning(const Decl *D,
+                                    const StringRef &Str,
+                                    std::string BugName,
+                                    bool AddQuotes = true) {
+
+    std::string Description = "";
+    if (AddQuotes)
+      Description.append("'");
+    Description.append(Str);
+    if (AddQuotes)
+      Description.append("' ");
+    else
+      Description.append(" ");
+    Description.append(BugName);
+    StringRef BugCategory = "Safe Parallelism";
+    StringRef BugStr = Description;
+
+    PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
+    BR.EmitBasicReport(D, BugName, BugCategory,
+                       BugStr, VDLoc, D->getSourceRange());
+
   }
 
   void helperEmitEffectNotCoveredWarning(const Stmt *S,
@@ -199,6 +240,27 @@ private:
     HasWriteSemantics = SavedHWS;
   }
 
+  void helperEmitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
+    StringRef BugName = "unsupported constructor initializer."
+      " Please file feature support request.";
+    helperEmitDeclarationWarning(D, "", BugName, false);
+  }
+
+
+  void helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
+    CXXConstructorDecl::init_const_iterator
+      I = D->init_begin(),
+      E = D->init_end();
+    for(; I != E; ++I) {
+      CXXCtorInitializer *Init = *I;
+      if (Init->isMemberInitializer()) {
+        //helperTypecheckDeclWithInit(Init->getMember(), Init->getInit());
+        Visit(Init->getInit());
+      } else {
+        helperEmitUnsupportedConstructorInitializer(D);
+      }
+    }
+  }
 
 public:
   /// Constructor
@@ -230,6 +292,10 @@ public:
     EffSummary = SymT.getEffectSummary(this->Def);
     assert(EffSummary);
 
+    if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
+      helperVisitCXXConstructorDecl(D);
+    }
+
     Visit(S);
     OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
   }
@@ -256,9 +322,9 @@ public:
   }
 
   /// TODO Factor out most of this code into helper functions
-  void VisitMemberExpr(MemberExpr *Expr) {
+  void VisitMemberExpr(MemberExpr *Exp) {
     OS << "DEBUG:: VisitMemberExpr: ";
-    Expr->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
     /*OS << "Rvalue=" << E->isRValue()
        << ", Lvalue=" << E->isLValue()
@@ -269,14 +335,14 @@ public:
       OS << "LV_Valid\n";
     else
       OS << "not LV_Valid\n";*/
-    ValueDecl* VD = Expr->getMemberDecl();
+    ValueDecl* VD = Exp->getMemberDecl();
     VD->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
 
     /// 1. VD is a FunctionDecl
     const FunctionDecl *FD = dyn_cast<FunctionDecl>(VD);
     if (FD)
-      helperVisitFunctionDecl(Expr, FD);
+      helperVisitFunctionDecl(Exp, FD);
 
     ///-//////////////////////////////////////////////
     /// 2. vd is a FieldDecl
@@ -284,28 +350,26 @@ public:
     const FieldDecl* FieldD  = dyn_cast<FieldDecl>(VD);
     if (FieldD) {
 
-      const ASaPType *T = SymT.getType(FieldD);
-      assert(T);
       if (IsBase)
-        memberSubstitute(T, DerefNum);
+        memberSubstitute(FieldD);
 
-      int EffectNr = collectEffects(T, DerefNum, IsBase);
+      int EffectNr = collectEffects(FieldD);
 
       /// 2.3. Visit Base with read semantics, then restore write semantics
       bool SavedHWS = HasWriteSemantics;
       bool SavedIsBase = IsBase; // probably not needed to save
 
-      DerefNum = Expr->isArrow() ? 1 : 0;
+      DerefNum = Exp->isArrow() ? 1 : 0;
       HasWriteSemantics = false;
       IsBase = true;
-      Visit(Expr->getBase());
+      Visit(Exp->getBase());
 
       /// Post visitation checking
       HasWriteSemantics = SavedHWS;
       IsBase = SavedIsBase;
       /// Post-Visit Actions: check that effects (after substitutions)
       /// are covered by effect summary
-      checkEffectCoverage(Expr, VD, EffectNr);
+      checkEffectCoverage(Exp, VD, EffectNr);
     } // end if FieldDecl
   } // end VisitMemberExpr
 
@@ -346,11 +410,19 @@ public:
   }
 
   // TODO collect effects
-  void VisitDeclRefExpr(DeclRefExpr *E) {
+  void VisitDeclRefExpr(DeclRefExpr *Exp) {
     OS << "DEBUG:: VisitDeclRefExpr --- whatever that is!: ";
-    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
-    DerefNum = 0;
+    ValueDecl* VD = Exp->getDecl();
+    assert(VD);
+
+    if (IsBase)
+      memberSubstitute(VD);
+
+    int EffectNr = collectEffects(VD);
+    checkEffectCoverage(Exp, VD, EffectNr);
+
     //TODO Collect effects
     /*OS << "Rvalue=" << E->isRValue()
        << ", Lvalue=" << E->isLValue()
@@ -364,6 +436,7 @@ public:
     ValueDecl* vd = E->getDecl();
     vd->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";*/
+    DerefNum = 0;
   }
 
   void VisitCXXThisExpr(CXXThisExpr *E) {
@@ -406,8 +479,8 @@ public:
   /// Visits a C++ overloaded operator call where the operator
   /// is implemented as a non-static member function
   void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
-    OS << "DEBUG:: VisitCXXOperatorCall\n";
-    Exp->dump(OS, BR.getSourceManager());
+    OS << "DEBUG:: VisitCXXOperatorCall: ";
+    //Exp->dump(OS, BR.getSourceManager());
     Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
 
@@ -421,6 +494,7 @@ public:
 
     /// 2. Add effects to tmp effects
     int EffectCount = copyAndPushEffects(FD);
+
     /// 3. Visit base if it exists
     VisitChildren(Exp);
 

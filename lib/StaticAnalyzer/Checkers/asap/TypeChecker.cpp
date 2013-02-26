@@ -132,6 +132,30 @@ private:
 
   void helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init);
 
+  /// \brief Issues Warning: '<str>' <bugName> on Declaration
+  void helperEmitDeclarationWarning(const Decl *D,
+                                    const StringRef &Str,
+                                    std::string BugName,
+                                    bool AddQuotes = true) {
+
+    std::string Description = "";
+    if (AddQuotes)
+      Description.append("'");
+    Description.append(Str);
+    if (AddQuotes)
+      Description.append("' ");
+    else
+      Description.append(" ");
+    Description.append(BugName);
+    StringRef BugCategory = "Safe Parallelism";
+    StringRef BugStr = Description;
+
+    PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
+    BR.EmitBasicReport(D, BugName, BugCategory,
+                       BugStr, VDLoc, D->getSourceRange());
+
+  }
+
   void helperEmitInvalidAliasingModificationWarning(Stmt *S, Decl *D,
                                                     const StringRef &Str) {
     StringRef BugName =
@@ -208,6 +232,12 @@ private:
     helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
   }
 
+  void helperEmitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
+    StringRef BugName = "unsupported constructor initializer."
+      " Please file feature support request.";
+    helperEmitDeclarationWarning(D, "", BugName, false);
+  }
+
   void helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
     CXXConstructorDecl::init_const_iterator
       I = D->init_begin(),
@@ -216,6 +246,8 @@ private:
       CXXCtorInitializer *Init = *I;
       if (Init->isMemberInitializer()) {
         helperTypecheckDeclWithInit(Init->getMember(), Init->getInit());
+      } else {
+        helperEmitUnsupportedConstructorInitializer(D);
       }
     }
   }
