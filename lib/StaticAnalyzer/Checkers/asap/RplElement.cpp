@@ -1,3 +1,18 @@
+//=== RplElement.cpp - Safe Parallelism checker -----*- C++ -*-------===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------===//
+//
+// This files defines the RPL Element classes used by the Safe Parallelism
+// checker, which tries to prove the safety of parallelism given region
+// and effect annotations.
+//
+//===----------------------------------------------------------------===//
+
   /// Return true when the input string is a special RPL element
   /// (e.g., '*', '?', 'Root'.
   // TODO (?): '?', 'Root'

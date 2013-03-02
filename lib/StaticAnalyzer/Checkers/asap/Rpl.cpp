@@ -1,3 +1,18 @@
+//=== Rpl.cpp - Safe Parallelism checker -----*- C++ -*--------------===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------===//
+//
+// This files defines the Rpl and RplVector classes used by the Safe
+// Parallelism checker, which tries to prove the safety of parallelism
+// given region and effect annotations.
+//
+//===----------------------------------------------------------------===//
+
 ///-//////////////////////////////////////////////////////////////////////
 /// Rpl Class
 class Rpl {
@@ -394,7 +409,8 @@ class RplVector {
   /// \brief Same as performing deref() DerefNum times.
   Rpl *deref(size_t DerefNum) {
     Rpl *Result = 0;
-    assert(DerefNum >=0 && DerefNum < RplV.size());
+    //assert(DerefNum >=0);
+    assert(DerefNum < RplV.size());
     for (Rpl::RplVectorT::iterator
             I = RplV.begin(),
             E = RplV.end();
@@ -409,7 +425,8 @@ class RplVector {
 
   /// \brief Return a pointer to the RPL at position Idx in the vector.
   inline const Rpl *getRplAt(size_t Idx) const {
-    assert(Idx>=0 && Idx < RplV.size());
+    //assert(Idx>=0);
+    assert(Idx < RplV.size());
     return RplV[Idx];
   }
 

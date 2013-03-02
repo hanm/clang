@@ -1,3 +1,18 @@
+//=== Effect.cpp - Safe Parallelism checker -----*- C++ -*-----------===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------===//
+//
+// This files defines the Effect and EffectSummary classes used by the Safe
+// Parallelism checker, which tries to prove the safety of parallelism
+// given region and effect annotations.
+//
+//===----------------------------------------------------------------===//
+
 ///-///////////////////////////////////////////////////////////////////////////
 /// Effect Class
 class EffectSummary;

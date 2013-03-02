@@ -1,3 +1,18 @@
+//=== SemanticChecker.cpp - Safe Parallelism checker -----*- C++ -*--===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------===//
+//
+// This files defines the Semantic Checker pass of the Safe Parallelism
+// checker, which tries to prove the safety of parallelism given region
+// and effect annotations.
+//
+//===----------------------------------------------------------------===//
+
 /// Traversal that checks semantic properties of the ASaP Annotations
 /// 1. Region and parameter declarations are well formed
 /// 2. Rpls are valid
@@ -89,7 +104,7 @@ private:
                        BugStr, VDLoc, Attr->getRange());
   }
 
-  /// \brief Emit error for redeclared region name within scope
+  /// \brief Emit error for redeclared region name within scope.
   inline void emitRedeclaredRegionName(const Decl *D, const StringRef &Str) {
     StringRef BugName = "Region name already declared at this scope";
     helperEmitDeclarationWarning(D, Str, BugName);
@@ -623,10 +638,10 @@ public:
 
   ///=///////////////////////////////////////////////////////////////
   /// Visitors
-  bool VisitValueDecl(ValueDecl* D) {
+  bool VisitValueDecl(ValueDecl *D) {
     OS << "DEBUG:: VisitValueDecl : ";
     D->print(OS, Ctx.getPrintingPolicy());
-    OS << "\n";
+    //OS << "\n";
     OS << "DEBUG:: it is " << (D->isTemplateDecl() ? "" : "NOT ")
        << "a template\n";
     return true;
