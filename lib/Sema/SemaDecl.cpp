@@ -4900,6 +4900,7 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       NewVD->setInvalidDecl();
   }
 
+  ProcessPragmaWeak(S, NewVD);
   checkAttributesAfterMerging(*this, *NewVD);
 
   // If this is a locally-scoped extern C variable, update the map of
@@ -6368,6 +6369,7 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     }
   }
 
+  ProcessPragmaWeak(S, NewFD);
   checkAttributesAfterMerging(*this, *NewFD);
 
   AddKnownFunctionAttributes(NewFD);
@@ -10144,6 +10146,12 @@ FieldDecl *Sema::HandleField(Scope *S, RecordDecl *Record,
     }
   }
 
+  // TR 18037 does not allow fields to be declared with address spaces.
+  if (T.getQualifiers().hasAddressSpace()) {
+    Diag(Loc, diag::err_field_with_address_space);
+    D.setInvalidType();
+  }
+
   // OpenCL 1.2 spec, s6.9 r:
   // The event type cannot be used to declare a structure or union field.
   if (LangOpts.OpenCL && T->isEventT()) {
@@ -10151,12 +10159,11 @@ FieldDecl *Sema::HandleField(Scope *S, RecordDecl *Record,
     D.setInvalidType();
   }
 
-
   DiagnoseFunctionSpecifiers(D);
 
   if (D.getDeclSpec().isThreadSpecified())
     Diag(D.getDeclSpec().getThreadSpecLoc(), diag::err_invalid_thread);
-  
+
   // Check to see if this name was declared as a member previously
   NamedDecl *PrevDecl = 0;
   LookupResult Previous(*this, II, Loc, LookupMemberName, ForRedeclaration);

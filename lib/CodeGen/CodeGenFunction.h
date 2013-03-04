@@ -796,7 +796,9 @@ public:
   class RunCleanupsScope {
     EHScopeStack::stable_iterator CleanupStackDepth;
     bool OldDidCallStackSave;
+  protected:
     bool PerformCleanup;
+  private:
 
     RunCleanupsScope(const RunCleanupsScope &) LLVM_DELETED_FUNCTION;
     void operator=(const RunCleanupsScope &) LLVM_DELETED_FUNCTION;
@@ -840,7 +842,6 @@ public:
 
   class LexicalScope: protected RunCleanupsScope {
     SourceRange Range;
-    bool PopDebugStack;
 
     LexicalScope(const LexicalScope &) LLVM_DELETED_FUNCTION;
     void operator=(const LexicalScope &) LLVM_DELETED_FUNCTION;
@@ -848,7 +849,7 @@ public:
   public:
     /// \brief Enter a new cleanup scope.
     explicit LexicalScope(CodeGenFunction &CGF, SourceRange Range)
-      : RunCleanupsScope(CGF), Range(Range), PopDebugStack(true) {
+      : RunCleanupsScope(CGF), Range(Range) {
       if (CGDebugInfo *DI = CGF.getDebugInfo())
         DI->EmitLexicalBlockStart(CGF.Builder, Range.getBegin());
     }
@@ -856,20 +857,20 @@ public:
     /// \brief Exit this cleanup scope, emitting any accumulated
     /// cleanups.
     ~LexicalScope() {
-      if (PopDebugStack) {
-        CGDebugInfo *DI = CGF.getDebugInfo();
-        if (DI) DI->EmitLexicalBlockEnd(CGF.Builder, Range.getEnd());
-      }
+      if (PerformCleanup) endLexicalScope();
     }
 
     /// \brief Force the emission of cleanups now, instead of waiting
     /// until this object is destroyed.
     void ForceCleanup() {
       RunCleanupsScope::ForceCleanup();
-      if (CGDebugInfo *DI = CGF.getDebugInfo()) {
+      endLexicalScope();
+    }
+
+  private:
+    void endLexicalScope() {
+      if (CGDebugInfo *DI = CGF.getDebugInfo())
         DI->EmitLexicalBlockEnd(CGF.Builder, Range.getEnd());
-        PopDebugStack = false;
-      }
     }
   };
 
@@ -1818,6 +1819,13 @@ public:
                                          const CXXRecordDecl *ClassDecl,
                                          const CXXRecordDecl *BaseClassDecl);
 
+  /// GetVTTParameter - Return the VTT parameter that should be passed to a
+  /// base constructor/destructor with virtual bases.
+  /// FIXME: VTTs are Itanium ABI-specific, so the definition should move
+  /// to ItaniumCXXABI.cpp together with all the references to VTT.
+  llvm::Value *GetVTTParameter(GlobalDecl GD, bool ForVirtualBase,
+                               bool Delegating);
+
   void EmitDelegateCXXConstructorCall(const CXXConstructorDecl *Ctor,
                                       CXXCtorType CtorType,
                                       const FunctionArgList &Args);
@@ -2294,11 +2302,29 @@ public:
   RValue EmitCallExpr(const CallExpr *E,
                       ReturnValueSlot ReturnValue = ReturnValueSlot());
 
+  llvm::CallInst *EmitRuntimeCall(llvm::Value *callee,
+                                  const Twine &name = "");
+  llvm::CallInst *EmitRuntimeCall(llvm::Value *callee,
+                                  ArrayRef<llvm::Value*> args,
+                                  const Twine &name = "");
+  llvm::CallInst *EmitNounwindRuntimeCall(llvm::Value *callee,
+                                          const Twine &name = "");
+  llvm::CallInst *EmitNounwindRuntimeCall(llvm::Value *callee,
+                                          ArrayRef<llvm::Value*> args,
+                                          const Twine &name = "");
+
   llvm::CallSite EmitCallOrInvoke(llvm::Value *Callee,
                                   ArrayRef<llvm::Value *> Args,
                                   const Twine &Name = "");
   llvm::CallSite EmitCallOrInvoke(llvm::Value *Callee,
                                   const Twine &Name = "");
+  llvm::CallSite EmitRuntimeCallOrInvoke(llvm::Value *callee,
+                                         ArrayRef<llvm::Value*> args,
+                                         const Twine &name = "");
+  llvm::CallSite EmitRuntimeCallOrInvoke(llvm::Value *callee,
+                                         const Twine &name = "");
+  void EmitNoreturnRuntimeCallOrInvoke(llvm::Value *callee,
+                                       ArrayRef<llvm::Value*> args);
 
   llvm::Value *BuildVirtualCall(const CXXMethodDecl *MD, llvm::Value *This,
                                 llvm::Type *Ty);
