@@ -121,13 +121,12 @@ public:
   }
 }; /// class StmtVisitorInvoker
 
-/// TODO Create a base class for my statement visitors that visit
-/// the code of entire function definitions. The tricky part is,
-/// do we want this base class to follow CRTP (Curiously Recurring
-/// template pattern
-//template<typename CustomVisitorTy>
-class ASaPStmtVisitorBase
-    : public StmtVisitor<ASaPStmtVisitorBase/*<CustomVisitorTy>*/ > {
+/// \brief Generic statement visitor that wraps different customized
+/// check pass.
+template<typename CustomCheckerTy>
+class ASaPStmtVisitor
+: public StmtVisitor<ASaPStmtVisitor<CustomCheckerTy> > {
+  typedef StmtVisitor<ASaPStmtVisitor<CustomCheckerTy> > BaseClass;
 
 protected:
   /// Fields
@@ -144,7 +143,7 @@ protected:
 
 public:
   /// Constructor
-  ASaPStmtVisitorBase (
+  ASaPStmtVisitor(
     ento::BugReporter &BR,
     ASTContext &Ctx,
     AnalysisManager &Mgr,
@@ -172,14 +171,14 @@ public:
     for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
          I!=E; ++I)
       if (Stmt *child = *I)
-        Visit(child);
+        BaseClass::Visit(child);
   }
 
   void VisitStmt(Stmt *S) {
     VisitChildren(S);
   }
 
-}; // end class StmtVisitor
+}; // End class StmtVisitor.
 
 /// FIXME temporarily just using pre-processor to concatenate code here... UGLY
 #include "asap/SemanticChecker.cpp"
