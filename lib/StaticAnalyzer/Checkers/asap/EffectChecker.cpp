@@ -1,3 +1,18 @@
+//=== EffectChecker.cpp - Safe Parallelism checker -----*- C++ -*----===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------===//
+//
+// This files defines the Effect Checker pass of the Safe Parallelism
+// checker, which tries to prove the safety of parallelism given region
+// and effect annotations.
+//
+//===----------------------------------------------------------------===//
+
 ///-///////////////////////////////////////////////////////////////////////////
 /// Stmt Visitor Classes
 
@@ -150,7 +165,7 @@ private:
   }
 
   /// \brief Copy the effect summary of FunD and push it to the TmpEffects
-  int copyAndPushEffects(FunctionDecl *FunD) {
+  int copyAndPushFunctionEffects(FunctionDecl *FunD) {
     const EffectSummary *FunEffects = SymT.getEffectSummary(FunD);
     assert(FunEffects);
     // Must make copies because we will substitute, cannot use append:
@@ -469,7 +484,7 @@ public:
     assert(D);
 
     /// 2. Add effects to tmp effects
-    int EffectCount = copyAndPushEffects(D);
+    int EffectCount = copyAndPushFunctionEffects(D);
     /// 3. Visit base if it exists
     VisitChildren(Exp);
     /// 4. Check coverage
@@ -493,7 +508,7 @@ public:
     OS << "DEBUG:: isOverloadedOperator = " << FD->isOverloadedOperator() << "\n";
 
     /// 2. Add effects to tmp effects
-    int EffectCount = copyAndPushEffects(FD);
+    int EffectCount = copyAndPushFunctionEffects(FD);
 
     /// 3. Visit base if it exists
     VisitChildren(Exp);

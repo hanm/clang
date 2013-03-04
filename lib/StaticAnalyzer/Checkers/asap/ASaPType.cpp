@@ -1,3 +1,18 @@
+//=== ASaPType.cpp - Safe Parallelism checker -----*- C++ -*---------===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------===//
+//
+// This files defines the ASaPType class used by the Safe Parallelism
+// checker, which tries to prove the safety of parallelism given region
+// and effect annotations.
+//
+//===----------------------------------------------------------------===//
+
 ///-///////////////////////////////////////////////////////////////////////////
 /// ASapType Class
 //namespace ASaP {
@@ -40,7 +55,7 @@ class ASaPType {
       }
     } // end if (!Simple)
   }
-
+  // copy constructor: deep copy
   ASaPType (const ASaPType &T) : QT(T.QT) {
     this->QT = T.QT;
     if (T.InRpl)
@@ -74,7 +89,7 @@ class ASaPType {
 
   /// \brief Return the Argument for substitution after DerefNum dereferences.
   /// FIXME: support multiple region parameters per class type.
-  const Rpl *getSubstArg(int DerefNum) const {
+  const Rpl *getSubstArg(int DerefNum = 0) const {
     assert(DerefNum >= -1);
     if (DerefNum == -1) return InRpl;
     if (InRpl)
@@ -83,7 +98,7 @@ class ASaPType {
       return this->ArgV->getRplAt(DerefNum);
   }
   /// \brief Return the QualType of this ASapType
-  inline QualType getQT() const { return QT; };
+  inline QualType getQT() const { return QT; }
 
   /// \brief Return the QualType of this after DerefNum dereferences.
   QualType getQT(int DerefNum) const {
@@ -190,13 +205,29 @@ class ASaPType {
   }
 
   // Substitution (ASaPType)
-  /// \brief Performs substitution on type: this[FromEl <- ToRpl]
-  void substitute(const RplElement &FromEl, const Rpl &ToRpl) {
-    if (InRpl)
-      InRpl->substitute(FromEl, ToRpl);
-    if (ArgV)
-      ArgV->substitute(FromEl, ToRpl);
+  void substitute(const SubstitutionVector &SubV) {
+    for(SubstitutionVector::SubstitutionVecT::const_iterator
+          I = SubV.begin(),
+          E = SubV.end();
+        I != E; ++I) {
+      Substitution &S = *(*I);
+      substitute(S);
+    }
   }
+
+  /// \brief Performs substitution on type: this[FromEl <- ToRpl]
+  void substitute(Substitution &S) {
+    const RplElement *FromEl = S.getFrom();
+    const Rpl *ToRpl = S.getTo();
+    assert(FromEl);
+    assert(ToRpl);
+    if (InRpl)
+      InRpl->substitute(*FromEl, *ToRpl);
+    if (ArgV)
+      ArgV->substitute(*FromEl, *ToRpl);
+  }
+
+
 
   private:
   // Private Methods

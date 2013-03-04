@@ -2,13 +2,21 @@
 // // RUN: %clang_cc1 -DASAP_GNU_SYNTAX -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
 
 #ifdef ASAP_CXX11_SYNTAX
+class 
+[[asap::param("P")]] Point {
+  double x [[asap::arg("P")]];
+  double y [[asap::arg("P")]];
+};
+
 class
-[[asap::param("Pc"),   asap::region("Links"), asap::region("Data"), asap::region("FData") ]]
+[[asap::param("Pc"),   asap::region("Links, Data, FData, Next")]]
 C {
 private:
   /// Fields
   float *p [[asap::arg("Links, Pc:Data")]];
   float fdata [[asap::arg("Pc:FData")]];
+  Point *point [[asap::arg("Links, Pc")]];
+  C *next[[asap::arg("Links, Pc:Next")]];
 
 public:
   /// Methods
@@ -21,13 +29,21 @@ public:
     p = &fdata; // expected-warning{{invalid assignment}}
     p = false ? &fdata : getP();  // expected-warning{{invalid assignment}}
   }
- 
+
   void setPointer [[asap::writes("Links")]] (float *p [[asap::arg("Pc:Data")]]) {
 	this->p = p;
   }
 
   void setPointerBad [[asap::writes("Links")]] (float *p [[asap::arg("Pc:FData")]]) {
 	this->p = p; // expected-warning{{invalid assignment}}
+  }
+
+  void setPoint [[asap::writes("Links")]] (Point *p[[asap::arg("Pc")]]) {
+    point = p;
+  }
+
+  void setNext [[asap::writes("Links")]] (C *c[[asap::arg("Pc:Next")]]) {
+    next = c;
   }
 
   void assignments () {
@@ -43,6 +59,13 @@ public:
     local_p = p; // expected-warning{{invalid assignment}}
   }
 }; // end class C
+
+int main() {
+  Point p;
+  C c0, c1 [[asap::arg("Local:C::Next")]];
+  c0.setNext(&c1);
+  return 0;
+}
 #endif
 
 #ifdef ASAP_GNU_SYNTAX

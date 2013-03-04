@@ -1,3 +1,18 @@
+//=== ASaPSymbolTable.cpp - Safe Parallelism checker -----*- C++ -*--===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------===//
+//
+// This files defines the SymbolTable and SymbolTableEntry classes used by
+// the Safe Parallelism checker, which tries to prove the safety of
+// parallelism given region and effect annotations.
+//
+//===----------------------------------------------------------------===//
+
 /// Maps AST Decl* nodes to ASaP info that appertains to the node
 /// such information includes ASaPType*, ParamVector, RegionNameSet,
 /// and EffectSummary
@@ -219,7 +234,7 @@ private:
     bool hasEffectSummary() const { return (EffSum) ? true : false; }
 
     // Getters
-    const ASaPType *getType() const { return Typ; };
+    const ASaPType *getType() const { return Typ; }
     const ParameterVector *getParameterVector() const { return ParamVec; }
     const RegionNameSet *getRegionNameSet() const { return RegnNameSet; }
     const EffectSummary *getEffectSummary() const { return EffSum; }

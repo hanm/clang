@@ -1,16 +1,16 @@
-//=== SafeParallelismChecker.cpp - Safe Parallelism checker -----*- C++ -*--===//
+//=== SafeParallelismChecker.cpp - Safe Parallelism checker --*- C++ -*--===//
 //
 //                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===----------------------------------------------------------------------===//
+//===--------------------------------------------------------------------===//
 //
 // This files defines the Safe Parallelism checker, which tries to prove the
-// safety of parallelism given region and effect annotations
+// safety of parallelism given region and effect annotations.
 //
-//===----------------------------------------------------------------------===//
+//===--------------------------------------------------------------------===//
 
 #include "ClangSACheckers.h"
 #include "clang/AST/Attr.h"
@@ -51,16 +51,6 @@ static void destroyVector(T &V) {
     delete(*I);
 }
 
-#if 0
-template<typename T>
-static void destroyVectorVector(T &V) {
-  for (typename T::const_iterator I = V.begin(), E = V.end(); I != E; ++I) {
-    destroyVector(*(*I));
-    delete(*I);
-  }
-}
-#endif
-
 inline bool isNonPointerScalarType(QualType QT) {
   return (QT->isScalarType() && !QT->isPointerType());
 }
@@ -68,6 +58,7 @@ inline bool isNonPointerScalarType(QualType QT) {
 #include "asap/RplElement.cpp"
 #include "asap/Rpl.cpp"
 #include "asap/Effect.cpp"
+#include "asap/Substitution.cpp"
 
 #include "asap/ASaPType.cpp"
 #include "asap/ASaPSymbolTable.cpp"
