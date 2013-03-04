@@ -426,6 +426,10 @@ class RplVector {
   /// \brief Return a pointer to the RPL at position Idx in the vector.
   inline const Rpl *getRplAt(size_t Idx) const {
     //assert(Idx>=0);
+    if (Idx >= RplV.size()) {
+      OSv2 << "DEBUG:: getRplAt(" << Idx << "), but size = " << RplV.size()
+           << "\n";
+    }
     assert(Idx < RplV.size());
     return RplV[Idx];
   }

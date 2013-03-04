@@ -886,6 +886,8 @@ public:
     OS << "\n";
     TypeBuilderVisitor TBV(BR, Ctx, Mgr, AC, OS, SymT, Def, Exp->getBase());
     Type = TBV.stealType();
+    if (Exp->isArrow())
+      Type->deref(1);
   }
 }; // end class BaseTypeBuilderVisitor
 ///-/////////////////////////////////////////////////////////////////////
@@ -1011,6 +1013,7 @@ void AssignmentCheckerVisitor::typecheckCallExpr(CallExpr *Exp) {
 
     ASaPType *T = TBV.getType();
     if (T) {
+      OS << "DEBUG:: Base Type = " << T->toString(Ctx) << "\n";
       const Rpl *R = T->getSubstArg();
       S.set(ParamEl, R);
       OS << "DEBUG:: typecheckCallExpr Substitution = "

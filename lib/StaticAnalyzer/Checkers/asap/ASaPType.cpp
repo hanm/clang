@@ -92,9 +92,12 @@ class ASaPType {
   const Rpl *getSubstArg(int DerefNum = 0) const {
     assert(DerefNum >= -1);
     if (DerefNum == -1) return InRpl;
-    if (InRpl)
-      return this->ArgV->getRplAt(DerefNum-1);
-    else
+    if (InRpl) {
+      if (DerefNum == 0)
+        assert(false);
+      else
+        return this->ArgV->getRplAt(DerefNum-1);
+    } else
       return this->ArgV->getRplAt(DerefNum);
   }
   /// \brief Return the QualType of this ASapType
@@ -130,9 +133,12 @@ class ASaPType {
     while (DerefNum > 0) {
       if (InRpl)
         delete InRpl;
-      InRpl = ArgV->deref();
       assert(QT->isPointerType());
       QT = QT->getPointeeType();
+      if (QT->isScalarType())
+        InRpl = ArgV->deref();
+      else
+        InRpl = 0;
       DerefNum--;
     }
   }
