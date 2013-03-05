@@ -135,12 +135,10 @@ class ASaPType {
         delete InRpl;
       assert(QT->isPointerType() || QT->isReferenceType());
       QT = QT->getPointeeType();
-      /*Rpl *R = ArgV->deref();
-      if (QT->isScalarType())
-        InRpl = R;
-      else
-        InRpl = 0;*/
 
+      // if the dereferenced type is scalar, we place the head of the
+      // args vector in the InRpl field; otherwise InRpl stays empty
+      // as in the case of C++ object types.
       if (QT->isScalarType())
         InRpl = ArgV->deref();
       else
