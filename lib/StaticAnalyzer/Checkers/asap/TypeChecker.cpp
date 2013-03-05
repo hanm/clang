@@ -181,9 +181,12 @@ public:
 
 private:
   /// Private Methods
-  bool typecheck(const ASaPType *LHSType, const ASaPType *RHSType) {
+  bool typecheck(const ASaPType *LHSType,
+                 const ASaPType *RHSType,
+                 bool IsInit = false) {
     assert(LHSType);
-    if (RHSType && !RHSType->isAssignableTo(*LHSType) )
+    //OS << "DEBUG:: typecheck(LHS, RHS, IsInit=" << IsInit << "\n";
+    if (RHSType && !RHSType->isAssignableTo(*LHSType, IsInit) )
       return false;
     else
       return true;
@@ -912,7 +915,7 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
 
   // allow RHSType to be NULL, e.g., we don't create ASaP Types for constants
   // because they don't have any interesting regions to typecheck.
-  if (! typecheck(LHSType, RHSType)) {
+  if (! typecheck(LHSType, RHSType, false)) {
     OS << "DEBUG:: invalid assignment: gonna emit an error\n";
     helperEmitInvalidExplicitAssignmentWarning(E, LHSType, RHSType);
     FatalError = true;
@@ -939,7 +942,7 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
     LHSType = LHSType->getReturnType(); // Makes a copy.
   assert(LHSType);
   ASaPType *RHSType = TBVR.getType();
-  if (! typecheck(LHSType, RHSType)) {
+  if (! typecheck(LHSType, RHSType, true)) {
     OS << "DEBUG:: invalid assignment: gonna emit an error\n";
     helperEmitInvalidReturnTypeWarning(Ret, LHSType, RHSType);
     FatalError = true;
@@ -955,7 +958,8 @@ void AssignmentCheckerVisitor::helperTypecheckDeclWithInit(
   TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, SymT, Def, Init);
   const ASaPType *LHSType = SymT.getType(VD);
   ASaPType *RHSType = TBVR.getType();
-  if (! typecheck(LHSType, RHSType)) {
+  //OS << "DEBUG:: gonna call typecheck(LHS,RHS, IsInit=true\n";
+  if (! typecheck(LHSType, RHSType, true)) {
     OS << "DEBUG:: invalid assignment: gonna emit an error\n";
     //  Fixme pass VS as arg instead of Init
     helperEmitInvalidInitializationWarning(Init, LHSType, RHSType);
@@ -983,7 +987,7 @@ bool AssignmentCheckerVisitor::
       OS << "DEBUG:: DONE perform substitution\n";
     }
     ASaPType *RHSType = TBVR.getType();
-    if (! typecheck(LHSType, RHSType)) {
+    if (! typecheck(LHSType, RHSType, true)) {
       OS << "DEBUG:: invalid argument to parameter assignment: "
         << "gonna emit an error\n";
       //  Fixme pass VS as arg instead of Init

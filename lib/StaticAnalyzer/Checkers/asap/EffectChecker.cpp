@@ -111,7 +111,7 @@ private:
       Type = new ASaPType(*T); // Make a copy of T.
 
     OS << "DEBUG:: Type used for collecting effects = "
-       << T->toString(Ctx) << "\n";
+       << Type->toString(Ctx) << "\n";
 
 
     // Dereferences have read effects
@@ -119,10 +119,13 @@ private:
     for (int I = DerefNum; I > 0; --I) {
       const Rpl *InRpl = Type->getInRpl();
       assert(InRpl);
-      Effect E(Effect::EK_ReadsEffect, InRpl);
-      EffectsTmp.push_back(&E);
-      EffectNr++;
-      Type->deref(DerefNum);
+      if (InRpl) {
+        // References do not have an InRpl
+        Effect E(Effect::EK_ReadsEffect, InRpl);
+        EffectsTmp.push_back(&E);
+        EffectNr++;
+      }
+      Type->deref();
     }
     if (!IsBase) {
       // TODO is this atomic or not? just ignore atomic for now

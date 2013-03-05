@@ -125,7 +125,7 @@ class ASaPType {
   }
 
   /// \brief Dereferences this type DerefNum times.
-  void deref(int DerefNum) {
+  void deref(int DerefNum = 1) {
     assert(DerefNum >= 0);
     if (DerefNum == 0)
       return;
@@ -135,6 +135,12 @@ class ASaPType {
         delete InRpl;
       assert(QT->isPointerType() || QT->isReferenceType());
       QT = QT->getPointeeType();
+      /*Rpl *R = ArgV->deref();
+      if (QT->isScalarType())
+        InRpl = R;
+      else
+        InRpl = 0;*/
+
       if (QT->isScalarType())
         InRpl = ArgV->deref();
       else
@@ -189,20 +195,27 @@ class ASaPType {
     return std::string(OS.str());
   }
 
-  bool isAssignableTo(const ASaPType &That) const {
+  bool isAssignableTo(const ASaPType &That, bool IsInit = false) const {
     OSv2 << "DEBUG:: isAssignable\n";
     if (this->isSubtypeOf(That))
       return true;
     // else check if That is a reference
     if (That.QT->isReferenceType()) {
-      OSv2 << "DEBUG:: isAssignable (LHS is a reference)\n";
+      OSv2 << "DEBUG:: isAssignable (LHS is a reference)[IsInit=" << IsInit
+           << "]\n";
       OSv2 << "LHS:" << That.toString() << "\n";
       OSv2 << "RHS:" << this->toString() << "\n";
-      // TODO: support this->QT isSubtypeOf QT->getPointeeType.
-      if (That.QT->getPointeeType() == this->QT) {
-        ASaPType ThisRef(*this);
-        ThisRef.addrOf(That.QT);
-        return ThisRef.isSubtypeOf(That);
+      if (IsInit) {
+        // TODO: support this->QT isSubtypeOf QT->getPointeeType.
+        if (That.QT->getPointeeType() == this->QT) {
+          ASaPType ThisRef(*this);
+          ThisRef.addrOf(That.QT);
+          return ThisRef.isSubtypeOf(That);
+        }
+      } else {
+        ASaPType ThatDeref(That);
+        ThatDeref.deref();
+        return this->isSubtypeOf(ThatDeref);
       }
     }
     return false; // TODO case for references
