@@ -7,9 +7,9 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This files defines the Effect and EffectSummary classes used by the Safe
-// Parallelism checker, which tries to prove the safety of parallelism
-// given region and effect annotations.
+// This files defines the Effect, EffectVector, and EffectSummary classes
+// used by the Safe Parallelism checker, which tries to prove the safety
+// of parallelism given region and effect annotations.
 //
 //===----------------------------------------------------------------===//
 
@@ -19,12 +19,6 @@ class EffectSummary;
 
 class Effect {
 public:
-  /// Types
-#ifndef EFFECT_VECTOR_SIZE
-  #define EFFECT_VECTOR_SIZE 16
-#endif
-  typedef llvm::SmallVector<Effect*, EFFECT_VECTOR_SIZE> EffectVector;
-
   enum EffectKind {
     /// pure = no effect
     EK_NoEffect,
@@ -144,10 +138,10 @@ public:
     return Attribute->getLocation();
   }
 
-  /// \brief substitute (Effect) this[FromEl <- ToRpl]
-  inline void substitute(const RplElement &FromElm, const Rpl &ToRpl) {
+  /// \brief substitute (Effect)
+  inline void substitute(const Substitution &S) {
     if (R)
-      R->substitute(FromElm, ToRpl);
+      S.applyTo(R);
   }
 
   /// \brief SubEffect Rule: true if this <= e
@@ -167,14 +161,77 @@ public:
 
 }; // end class Effect
 
-/// Implements a Set of Effects
+/////////////////////////////////////////////////////////////////////////////
+class EffectVector {
+public:
+  // Types
+#ifndef EFFECT_VECTOR_SIZE
+  #define EFFECT_VECTOR_SIZE 16
+#endif
+  typedef llvm::SmallVector<Effect*, EFFECT_VECTOR_SIZE> EffectVectorT;
+
+private:
+  // Fields
+  EffectVectorT EffV;
+
+public:
+  /// Constructor
+  EffectVector() {}
+  EffectVector(const Effect &E) {
+    EffV.push_back(new Effect(E));
+  }
+
+  /// Destructor
+  ~EffectVector() {
+    for (EffectVectorT::const_iterator
+            I = EffV.begin(),
+            E = EffV.end();
+         I != E; ++I) {
+      delete (*I);
+    }
+  }
+
+  // Methods
+  /// \brief Return an iterator at the first Effect of the vector.
+  inline EffectVectorT::iterator begin() { return EffV.begin(); }
+  /// \brief Return an iterator past the last Effect of the vector.
+  inline EffectVectorT::iterator end() { return EffV.end(); }
+  /// \brief Return a const_iterator at the first Effect of the vector.
+  inline EffectVectorT::const_iterator begin () const { return EffV.begin(); }
+  /// \brief Return a const_iterator past the last Effect of the vector.
+  inline EffectVectorT::const_iterator end () const { return EffV.end(); }
+  /// \brief Return the size of the Effect vector.
+  inline size_t size () const { return EffV.size(); }
+  /// \brief Append the argument Effect to the Effect vector.
+  inline void push_back (const Effect *E) {
+    assert(E);
+    EffV.push_back(new Effect(*E));
+  }
+  /// \brief Return the last Effect in the vector after removing it.
+  inline Effect *pop_back_val() { return EffV.pop_back_val(); }
+
+  void substitute(const Substitution &S) {
+    for (EffectVectorT::const_iterator
+            I = EffV.begin(),
+            E = EffV.end();
+         I != E; ++I) {
+      Effect *Eff = *I;
+      Eff->substitute(S);
+    }
+  }
+
+}; // end class EffectVector
+
+/////////////////////////////////////////////////////////////////////////////
+/// \brief Implements a Set of Effects
 class EffectSummary {
 private:
   // Fields
 #ifndef EFFECT_SUMMARY_SIZE
 #define EFFECT_SUMMARY_SIZE 8
 #endif
-  typedef llvm::SmallPtrSet<const Effect*, EFFECT_SUMMARY_SIZE> EffectSummarySetT;
+  typedef llvm::SmallPtrSet<const Effect*, EFFECT_SUMMARY_SIZE>
+    EffectSummarySetT;
   EffectSummarySetT EffectSum;
 public:
   // Constructor

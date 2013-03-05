@@ -1,6 +1,5 @@
 // RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
 
-// expected-no-diagnostics
 
 namespace tbb {
     template<typename Func0, typename Func1>
@@ -14,8 +13,14 @@ class [[asap::param("P"), asap::region("R")]] point  {
 public:
     point() {}
     point(double x_, double y_) : x(x_), y(y_) {} 
-    // implicitly: [[asap::reads("Local")]] point(double x_ [[asap:arg("Local")]], double y_ [[asap::arg("Local")]]) ...
-    };
+    // implicitly: [[asap::reads("Local")]] point(double x_ [[asap:arg("Local")]], double y_ [[asap::arg("Local")]]) : x(x_), y(y_) {}
+    double *getXPtr [[asap::arg("P")]] () { return &x; }
+    double getX [[asap::reads("P")]] () { return x; }
+    //double &getXRef [[asap::arg("P")]] () { return x; }
+    void setX1(double x_) { *getXPtr() = x_; } // expected-warning{{effect not covered by effect summary}}
+    void setX2[[asap::reads("P")]](double x_) { *getXPtr() = x_; } // expected-warning{{effect not covered by effect summary}}
+    void setX [[asap::writes("P")]](double x_) { *getXPtr() = x_; }
+    }; // end class point
 
 class [[asap::param("P"), asap::region("R")]]  write_functor {
 

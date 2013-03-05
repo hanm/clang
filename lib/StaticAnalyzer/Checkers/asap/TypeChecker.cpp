@@ -391,6 +391,7 @@ private:
   // Private Functions
   /// \brief substitute region parameters in Type with arguments.
   void memberSubstitute(const ValueDecl *D) {
+    assert(D);
     OS << "DEBUG:: in TypeBuilder::memberSubstitute:";
     D->print(OS, Ctx.getPrintingPolicy());
     OS << "\nDEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
@@ -426,7 +427,7 @@ private:
     }
     OS << "   DONE\n";
     if (NeedsCleanup) {
-      //delete T;
+      delete T;
     }
   }
 

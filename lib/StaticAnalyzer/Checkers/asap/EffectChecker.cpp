@@ -33,7 +33,7 @@ private:
   const FunctionDecl *Def;
   bool FatalError;
 
-  Effect::EffectVector EffectsTmp;
+  EffectVector EffectsTmp;
 
   /// true when visiting an expression that is being written to
   bool HasWriteSemantics;
@@ -50,35 +50,46 @@ private:
   /// \brief using Type with DerefNum perform substitution on all TmpEffects
   void memberSubstitute(const ValueDecl *D) {
     assert(D);
-    const ASaPType *Type = SymT.getType(D);
-    assert(Type);
 
-    QualType QT = Type->getQT(DerefNum);
+
+
+
+
+    const ASaPType *T = SymT.getType(D);
+    assert(T);
+    bool NeedsCleanup = false;
+    if (T->isFunctionType()) {
+      NeedsCleanup = true;
+      T = T->getReturnType();
+    }
+    OS << "DEBUG:: Type used for substitution = " << T->toString(Ctx) << "\n";
+
+    QualType QT = T->getQT(DerefNum);
 
     const ParameterVector *ParamVec = SymT.getParameterVectorFromQualType(QT);
+
     // TODO support multiple Parameters
     const ParamRplElement *FromEl = ParamVec->getParamAt(0);
     assert(FromEl);
 
-    const Rpl *ToRpl = Type->getSubstArg(DerefNum);
+    const Rpl *ToRpl = T->getSubstArg(DerefNum);
     assert(ToRpl);
     OS << "DEBUG:: gonna substitute... " << FromEl->getName()
        << "->" << ToRpl->toString() << "\n";
 
     if (FromEl->getName().compare(ToRpl->toString())) {
       // if (from != to) then substitute
+      Substitution S(FromEl, ToRpl);
       /// 2.1.1 Substitution of effects
-      for (Effect::EffectVector::const_iterator
-              I = EffectsTmp.begin(),
-              E = EffectsTmp.end();
-            I != E; ++I) {
-        (*I)->substitute(*FromEl, *ToRpl);
-      }
+      EffectsTmp.substitute(S);
     }
     OS << "   DONE\n";
+    if (NeedsCleanup) {
+      delete T;
+    }
   }
 
-  /// \brief adds effects to TmpEffects and returns the number of effects added
+  /// \brief adds effects to TmpEffects and returns the number of effects added.
   int collectEffects(const ValueDecl *D) {
     if (DerefNum < 0)
       return 0;
@@ -92,18 +103,24 @@ private:
     if (!T) // e.g., method returning null
       return 0;
 
+    int EffectNr = 0;
+    ASaPType *Type = 0;
+    if (T->isFunctionType())
+      Type = T->getReturnType(); // Makes a copy.
+    else
+      Type = new ASaPType(*T); // Make a copy of T.
+
     OS << "DEBUG:: Type used for collecting effects = "
        << T->toString(Ctx) << "\n";
 
-    int EffectNr = 0;
-    ASaPType *Type = new ASaPType(*T); // Make a copy of T
 
     // Dereferences have read effects
     // TODO is this atomic or not? just ignore atomic for now
     for (int I = DerefNum; I > 0; --I) {
       const Rpl *InRpl = Type->getInRpl();
       assert(InRpl);
-      EffectsTmp.push_back(new Effect(Effect::EK_ReadsEffect, InRpl));
+      Effect E(Effect::EK_ReadsEffect, InRpl);
+      EffectsTmp.push_back(&E);
       EffectNr++;
       Type->deref(DerefNum);
     }
@@ -113,7 +130,8 @@ private:
                               Effect::EK_WritesEffect : Effect::EK_ReadsEffect;
       const Rpl *InRpl = Type->getInRpl();
       if (InRpl) {
-        EffectsTmp.push_back(new Effect(EK, InRpl));
+        Effect E(EK, InRpl);
+        EffectsTmp.push_back(&E);
         EffectNr++;
       }
     }
@@ -174,13 +192,14 @@ private:
             I = FunEffects->begin(),
             E = FunEffects->end();
          I != E; ++I) {
-        EffectsTmp.push_back(new Effect(*(*I)));
+        Effect Eff(*(*I));
+        EffectsTmp.push_back(&Eff);
     }
     return FunEffects->size();
   }
 
   /// \brief Check that the 'N' last effects are covered by the summary
-  bool checkEffectCoverage(Expr *Exp, Decl *D, int N) {
+  bool checkEffectCoverage(const Expr *Exp, const Decl *D, int N) {
     bool Result = true;
     for (int I=0; I<N; ++I){
       Effect* E = EffectsTmp.pop_back_val();
@@ -204,7 +223,7 @@ private:
 
     /// find declaration -> find parameter(s) ->
     /// find argument(s) -> substitute
-    const RegionParamAttr* Param = FunDecl->getAttr<RegionParamAttr>();
+    /*const RegionParamAttr* Param = FunDecl->getAttr<RegionParamAttr>();
     if (Param) {
       /// if function has region params, find the region args on
       /// the invokation
@@ -214,7 +233,11 @@ private:
     } else {
       /// no params
       OS << "DEBUG:: didn't find function param\n";
-    }
+    }*/
+    if (IsBase)
+        memberSubstitute(FunDecl);
+
+    int EffectNr = collectEffects(FunDecl);
 
     /// parameters read after substitution, invoke effects after substitution
     ///
@@ -234,7 +257,7 @@ private:
     IsBase = SavedIsBase;
     /// Post-Visit Actions: check that effects (after substitutions)
     /// are covered by effect summary
-    //checkEffectCoverage(Expr, FunDecl, EffectNr); // checked up the AST
+    checkEffectCoverage(Expr, FunDecl, EffectNr); // checked up the AST
     /// Post-Visit Actions: check that effects (after substitution)
     /// are covered by effect summary
   }
@@ -315,11 +338,6 @@ public:
     OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
   }
 
-  /// Destructor
-  virtual ~EffectCollectorVisitor() {
-    destroyVector(EffectsTmp);
-  }
-
   /// Getters
   inline bool getIsCoveredBySummary() { return IsCoveredBySummary; }
   inline bool encounteredFatalError() { return FatalError; }
@@ -356,9 +374,10 @@ public:
 
     /// 1. VD is a FunctionDecl
     const FunctionDecl *FD = dyn_cast<FunctionDecl>(VD);
-    if (FD)
+    if (FD) {
       helperVisitFunctionDecl(Exp, FD);
 
+    }
     ///-//////////////////////////////////////////////
     /// 2. vd is a FieldDecl
     /// Type_vd <args> vd
@@ -486,6 +505,7 @@ public:
     /// 2. Add effects to tmp effects
     int EffectCount = copyAndPushFunctionEffects(D);
     /// 3. Visit base if it exists
+    //TODO we have to visit call arguments with read semantics
     VisitChildren(Exp);
     /// 4. Check coverage
     checkEffectCoverage(Exp, D, EffectCount);
@@ -505,12 +525,14 @@ public:
     assert(FD);
     OS << "DEBUG:: FunctionDecl = ";
     FD->print(OS, Ctx.getPrintingPolicy());
-    OS << "DEBUG:: isOverloadedOperator = " << FD->isOverloadedOperator() << "\n";
+    OS << "DEBUG:: isOverloadedOperator = "
+       << FD->isOverloadedOperator() << "\n";
 
     /// 2. Add effects to tmp effects
     int EffectCount = copyAndPushFunctionEffects(FD);
 
     /// 3. Visit base if it exists
+    //TODO we have to visit call arguments with read semantics
     VisitChildren(Exp);
 
     /// 4. Check coverage

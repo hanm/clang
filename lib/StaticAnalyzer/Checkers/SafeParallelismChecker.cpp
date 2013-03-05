@@ -57,8 +57,8 @@ inline bool isNonPointerScalarType(QualType QT) {
 
 #include "asap/RplElement.cpp"
 #include "asap/Rpl.cpp"
-#include "asap/Effect.cpp"
 #include "asap/Substitution.cpp"
+#include "asap/Effect.cpp"
 
 #include "asap/ASaPType.cpp"
 #include "asap/ASaPSymbolTable.cpp"
