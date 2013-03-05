@@ -183,7 +183,7 @@ private:
   /// Private Methods
   bool typecheck(const ASaPType *LHSType, const ASaPType *RHSType) {
     assert(LHSType);
-    if (RHSType && !RHSType->subtype(*LHSType) )
+    if (RHSType && !RHSType->isAssignableTo(*LHSType) )
       return false;
     else
       return true;
@@ -289,7 +289,7 @@ private:
 
     std::string description_std = "The RHS type [";
     description_std.append(RHS ? RHS->toString(Ctx) : "");
-    description_std.append("] is not a subtype of the LHS type [");
+    description_std.append("] is not assignable to the LHS type [");
     description_std.append(LHS ? LHS->toString(Ctx) : "");
     description_std.append("] ");
     description_std.append(BugName);
@@ -434,7 +434,7 @@ private:
   void setType(const ValueDecl *D) {
     OS << "DEBUG:: in TypeBuilder::setType: ";
     D->print(OS, Ctx.getPrintingPolicy());
-    OS << "\n Decl pointer address:" << D;
+    //OS << "\n Decl pointer address:" << D;
     OS << "\n";
     const ASaPType *T = SymT.getType(D);
     assert(T);
@@ -713,7 +713,11 @@ public:
     // by the AssignmentCheckerVisitor.
     OS << "DEBUG:: VisitCallExpr:";
     Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
-    OS << "\nNOTHING TODO HERE!\n";
+    OS << "\n";
+    if (Exp->getCallee())
+      Visit(Exp->getCallee());
+    else
+      OS << "NOTHING TODO HERE!\n";
     return;
   }
   /*void VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
@@ -722,6 +726,7 @@ public:
     OS << "DEBUG:: VisitCXXMemberCallExpr:";
     Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\nNOTHING TODO HERE!";
+    Visit(Exp->getCallee());
     return;
   }
   void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
@@ -735,8 +740,6 @@ public:
 
   void VisitReturnStmt(ReturnStmt *Ret) {
     assert(false);
-    // Don't visit call arguments. Typechecking those is initiated
-    // by the AssignmentCheckerVisitor.
     return;
   }
 
@@ -991,6 +994,7 @@ bool AssignmentCheckerVisitor::
     OS << "DEBUG:: DONE with typeckeckParamAssignment\n";
     return Result;
 }
+
 void AssignmentCheckerVisitor::typecheckCallExpr(CallExpr *Exp) {
   Decl *D = Exp->getCalleeDecl();
   assert(D);

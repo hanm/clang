@@ -15,6 +15,7 @@ private:
   /// Fields
   float *p [[asap::arg("Links, Pc:Data")]];
   float fdata [[asap::arg("Pc:FData")]];
+  float data [[asap::arg("Pc:Data")]];
   Point *point [[asap::arg("Links, Pc")]];
   C *next[[asap::arg("Links, Pc:Next")]];
 
@@ -25,9 +26,18 @@ public:
   float *getPWrong2 [[asap::arg("Pc:Data"), asap::no_effect]]  () { return &fdata; } // expected-warning{{invalid return type}}
   float *getFP [[asap::arg("Pc:FData"), asap::no_effect]] ()  { return &fdata; }
 
+  float &getDataRef [[asap::arg("Pc:Data")]] () { return data; }
+  float &getFDataRef [[asap::arg("Pc:FData")]] () { return fdata; }
+
+  float getData [[asap::reads("Pc:Data")]] () { return data; }
+  float getFData [[asap::reads("Pc:FData")]] () { return fdata; }
+
   void setPointer [[asap::writes("Links")]] () {
     p = &fdata; // expected-warning{{invalid assignment}}
     p = false ? &fdata : getP();  // expected-warning{{invalid assignment}}
+    p = false ? getP() : &fdata;  // expected-warning{{invalid assignment}}
+    p = false ? getP() : &data;
+    p = false ? &data : getP();
   }
 
   void setPointer [[asap::writes("Links")]] (float *p [[asap::arg("Pc:Data")]]) {
@@ -58,12 +68,32 @@ public:
 	setPointer(getP());
     local_p = p; // expected-warning{{invalid assignment}}
   }
+
 }; // end class C
 
 int main() {
   Point p;
   C c0, c1 [[asap::arg("Local:C::Next")]];
   c0.setNext(&c1);
+  // references
+  float &ref0[[asap::arg("Local")]] = *c0.getP(); // expected-warning{{invalid initialization}}
+  float &ref1[[asap::arg("Local:C::Data")]] = *c0.getP();
+  float &ref2[[asap::arg("Local:C::Data")]] = c0.getDataRef();
+  float &ref3[[asap::arg("Local:C::Data")]] = c0.getFDataRef(); // expected-warning{{invalid initialization}}
+  float &ref4[[asap::arg("Local:C::FData")]] = c0.getFDataRef();
+  float &ref5[[asap::arg("Local:C::FData")]] = c1.getFDataRef(); // expected-warning{{invalid initialization}}
+  float &ref6[[asap::arg("Local:C::Next:C::FData")]] = c1.getFDataRef();
+  float &ref7[[asap::arg("Local:*:C::FData")]] = c1.getFDataRef();
+  float &ref8[[asap::arg("Local:*:C::FData")]] = c1.getDataRef(); // expected-warning{{invalid initialization}}
+  float &ref9[[asap::arg("Local:*:C::Data")]] = c1.getDataRef();
+  float &ref10[[asap::arg("Local:*")]] = c1.getDataRef();
+  float &ref11[[asap::arg("Local:*")]] = c0.getDataRef();
+  float &ref12[[asap::arg("Local:*:C::Data")]] = c0.getDataRef();
+  float &ref13[[asap::arg("Local:*:C::Data")]] = c0.getFDataRef(); // expected-warning{{invalid initialization}}
+  float &ref14[[asap::arg("*:C::Data")]] = c0.getDataRef();
+  float &ref15[[asap::arg("*:C::FData")]] = c0.getDataRef(); // expected-warning{{invalid initialization}}
+  float &ref16[[asap::arg("*")]] = c0.getDataRef();
+
   return 0;
 }
 #endif

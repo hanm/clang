@@ -287,9 +287,10 @@ private:
     return upperBound;
   }
 
-  /// \brief Join this to That.
-  Rpl *join(Rpl* That) {
-    assert(That);
+  /// \brief Join this to That (by modifying this).
+  void join(Rpl* That) {
+    if (!That)
+      return;
     Rpl Result;
     // join from the left
     RplElementVectorTy::const_iterator
@@ -321,7 +322,7 @@ private:
     }
     // return
     this->RplElements = Result.RplElements;
-    return this;
+    return;
   }
 
   // Capture
@@ -435,8 +436,9 @@ class RplVector {
   }
 
   /// \brief Joins this to That.
-  RplVector *join(RplVector *That) {
-    assert(That);
+  void join(RplVector *That) {
+    if (!That)
+      return;
     assert(That->size() == this->size());
 
     Rpl::RplVectorT::iterator
@@ -449,12 +451,13 @@ class RplVector {
           ++ThatI, ++ThisI) {
       Rpl *LHS = *ThisI;
       Rpl *RHS = *ThatI;
-      Rpl *Join = LHS->join(RHS);
-      ThisI = this->RplV.erase(ThisI);
+      assert(LHS);
+      LHS->join(RHS); // modify *ThisI in place
+      //ThisI = this->RplV.erase(ThisI);
       //this->RplV.assign(); // can we use assign instead of erase and insert?
-      ThisI = this->RplV.insert(ThisI, Join);
+      //ThisI = this->RplV.insert(ThisI, Join);
     }
-    return this;
+    return;
   }
 
   /// \brief Return true when this is included in That, false otherwise.
@@ -477,8 +480,8 @@ class RplVector {
         break;
       }
     }
-    OSv2 << "DEBUG:: [" << this->toString() << "] is " << (Result?"":"not")
-        << " included in [" << That.toString() << "]\n";
+    OSv2 << "DEBUG:: [" << this->toString() << "] is " << (Result?"":"not ")
+        << "included in [" << That.toString() << "]\n";
     return Result;
   }
 

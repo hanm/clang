@@ -133,7 +133,7 @@ class ASaPType {
     while (DerefNum > 0) {
       if (InRpl)
         delete InRpl;
-      assert(QT->isPointerType());
+      assert(QT->isPointerType() || QT->isReferenceType());
       QT = QT->getPointeeType();
       if (QT->isScalarType())
         InRpl = ArgV->deref();
@@ -144,9 +144,8 @@ class ASaPType {
   }
   /// \brief Modifies this type as if its address were taken.
   void addrOf(QualType RefQT) {
-    assert(RefQT->isPointerType());
-    QualType TestQT = RefQT->getPointeeType();
-    assert(this->QT == TestQT);
+    assert(RefQT->isPointerType() || RefQT->isReferenceType());
+    assert(this->QT == RefQT->getPointeeType());
     this->QT = RefQT;
 
     if (InRpl) {
@@ -175,8 +174,42 @@ class ASaPType {
     return std::string(OS.str());
   }
 
+  /// \brief Returns a string describing this ASaPType
+  std::string toString() const {
+    std::string SBuf;
+    llvm::raw_string_ostream OS(SBuf);
+    OS << QT.getAsString();
+    OS << ", ";
+    if (InRpl)
+      OS << "IN:" << InRpl->toString();
+    else
+      OS << "IN:<empty>";
+
+    OS << ", ArgV:" << ArgV->toString();
+    return std::string(OS.str());
+  }
+
+  bool isAssignableTo(const ASaPType &That) const {
+    OSv2 << "DEBUG:: isAssignable\n";
+    if (this->isSubtypeOf(That))
+      return true;
+    // else check if That is a reference
+    if (That.QT->isReferenceType()) {
+      OSv2 << "DEBUG:: isAssignable (LHS is a reference)\n";
+      OSv2 << "LHS:" << That.toString() << "\n";
+      OSv2 << "RHS:" << this->toString() << "\n";
+      // TODO: support this->QT isSubtypeOf QT->getPointeeType.
+      if (That.QT->getPointeeType() == this->QT) {
+        ASaPType ThisRef(*this);
+        ThisRef.addrOf(That.QT);
+        return ThisRef.isSubtypeOf(That);
+      }
+    }
+    return false; // TODO case for references
+  }
+
   /// \brief  true when 'this' is a subtype (derived type) of 'that'
-  inline bool subtype(const ASaPType &That) const { return *this <= That; }
+  inline bool isSubtypeOf(const ASaPType &That) const { return *this <= That; }
 
   /// \brief true when 'this' is a subtype (derived type) of 'that'
   bool operator <= (const ASaPType &That) const {
@@ -188,26 +221,35 @@ class ASaPType {
       return false; // until we support inheritance this is good enough
     }
     assert(this->QT == That.QT);
-    /// Note that we're ignoring InRpl
+    /// Note that we're ignoring InRpl on purpose.
     assert(That.ArgV);
     return this->ArgV->isIncludedIn(*That.ArgV);
   }
 
-  /// \brief Joins this to That.
+  /// \brief Joins this to That (by modifying this).
   /// Join returns the smallest common supertype (Base Type)
-  ASaPType *join(ASaPType *That) {
-    if (!That) return this;
+  void join(ASaPType *That) {
+    if (!That)
+      return;
     if (this->QT!=That->QT) {
       /// Typechecking has passed so we assume that this->QT <= that->QT
       /// but we have to find follow the mapping and substitute Rpls....
       /// TODO :)
       assert(false); // ...just fail
-      return 0; // until we support inheritance this is good enough
+      return; // until we support inheritance this is good enough
     }
     assert(this->QT == That->QT);
-    this->InRpl->join(That->InRpl);
-    this->ArgV->join(That->ArgV);
-    return this;
+    if (this->InRpl)
+      this->InRpl->join(That->InRpl);
+    else if (That->InRpl)
+      this->InRpl = new Rpl(*That->InRpl);
+    // else this->InRpl = That->InRpl == null. Nothing to do.
+
+    if (this->ArgV)
+      this->ArgV->join(That->ArgV);
+    else if (That->ArgV)
+      this->ArgV = new RplVector(*That->ArgV);
+    return;
   }
 
   // Substitution (ASaPType)
