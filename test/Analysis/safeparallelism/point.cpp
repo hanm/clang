@@ -18,7 +18,7 @@ public:
     // some functions added for testing checker features & corner cases
     double *getXPtr [[asap::arg("P")]] () { return &x; }
     double getX [[asap::reads("P")]] () { return x; }
-    //double &getXRef [[asap::arg("P")]] () { return x; }
+    double &getXRef [[asap::arg("P")]] () { return x; }
     void setX1(double x_) { *getXPtr() = x_; } // expected-warning{{effect not covered by effect summary}}
     void setX2[[asap::reads("P")]](double x_) { *getXPtr() = x_; } // expected-warning{{effect not covered by effect summary}}
     void setX [[asap::writes("P")]](double x_) { *getXPtr() = x_; }

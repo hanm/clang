@@ -382,6 +382,19 @@ public:
     VisitPrePostIncDec(E);
   }
 
+  void VisitReturnStmt(ReturnStmt *Ret) {
+    // This next lookup actually returns the function type.
+    const ASaPType *ReturnType = SymT.getType(Def);
+    if (ReturnType)
+      ReturnType = ReturnType->getReturnType(); // Makes a copy.
+    assert(ReturnType);
+    if (ReturnType->getQT()->isReferenceType()) {
+      DerefNum--; // FIXME: we prob need a stack of DerefNum for complex exprs.
+    }
+    delete ReturnType;
+    Visit(Ret->getRetValue());
+  }
+
   void VisitDeclRefExpr(DeclRefExpr *Exp) {
     OS << "DEBUG:: VisitDeclRefExpr --- whatever that is!: ";
     Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
