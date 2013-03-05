@@ -214,54 +214,6 @@ private:
     return Result;
   }
 
-  /// \brief This is currently a mess and does next to nothing.
-  /// Michael avert your eyes! :p
-  void helperVisitFunctionDecl(MemberExpr *Expr, const FunctionDecl *FunDecl) {
-    // TODO
-    OS << "DEBUG:: helperVisitFunctionDecl!\n";
-    //Effect *E = 0; // TODO here we may have a long list of effects
-
-    /// find declaration -> find parameter(s) ->
-    /// find argument(s) -> substitute
-    /*const RegionParamAttr* Param = FunDecl->getAttr<RegionParamAttr>();
-    if (Param) {
-      /// if function has region params, find the region args on
-      /// the invokation
-      OS << "DEBUG:: found region param on function";
-      Param->printPretty(OS, Ctx.getPrintingPolicy());
-      OS << "\n";
-    } else {
-      /// no params
-      OS << "DEBUG:: didn't find function param\n";
-    }*/
-    if (IsBase)
-        memberSubstitute(FunDecl);
-
-    int EffectNr = collectEffects(FunDecl);
-
-    /// parameters read after substitution, invoke effects after substitution
-    ///
-    /// return type
-    /// TODO Merge with FieldDecl (Duplicate code)
-    /// 1.3. Visit Base with read semantics, then restore write semantics
-    bool SavedHWS = HasWriteSemantics;
-    bool SavedIsBase = IsBase; // probably not needed to save
-
-    DerefNum = Expr->isArrow() ? 1 : 0;
-    HasWriteSemantics = false;
-    IsBase = true;
-    Visit(Expr->getBase());
-
-    /// Post visitation checking
-    HasWriteSemantics = SavedHWS;
-    IsBase = SavedIsBase;
-    /// Post-Visit Actions: check that effects (after substitutions)
-    /// are covered by effect summary
-    checkEffectCoverage(Expr, FunDecl, EffectNr); // checked up the AST
-    /// Post-Visit Actions: check that effects (after substitution)
-    /// are covered by effect summary
-  }
-
   inline void helperVisitAssignment(BinaryOperator *E) {
     OS << "DEBUG:: helperVisitAssignment. ";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -372,39 +324,26 @@ public:
     VD->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
 
-    /// 1. VD is a FunctionDecl
-    const FunctionDecl *FD = dyn_cast<FunctionDecl>(VD);
-    if (FD) {
-      helperVisitFunctionDecl(Exp, FD);
+    if (IsBase)
+      memberSubstitute(VD);
 
-    }
-    ///-//////////////////////////////////////////////
-    /// 2. vd is a FieldDecl
-    /// Type_vd <args> vd
-    const FieldDecl* FieldD  = dyn_cast<FieldDecl>(VD);
-    if (FieldD) {
+    int EffectNr = collectEffects(VD);
 
-      if (IsBase)
-        memberSubstitute(FieldD);
+    /// 2.3. Visit Base with read semantics, then restore write semantics
+    bool SavedHWS = HasWriteSemantics;
+    bool SavedIsBase = IsBase; // probably not needed to save
 
-      int EffectNr = collectEffects(FieldD);
+    DerefNum = Exp->isArrow() ? 1 : 0;
+    HasWriteSemantics = false;
+    IsBase = true;
+    Visit(Exp->getBase());
 
-      /// 2.3. Visit Base with read semantics, then restore write semantics
-      bool SavedHWS = HasWriteSemantics;
-      bool SavedIsBase = IsBase; // probably not needed to save
-
-      DerefNum = Exp->isArrow() ? 1 : 0;
-      HasWriteSemantics = false;
-      IsBase = true;
-      Visit(Exp->getBase());
-
-      /// Post visitation checking
-      HasWriteSemantics = SavedHWS;
-      IsBase = SavedIsBase;
-      /// Post-Visit Actions: check that effects (after substitutions)
-      /// are covered by effect summary
-      checkEffectCoverage(Exp, VD, EffectNr);
-    } // end if FieldDecl
+    /// Post visitation checking
+    HasWriteSemantics = SavedHWS;
+    IsBase = SavedIsBase;
+    /// Post-Visit Actions: check that effects (after substitutions)
+    /// are covered by effect summary
+    checkEffectCoverage(Exp, VD, EffectNr);
   } // end VisitMemberExpr
 
   void VisitUnaryAddrOf(UnaryOperator *E)  {
@@ -443,7 +382,6 @@ public:
     VisitPrePostIncDec(E);
   }
 
-  // TODO collect effects
   void VisitDeclRefExpr(DeclRefExpr *Exp) {
     OS << "DEBUG:: VisitDeclRefExpr --- whatever that is!: ";
     Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());

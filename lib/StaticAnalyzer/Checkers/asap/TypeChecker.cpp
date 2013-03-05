@@ -936,7 +936,7 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, SymT, Def, RetExp);
   const ASaPType *LHSType = SymT.getType(Def);
   if (LHSType)
-    LHSType = LHSType->getReturnType(); // FIXME memory leak
+    LHSType = LHSType->getReturnType(); // Makes a copy.
   assert(LHSType);
   ASaPType *RHSType = TBVR.getType();
   if (! typecheck(LHSType, RHSType)) {

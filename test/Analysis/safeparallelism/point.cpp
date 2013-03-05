@@ -14,6 +14,8 @@ public:
     point() {}
     point(double x_, double y_) : x(x_), y(y_) {} 
     // implicitly: [[asap::reads("Local")]] point(double x_ [[asap:arg("Local")]], double y_ [[asap::arg("Local")]]) : x(x_), y(y_) {}
+
+    // some functions added for testing checker features & corner cases
     double *getXPtr [[asap::arg("P")]] () { return &x; }
     double getX [[asap::reads("P")]] () { return x; }
     //double &getXRef [[asap::arg("P")]] () { return x; }
@@ -35,9 +37,9 @@ public:
        : pt(pt_) {}
 
 
-    void operator()() // body is commented out to avoid crashes.
+    void operator()()
     {
-      //*pt = point(0.0, 0.0);
+      //*pt = point(0.0, 0.0); // Calls implicit function (copy constructor) which is unsupported
     }
 };
 
@@ -48,11 +50,9 @@ int main()
     int x;
     point p1 [[asap::arg("Local")]];
 
-    //warning: The RHS type [point *, IN:<empty>, ArgV:Local] is not a subtype of the LHS type [write_functor, IN:<empty>, ArgV:Local] invalid assignment: wf1.pt = &p1]
     write_functor wf1[[asap::arg("Local")]](&p1);
 
     write_functor wf2; // implicitly wf2 [[asap::arg("Local")]]
-    //warning: The RHS type [point *, IN:<empty>, ArgV:Local] is not a subtype of the LHS type [write_functor, IN:<empty>, ArgV:Local] invalid assignment: wf1.pt = &p1]
     wf2.pt = &p1;
 
     tbb::parallel_invoke(wf1, wf2);
