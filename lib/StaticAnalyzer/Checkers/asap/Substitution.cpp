@@ -13,6 +13,7 @@
 //
 //===----------------------------------------------------------------===//
 
+using namespace clang::asap;
 
 // TODO support substitution over multiple parameters
 class Substitution {

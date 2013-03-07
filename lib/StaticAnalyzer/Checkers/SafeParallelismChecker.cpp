@@ -23,27 +23,13 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
+#include "Rpl.h"
 
 #include <typeinfo>
 
 using namespace clang;
 using namespace ento;
-
-#define ASAP_DEBUG
-#define ASAP_DEBUG_VERBOSE2
-
-#ifdef ASAP_DEBUG
-static raw_ostream& os = llvm::errs();
-#else
-static raw_ostream& os = llvm::nulls();
-#endif
-
-#ifdef ASAP_DEBUG_VERBOSE2
-static raw_ostream& OSv2 = llvm::errs();
-#else
-static raw_ostream& OSv2 = llvm::nulls();
-#endif
-
+using namespace clang::asap;
 
 template<typename T>
 static void destroyVector(T &V) {
@@ -54,11 +40,6 @@ static void destroyVector(T &V) {
 inline bool isNonPointerScalarType(QualType QT) {
   return (QT->isScalarType() && !QT->isPointerType());
 }
-
-#include "asap/RplElement.cpp"
-#include "asap/Rpl.cpp"
-#include "asap/Substitution.cpp"
-#include "asap/Effect.cpp"
 
 #include "asap/ASaPType.cpp"
 #include "asap/ASaPSymbolTable.cpp"
