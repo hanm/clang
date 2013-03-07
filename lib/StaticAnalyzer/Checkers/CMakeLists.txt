@@ -5,6 +5,7 @@ clang_tablegen(Checkers.inc -gen-clang-sa-checkers
 
 add_clang_library(clangStaticAnalyzerCheckers
   Rpl.cpp
+  Effect.cpp
   AnalyzerStatsChecker.cpp
   ArrayBoundChecker.cpp
   ArrayBoundCheckerV2.cpp
