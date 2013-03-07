@@ -41,8 +41,8 @@ inline bool isNonPointerScalarType(QualType QT) {
   return (QT->isScalarType() && !QT->isPointerType());
 }
 
-#include "asap/ASaPType.cpp"
-#include "asap/ASaPSymbolTable.cpp"
+#include "Asap/ASaPType.cpp"
+#include "Asap/ASaPSymbolTable.cpp"
 
 namespace {
 ///-///////////////////////////////////////////////////////////////////
@@ -162,9 +162,9 @@ public:
 }; // End class StmtVisitor.
 
 /// FIXME temporarily just using pre-processor to concatenate code here... UGLY
-#include "asap/SemanticChecker.cpp"
-#include "asap/TypeChecker.cpp"
-#include "asap/EffectChecker.cpp"
+#include "Asap/SemanticChecker.cpp"
+#include "Asap/TypeChecker.cpp"
+#include "Asap/EffectChecker.cpp"
 
 class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
