@@ -44,7 +44,7 @@ namespace asap {
 const StarRplElement *STARRplElmt = new StarRplElement();
 const SpecialRplElement *ROOTRplElmt = new SpecialRplElement("Root");
 const SpecialRplElement *LOCALRplElmt = new SpecialRplElement("Local");
-const Effect *WritesLocal = new Effect(Effect::EK_WritesEffect, new Rpl(*LOCALRplElmt));
+Effect *WritesLocal = 0;
 
 const RplElement* getSpecialRplElement(const llvm::StringRef& s) {
   if (!s.compare(STARRplElmt->getName()))
@@ -329,7 +329,9 @@ std::string EffectSummary::toString() const {
   return std::string(OS.str());
 }
 
-const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
+const Effect *Effect::isCoveredBy(const EffectSummary &ES, const RplElement *LocalRplElement) {
+  if (!WritesLocal)
+    WritesLocal = new Effect(Effect::EK_WritesEffect, new Rpl(*LocalRplElement));
   bool Result = this->isSubEffectOf(*WritesLocal);
   if (Result)
     return WritesLocal;

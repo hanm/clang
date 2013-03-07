@@ -207,7 +207,7 @@ private:
     for (int I=0; I<N; ++I){
       Effect* E = EffectsTmp.pop_back_val();
       OS << "### "; E->print(OS); OS << "\n";
-      if (!E->isCoveredBy(*EffSummary)) {
+      if (!E->isCoveredBy(*EffSummary, LOCALRplElmt)) {
         std::string Str = E->toString();
         helperEmitEffectNotCoveredWarning(Exp, D, Str);
         Result = false;

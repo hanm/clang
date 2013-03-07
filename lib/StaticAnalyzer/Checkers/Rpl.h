@@ -129,9 +129,9 @@ class Effect;
 extern const StarRplElement *STARRplElmt;
 extern const SpecialRplElement *ROOTRplElmt;
 extern const SpecialRplElement *LOCALRplElmt;
-extern const Effect *WritesLocal;
+extern Effect *WritesLocal;
 
-/// \brief returns a special RPL element (Root, Local, *, ...) or NULL
+/// \brief a special RPL element (Root, Local, *, ...) or NULL
 const RplElement* getSpecialRplElement(const llvm::StringRef& s);
 
 /// Return true when the input string is a special RPL element
@@ -874,6 +874,7 @@ public:
       S.applyTo(R);
   }
 
+
   /// \brief SubEffect Rule: true if this <= e
   ///
   ///  RPL1 c= RPL2   E1 c= E2
@@ -887,7 +888,7 @@ public:
     return Result;
   }
   /// \brief Returns covering effect in effect summary or null.
-  const Effect *isCoveredBy(const EffectSummary &ES);
+  const Effect *isCoveredBy(const EffectSummary &ES, const RplElement *LocalRplElement);
 
 }; // end class Effect
 
