@@ -24,7 +24,6 @@ private:
   /// Fields
   ento::BugReporter &BR;
   ASTContext &Ctx;
-  AnalysisManager &Mgr;
   AnalysisDeclContext *AC;
   raw_ostream &OS;
 
@@ -50,11 +49,6 @@ private:
   /// \brief using Type with DerefNum perform substitution on all TmpEffects
   void memberSubstitute(const ValueDecl *D) {
     assert(D);
-
-
-
-
-
     const ASaPType *T = SymT.getType(D);
     assert(T);
     bool NeedsCleanup = false;
@@ -268,7 +262,6 @@ public:
     Stmt *S
     ) : BR(BR),
         Ctx(Ctx),
-        Mgr(Mgr),
         AC(AC),
         OS(OS),
         SymT(SymT),
