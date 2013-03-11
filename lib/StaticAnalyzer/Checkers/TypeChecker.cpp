@@ -114,7 +114,7 @@ void AssignmentCheckerVisitor::VisitInitListExpr(InitListExpr *Exp) {
   // TODO?
 }
 
-void AssignmentCheckerVisitor::AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
+void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
   OS << "Decl Stmt INIT ?? (";
   S->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << ")\n";
