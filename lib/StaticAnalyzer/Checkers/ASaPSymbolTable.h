@@ -99,16 +99,16 @@ private:
     SymbolTableEntry();
 
     // Predicates.
-    bool hasType() const { return (Typ) ? true : false; }
-    bool hasParameterVector() const { return (ParamVec) ? true : false; }
-    bool hasRegionNameSet() const { return (RegnNameSet) ? true :false; }
-    bool hasEffectSummary() const { return (EffSum) ? true : false; }
+    inline bool hasType() const { return (Typ) ? true : false; }
+    inline bool hasParameterVector() const { return (ParamVec) ? true : false; }
+    inline bool hasRegionNameSet() const { return (RegnNameSet) ? true :false; }
+    inline bool hasEffectSummary() const { return (EffSum) ? true : false; }
 
     // Getters.
-    const ASaPType *getType() const { return Typ; }
-    const ParameterVector *getParameterVector() const { return ParamVec; }
-    const RegionNameSet *getRegionNameSet() const { return RegnNameSet; }
-    const EffectSummary *getEffectSummary() const { return EffSum; }
+    inline const ASaPType *getType() const { return Typ; }
+    inline const ParameterVector *getParameterVector() const { return ParamVec; }
+    inline const RegionNameSet *getRegionNameSet() const { return RegnNameSet; }
+    inline const EffectSummary *getEffectSummary() const { return EffSum; }
 
     // Setters.
     inline void setType(ASaPType *T) { Typ = T; }
