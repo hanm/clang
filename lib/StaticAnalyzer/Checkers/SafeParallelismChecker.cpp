@@ -25,6 +25,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "Rpl.h"
 #include "Effect.h"
+#include "ASaPType.h"
 
 #include <typeinfo>
 
@@ -42,7 +43,6 @@ inline bool isNonPointerScalarType(QualType QT) {
   return (QT->isScalarType() && !QT->isPointerType());
 }
 
-#include "Asap/ASaPType.cpp"
 #include "Asap/ASaPSymbolTable.cpp"
 
 namespace {

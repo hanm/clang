@@ -4,6 +4,7 @@ clang_tablegen(Checkers.inc -gen-clang-sa-checkers
   TARGET ClangSACheckers)
 
 add_clang_library(clangStaticAnalyzerCheckers
+  ASaPType.cpp
   Rpl.cpp
   Effect.cpp
   AnalyzerStatsChecker.cpp
