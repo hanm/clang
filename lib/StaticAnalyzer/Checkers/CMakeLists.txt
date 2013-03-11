@@ -4,9 +4,10 @@ clang_tablegen(Checkers.inc -gen-clang-sa-checkers
   TARGET ClangSACheckers)
 
 add_clang_library(clangStaticAnalyzerCheckers
+  ASaPSymbolTable.cpp
   ASaPType.cpp
-  Rpl.cpp
   Effect.cpp
+  Rpl.hcpp
   AnalyzerStatsChecker.cpp
   ArrayBoundChecker.cpp
   ArrayBoundCheckerV2.cpp

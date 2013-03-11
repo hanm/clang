@@ -26,6 +26,7 @@
 #include "Rpl.h"
 #include "Effect.h"
 #include "ASaPType.h"
+#include "ASaPSymbolTable.h"
 
 #include <typeinfo>
 
@@ -43,12 +44,10 @@ inline bool isNonPointerScalarType(QualType QT) {
   return (QT->isScalarType() && !QT->isPointerType());
 }
 
-#include "Asap/ASaPSymbolTable.cpp"
-
 namespace {
 ///-///////////////////////////////////////////////////////////////////
 /// GENERIC VISITORS
-using ASaP::SymbolTable;
+using clang::asap::SymbolTable;
 
 /// 1. Wrapper pass that calls a Stmt visitor on each function definition.
 template<typename StmtVisitorT>
