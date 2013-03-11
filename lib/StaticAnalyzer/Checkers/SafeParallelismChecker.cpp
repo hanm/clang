@@ -29,6 +29,7 @@
 #include "ASaPSymbolTable.h"
 #include "SemanticChecker.h"
 #include "TypeChecker.h"
+#include "EffectChecker.h"
 
 #include <typeinfo>
 
@@ -162,9 +163,6 @@ public:
   }
 
 }; // End class StmtVisitor.
-
-/// FIXME temporarily just using pre-processor to concatenate code here... UGLY
-#include "Asap/EffectChecker.cpp"
 
 class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
