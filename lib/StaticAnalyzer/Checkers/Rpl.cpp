@@ -197,6 +197,7 @@ void Rpl::join(Rpl* That) {
     assert(ThatI != ThatE);
     Result.appendElement(STARRplElmt);
     Result.FullySpecified = false;
+    // count how many elements from the right we will need to append
     RplElementVectorTy::const_reverse_iterator
       ThisI = this->RplElements.rbegin(),
       ThatI = That->RplElements.rbegin(),
@@ -204,11 +205,12 @@ void Rpl::join(Rpl* That) {
       ThatE = That->RplElements.rend();
     int ElNum = 0;
     for(; ThisI != ThisE && ThatI != ThatE && (*ThisI == *ThatI);
-      ++ThisI, ++ThatI, ++ElNum);
-      if (ElNum > 0) {
-        Result.RplElements.append(ElNum,
-          *(RplElements.begin() + RplElements.size() - ElNum));
-      }
+        ++ThisI, ++ThatI, ++ElNum);
+    // append ElNum elements from the right
+    if (ElNum > 0) {
+      Result.RplElements.append(ElNum,
+        *(RplElements.begin() + RplElements.size() - ElNum));
+    }
   }
   // return
   this->RplElements = Result.RplElements;
