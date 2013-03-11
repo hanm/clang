@@ -17,6 +17,9 @@
 /// such information includes ASaPType*, ParamVector, RegionNameSet,
 /// and EffectSummary
 
+#ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_SYMBOL_TABLE_H
+#define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_SYMBOL_TABLE_H
+
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "clang/AST/Type.h"
@@ -124,3 +127,5 @@ private:
 }; // End class SymbolTable.
 } // End namespace asap.
 } // End namespace clang.
+
+#endif

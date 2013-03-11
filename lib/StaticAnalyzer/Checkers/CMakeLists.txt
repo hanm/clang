@@ -8,6 +8,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   ASaPType.cpp
   Effect.cpp
   Rpl.cpp
+  SemanticChecker.cpp
   AnalyzerStatsChecker.cpp
   ArrayBoundChecker.cpp
   ArrayBoundCheckerV2.cpp

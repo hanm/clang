@@ -27,6 +27,7 @@
 #include "Effect.h"
 #include "ASaPType.h"
 #include "ASaPSymbolTable.h"
+#include "SemanticChecker.h"
 
 #include <typeinfo>
 
@@ -162,7 +163,6 @@ public:
 }; // End class StmtVisitor.
 
 /// FIXME temporarily just using pre-processor to concatenate code here... UGLY
-#include "Asap/SemanticChecker.cpp"
 #include "Asap/TypeChecker.cpp"
 #include "Asap/EffectChecker.cpp"
 
