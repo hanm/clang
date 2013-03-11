@@ -7,7 +7,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   ASaPSymbolTable.cpp
   ASaPType.cpp
   Effect.cpp
-  Rpl.hcpp
+  Rpl.cpp
   AnalyzerStatsChecker.cpp
   ArrayBoundChecker.cpp
   ArrayBoundCheckerV2.cpp
