@@ -7,6 +7,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   ASaPSymbolTable.cpp
   ASaPType.cpp
   Effect.cpp
+  EffectChecker.cpp
   Rpl.cpp
   TypeChecker.cpp
   SemanticChecker.cpp
