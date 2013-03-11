@@ -85,7 +85,8 @@ void AssignmentCheckerVisitor::VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
   VisitChildren(Exp);
 }
 
-void AssignmentCheckerVisitor::VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
+void AssignmentCheckerVisitor::
+VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
   typecheckCallExpr(Exp);
   VisitChildren(Exp);
 }
@@ -97,12 +98,14 @@ void AssignmentCheckerVisitor::VisitMemberExpr(MemberExpr *Exp) {
   VisitChildren(Exp);
 }
 
-void AssignmentCheckerVisitor::VisitDesignatedInitExpr(DesignatedInitExpr *Exp) {
+void AssignmentCheckerVisitor::
+VisitDesignatedInitExpr(DesignatedInitExpr *Exp) {
   OS << "Designated INIT Expr!!\n";
   // TODO?
 }
 
-void AssignmentCheckerVisitor::VisitCXXScalarValueInitExpr(CXXScalarValueInitExpr *Exp) {
+void AssignmentCheckerVisitor::
+VisitCXXScalarValueInitExpr(CXXScalarValueInitExpr *Exp) {
   OS << "CXX Scalar Value INIT Expr!!\n";
   // TODO?
 }
@@ -158,30 +161,30 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
 bool AssignmentCheckerVisitor::typecheck(const ASaPType *LHSType,
                                          const ASaPType *RHSType,
                                          bool IsInit) {
-                                           assert(LHSType);
-                                           //OS << "DEBUG:: typecheck(LHS, RHS, IsInit=" << IsInit << "\n";
-                                           if (RHSType && !RHSType->isAssignableTo(*LHSType, IsInit) )
-                                             return false;
-                                           else
-                                             return true;
+  assert(LHSType);
+  if (RHSType && !RHSType->isAssignableTo(*LHSType, IsInit) )
+    return false;
+  else
+    return true;
 }
 
 void AssignmentCheckerVisitor::typecheckCall(FunctionDecl *CalleeDecl,
                                              ExprIterator ArgI,
                                              ExprIterator ArgE,
                                              SubstitutionVector *SubV) {
-                                               assert(CalleeDecl);
-                                               FunctionDecl::param_iterator ParamI, ParamE;
-                                               for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
-                                                 ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
-                                                   OS << "DEBUG:: " << "\n";
-                                                   Expr *ArgExpr = *ArgI;
-                                                   ParmVarDecl *ParamDecl = *ParamI;
-                                                   typecheckParamAssignment(ParamDecl, ArgExpr, SubV);
-                                               }
+  assert(CalleeDecl);
+  FunctionDecl::param_iterator ParamI, ParamE;
+  for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
+      ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
+    OS << "DEBUG:: " << "\n";
+    Expr *ArgExpr = *ArgI;
+    ParmVarDecl *ParamDecl = *ParamI;
+    typecheckParamAssignment(ParamDecl, ArgExpr, SubV);
+  }
 }
 
-void AssignmentCheckerVisitor::typecheckCXXConstructExpr(VarDecl *D, CXXConstructExpr *Exp) {
+void AssignmentCheckerVisitor::typecheckCXXConstructExpr(VarDecl *D,
+                                                         CXXConstructExpr *Exp) {
   CXXConstructorDecl *ConstrDecl =  Exp->getConstructor();
   DeclContext *ClassDeclContext = ConstrDecl->getDeclContext();
   assert(ClassDeclContext);
@@ -206,7 +209,9 @@ void AssignmentCheckerVisitor::typecheckCXXConstructExpr(VarDecl *D, CXXConstruc
   typecheckCall(ConstrDecl, Exp->arg_begin(), Exp->arg_end(), SubPtr);
 }
 
-void AssignmentCheckerVisitor::helperEmitDeclarationWarning(const Decl *D, const StringRef &Str, std::string BugName, bool AddQuotes) {
+void AssignmentCheckerVisitor::
+helperEmitDeclarationWarning(const Decl *D, const StringRef &Str,
+                             std::string BugName, bool AddQuotes) {
   std::string Description = "";
   if (AddQuotes)
     Description.append("'");
@@ -225,7 +230,9 @@ void AssignmentCheckerVisitor::helperEmitDeclarationWarning(const Decl *D, const
 
 }
 
-void AssignmentCheckerVisitor::helperEmitInvalidAliasingModificationWarning(Stmt *S, Decl *D, const StringRef &Str) {
+void AssignmentCheckerVisitor::
+helperEmitInvalidAliasingModificationWarning(Stmt *S, Decl *D,
+                                             const StringRef &Str) {
   StringRef BugName =
     "cannot modify aliasing through pointer to partly specified region";
   std::string description_std = "'";
@@ -243,7 +250,9 @@ void AssignmentCheckerVisitor::helperEmitInvalidAliasingModificationWarning(Stmt
     BugStr, VDLoc, S->getSourceRange());
 }
 
-void AssignmentCheckerVisitor::helperEmitInvalidAssignmentWarning(const Stmt *S, const ASaPType *LHS, const ASaPType *RHS, StringRef BugName) {
+void AssignmentCheckerVisitor::
+helperEmitInvalidAssignmentWarning(const Stmt *S, const ASaPType *LHS,
+                                   const ASaPType *RHS, StringRef BugName) {
   std::string description_std = "The RHS type [";
   description_std.append(RHS ? RHS->toString(Ctx) : "");
   description_std.append("] is not assignable to the LHS type [");
@@ -268,33 +277,43 @@ void AssignmentCheckerVisitor::helperEmitInvalidAssignmentWarning(const Stmt *S,
   BR.emitReport(R);
 }
 
-void AssignmentCheckerVisitor::helperEmitInvalidArgToFunctionWarning(const Stmt *S, const ASaPType *LHS, const ASaPType *RHS) {
+void AssignmentCheckerVisitor::
+helperEmitInvalidArgToFunctionWarning(const Stmt *S, const ASaPType *LHS,
+                                      const ASaPType *RHS) {
   StringRef BugName = "invalid argument to function call";
   helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
 }
 
-void AssignmentCheckerVisitor::helperEmitInvalidExplicitAssignmentWarning(const Stmt *S, const ASaPType *LHS, const ASaPType *RHS) {
+void AssignmentCheckerVisitor::
+helperEmitInvalidExplicitAssignmentWarning(const Stmt *S, const ASaPType *LHS,
+                                           const ASaPType *RHS) {
   StringRef BugName = "invalid assignment";
   helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
 }
 
-void AssignmentCheckerVisitor::helperEmitInvalidReturnTypeWarning(const Stmt *S, const ASaPType *LHS, const ASaPType *RHS) {
+void AssignmentCheckerVisitor::
+helperEmitInvalidReturnTypeWarning(const Stmt *S, const ASaPType *LHS,
+                                   const ASaPType *RHS) {
   StringRef BugName = "invalid return type";
   helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
 }
 
-void AssignmentCheckerVisitor::helperEmitInvalidInitializationWarning(const Stmt *S, const ASaPType *LHS, const ASaPType *RHS) {
+void AssignmentCheckerVisitor::
+helperEmitInvalidInitializationWarning(const Stmt *S, const ASaPType *LHS,
+                                       const ASaPType *RHS) {
   StringRef BugName = "invalid initialization";
   helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
 }
 
-void AssignmentCheckerVisitor::helperEmitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
+void AssignmentCheckerVisitor::
+helperEmitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
   StringRef BugName = "unsupported constructor initializer."
     " Please file feature support request.";
   helperEmitDeclarationWarning(D, "", BugName, false);
 }
 
-void AssignmentCheckerVisitor::helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
+void AssignmentCheckerVisitor::
+helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
   CXXConstructorDecl::init_const_iterator
     I = D->init_begin(),
     E = D->init_end();
@@ -360,7 +379,8 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   Type = 0;
 }
 
-void AssignmentCheckerVisitor::helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init) {
+void AssignmentCheckerVisitor::
+helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init) {
   TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, SymT, Def, Init);
   const ASaPType *LHSType = SymT.getType(VD);
   ASaPType *RHSType = TBVR.getType();
@@ -373,7 +393,9 @@ void AssignmentCheckerVisitor::helperTypecheckDeclWithInit(const ValueDecl *VD, 
   }
 }
 
-bool AssignmentCheckerVisitor::typecheckParamAssignment(ParmVarDecl *Param, Expr *Arg, SubstitutionVector *SubV) {
+bool AssignmentCheckerVisitor::
+typecheckParamAssignment(ParmVarDecl *Param, Expr *Arg,
+                         SubstitutionVector *SubV) {
   bool Result = true;
   OS << "DEBUG:: typeckeckParamAssignment\n";
   if (SubV) {
@@ -730,7 +752,8 @@ void TypeBuilderVisitor::VisitConditionalOperator(ConditionalOperator *Exp) {
 
 }
 
-void TypeBuilderVisitor::VisitBinaryConditionalOperator(BinaryConditionalOperator *Exp) {
+void TypeBuilderVisitor::
+VisitBinaryConditionalOperator(BinaryConditionalOperator *Exp) {
   OS << "DEBUG:: @@@@@@@@@@@@VisitConditionalOp@@@@@@@@@@@@@@\n";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
@@ -818,4 +841,7 @@ void BaseTypeBuilderVisitor::VisitMemberExpr(MemberExpr *Exp) {
   if (Exp->isArrow())
     Type->deref(1);
 }
+
+
+
 

@@ -120,42 +120,39 @@ void EffectCollectorVisitor::helperEmitDeclarationWarning(const Decl *D,
                                                           const StringRef &Str,
                                                           std::string BugName,
                                                           bool AddQuotes) {
+  std::string Description = "";
+  if (AddQuotes)
+    Description.append("'");
+  Description.append(Str);
+  if (AddQuotes)
+    Description.append("' ");
+  else
+    Description.append(" ");
+  Description.append(BugName);
+  StringRef BugCategory = "Safe Parallelism";
+  StringRef BugStr = Description;
 
-                                                            std::string Description = "";;
-                                                            if (AddQuotes)
-                                                              Description.append("'");
-                                                            Description.append(Str);
-                                                            if (AddQuotes)
-                                                              Description.append("' ");
-                                                            else
-                                                              Description.append(" ");
-                                                            Description.append(BugName);
-                                                            StringRef BugCategory = "Safe Parallelism";
-                                                            StringRef BugStr = Description;
-
-                                                            PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
-                                                            BR.EmitBasicReport(D, BugName, BugCategory,
-                                                              BugStr, VDLoc, D->getSourceRange());
-
+  PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
+  BR.EmitBasicReport(D, BugName, BugCategory,
+  BugStr, VDLoc, D->getSourceRange());
 }
 
-void EffectCollectorVisitor::helperEmitEffectNotCoveredWarning(const Stmt *S,
-                                                               const Decl *D,
-                                                               const StringRef &Str) {
-                                                                 StringRef BugName = "effect not covered by effect summary";
-                                                                 std::string description_std = "'";
-                                                                 description_std.append(Str);
-                                                                 description_std.append("' ");
-                                                                 description_std.append(BugName);
+void EffectCollectorVisitor::
+helperEmitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
+                                  const StringRef &Str) {
+  StringRef BugName = "effect not covered by effect summary";
+  std::string description_std = "'";
+  description_std.append(Str);
+  description_std.append("' ");
+  description_std.append(BugName);
 
-                                                                 StringRef BugCategory = "Safe Parallelism";
-                                                                 StringRef BugStr = description_std;
+  StringRef BugCategory = "Safe Parallelism";
+  StringRef BugStr = description_std;
+  PathDiagnosticLocation VDLoc =
+    PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
 
-                                                                 PathDiagnosticLocation VDLoc =
-                                                                   PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
-
-                                                                 BR.EmitBasicReport(D, BugName, BugCategory,
-                                                                   BugStr, VDLoc, S->getSourceRange());
+  BR.EmitBasicReport(D, BugName, BugCategory,
+                     BugStr, VDLoc, S->getSourceRange());
 }
 
 int EffectCollectorVisitor::copyAndPushFunctionEffects(FunctionDecl *FunD) {
@@ -173,7 +170,8 @@ int EffectCollectorVisitor::copyAndPushFunctionEffects(FunctionDecl *FunD) {
   return FunEffects->size();
 }
 
-bool EffectCollectorVisitor::checkEffectCoverage(const Expr *Exp, const Decl *D, int N) {
+bool EffectCollectorVisitor::checkEffectCoverage(const Expr *Exp, const Decl *D,
+                                                 int N) {
   bool Result = true;
   for (int I=0; I<N; ++I){
     Effect* E = EffectsTmp.pop_back_val();
@@ -204,13 +202,15 @@ void EffectCollectorVisitor::helperVisitAssignment(BinaryOperator *E) {
     HasWriteSemantics = SavedHWS;
   }
 
-void EffectCollectorVisitor::helperEmitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
+void EffectCollectorVisitor::
+helperEmitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
     StringRef BugName = "unsupported constructor initializer."
       " Please file feature support request.";
     helperEmitDeclarationWarning(D, "", BugName, false);
   }
 
-void EffectCollectorVisitor::helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
+void EffectCollectorVisitor::
+helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
   CXXConstructorDecl::init_const_iterator
     I = D->init_begin(),
     E = D->init_end();
@@ -393,7 +393,8 @@ void EffectCollectorVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
   DerefNum = 0;
 }
 
-void EffectCollectorVisitor::VisitCompoundAssignOperator(CompoundAssignOperator *E) {
+void EffectCollectorVisitor::
+VisitCompoundAssignOperator(CompoundAssignOperator *E) {
   OS << "DEBUG:: !!!!!!!!!!! Mother of compound Assign!!!!!!!!!!!!!\n";
   E->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
@@ -425,7 +426,8 @@ void EffectCollectorVisitor::VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
   checkEffectCoverage(Exp, D, EffectCount);
 }
 
-void EffectCollectorVisitor::VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
+void EffectCollectorVisitor::
+VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
   OS << "DEBUG:: VisitCXXOperatorCall: ";
   //Exp->dump(OS, BR.getSourceManager());
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());

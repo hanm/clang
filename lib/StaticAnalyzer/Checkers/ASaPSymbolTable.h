@@ -73,7 +73,8 @@ public:
   /// \brief Returns a named RPL element of the same name or null.
   const NamedRplElement *lookupRegionName(const Decl* D, llvm::StringRef Name);
   /// \brief Returns a parameter RPL element of the same name or null.
-  const ParamRplElement *lookupParameterName(const Decl *D, llvm::StringRef Name);
+  const ParamRplElement *lookupParameterName(const Decl *D,
+                                             llvm::StringRef Name);
   // Others
   /// \brief Returns true iff D has a declared region-name Name.
   bool hasRegionName(const Decl *D, llvm::StringRef Name);
@@ -128,4 +129,7 @@ private:
 } // End namespace asap.
 } // End namespace clang.
 
+
 #endif
+
+

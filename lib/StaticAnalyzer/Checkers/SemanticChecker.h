@@ -95,7 +95,8 @@ class ASaPSemanticCheckerTraverser :
   /// \brief Region arguments Str on declaration D are superfluous for its type.
   void emitSuperfluousRegionArg(Decl *D, llvm::StringRef Str);
   /// \brief Region name or parameter contains illegal characters.
-  void emitIllFormedRegionNameOrParameter(Decl *D, Attr *A, llvm::StringRef Name);
+  void emitIllFormedRegionNameOrParameter(Decl *D, Attr *A,
+                                          llvm::StringRef Name);
   /// \brief Effect summary not minimal: effect E1 is covered by effect E2.
   void emitEffectCovered(Decl *D, const Effect *E1, const Effect *E2);
   void emitNoEffectInNonEmptyEffectSummary(Decl *D, const Attr *A);
@@ -169,7 +170,8 @@ class ASaPSemanticCheckerTraverser :
   const RplElement *findRegionOrParamName(const Decl *D, llvm::StringRef Name);
   const Decl *getDeclFromContext(const DeclContext *DC);
   /// \brief Looks for 'Name' in the declaration 'D' and its parent scopes.
-  const RplElement *recursiveFindRegionOrParamName(const Decl *D, llvm::StringRef Name);
+  const RplElement *recursiveFindRegionOrParamName(const Decl *D,
+                                                   llvm::StringRef Name);
   void checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl);
   /// \brief Check that the annotations of type AttrType of declaration
   /// D have RPLs whose elements have been declared, and if so, add RPL
@@ -253,7 +255,7 @@ public:
 
   bool shouldVisitTemplateInstantiations() const { return true; }
   bool shouldVisitImplicitCode() const { return true; }
-  
+
   bool VisitValueDecl(ValueDecl *D);
   bool VisitFunctionDecl(FunctionDecl *D);
   bool VisitRecordDecl (RecordDecl *D);

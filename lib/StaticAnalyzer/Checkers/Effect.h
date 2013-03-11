@@ -85,7 +85,7 @@ public:
   /// \brief Return an iterator past the last RPL of the vector.
   inline SubstitutionVecT::iterator end () { return SubV.end(); }
   /// \brief Return a const_iterator at the first RPL of the vector.
-  inline SubstitutionVecT::const_iterator begin () const { return SubV.begin(); }
+  inline SubstitutionVecT::const_iterator begin () const { return SubV.begin();}
   /// \brief Return a const_iterator past the last RPL of the vector.
   inline SubstitutionVecT::const_iterator end () const { return SubV.end(); }
   /// \brief Return the size of the RPL vector.
@@ -125,7 +125,6 @@ public:
     return std::string(OS.str());
   }
 }; // End class Substituion.
-
 
 class Effect {
 public:
@@ -214,8 +213,8 @@ public:
   bool isSubEffectOf(const Effect &That) const;
 
   /// \brief Returns covering effect in effect summary or null.
-  const Effect *isCoveredBy(const EffectSummary &ES, const RplElement *LocalRplElement);
-
+  const Effect *isCoveredBy(const EffectSummary &ES,
+                            const RplElement *LocalRplElement);
 }; // end class Effect
 
 /////////////////////////////////////////////////////////////////////////////
@@ -339,3 +338,7 @@ public:
 }
 
 #endif
+
+
+
+

@@ -57,7 +57,8 @@ Effect::~Effect() {
 }
 
 bool Effect::isSubEffectOf(const Effect &That) const {
-  bool Result = (isNoEffect() || (isSubEffectKindOf(That) && R->isIncludedIn(*(That.R))));
+  bool Result = (isNoEffect() ||
+                 (isSubEffectKindOf(That) && R->isIncludedIn(*(That.R))));
   OSv2  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
     << That.toString() << ")=" << (Result ? "true" : "false") << "\n";
   return Result;
@@ -172,13 +173,18 @@ std::string EffectSummary::toString() const {
   return std::string(OS.str());
 }
 
-const Effect *Effect::isCoveredBy(const EffectSummary &ES, const RplElement *LocalRplElement) {
+const Effect *Effect::isCoveredBy(const EffectSummary &ES,
+                                  const RplElement *LocalRplElement) {
   if (!WritesLocal)
-    WritesLocal = new Effect(Effect::EK_WritesEffect, new Rpl(*LocalRplElement));
+    WritesLocal = new Effect(Effect::EK_WritesEffect,
+                             new Rpl(*LocalRplElement));
   bool Result = this->isSubEffectOf(*WritesLocal);
   if (Result)
     return WritesLocal;
   else
     return ES.covers(this);
 }
+
+
+
 

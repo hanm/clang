@@ -13,6 +13,9 @@
 //
 //===----------------------------------------------------------------===//
 
+#ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_TYPE_H
+#define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_TYPE_H
+
 #include "clang/AST/Type.h"
 #include "Effect.h"
 
@@ -78,3 +81,8 @@ public:
 
 } // End namespace asap.
 } // End namespace clang.
+
+#endif
+
+
+

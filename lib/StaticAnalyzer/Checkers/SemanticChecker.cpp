@@ -32,7 +32,8 @@ static bool isNonPointerScalarType(QualType QT) {
   return (QT->isScalarType() && !QT->isPointerType());
 }
 
-void ASaPSemanticCheckerTraverser::addASaPTypeToMap(ValueDecl *D, RplVector *RV, Rpl *InRpl) {
+void ASaPSemanticCheckerTraverser::addASaPTypeToMap(ValueDecl *D, RplVector *RV,
+                                                    Rpl *InRpl) {
   assert(!SymT.hasType(D));
   ASaPType *T = new ASaPType(D->getType(), RV, InRpl);
   OS << "Debug:: RV.size=" << (RV ? RV->size() : 0)
@@ -44,75 +45,74 @@ void ASaPSemanticCheckerTraverser::addASaPTypeToMap(ValueDecl *D, RplVector *RV,
   assert(Result);
 }
 
-  void ASaPSemanticCheckerTraverser::helperEmitDeclarationWarning(const Decl *D, const StringRef &Str,
-    std::string BugName, bool AddQuotes) {
+void ASaPSemanticCheckerTraverser::
+helperEmitDeclarationWarning(const Decl *D, const StringRef &Str,
+                             std::string BugName, bool AddQuotes) {
+  std::string Description = "";
+  if (AddQuotes)
+    Description.append("'");
+  Description.append(Str);
+  if (AddQuotes)
+    Description.append("' ");
+  else
+    Description.append(" ");
+  Description.append(BugName);
+  StringRef BugCategory = "Safe Parallelism";
+  StringRef BugStr = Description;
+  PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
+  BR.EmitBasicReport(D, BugName, BugCategory,
+                     BugStr, VDLoc, D->getSourceRange());
+}
 
-    std::string Description = "";
-    if (AddQuotes)
-      Description.append("'");
-    Description.append(Str);
-    if (AddQuotes)
-      Description.append("' ");
-    else
-      Description.append(" ");
-    Description.append(BugName);
-    StringRef BugCategory = "Safe Parallelism";
-    StringRef BugStr = Description;
+void ASaPSemanticCheckerTraverser::
+helperEmitAttributeWarning(const Decl *D, const Attr *Attr,
+                           const StringRef &Str,std::string BugName,
+                           bool AddQuotes) {
+  std::string Description = "";
+  if (AddQuotes)
+    Description.append("'");
+  Description.append(Str);
+  if (AddQuotes)
+    Description.append("' ");
+  else
+    Description.append(" ");
+  Description.append(BugName);
+  StringRef BugCategory = "Safe Parallelism";
+  StringRef BugStr = Description;
+  PathDiagnosticLocation VDLoc(Attr->getLocation(), BR.getSourceManager());
+  BR.EmitBasicReport(D, BugName, BugCategory,
+                     BugStr, VDLoc, Attr->getRange());
+}
 
-    PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
-    BR.EmitBasicReport(D, BugName, BugCategory,
-                       BugStr, VDLoc, D->getSourceRange());
-
-  }
-
-  void ASaPSemanticCheckerTraverser::helperEmitAttributeWarning(const Decl *D,
-    const Attr *Attr,
-    const StringRef &Str,
-    std::string BugName,
-    bool AddQuotes) {
-
-      std::string Description = "";
-      if (AddQuotes)
-        Description.append("'");
-      Description.append(Str);
-      if (AddQuotes)
-        Description.append("' ");
-      else
-        Description.append(" ");
-      Description.append(BugName);
-      StringRef BugCategory = "Safe Parallelism";
-      StringRef BugStr = Description;
-
-      PathDiagnosticLocation VDLoc(Attr->getLocation(), BR.getSourceManager());
-      BR.EmitBasicReport(D, BugName, BugCategory,
-        BugStr, VDLoc, Attr->getRange());
-  }
-
-void ASaPSemanticCheckerTraverser::emitRedeclaredRegionName(const Decl *D, const StringRef &Str) {
+void ASaPSemanticCheckerTraverser::
+emitRedeclaredRegionName(const Decl *D, const StringRef &Str) {
   StringRef BugName = "Region name already declared at this scope";
   helperEmitDeclarationWarning(D, Str, BugName);
   // Not a Fatal Error
 }
 
-inline void ASaPSemanticCheckerTraverser::emitRedeclaredRegionParameter(const Decl *D, const StringRef &Str) {
+inline void ASaPSemanticCheckerTraverser::
+emitRedeclaredRegionParameter(const Decl *D, const StringRef &Str) {
   FatalError = true;
   StringRef BugName = "Region name already declared at this scope";
   helperEmitDeclarationWarning(D, Str, BugName);
 }
 
-void ASaPSemanticCheckerTraverser::emitMisplacedRegionParameter(const Decl *D,
-                                    const Attr* A,
-                                    const StringRef &S) {
+void ASaPSemanticCheckerTraverser::
+emitMisplacedRegionParameter(const Decl *D,
+                             const Attr* A,
+                             const StringRef &S) {
   StringRef BugName = "Misplaced Region Parameter: Region parameters "
                         "may only appear at the head of an RPL.";
   helperEmitAttributeWarning(D, A, S, BugName);
 }
 
-void ASaPSemanticCheckerTraverser::emitUndeclaredRplElement(const Decl *D,
-                                const Attr *Attr,
-                                const StringRef &Str) {
-    StringRef BugName = "RPL element was not declared";
-    helperEmitAttributeWarning(D, Attr, Str, BugName);
+void ASaPSemanticCheckerTraverser::
+emitUndeclaredRplElement(const Decl *D,
+                         const Attr *Attr,
+                         const StringRef &Str) {
+  StringRef BugName = "RPL element was not declared";
+  helperEmitAttributeWarning(D, Attr, Str, BugName);
 }
 
 void ASaPSemanticCheckerTraverser::emitMissingRegionArgs(Decl *D) {
@@ -126,7 +126,8 @@ void ASaPSemanticCheckerTraverser::emitMissingRegionArgs(Decl *D) {
   helperEmitDeclarationWarning(D, strbuf.str(), bugName);
 }
 
-void ASaPSemanticCheckerTraverser::emitUnknownNumberOfRegionParamsForType(Decl *D) {
+void ASaPSemanticCheckerTraverser::
+emitUnknownNumberOfRegionParamsForType(Decl *D) {
   FatalError = true;
   std::string bugName = "unknown number of region parameters for type";
 
@@ -137,13 +138,15 @@ void ASaPSemanticCheckerTraverser::emitUnknownNumberOfRegionParamsForType(Decl *
   helperEmitDeclarationWarning(D, strbuf.str(), bugName);
 }
 
-void ASaPSemanticCheckerTraverser::emitSuperfluousRegionArg(Decl *D, StringRef Str) {
+void ASaPSemanticCheckerTraverser::
+emitSuperfluousRegionArg(Decl *D, StringRef Str) {
   FatalError = true;
   std::string bugName = "superfluous region argument(s)";
   helperEmitDeclarationWarning(D, Str, bugName);
 }
 
-void ASaPSemanticCheckerTraverser::emitIllFormedRegionNameOrParameter(Decl *D, Attr *A, StringRef Name) {
+void ASaPSemanticCheckerTraverser::
+emitIllFormedRegionNameOrParameter(Decl *D, Attr *A, StringRef Name) {
   // Not a fatal error (e.g., if region name is not actually used)
   std::string AttrTypeStr = "";
   assert(A);
@@ -157,7 +160,8 @@ void ASaPSemanticCheckerTraverser::emitIllFormedRegionNameOrParameter(Decl *D, A
   helperEmitAttributeWarning(D, A, Name, BugName);
 }
 
-void ASaPSemanticCheckerTraverser::emitEffectCovered(Decl *D, const Effect *E1, const Effect *E2) {
+void ASaPSemanticCheckerTraverser::emitEffectCovered(Decl *D, const Effect *E1,
+                                                     const Effect *E2) {
   // warning: e1 is covered by e2
   StringRef BugName = "effect summary is not minimal";
   std::string sbuf;
@@ -171,7 +175,8 @@ void ASaPSemanticCheckerTraverser::emitEffectCovered(Decl *D, const Effect *E1, 
   helperEmitAttributeWarning(D, E1->getAttr(), BugStr, BugName, false);
 }
 
-void ASaPSemanticCheckerTraverser::emitNoEffectInNonEmptyEffectSummary(Decl *D, const Attr *A) {
+void ASaPSemanticCheckerTraverser::
+emitNoEffectInNonEmptyEffectSummary(Decl *D, const Attr *A) {
   StringRef BugName = "no_effect is illegal in non-empty effect summary";
   StringRef BugStr = "";
 
@@ -209,7 +214,8 @@ long ASaPSemanticCheckerTraverser::getRegionParamCount(QualType QT) {
   }
 }
 
-StringRef ASaPSemanticCheckerTraverser::getRegionOrParamName(const Attr *Attribute) {
+StringRef ASaPSemanticCheckerTraverser::
+getRegionOrParamName(const Attr *Attribute) {
   StringRef Result = "";
   switch(Attribute->getKind()) {
   case attr::Region:
@@ -222,7 +228,8 @@ StringRef ASaPSemanticCheckerTraverser::getRegionOrParamName(const Attr *Attribu
   return Result;
 }
 
-const RplElement *ASaPSemanticCheckerTraverser::findRegionOrParamName(const Decl *D, StringRef Name) {
+const RplElement *ASaPSemanticCheckerTraverser::
+findRegionOrParamName(const Decl *D, StringRef Name) {
   if (!D)
     return 0;
   /// 1. try to find among regions or region parameters
@@ -232,7 +239,8 @@ const RplElement *ASaPSemanticCheckerTraverser::findRegionOrParamName(const Decl
   return Result;
 }
 
-const Decl *ASaPSemanticCheckerTraverser::getDeclFromContext(const DeclContext *DC) {
+const Decl *ASaPSemanticCheckerTraverser::
+getDeclFromContext(const DeclContext *DC) {
   assert(DC);
   const Decl *D = 0;
   if (DC->isFunctionOrMethod())
@@ -246,8 +254,8 @@ const Decl *ASaPSemanticCheckerTraverser::getDeclFromContext(const DeclContext *
   return D;
 }
 
-const RplElement *ASaPSemanticCheckerTraverser::recursiveFindRegionOrParamName(const Decl *D, StringRef Name) {
-
+const RplElement *ASaPSemanticCheckerTraverser::
+recursiveFindRegionOrParamName(const Decl *D, StringRef Name) {
   /// 1. try to find among regions or region parameters of function
   const RplElement *Result = findRegionOrParamName(D, Name);
   if (Result)
@@ -266,7 +274,8 @@ const RplElement *ASaPSemanticCheckerTraverser::recursiveFindRegionOrParamName(c
   return 0;
 }
 
-void ASaPSemanticCheckerTraverser::checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
+void ASaPSemanticCheckerTraverser::
+checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
   RegionArgAttr *A = D->getAttr<RegionArgAttr>();
   RplVector *RplVec = (A) ? RplVecAttrMap[A] : 0;
   if (A && !RplVec && FatalError)
@@ -314,7 +323,8 @@ void ASaPSemanticCheckerTraverser::checkTypeRegionArgs(ValueDecl *D, const Rpl *
   OS << "DEBUG:: DONE checkTypeRegionArgs\n";
 }
 
-bool ASaPSemanticCheckerTraverser::checkRpls(Decl *D, Attr *A, StringRef RplsStr) {
+bool ASaPSemanticCheckerTraverser::checkRpls(Decl *D, Attr *A,
+                                             StringRef RplsStr) {
   /// First check that we have not already parsed this attribute's RPL
   RplVector *RV = RplVecAttrMap[A];
   if (RV)
@@ -344,11 +354,10 @@ bool ASaPSemanticCheckerTraverser::checkRpls(Decl *D, Attr *A, StringRef RplsStr
   }
 }
 
-Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *A, StringRef RplStr) {
+Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *A,
+                                            StringRef RplStr) {
   bool Result = true;
-
   int Count = 0;
-
   Rpl *R = new Rpl();
   while(RplStr.size() > 0) { /// for all RPL elements of the RPL
     const RplElement *RplEl = 0;
@@ -356,7 +365,8 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *A, StringRef RplStr) 
     StringRef Head = Pair.first;
     llvm::SmallVector<StringRef, 8> Vec;
     Head.split(Vec, "::");
-    OS << "DEBUG:: Vec.size = " << Vec.size() << ", Vec.back() = " << Vec.back() <<"\n";
+    OS << "DEBUG:: Vec.size = " << Vec.size() << ", Vec.back() = "
+      << Vec.back() <<"\n";
 
     if (Vec.size() > 1) {
       // Find the specified declaration
@@ -422,7 +432,8 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *A, StringRef RplStr) 
   return R;
 }
 
-void ASaPSemanticCheckerTraverser::buildEffectSummary(FunctionDecl *D, EffectSummary &ES) {
+void ASaPSemanticCheckerTraverser::buildEffectSummary(FunctionDecl *D,
+                                                      EffectSummary &ES) {
   buildPartialEffectSummary<ReadsEffectAttr>(D, ES);
   buildPartialEffectSummary<WritesEffectAttr>(D, ES);
   buildPartialEffectSummary<AtomicReadsEffectAttr>(D, ES);
@@ -625,25 +636,29 @@ bool ASaPSemanticCheckerTraverser::VisitCXXMethodDecl(clang::CXXMethodDecl *D) {
   return true;
 }
 
-bool ASaPSemanticCheckerTraverser::VisitCXXConstructorDecl(CXXConstructorDecl *D) {
+bool ASaPSemanticCheckerTraverser::
+VisitCXXConstructorDecl(CXXConstructorDecl *D) {
   // ATTENTION This is called after VisitCXXMethodDecl
   OS << "DEBUG:: VisitCXXConstructorDecl\n";
   return true;
 }
 
-bool ASaPSemanticCheckerTraverser::VisitCXXDestructorDecl(CXXDestructorDecl *D) {
+bool ASaPSemanticCheckerTraverser::
+VisitCXXDestructorDecl(CXXDestructorDecl *D) {
   // ATTENTION This is called after VisitCXXMethodDecl
   OS << "DEBUG:: VisitCXXDestructorDecl\n";
   return true;
 }
 
-bool ASaPSemanticCheckerTraverser::VisitCXXConversionDecl(CXXConversionDecl *D) {
+bool ASaPSemanticCheckerTraverser::
+VisitCXXConversionDecl(CXXConversionDecl *D) {
   // ATTENTION This is called after VisitCXXMethodDecl
   OS << "DEBUG:: VisitCXXConversionDecl\n";
   return true;
 }
 
-bool ASaPSemanticCheckerTraverser::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
+bool ASaPSemanticCheckerTraverser::
+VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
   OS << "DEBUG:: VisitFunctionTemplateDecl:";
   D->print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
@@ -652,3 +667,6 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionTemplateDecl(FunctionTemplateDec
   NextFunctionIsATemplatePattern = true;
   return true;
 }
+
+
+

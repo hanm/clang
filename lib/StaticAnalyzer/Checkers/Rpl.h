@@ -644,7 +644,8 @@ private:
 #ifndef REGION_NAME_SET_SIZE
   #define REGION_NAME_SET_SIZE 8
 #endif
-  typedef llvm::SmallPtrSet<const NamedRplElement*, REGION_NAME_SET_SIZE> RegnNameSetTy;
+  typedef llvm::SmallPtrSet<const NamedRplElement*, REGION_NAME_SET_SIZE> 
+    RegnNameSetTy;
   RegnNameSetTy RegnNameSet;
 public:
   // Destructor
@@ -680,4 +681,6 @@ public:
 } // End namespace clang.
 
 #endif
+
+
 

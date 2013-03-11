@@ -19,7 +19,8 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
-// FIXME: this header should be removed, and AnalysisManager should be removed from interface.
+// FIXME: this header should be removed, and AnalysisManager
+// should be removed from interface.
 #include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
 #include "llvm/Support/raw_ostream.h"
 #include "ASaPSymbolTable.h"
