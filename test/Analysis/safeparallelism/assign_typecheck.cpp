@@ -29,6 +29,9 @@ public:
   float &getDataRef [[asap::arg("Pc:Data")]] () { return data; }
   float &getFDataRef [[asap::arg("Pc:FData")]] () { return fdata; }
 
+  float &getDataRefBad [[asap::arg("Pc:Data")]] () { return fdata; }  // expected-warning{{invalid return type}}
+  float &getFDataRefBad [[asap::arg("Pc:FData")]] () { return data; } // expected-warning{{invalid return type}}
+
   float getData [[asap::reads("Pc:Data")]] () { return data; }
   float getFData [[asap::reads("Pc:FData")]] () { return fdata; }
 
@@ -92,8 +95,8 @@ int main() {
   float &ref13[[asap::arg("Local:*:C::Data")]] = c0.getFDataRef(); // expected-warning{{invalid initialization}}
   float &ref14[[asap::arg("*:C::Data")]] = c0.getDataRef();
   float &ref15[[asap::arg("*:C::FData")]] = c0.getDataRef(); // expected-warning{{invalid initialization}}
+  ref15 = c0.getDataRef(); // This is ok because the value gets copied
   float &ref16[[asap::arg("*")]] = c0.getDataRef();
-
   return 0;
 }
 #endif

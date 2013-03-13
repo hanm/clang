@@ -122,7 +122,7 @@ void ASaPType::deref(int DerefNum) {
       delete InRpl;
     assert(QT->isPointerType() || QT->isReferenceType());
     QT = QT->getPointeeType();
-    
+
     // if the dereferenced type is scalar, we place the head of the
     // args vector in the InRpl field; otherwise InRpl stays empty
     // as in the case of C++ object types.
@@ -138,7 +138,7 @@ void ASaPType::addrOf(QualType RefQT) {
   assert(RefQT->isPointerType() || RefQT->isReferenceType());
   assert(this->QT == RefQT->getPointeeType());
   this->QT = RefQT;
-  
+
   if (InRpl) {
     ArgV->push_front(InRpl);
     InRpl = 0;
@@ -159,7 +159,7 @@ std::string ASaPType::toString(ASTContext &Ctx) const {
     OS << "IN:" << InRpl->toString();
   else
     OS << "IN:<empty>";
-  
+
   OS << ", ArgV:" << ArgV->toString();
   return std::string(OS.str());
 }
@@ -173,35 +173,42 @@ std::string ASaPType::toString() const {
     OS << "IN:" << InRpl->toString();
   else
     OS << "IN:<empty>";
-  
+
   OS << ", ArgV:" << ArgV->toString();
   return std::string(OS.str());
 }
 
 bool ASaPType::isAssignableTo(const ASaPType &That, bool IsInit) const {
   OSv2 << "DEBUG:: isAssignable\n";
-  if (this->isSubtypeOf(That))
-    return true;
-  // else check if That is a reference
-  if (That.QT->isReferenceType()) {
-    OSv2 << "DEBUG:: isAssignable (LHS is a reference)[IsInit=" << IsInit
-    << "]\n";
-    OSv2 << "LHS:" << That.toString() << "\n";
-    OSv2 << "RHS:" << this->toString() << "\n";
-    if (IsInit) {
-      // TODO: support this->QT isSubtypeOf QT->getPointeeType.
-      if (That.QT->getPointeeType() == this->QT) {
-        ASaPType ThisRef(*this);
-        ThisRef.addrOf(That.QT);
-        return ThisRef.isSubtypeOf(That);
-      }
-    } else {
-      ASaPType ThatDeref(That);
-      ThatDeref.deref();
-      return this->isSubtypeOf(ThatDeref);
-    }
+  OSv2 << "DEBUG:: isAssignable (LHS is a reference)[IsInit=" << IsInit
+  << "]\n";
+  OSv2 << "LHS:" << That.toString() << "\n";
+  OSv2 << "RHS:" << this->toString() << "\n";
+
+  ASaPType ThisCopy(*this);
+  if (ThisCopy.QT->isReferenceType()) {
+    ASaPType ThisDeref(*this);
+    ThisCopy.deref();
   }
-  return false; // TODO case for references
+  // If IsInit==false, get rid of references.
+  if (!IsInit) {
+    ASaPType ThatCopy(That);
+    if (ThatCopy.QT->isReferenceType()) {
+      ThatCopy.deref();
+    }
+    return ThisCopy.isSubtypeOf(ThatCopy);
+  } else { // IsInit == true
+    if (That.QT->isReferenceType()) {
+      // TODO: support this->QT isSubtypeOf QT->getPointeeType.
+      if (That.QT->getPointeeType() == ThisCopy.QT) {
+        ThisCopy.addrOf(That.QT);
+      } else {
+        return false; // good enough until we support inheritance
+      }
+    }
+    return ThisCopy.isSubtypeOf(That);
+
+  }
 }
 
 bool ASaPType::isSubtypeOf(const ASaPType &That) const { return *this <= That; }
@@ -236,7 +243,7 @@ void ASaPType::join(ASaPType *That) {
   else if (That->InRpl)
     this->InRpl = new Rpl(*That->InRpl);
   // else this->InRpl = That->InRpl == null. Nothing to do.
-  
+
   if (this->ArgV)
     this->ArgV->join(That->ArgV);
   else if (That->ArgV)

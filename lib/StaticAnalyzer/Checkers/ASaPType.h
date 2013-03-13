@@ -64,6 +64,8 @@ public:
   std::string toString(ASTContext &Ctx) const;
   /// \brief Returns a string describing this ASaPType.
   std::string toString() const;
+  /// \brief Returns true when 'this' can be assigned to That
+  // Note: That=LHS and this=RHS
   bool isAssignableTo(const ASaPType &That, bool IsInit = false) const;
   /// \brief  true when 'this' is a subtype (derived type) of 'that'.
   bool isSubtypeOf(const ASaPType &That) const;
