@@ -51,9 +51,9 @@ class ValueDecl;
 
 namespace asap {
 
-class ASaPSemanticCheckerTraverser : 
+class ASaPSemanticCheckerTraverser :
   public RecursiveASTVisitor<ASaPSemanticCheckerTraverser> {
-  
+
   typedef llvm::DenseMap<const Attr*, RplVector*> RplVecAttrMapT;
   ento::BugReporter &BR;
   ASTContext &Ctx;
