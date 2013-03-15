@@ -32,11 +32,6 @@ void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
   assert(D);
   const ASaPType *T = SymT.getType(D);
   assert(T);
-  bool NeedsCleanup = false;
-  if (T->isFunctionType()) {
-    NeedsCleanup = true;
-    T = T->getReturnType();
-  }
   OS << "DEBUG:: Type used for substitution = " << T->toString(Ctx) << "\n";
 
   QualType QT = T->getQT(DerefNum);
@@ -59,9 +54,6 @@ void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
     EffectsTmp.substitute(S);
   }
   OS << "   DONE\n";
-  if (NeedsCleanup) {
-    delete T;
-  }
 }
 
 int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
@@ -79,10 +71,7 @@ int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
 
   int EffectNr = 0;
   ASaPType *Type = 0;
-  if (T->isFunctionType())
-    Type = T->getReturnType(); // Makes a copy.
-  else
-    Type = new ASaPType(*T); // Make a copy of T.
+  Type = new ASaPType(*T); // Make a copy of T.
 
   OS << "DEBUG:: Type used for collecting effects = "
     << Type->toString(Ctx) << "\n";
@@ -349,13 +338,11 @@ void EffectCollectorVisitor::VisitUnaryPreDec(UnaryOperator *E) {
 void EffectCollectorVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   // This next lookup actually returns the function type.
   const ASaPType *ReturnType = SymT.getType(Def);
-  if (ReturnType)
-    ReturnType = ReturnType->getReturnType(); // Makes a copy.
   assert(ReturnType);
+
   if (ReturnType->getQT()->isReferenceType()) {
     DerefNum--; // FIXME: we prob need a stack of DerefNum for complex exprs.
   }
-  delete ReturnType;
   Visit(Ret->getRetValue());
 }
 

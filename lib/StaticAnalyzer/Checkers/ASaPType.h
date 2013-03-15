@@ -29,7 +29,7 @@ class ASaPType {
   friend class ASaPType;
   QualType QT;
   RplVector *ArgV;
-  // This can be null.
+  // InRpl can be null.
   Rpl *InRpl;
 
 public:
@@ -53,7 +53,7 @@ public:
   /// \brief Return the QualType of this after DerefNum dereferences.
   QualType getQT(int DerefNum) const;
   /// \brief If this is a function type, return its return type; else null.
-  ASaPType *getReturnType() const;
+  //ASaPType *getReturnType() const;
   /// \brief Dereferences this type DerefNum times.
   void deref(int DerefNum = 1);
   /// \brief Modifies this type as if its address were taken.

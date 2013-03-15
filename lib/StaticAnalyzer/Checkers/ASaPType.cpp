@@ -31,17 +31,18 @@ ASaPType::ASaPType(QualType QT, RplVector *ArgV, Rpl *InRpl,
     this->ArgV = new RplVector(*ArgV);
   else
     this->ArgV = 0;
+
   if (!Simple) {
     // 2. If QT is a function type, we're really interested in the
     // return type.
     if (QT->isFunctionType()) {
       const FunctionType *FT = dyn_cast<FunctionType>(QT.getTypePtr());
-      QT = FT->getResultType();
+      this->QT = FT->getResultType();
     }
     // 3. Check if we might need to set InRpl.
     if (!this->InRpl) {
       // Figure out based on QT if we need an InRpl.
-      if (QT->isScalarType() && !QT->isReferenceType()) {
+      if (this->QT->isScalarType() && !this->QT->isReferenceType()) {
         // Get it from the head of ArgV.
         assert(this->ArgV && this->ArgV->size() > 0);
         this->InRpl = this->ArgV->pop_front();
@@ -103,14 +104,14 @@ QualType ASaPType::getQT(int DerefNum) const {
   return Result;
 }
 
-ASaPType *ASaPType::getReturnType() const {
+/*ASaPType *ASaPType::getReturnType() const {
   if (QT->isFunctionType()) {
     const FunctionType *FT = dyn_cast<FunctionType>(QT.getTypePtr());
     QualType ResultQT = FT->getResultType();
     return new ASaPType(ResultQT, ArgV, InRpl);
   } else
     return 0;
-}
+}*/
 
 void ASaPType::deref(int DerefNum) {
   assert(DerefNum >= 0);

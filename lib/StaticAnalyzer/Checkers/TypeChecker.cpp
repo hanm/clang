@@ -365,8 +365,6 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
 
   TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, SymT, Def, RetExp);
   const ASaPType *LHSType = SymT.getType(Def);
-  if (LHSType)
-    LHSType = LHSType->getReturnType(); // Makes a copy.
   assert(LHSType);
   ASaPType *RHSType = TBVR.getType();
   if (! typecheck(LHSType, RHSType, true)) {
@@ -374,7 +372,6 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
     helperEmitInvalidReturnTypeWarning(Ret, LHSType, RHSType);
     FatalError = true;
   }
-  delete LHSType;
   delete Type;
   Type = 0;
 }
@@ -469,11 +466,6 @@ void TypeBuilderVisitor::memberSubstitute(const ValueDecl *D) {
 
   const ASaPType *T = SymT.getType(D);
   assert(T);
-  bool NeedsCleanup = false;
-  if (T->isFunctionType()) {
-    NeedsCleanup = true;
-    T = T->getReturnType();
-  }
   OS << "DEBUG:: Type used for substitution = " << T->toString(Ctx) << "\n";
 
   QualType QT = T->getQT(DerefNum);
@@ -496,9 +488,6 @@ void TypeBuilderVisitor::memberSubstitute(const ValueDecl *D) {
     Type->substitute(S);
   }
   OS << "   DONE\n";
-  if (NeedsCleanup) {
-    delete T;
-  }
 }
 
 void TypeBuilderVisitor::setType(const ValueDecl *D) {
@@ -510,10 +499,7 @@ void TypeBuilderVisitor::setType(const ValueDecl *D) {
   assert(T);
 
   assert(!Type);
-  if (T->isFunctionType())
-    Type = T->getReturnType(); // makes a copy
-  else
-    Type = new ASaPType(*T); // make a copy
+  Type = new ASaPType(*T); // make a copy
   if (DerefNum == -1)
     Type->addrOf(RefQT);
   else {
@@ -658,6 +644,8 @@ void TypeBuilderVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
     OS << "DEBUG:: adding 'this' type : ";
     ThisQT.print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
+    // simple==true because 'this' is an rvalue (can't have its address taken)
+    // so we want to keep InRpl=0
     Type = new ASaPType(ThisQT, &RV, 0, true);
     OS << "DEBUG:: type actually added: " << Type->toString(Ctx) << "\n";
 

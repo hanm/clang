@@ -36,7 +36,11 @@ void ASaPSemanticCheckerTraverser::addASaPTypeToMap(ValueDecl *D, RplVector *RV,
                                                     Rpl *InRpl) {
   assert(!SymT.hasType(D));
   ASaPType *T = new ASaPType(D->getType(), RV, InRpl);
+  OS << "DEBUG:: D->getType() = ";
+  D->getType().print(OS, Ctx.getPrintingPolicy());
+  OS << ", isFunction = " << D->getType()->isFunctionType() << "\n";
   OS << "Debug:: RV.size=" << (RV ? RV->size() : 0)
+
     << ", T.RV.size=" << T->getArgVSize() << "\n";
   bool Result = SymT.setType(D, T);
   OS << "Debug :: adding type: " << T->toString(Ctx) << " to Decl: ";
