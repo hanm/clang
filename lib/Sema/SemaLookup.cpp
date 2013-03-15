@@ -722,7 +722,7 @@ static bool LookupDirect(Sema &S, LookupResult &R, const DeclContext *DC) {
     EPI.NumExceptions = 0;
     QualType ExpectedType
       = R.getSema().Context.getFunctionType(R.getLookupName().getCXXNameType(),
-                                            0, 0, EPI);
+                                            ArrayRef<QualType>(), EPI);
 
     // Perform template argument deduction against the type that we would
     // expect the function to have.
@@ -3733,6 +3733,16 @@ TypoCorrection Sema::CorrectTypo(const DeclarationNameInfo &TypoName,
   // instantiation.
   if (!ActiveTemplateInstantiations.empty())
     return TypoCorrection();
+
+  // Don't try to correct 'super'.
+  if (S && S->isInObjcMethodScope() && Typo == getSuperIdentifier())
+    return TypoCorrection();
+
+  // This is for regression testing. It's disabled by default.
+  if (Diags.getDiagnosticLevel(diag::warn_spellcheck_initiated,
+                               TypoName.getLoc()) != DiagnosticsEngine::Ignored)
+    Diag(TypoName.getLoc(), diag::warn_spellcheck_initiated)
+      << TypoName.getName();
 
   NamespaceSpecifierSet Namespaces(Context, CurContext, SS);
 

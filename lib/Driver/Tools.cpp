@@ -456,11 +456,12 @@ static const char *getLLVMArchSuffixForARM(StringRef CPU) {
     .Cases("arm1136j-s",  "arm1136jf-s",  "arm1176jz-s", "v6")
     .Cases("arm1176jzf-s",  "mpcorenovfp",  "mpcore", "v6")
     .Cases("arm1156t2-s",  "arm1156t2f-s", "v6t2")
-    .Cases("cortex-a5", "cortex-a8", "cortex-a9", "cortex-a15", "v7")
+    .Cases("cortex-a5", "cortex-a7", "cortex-a8", "v7")
+    .Cases("cortex-a9", "cortex-a15", "v7")
     .Case("cortex-r5", "v7r")
-    .Case("cortex-m3", "v7m")
-    .Case("cortex-m4", "v7m")
     .Case("cortex-m0", "v6m")
+    .Case("cortex-m3", "v7m")
+    .Case("cortex-m4", "v7em")
     .Case("cortex-a9-mp", "v7f")
     .Case("swift", "v7s")
     .Default("");
@@ -516,7 +517,9 @@ static std::string getARMTargetCPU(const ArgList &Args,
     .Case("armv6j", "arm1136j-s")
     .Cases("armv6z", "armv6zk", "arm1176jzf-s")
     .Case("armv6t2", "arm1156t2-s")
+    .Cases("armv6m", "armv6-m", "cortex-m0")
     .Cases("armv7", "armv7a", "armv7-a", "cortex-a8")
+    .Cases("armv7em", "armv7e-m", "cortex-m4")
     .Cases("armv7f", "armv7-f", "cortex-a9-mp")
     .Cases("armv7s", "armv7-s", "swift")
     .Cases("armv7r", "armv7-r", "cortex-r4")
@@ -524,7 +527,6 @@ static std::string getARMTargetCPU(const ArgList &Args,
     .Case("ep9312", "ep9312")
     .Case("iwmmxt", "iwmmxt")
     .Case("xscale", "xscale")
-    .Cases("armv6m", "armv6-m", "cortex-m0")
     // If all else failed, return the most base CPU LLVM supports.
     .Default("arm7tdmi");
 }
@@ -596,8 +598,9 @@ static void addFPMathArgs(const Driver &D, const Arg *A, const ArgList &Args,
     CmdArgs.push_back("-target-feature");
     CmdArgs.push_back("+neonfp");
     
-    if (CPU != "cortex-a8" && CPU != "cortex-a9" && CPU != "cortex-a9-mp" &&
-        CPU != "cortex-a15" && CPU != "cortex-a5")
+    if (CPU != "cortex-a5" && CPU != "cortex-a7" &&
+        CPU != "cortex-a8" && CPU != "cortex-a9" &&
+        CPU != "cortex-a9-mp" && CPU != "cortex-a15")
       D.Diag(diag::err_drv_invalid_feature) << "-mfpmath=neon" << CPU;
     
   } else if (FPMath == "vfp" || FPMath == "vfp2" || FPMath == "vfp3" ||
@@ -1411,15 +1414,21 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
     CmdArgs.push_back("-fexceptions");
 }
 
+/// \brief Check if the toolchain should use the integrated assembler.
+static bool ShouldUseIntegratedAssembler(const ArgList &Args,
+                                         const ToolChain &TC) {
+  return Args.hasFlag(options::OPT_integrated_as,
+                      options::OPT_no_integrated_as,
+                      TC.IsIntegratedAssemblerDefault());
+}
+
 static bool ShouldDisableCFI(const ArgList &Args,
                              const ToolChain &TC) {
   bool Default = true;
   if (TC.getTriple().isOSDarwin()) {
     // The native darwin assembler doesn't support cfi directives, so
     // we disable them if we think the .s file will be passed to it.
-    Default = Args.hasFlag(options::OPT_integrated_as,
-                           options::OPT_no_integrated_as,
-                           TC.IsIntegratedAssemblerDefault());
+    Default = ShouldUseIntegratedAssembler(Args, TC);
   }
   return !Args.hasFlag(options::OPT_fdwarf2_cfi_asm,
                        options::OPT_fno_dwarf2_cfi_asm,
@@ -1428,13 +1437,9 @@ static bool ShouldDisableCFI(const ArgList &Args,
 
 static bool ShouldDisableDwarfDirectory(const ArgList &Args,
                                         const ToolChain &TC) {
-  bool IsIADefault = TC.IsIntegratedAssemblerDefault();
-  bool UseIntegratedAs = Args.hasFlag(options::OPT_integrated_as,
-                                      options::OPT_no_integrated_as,
-                                      IsIADefault);
   bool UseDwarfDirectory = Args.hasFlag(options::OPT_fdwarf_directory_asm,
                                         options::OPT_fno_dwarf_directory_asm,
-                                        UseIntegratedAs);
+                                        ShouldUseIntegratedAssembler(Args, TC));
   return !UseDwarfDirectory;
 }
 
@@ -1478,6 +1483,8 @@ SanitizerArgs::SanitizerArgs(const Driver &D, const ArgList &Args)
       AsanZeroBaseShadow(false) {
   unsigned AllKinds = 0;  // All kinds of sanitizers that were turned on
                           // at least once (possibly, disabled further).
+  unsigned AllRemovedKinds = 0;  // All kinds of sanitizers that were explicitly
+                                 // removed at least once.
   for (ArgList::const_iterator I = Args.begin(), E = Args.end(); I != E; ++I) {
     unsigned Add, Remove;
     if (!parse(D, Args, *I, Add, Remove, true))
@@ -1486,6 +1493,12 @@ SanitizerArgs::SanitizerArgs(const Driver &D, const ArgList &Args)
     Kind |= Add;
     Kind &= ~Remove;
     AllKinds |= Add;
+    AllRemovedKinds |= Remove;
+  }
+  // Assume -fsanitize=address implies -fsanitize=init-order, if the latter is
+  // not disabled explicitly.
+  if ((Kind & Address) != 0 && (AllRemovedKinds & InitOrder) == 0) {
+    Kind |= InitOrder;
   }
 
   UbsanTrapOnError =
@@ -2329,8 +2342,15 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     if (Output.isFilename()) {
       CmdArgs.push_back("-coverage-file");
       SmallString<128> CoverageFilename(Output.getFilename());
-      if (!C.getArgs().hasArg(options::OPT_no_canonical_prefixes))
-        llvm::sys::fs::make_absolute(CoverageFilename);
+      if (llvm::sys::path::is_relative(CoverageFilename.str())) {
+        if (const char *pwd = ::getenv("PWD")) {
+          if (llvm::sys::path::is_absolute(pwd)) {
+            SmallString<128> Pwd(pwd);
+            llvm::sys::path::append(Pwd, CoverageFilename.str());
+            CoverageFilename.swap(Pwd);
+          }
+        }
+      }
       CmdArgs.push_back(Args.MakeArgString(CoverageFilename));
     }
   }
@@ -2792,8 +2812,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddAllArgs(CmdArgs, options::OPT_fmodules_ignore_macro);
 
   // -fmodules-autolink (on by default when modules is enabled) automatically
-  // links against libraries for imported modules.
-  if (HaveModules &&
+  // links against libraries for imported modules.  This requires the
+  // integrated assembler.
+  if (HaveModules && ShouldUseIntegratedAssembler(Args, getToolChain()) &&
       Args.hasFlag(options::OPT_fmodules_autolink,
                    options::OPT_fno_modules_autolink,
                    true)) {
@@ -3998,8 +4019,9 @@ llvm::Triple::ArchType darwin::getArchTypeForDarwinArchName(StringRef Str) {
            llvm::Triple::x86)
     .Case("x86_64", llvm::Triple::x86_64)
     // This is derived from the driver driver.
-    .Cases("arm", "armv4t", "armv5", "armv6", llvm::Triple::arm)
-    .Cases("armv7", "armv7f", "armv7k", "armv7s", "xscale", llvm::Triple::arm)
+    .Cases("arm", "armv4t", "armv5", "armv6", "armv6m", llvm::Triple::arm)
+    .Cases("armv7", "armv7em", "armv7f", "armv7k", "armv7m", llvm::Triple::arm)
+    .Cases("armv7s", "xscale", llvm::Triple::arm)
     .Case("r600", llvm::Triple::r600)
     .Case("nvptx", llvm::Triple::nvptx)
     .Case("nvptx64", llvm::Triple::nvptx64)

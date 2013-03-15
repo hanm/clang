@@ -1476,7 +1476,7 @@ static const char *GetCompletionTypeString(QualType T,
     // Anonymous tag types are constant strings.
     if (const TagType *TagT = dyn_cast<TagType>(T))
       if (TagDecl *Tag = TagT->getDecl())
-        if (!Tag->getIdentifier() && !Tag->getTypedefNameForAnonDecl()) {
+        if (!Tag->hasNameForLinkage()) {
           switch (Tag->getTagKind()) {
           case TTK_Struct: return "struct <anonymous>";
           case TTK_Interface: return "__interface <anonymous>";
@@ -4477,6 +4477,14 @@ static void AddObjCTopLevelResults(ResultBuilder &Results, bool NeedAt) {
   Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
   Builder.AddPlaceholderChunk("class");
   Results.AddResult(Result(Builder.TakeString()));
+
+  if (Results.getSema().getLangOpts().Modules) {
+    // @import name
+    Builder.AddTypedTextChunk(OBJC_AT_KEYWORD_NAME(NeedAt, "import"));
+    Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
+    Builder.AddPlaceholderChunk("module");
+    Results.AddResult(Result(Builder.TakeString()));
+  }
 }
 
 void Sema::CodeCompleteObjCAtDirective(Scope *S) {
@@ -5307,7 +5315,7 @@ void Sema::CodeCompleteObjCSuperMessage(Scope *S, SourceLocation SuperLoc,
   } else {
     // "super" may be the name of a type or variable. Figure out which
     // it is.
-    IdentifierInfo *Super = &Context.Idents.get("super");
+    IdentifierInfo *Super = getSuperIdentifier();
     NamedDecl *ND = LookupSingleName(S, Super, SuperLoc, 
                                      LookupOrdinaryName);
     if ((CDecl = dyn_cast_or_null<ObjCInterfaceDecl>(ND))) {
