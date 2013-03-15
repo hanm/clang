@@ -25,9 +25,19 @@
 namespace clang {
 namespace asap {
 
-// FIXME
-static llvm::raw_ostream& OSv2 = llvm::errs();
-static llvm::raw_ostream& os = llvm::errs();
+#define ASAP_DEBUG
+#define ASAP_DEBUG_VERBOSE2 
+#ifdef ASAP_DEBUG
+  static raw_ostream& os = llvm::errs();
+#else
+  static raw_ostream& os = llvm::nulls();
+#endif
+
+#ifdef ASAP_DEBUG_VERBOSE2
+  static raw_ostream& OSv2 = llvm::errs();
+#else
+  static raw_ostream& OSv2 = llvm::nulls();
+#endif
 
 class RplElement {
 public:
