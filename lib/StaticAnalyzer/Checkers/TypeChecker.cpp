@@ -465,7 +465,7 @@ void TypeBuilderVisitor::memberSubstitute(const ValueDecl *D) {
   OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
 
   const ASaPType *T = SymT.getType(D);
-  assert(T);
+  assert(T && "Type can't be null");
   OS << "DEBUG:: Type used for substitution = " << T->toString(Ctx) << "\n";
 
   QualType QT = T->getQT(DerefNum);
