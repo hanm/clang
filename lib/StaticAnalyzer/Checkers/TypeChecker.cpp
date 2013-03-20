@@ -458,7 +458,7 @@ void AssignmentCheckerVisitor::typecheckCallExpr(CallExpr *Exp) {
 }
 
 void TypeBuilderVisitor::memberSubstitute(const ValueDecl *D) {
-  assert(D);
+  assert(D && "D can't be null!");
   OS << "DEBUG:: in TypeBuilder::memberSubstitute:";
   D->print(OS, Ctx.getPrintingPolicy());
   OS << "\nDEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
@@ -474,16 +474,16 @@ void TypeBuilderVisitor::memberSubstitute(const ValueDecl *D) {
 
   // TODO support multiple Parameters
   const ParamRplElement *FromEl = ParamVec->getParamAt(0);
-  assert(FromEl);
+  assert(FromEl && "FromEl can't be null");
 
   const Rpl *ToRpl = T->getSubstArg(DerefNum);
-  assert(ToRpl);
+  assert(ToRpl && "ToRpl can't be null");
   OS << "DEBUG:: gonna substitute... " << FromEl->getName()
     << "<-" << ToRpl->toString() << "\n";
 
   if (FromEl->getName().compare(ToRpl->toString())) {
     OS <<" GO!!\n";
-    assert(Type);
+    assert(Type && "Type can't be null");
     Substitution S(FromEl, ToRpl);
     Type->substitute(S);
   }
@@ -496,9 +496,9 @@ void TypeBuilderVisitor::setType(const ValueDecl *D) {
   //OS << "\n Decl pointer address:" << D;
   OS << "\n";
   const ASaPType *T = SymT.getType(D);
-  assert(T);
+  assert(T && "T can't be null");
 
-  assert(!Type);
+  assert(!Type && "Type can't be null");
   Type = new ASaPType(*T); // make a copy
   if (DerefNum == -1)
     Type->addrOf(RefQT);
@@ -564,14 +564,14 @@ void TypeBuilderVisitor::VisitStmt(Stmt *S) {
 }
 
 void TypeBuilderVisitor::VisitUnaryAddrOf(UnaryOperator *Exp)  {
-  assert(DerefNum>=0);
+  assert(DerefNum>=0 && "Must be positive dereference number");
   DerefNum--;
   OS << "DEBUG:: Visit Unary: AddrOf (DerefNum=" << DerefNum << ") Type = ";
   Exp->getType().print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
 
   RefQT = Exp->getType();
-  assert(RefQT->isPointerType());
+  assert(RefQT->isPointerType() && "Must be a pointer type here");
 
   Visit(Exp->getSubExpr());
   DerefNum++;
@@ -589,7 +589,7 @@ void TypeBuilderVisitor::VisitDeclRefExpr(DeclRefExpr *E) {
   E->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
   ValueDecl* VD = E->getDecl();
-  assert(VD);
+  assert(VD && "VD can't be null");
   if (IsBase)
     memberSubstitute(VD);
   else
@@ -598,14 +598,14 @@ void TypeBuilderVisitor::VisitDeclRefExpr(DeclRefExpr *E) {
 
 void TypeBuilderVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
   OS << "DEBUG:: visiting 'this' expression\n";
-  assert(E);
+  assert(E && "E can't be null");
   //DerefNum = 0;
   if (!IsBase) {
-    assert(!Type);
+    assert(!Type && "Type must be null at this place.");
     // Add parameter as implicit argument
     CXXRecordDecl *RecDecl =
       const_cast<CXXRecordDecl*>(E->getBestDynamicClassType());
-    assert(RecDecl);
+    assert(RecDecl && "RecDecl can't be null");
 
     /* Keeping this code below as an example of how to add nodes to the AST
     /// If the declaration does not yet have an implicit region argument
@@ -710,9 +710,9 @@ void TypeBuilderVisitor::VisitBinAssign(BinaryOperator *Exp) {
   OS << "\n";
 
   AssignmentCheckerVisitor ACV(BR, Ctx, Mgr, AC, OS, SymT, Def, Exp);
-  assert(!Type);
+  assert(!Type && "Type must be null here");
   Type = ACV.stealType();
-  assert(Type);
+  assert(Type && "Type must not be null here");
 }
 
 void TypeBuilderVisitor::VisitConditionalOperator(ConditionalOperator *Exp) {
@@ -723,7 +723,7 @@ void TypeBuilderVisitor::VisitConditionalOperator(ConditionalOperator *Exp) {
     SymT, Def, Exp->getCond());
   FatalError |= ACV.encounteredFatalError();
 
-  assert(!Type);
+  assert(!Type && "Type must be null here");
   OS << "DEBUG:: Visiting Cond LHS\n";
   Visit(Exp->getLHS());
   OS << "DEBUG:: DONE Visiting Cond LHS\n";
@@ -765,7 +765,7 @@ void TypeBuilderVisitor::VisitCallExpr(CallExpr *Exp) {
 }
 
 void TypeBuilderVisitor::VisitReturnStmt(ReturnStmt *Ret) {
-  assert(false);
+  assert(false && "NOT implemented!");
   return;
 }
 
