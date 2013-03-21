@@ -412,6 +412,7 @@ typecheckParamAssignment(ParmVarDecl *Param, Expr *Arg,
   ASaPType *RHSType = TBVR.getType();
   if (! typecheck(LHSType, RHSType, true)) {
     OS << "DEBUG:: invalid argument to parameter assignment: "
+      << LHSType->toString(Ctx) << ", " << RHSType->toString(Ctx)
       << "gonna emit an error\n";
     //  Fixme pass VS as arg instead of Init
     helperEmitInvalidArgToFunctionWarning(Arg, LHSType, RHSType);
@@ -647,6 +648,14 @@ void TypeBuilderVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
     // simple==true because 'this' is an rvalue (can't have its address taken)
     // so we want to keep InRpl=0
     Type = new ASaPType(ThisQT, &RV, 0, true);
+    if (DerefNum == -1)
+      Type->addrOf(RefQT);
+    else {
+      OS << "DEBUG :: calling ASaPType::deref(" << DerefNum << ")\n";
+      Type->deref(DerefNum);
+      OS << "DEBUG :: DONE calling ASaPType::deref\n";
+    }
+
     OS << "DEBUG:: type actually added: " << Type->toString(Ctx) << "\n";
 
     //TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));
