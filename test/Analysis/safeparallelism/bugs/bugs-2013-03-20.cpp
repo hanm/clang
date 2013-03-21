@@ -25,3 +25,12 @@ public:
     return *this;
     }
 };
+
+double simple(const double &d) {
+  return d;
+}
+
+double simple3 [[asap::param("P"),asap::reads("P")]] (
+  const double &d [[asap::arg("P")]]) { 
+  return d;
+}

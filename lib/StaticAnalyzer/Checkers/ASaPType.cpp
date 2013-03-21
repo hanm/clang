@@ -215,14 +215,13 @@ bool ASaPType::isAssignableTo(const ASaPType &That, bool IsInit) const {
 bool ASaPType::isSubtypeOf(const ASaPType &That) const { return *this <= That; }
 
 bool ASaPType::operator <= (const ASaPType &That) const {
-  if (this->QT!=That.QT) {
+  if (this->QT.getUnqualifiedType() != That.QT.getUnqualifiedType()) {
     /// Typechecking has passed so we assume that this->QT <= that->QT
     /// but we have to find follow the mapping and substitute Rpls....
     /// TODO :)
     OSv2 << "DEBUG:: Failing ASaP::subtype because QT != QT'\n";
     return false; // until we support inheritance this is good enough.
   }
-  assert(this->QT == That.QT);
   /// Note that we're ignoring InRpl on purpose.
   assert(That.ArgV);
   return this->ArgV->isIncludedIn(*That.ArgV);
@@ -231,14 +230,13 @@ bool ASaPType::operator <= (const ASaPType &That) const {
 void ASaPType::join(ASaPType *That) {
   if (!That)
     return;
-  if (this->QT!=That->QT) {
+  if (this->QT.getUnqualifiedType() != That->QT.getUnqualifiedType()) {
     /// Typechecking has passed so we assume that this->QT <= that->QT
     /// but we have to find follow the mapping and substitute Rpls....
     /// TODO :)
     assert(false); // ...just fail
     return; // until we support inheritance this is good enough
   }
-  assert(this->QT == That->QT);
   if (this->InRpl)
     this->InRpl->join(That->InRpl);
   else if (That->InRpl)
