@@ -29,11 +29,24 @@ void Substitution::applyTo(Rpl *R) const {
 void Substitution::print(llvm::raw_ostream &OS) const {
   llvm::StringRef FromName = "<MISSING>";
   llvm::StringRef ToName = "<MISSING>";
-  if (FromEl)
+  OS << "[";
+  if (FromEl) {
+    OS << FromEl->getName();
+  } else {
+    OS << "<MISSING>";
+  }
+  OS << "<-";
+  if (ToRpl) {
+    OS << ToRpl->toString();
+  } else {
+    OS << "<MISSING";
+  }
+  OS << "]";
+  /*if (FromEl)
     FromName = FromEl->getName();
   if (ToRpl)
     ToName = ToRpl->toString();
-  OS << "[" << FromName << "<-" << ToName << "]";
+  OS << "[" << FromName << "<-" << ToName << "]";*/
 }
 
 std::string Substitution::toString() const {
