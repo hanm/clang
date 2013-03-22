@@ -30,7 +30,7 @@ ASaPType::ASaPType(QualType QT, RplVector *ArgV, Rpl *InRpl,
   if (ArgV)
     this->ArgV = new RplVector(*ArgV);
   else
-    this->ArgV = 0;
+    this->ArgV = new RplVector();
 
   if (!Simple) {
     // 2. If QT is a function type, we're really interested in the
@@ -160,7 +160,6 @@ std::string ASaPType::toString(ASTContext &Ctx) const {
     OS << "IN:" << InRpl->toString();
   else
     OS << "IN:<empty>";
-
   OS << ", ArgV:" << ArgV->toString();
   return std::string(OS.str());
 }
@@ -174,17 +173,15 @@ std::string ASaPType::toString() const {
     OS << "IN:" << InRpl->toString();
   else
     OS << "IN:<empty>";
-
   OS << ", ArgV:" << ArgV->toString();
   return std::string(OS.str());
 }
 
 bool ASaPType::isAssignableTo(const ASaPType &That, bool IsInit) const {
-  OSv2 << "DEBUG:: isAssignable\n";
-  OSv2 << "DEBUG:: isAssignable (LHS is a reference)[IsInit=" << IsInit
+  OSv2 << "DEBUG:: isAssignable [IsInit=" << IsInit
   << "]\n";
-  OSv2 << "LHS:" << That.toString() << "\n";
   OSv2 << "RHS:" << this->toString() << "\n";
+  OSv2 << "LHS:" << That.toString() << "\n";
 
   ASaPType ThisCopy(*this);
   if (ThisCopy.QT->isReferenceType()) {

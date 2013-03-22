@@ -47,7 +47,7 @@ void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
   OS << "DEBUG:: gonna substitute... " << FromEl->getName()
     << "->" << ToRpl->toString() << "\n";
 
-  if (FromEl->getName().compare(ToRpl->toString())) {
+  if (*ToRpl != *FromEl) {
     // if (from != to) then substitute
     Substitution S(FromEl, ToRpl);
     /// 2.1.1 Substitution of effects
@@ -130,6 +130,12 @@ void EffectCollectorVisitor::
 helperEmitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
                                   const StringRef &Str) {
   StringRef BugName = "effect not covered by effect summary";
+  OS << "DEBUG::" << BugName << "\n";
+  OS << "DEBUG:: Stmt:";
+  S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\nDEBUG:: Decl:";
+  D->print(OS, Ctx.getPrintingPolicy());
+  OS << "\n";
   std::string description_std = "'";
   description_std.append(Str);
   description_std.append("' ");

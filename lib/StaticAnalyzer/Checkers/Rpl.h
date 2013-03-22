@@ -26,17 +26,17 @@ namespace clang {
 namespace asap {
 
 #define ASAP_DEBUG
-#define ASAP_DEBUG_VERBOSE2 
+#define ASAP_DEBUG_VERBOSE2
 #ifdef ASAP_DEBUG
   static raw_ostream& os = llvm::errs();
 #else
-  static raw_ostream& os = llvm::nulls();
+  static raw_ostream &os = llvm::nulls();
 #endif
 
 #ifdef ASAP_DEBUG_VERBOSE2
-  static raw_ostream& OSv2 = llvm::errs();
+  static raw_ostream &OSv2 = llvm::errs();
 #else
-  static raw_ostream& OSv2 = llvm::nulls();
+  static raw_ostream &OSv2 = llvm::nulls();
 #endif
 
 class RplElement {
@@ -60,7 +60,7 @@ public:
   virtual bool isFullySpecified() const { return true; }
 
   virtual llvm::StringRef getName() const = 0;
-  virtual bool operator == (const RplElement& That) const {
+  virtual bool operator == (const RplElement &That) const {
     return (this == &That) ? true : false;
   }
   virtual ~RplElement() {}
@@ -339,6 +339,17 @@ typedef llvm::SmallVector<const RplElement*,
   /// \brief Join this to That (by modifying this).
   void join(Rpl* That);
 
+  bool operator == (const RplElement &That) const {
+    if (RplElements.size() == 1 &&
+        *RplElements[0] == That)
+      return true;
+    else
+      return false;
+  }
+
+  bool operator != (const RplElement &That) const {
+    return !(*this==That);
+  }
   // Capture
   // TODO: caller must deallocate Rpl and its element
   Rpl* capture();
@@ -364,7 +375,7 @@ public:
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Capture;
   }
-};
+}; // end class CaptureRplElement
 
 class ParameterVector {
 private:

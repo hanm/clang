@@ -130,8 +130,9 @@ bool Rpl::isIncludedIn(const Rpl& That) const {
   RplRef* RHS = new RplRef(That);
   bool Result = LHS->isIncludedIn(*RHS);
   delete LHS; delete RHS;
-  OSv2 << "DEBUG:: ~~~~~ isIncludedIn[RPL](" << this->toString() << ", "
-    << That.toString() << ")=" << (Result ? "true" : "false") << "\n";
+  OSv2 << "DEBUG:: ~~~~~ isIncludedIn[RPL](" << this->toString()
+    << "[" << this << "], " << That.toString() << "[" << &That
+    << "])=" << (Result ? "true" : "false") << "\n";
   return Result;
 }
 

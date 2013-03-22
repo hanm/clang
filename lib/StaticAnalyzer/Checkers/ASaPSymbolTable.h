@@ -40,7 +40,9 @@ class ParamRplElement;
 class SymbolTable {
   class SymbolTableEntry;
   typedef llvm::DenseMap<const Decl*, SymbolTableEntry*>  SymbolTableMapT;
+  // Symbol Table Map
   SymbolTableMapT SymTable;
+
   /// \brief The implicit region parameter "P" of implicitly boxed types
   /// such as int or pointers.
   const ParameterVector *BuiltinDefaultRegionParameterVec;
@@ -53,6 +55,7 @@ public:
   bool hasParameterVector(const Decl* D) const;
   bool hasRegionNameSet(const Decl* D) const;
   bool hasEffectSummary(const Decl* D) const;
+
   /// \brief Returns the ASaP Type for D or null.
   const ASaPType *getType(const Decl* D) const;
   /// \brief Retuns the parameter vector for D or null.

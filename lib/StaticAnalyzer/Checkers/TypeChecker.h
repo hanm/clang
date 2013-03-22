@@ -76,8 +76,6 @@ public:
   void VisitChildren(Stmt *S);
   void VisitStmt(Stmt *S);
 
-  /// FIXME: Declarations only. Implementation later to support mutual recursion
-  /// with TypeChecker.
   void VisitBinAssign(BinaryOperator *E);
   void VisitReturnStmt(ReturnStmt *Ret);
 
@@ -177,8 +175,7 @@ public:
   void VisitCXXThisExpr(CXXThisExpr *E);
   void VisitMemberExpr(MemberExpr *Exp);
   void helperBinAddSub(Expr *LHS, Expr *RHS);
-  void VisitBinSub(BinaryOperator *Exp);
-  void VisitBinAdd(BinaryOperator *Exp);
+  void VisitBinaryOperator(BinaryOperator *S);
   void VisitBinAssign(BinaryOperator *Exp);
   void VisitConditionalOperator(ConditionalOperator *Exp);
   void VisitBinaryConditionalOperator(BinaryConditionalOperator *Exp);

@@ -27,8 +27,6 @@ void Substitution::applyTo(Rpl *R) const {
 }
 
 void Substitution::print(llvm::raw_ostream &OS) const {
-  llvm::StringRef FromName = "<MISSING>";
-  llvm::StringRef ToName = "<MISSING>";
   OS << "[";
   if (FromEl) {
     OS << FromEl->getName();

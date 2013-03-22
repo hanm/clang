@@ -481,7 +481,7 @@ void TypeBuilderVisitor::memberSubstitute(const ValueDecl *D) {
   OS << "DEBUG:: gonna substitute... " << FromEl->getName()
     << "<-" << ToRpl->toString() << "\n";
 
-  if (FromEl->getName().compare(ToRpl->toString())) {
+  if (*ToRpl != *FromEl) {
     OS <<" GO!!\n";
     assert(Type && "Type can't be null");
     Substitution S(FromEl, ToRpl);
@@ -647,6 +647,14 @@ void TypeBuilderVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
     // simple==true because 'this' is an rvalue (can't have its address taken)
     // so we want to keep InRpl=0
     Type = new ASaPType(ThisQT, &RV, 0, true);
+    if (DerefNum == -1)
+      Type->addrOf(RefQT);
+    else {
+      OS << "DEBUG :: calling ASaPType::deref(" << DerefNum << ")\n";
+      Type->deref(DerefNum);
+      OS << "DEBUG :: DONE calling ASaPType::deref\n";
+    }
+
     OS << "DEBUG:: type actually added: " << Type->toString(Ctx) << "\n";
 
     //TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));
@@ -687,6 +695,7 @@ void TypeBuilderVisitor::VisitMemberExpr(MemberExpr *Exp) {
 } // end VisitMemberExpr
 
 void TypeBuilderVisitor::helperBinAddSub(Expr *LHS, Expr* RHS) {
+  OS << "DEBUG:: helperBinAddSub\n";
   Visit(LHS);
   ASaPType *T = stealType();
   Visit(RHS);
@@ -696,13 +705,30 @@ void TypeBuilderVisitor::helperBinAddSub(Expr *LHS, Expr* RHS) {
     Type = T;
 }
 
-void TypeBuilderVisitor::VisitBinSub(BinaryOperator *Exp) {
-  helperBinAddSub(Exp->getLHS(), Exp->getRHS());
+void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
+  OS << "Visiting Operator " << Exp->getOpcodeStr() << "\n";
+  if (Exp->isAdditiveOp()) {
+    helperBinAddSub(Exp->getLHS(), Exp->getRHS());
+  } else if (Exp->isComparisonOp()) {
+    assert(!Type && "Type can't be null");
+    Rpl LOCALRpl(*LOCALRplElmt);
+    QualType QT = Exp->getType();
+    OS << "DEBUG:: QT = ";
+    QT.print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+    Type = new ASaPType(QT, 0, &LOCALRpl);
+    OS << "DEBUG:: (VisitComparisonOp) Type = " << Type->toString() << "\n";
+    AssignmentCheckerVisitor
+      ACVR(BR, Ctx, Mgr, AC, OS, SymT, Def, Exp->getRHS());
+    AssignmentCheckerVisitor
+      ACVL(BR, Ctx, Mgr, AC, OS, SymT, Def, Exp->getLHS());
+    OS << "DEBUG:: (VisitComparisonOp) Type = " << Type->toString() << "\n";
+  } else {
+    // TODO!!!
+    VisitChildren(Exp);
+  }
 }
 
-void TypeBuilderVisitor::VisitBinAdd(BinaryOperator *Exp) {
-  helperBinAddSub(Exp->getLHS(), Exp->getRHS());
-}
 
 void TypeBuilderVisitor::VisitBinAssign(BinaryOperator *Exp) {
   OS << "DEBUG:: >>>>>>>>>>VisitBinAssign<<<<<<<<<<<<<<<<<\n";
