@@ -40,11 +40,6 @@ void Substitution::print(llvm::raw_ostream &OS) const {
     OS << "<MISSING";
   }
   OS << "]";
-  /*if (FromEl)
-    FromName = FromEl->getName();
-  if (ToRpl)
-    ToName = ToRpl->toString();
-  OS << "[" << FromName << "<-" << ToName << "]";*/
 }
 
 std::string Substitution::toString() const {

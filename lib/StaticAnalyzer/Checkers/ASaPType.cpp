@@ -137,7 +137,7 @@ void ASaPType::deref(int DerefNum) {
 
 void ASaPType::addrOf(QualType RefQT) {
   assert(RefQT->isPointerType() || RefQT->isReferenceType());
-  assert(this->QT == RefQT->getPointeeType());
+  assert(areQTsEqual(this->QT, RefQT->getPointeeType()));
   this->QT = RefQT;
 
   if (InRpl) {
@@ -198,21 +198,22 @@ bool ASaPType::isAssignableTo(const ASaPType &That, bool IsInit) const {
   } else { // IsInit == true
     if (That.QT->isReferenceType()) {
       // TODO: support this->QT isSubtypeOf QT->getPointeeType.
-      if (That.QT->getPointeeType() == ThisCopy.QT) {
+      if (areQTsEqual(That.QT->getPointeeType(), ThisCopy.QT)) {
+        OSv2 << "DEBUG:: here 1\n";
         ThisCopy.addrOf(That.QT);
       } else {
+        OSv2 << "DEBUG:: failed\n";
         return false; // good enough until we support inheritance
       }
     }
     return ThisCopy.isSubtypeOf(That);
-
-  }
+  } // end IsInit == true
 }
 
 bool ASaPType::isSubtypeOf(const ASaPType &That) const { return *this <= That; }
 
 bool ASaPType::operator <= (const ASaPType &That) const {
-  if (this->QT.getUnqualifiedType() != That.QT.getUnqualifiedType()) {
+  if (! areQTsEqual(QT, That.QT)) {
     /// Typechecking has passed so we assume that this->QT <= that->QT
     /// but we have to find follow the mapping and substitute Rpls....
     /// TODO :)

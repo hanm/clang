@@ -31,6 +31,11 @@ class ASaPType {
   RplVector *ArgV;
   // InRpl can be null.
   Rpl *InRpl;
+  // Private Functions
+  inline static bool areQTsEqual(const QualType QT1, const QualType QT2) {
+    return QT1.getUnqualifiedType().getCanonicalType()
+              == QT2.getUnqualifiedType().getCanonicalType();
+  }
 
 public:
   ASaPType(QualType QT, RplVector *ArgV, Rpl *InRpl = 0, bool Simple = false);

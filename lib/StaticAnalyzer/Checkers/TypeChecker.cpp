@@ -80,15 +80,13 @@ void AssignmentCheckerVisitor::VisitStmt(Stmt *S) {
   VisitChildren(S);
 }
 
-void AssignmentCheckerVisitor::VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
-  typecheckCallExpr(Exp);
-  VisitChildren(Exp);
-}
-
 void AssignmentCheckerVisitor::
-VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
+VisitCallExpr(CallExpr *Exp) {
   typecheckCallExpr(Exp);
-  VisitChildren(Exp);
+  // No need to visit call args, only call itself
+  if (Exp->getCallee())
+    Visit(Exp->getCallee());
+
 }
 
 void AssignmentCheckerVisitor::VisitMemberExpr(MemberExpr *Exp) {
@@ -168,10 +166,11 @@ bool AssignmentCheckerVisitor::typecheck(const ASaPType *LHSType,
     return true;
 }
 
-void AssignmentCheckerVisitor::typecheckCall(FunctionDecl *CalleeDecl,
-                                             ExprIterator ArgI,
-                                             ExprIterator ArgE,
-                                             SubstitutionVector *SubV) {
+void AssignmentCheckerVisitor::
+typecheckParamAssignments(FunctionDecl *CalleeDecl,
+                          ExprIterator ArgI,
+                          ExprIterator ArgE,
+                          SubstitutionVector *SubV) {
   assert(CalleeDecl);
   FunctionDecl::param_iterator ParamI, ParamE;
   for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
@@ -179,7 +178,7 @@ void AssignmentCheckerVisitor::typecheckCall(FunctionDecl *CalleeDecl,
     OS << "DEBUG:: " << "\n";
     Expr *ArgExpr = *ArgI;
     ParmVarDecl *ParamDecl = *ParamI;
-    typecheckParamAssignment(ParamDecl, ArgExpr, SubV);
+    typecheckSingleParamAssignment(ParamDecl, ArgExpr, SubV);
   }
 }
 
@@ -192,7 +191,7 @@ void AssignmentCheckerVisitor::typecheckCXXConstructExpr(VarDecl *D,
   assert(ClassDecl);
   // Set up Substitution Vector
   SubstitutionVector SubV, *SubPtr = 0;
-  Substitution S;
+  Substitution Sub;
   const ParameterVector *PV = SymT.getParameterVector(ClassDecl);
   if (PV) {
     assert(PV->size() == 1); // until we support multiple region params
@@ -200,13 +199,13 @@ void AssignmentCheckerVisitor::typecheckCXXConstructExpr(VarDecl *D,
     const ASaPType *T = SymT.getType(D);
     if (T) {
       const Rpl *R = T->getSubstArg();
-      S.set(ParamEl, R);
-      OS << "DEBUG:: ConstructExpr Substitution = " << S.toString() << "\n";
-      SubV.push_back(&S);
+      Sub.set(ParamEl, R);
+      OS << "DEBUG:: ConstructExpr Substitution = " << Sub.toString() << "\n";
+      SubV.push_back(&Sub);
       SubPtr = &SubV;
     }
   }
-  typecheckCall(ConstrDecl, Exp->arg_begin(), Exp->arg_end(), SubPtr);
+  typecheckParamAssignments(ConstrDecl, Exp->arg_begin(), Exp->arg_end(), SubPtr);
 }
 
 void AssignmentCheckerVisitor::
@@ -391,10 +390,10 @@ helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init) {
 }
 
 bool AssignmentCheckerVisitor::
-typecheckParamAssignment(ParmVarDecl *Param, Expr *Arg,
+typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
                          SubstitutionVector *SubV) {
   bool Result = true;
-  OS << "DEBUG:: typeckeckParamAssignment\n";
+  OS << "DEBUG:: typeckeckSingleParamAssignment\n";
   if (SubV) {
     OS << "SubstitutionVector Size = " << SubV->size() << "\n";
     OS << "SubVec: " << SubV->toString();
@@ -424,37 +423,56 @@ typecheckParamAssignment(ParmVarDecl *Param, Expr *Arg,
 }
 
 void AssignmentCheckerVisitor::typecheckCallExpr(CallExpr *Exp) {
+  OS << "DEBUG:: typecheckCallExpr: ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  OS << "DEBUG:: Expr:";
+  Exp->dump(OS, BR.getSourceManager());
+  OS << "\n";
+
   Decl *D = Exp->getCalleeDecl();
   assert(D);
+
   FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
-  assert(FD);
+  // TODO we shouldn't give up like this below, but doing this for now
+  // to see how to fix this here problem...
+  //assert(FD);
+  if (!FD)
+    return;
   // Set up Substitution Vector
   DeclContext *DC = FD->getDeclContext();
   assert(DC);
   RecordDecl *ClassDecl = dyn_cast<RecordDecl>(DC);
-  assert(ClassDecl);
-  const ParameterVector *PV = SymT.getParameterVector(ClassDecl);
-
+  //assert(ClassDecl);
   SubstitutionVector SubV, *SubPtr = 0;
-  Substitution S;
+  Substitution Sub;
   BaseTypeBuilderVisitor  TBV(BR, Ctx, Mgr, AC, OS,
-    SymT, Def, Exp->getCallee());
-  if (PV) {
-    assert(PV->size() == 1); // until we support multiple region params
-    const ParamRplElement *ParamEl = PV->getParamAt(0);
+        SymT, Def, Exp->getCallee());
+  if (ClassDecl) {
+    // Build substitution
+    const ParameterVector *PV = SymT.getParameterVector(ClassDecl);
+    if (PV) {
+      assert(PV->size() == 1); // until we support multiple region params
+      const ParamRplElement *ParamEl = PV->getParamAt(0);
 
-    ASaPType *T = TBV.getType();
-    if (T) {
-      OS << "DEBUG:: Base Type = " << T->toString(Ctx) << "\n";
-      const Rpl *R = T->getSubstArg();
-      S.set(ParamEl, R);
-      OS << "DEBUG:: typecheckCallExpr Substitution = "
-        << S.toString() << "\n";
-      SubV.push_back(&S);
-      SubPtr = &SubV;
+      ASaPType *T = TBV.getType();
+      if (T) {
+        OS << "DEBUG:: Base Type = " << T->toString(Ctx) << "\n";
+        const Rpl *R = T->getSubstArg();
+        Sub.set(ParamEl, R);
+        OS << "DEBUG:: typecheckCallExpr Substitution = "
+          << Sub.toString() << "\n";
+        SubV.push_back(&Sub);
+        SubPtr = &SubV;
+      }
     }
+  } // end if (ClassDecl)
+  if (SubPtr) {
+    OS << "DEBUG:: typecheckCallExpr Substitution Vec = "
+       << SubPtr->toString() << "\n";
   }
-  typecheckCall(FD, Exp->arg_begin(), Exp->arg_end(), SubPtr);
+
+  typecheckParamAssignments(FD, Exp->arg_begin(), Exp->arg_end(), SubPtr);
 }
 
 void TypeBuilderVisitor::memberSubstitute(const ValueDecl *D) {

@@ -79,8 +79,7 @@ public:
   void VisitBinAssign(BinaryOperator *E);
   void VisitReturnStmt(ReturnStmt *Ret);
 
-  void VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp);
-  void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp);
+  void VisitCallExpr(CallExpr *Exp);
   void VisitMemberExpr(MemberExpr *Exp);
   void VisitDesignatedInitExpr(DesignatedInitExpr *Exp);
   void VisitCXXScalarValueInitExpr(CXXScalarValueInitExpr *Exp);
@@ -91,12 +90,12 @@ private:
   bool typecheck(const ASaPType *LHSType,
                  const ASaPType *RHSType,
                  bool IsInit = false);
-  bool typecheckParamAssignment(ParmVarDecl *Param, Expr *Arg,
-                                SubstitutionVector *SubV = 0);
-  void typecheckCall(FunctionDecl *CalleeDecl,
-                     ExprIterator ArgI,
-                     ExprIterator ArgE,
-                     SubstitutionVector *SubV = 0);
+  bool typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
+                                      SubstitutionVector *SubV = 0);
+  void typecheckParamAssignments(FunctionDecl *CalleeDecl,
+                                 ExprIterator ArgI,
+                                 ExprIterator ArgE,
+                                 SubstitutionVector *SubV = 0);
   void typecheckCallExpr(CallExpr *Exp);
   void typecheckCXXConstructExpr(VarDecl *D, CXXConstructExpr *Exp);
   void helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init);
