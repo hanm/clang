@@ -212,10 +212,10 @@ typedef llvm::SmallVector<const RplElement*,
     }
 
     /// Getters
-    const RplElement* getFirstElement() {
+    const RplElement* getFirstElement() const {
       return rpl.RplElements[firstIdx];
     }
-    const RplElement* getLastElement() {
+    const RplElement* getLastElement() const {
       return rpl.RplElements[lastIdx];
     }
 
@@ -299,12 +299,12 @@ typedef llvm::SmallVector<const RplElement*,
     return RplElements.back();
   }
   /// \brief Returns the first of the RPL elements of this RPL.
-  inline const RplElement* getFirstElement() {
+  inline const RplElement* getFirstElement() const {
     return RplElements.front();
   }
 
   /// \brief Returns the number of RPL elements.
-  inline size_t length() {
+  inline size_t length() const {
     return RplElements.size();
   }
   // Setters
@@ -432,6 +432,17 @@ public:
     }
     return 0;
   }
+  /// \brief Returns true if the argument RplElement is contained.
+  bool hasElement(const RplElement *Elmt) const {
+    for(ParamVecT::const_iterator
+          I = ParamVec.begin(),
+          E = ParamVec.end();
+        I != E; ++I) {
+      if (Elmt == *I)
+        return true;
+    }
+    return false;
+  }
 }; // end class ParameterVector
 
 class RplVector {
@@ -474,6 +485,9 @@ class RplVector {
       delete (*I);
     }
   }
+  // Types
+  typedef Rpl::RplVectorT::iterator iterator;
+  typedef Rpl::RplVectorT::const_iterator const_iterator;
 
   // Methods
   /// \brief Return an iterator at the first RPL of the vector.

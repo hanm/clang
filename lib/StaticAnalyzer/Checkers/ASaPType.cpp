@@ -14,6 +14,7 @@
 //===----------------------------------------------------------------===//
 
 #include "Rpl.h"
+#include "Effect.h"
 #include "ASaPType.h"
 #include "clang/AST/ASTContext.h"
 
@@ -71,6 +72,8 @@ ASaPType::~ASaPType() {
 bool ASaPType::isFunctionType() const { return QT->isFunctionType(); }
 
 int ASaPType::getArgVSize() const { return ArgV->size(); }
+
+const RplVector *ASaPType::getArgV() const { return ArgV; }
 
 const Rpl *ASaPType::getInRpl() const { return InRpl; }
 
@@ -248,19 +251,24 @@ void ASaPType::join(ASaPType *That) {
   return;
 }
 
-void ASaPType::substitute(const SubstitutionVector &SubV) {
+void ASaPType::substitute(const SubstitutionVector *SubV) {
+  if (!SubV)
+    return;
   for(SubstitutionVector::SubstitutionVecT::const_iterator
-      I = SubV.begin(),
-      E = SubV.end();
+      I = SubV->begin(),
+      E = SubV->end();
       I != E; ++I) {
-    Substitution &S = *(*I);
-    substitute(S);
+    Substitution *Sub = *I;
+    substitute(Sub);
   }
 }
 
-void ASaPType::substitute(Substitution &S) {
-  const RplElement *FromEl = S.getFrom();
-  const Rpl *ToRpl = S.getTo();
+void ASaPType::substitute(Substitution *Sub) {
+  if (!Sub)
+    return;
+
+  const RplElement *FromEl = Sub->getFrom();
+  const Rpl *ToRpl = Sub->getTo();
   assert(FromEl);
   assert(ToRpl);
   if (InRpl)

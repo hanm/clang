@@ -56,6 +56,7 @@ class AssignmentCheckerVisitor
   const FunctionDecl *Def;
   bool FatalError;
   ASaPType *Type;
+  SubstitutionVector *SubV;
 
 public:
   AssignmentCheckerVisitor (
@@ -68,9 +69,11 @@ public:
     const FunctionDecl *Def,
     Stmt *S
     );
+
   ~AssignmentCheckerVisitor();
 
   inline bool encounteredFatalError() { return FatalError; }
+  inline ASaPType *getType() { return Type; }
   ASaPType *stealType();
 
   void VisitChildren(Stmt *S);
@@ -91,13 +94,23 @@ private:
                  const ASaPType *RHSType,
                  bool IsInit = false);
   bool typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
-                                      SubstitutionVector *SubV = 0);
+                                      SubstitutionVector &SubV);
   void typecheckParamAssignments(FunctionDecl *CalleeDecl,
                                  ExprIterator ArgI,
                                  ExprIterator ArgE,
-                                 SubstitutionVector *SubV = 0);
-  void typecheckCallExpr(CallExpr *Exp);
-  void typecheckCXXConstructExpr(VarDecl *D, CXXConstructExpr *Exp);
+                                 SubstitutionVector &SubV);
+  void typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV);
+  void typecheckCXXConstructExpr(VarDecl *D, CXXConstructExpr *Exp, SubstitutionVector &SubV);
+
+  void buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
+                                    const ParameterVector &ParamV,
+                                    SubstitutionVector &SubV);
+  void buildParamSubstitutions(FunctionDecl *CalleeDecl,
+                                ExprIterator ArgI, ExprIterator ArgE,
+                                const ParameterVector &ParamV,
+                                SubstitutionVector &SubV);
+  void buildSubstitutionsCallExpr(CallExpr *Exp, SubstitutionVector &SubV);
+
   void helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init);
   /// \brief Issues Warning: '<str>' <bugName> on Declaration.
   void helperEmitDeclarationWarning(const Decl *D,
@@ -146,8 +159,10 @@ class TypeBuilderVisitor
 
   /// \brief substitute region parameters in Type with arguments.
   void memberSubstitute(const ValueDecl *D);
+  void memberSubstitute(const ASaPType *T);
   /// \brief collect the region arguments for a field.
   void setType(const ValueDecl *D);
+  void setType(const ASaPType *T);
 
 public:
   TypeBuilderVisitor (

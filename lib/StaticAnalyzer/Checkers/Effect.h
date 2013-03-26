@@ -33,25 +33,24 @@ class EffectSummary;
 class Substitution {
 private:
   // Fields
-  const RplElement *FromEl; // RplElement not owned by class
-  const Rpl *ToRpl;         // Rpl not owned by class
+  const RplElement *FromEl; // RplElement *not* owned by class
+  const Rpl *ToRpl;         // Rpl owned by class
 public:
-  // Constructor
+  // Constructors
   Substitution() : FromEl(0),  ToRpl(0) {}
 
-  Substitution(const RplElement *FromEl, const Rpl *ToRpl) :
-    FromEl(FromEl), ToRpl(ToRpl) {
-    assert(FromEl);
-    assert(ToRpl);
-  }
+  Substitution(const RplElement *FromEl, const Rpl *ToRpl);
+
+  Substitution(const Substitution &Sub);
+
+  virtual ~Substitution();
+
   // Getters
   inline const RplElement *getFrom() const { return FromEl; }
   inline const Rpl *getTo() const { return ToRpl; }
   // Setters
-  void set(const RplElement *FromEl, const Rpl *ToRpl) {
-    this->FromEl = FromEl;
-    this->ToRpl = ToRpl;
-  }
+  void set(const RplElement *FromEl, const Rpl *ToRpl);
+
   // Apply
   /// \brief Apply substitution to RPL
   void applyTo(Rpl *R) const;
@@ -78,7 +77,16 @@ private:
 public:
   // Constructor
   SubstitutionVector() {}
-  SubstitutionVector(Substitution *S) { SubV.push_back(S); }
+  SubstitutionVector(Substitution *S) {
+    if (S)
+      SubV.push_back(new Substitution(*S));
+  }
+  virtual ~SubstitutionVector() {
+    for (SubstitutionVecT::const_iterator I = SubV.begin(), E = SubV.end();
+         I != E; ++I) {
+      delete(*I);
+    }
+  }
   // Methods
   /// \brief Return an iterator at the first RPL of the vector.
   inline SubstitutionVecT::iterator begin () { return SubV.begin(); }
@@ -91,9 +99,9 @@ public:
   /// \brief Return the size of the RPL vector.
   inline size_t size () const { return SubV.size(); }
   /// \brief Append the argument Substitution to the Substitution vector.
-  inline void push_back(Substitution *S) {
-    assert(S);
-    SubV.push_back(S);
+  inline void push_back(Substitution *Sub) {
+    if (Sub)
+      SubV.push_back(new Substitution(*Sub));
   }
 
   // Apply

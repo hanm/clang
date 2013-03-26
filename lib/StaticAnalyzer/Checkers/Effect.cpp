@@ -19,6 +19,36 @@
 using namespace clang;
 using namespace clang::asap;
 
+Substitution::Substitution(const RplElement *FromEl, const Rpl *ToRpl) :
+  FromEl(FromEl) {
+  assert(FromEl);
+  if (ToRpl)
+    this->ToRpl = new Rpl(*ToRpl);
+  else
+    this->ToRpl = 0;
+}
+
+Substitution::Substitution(const Substitution &Sub) :
+  FromEl(Sub.FromEl) {
+  assert(FromEl);
+  if (Sub.ToRpl)
+    this->ToRpl = new Rpl(*Sub.ToRpl);
+  else
+    this->ToRpl = 0;
+}
+
+Substitution::~Substitution() {
+  delete ToRpl;
+}
+
+void Substitution::set(const RplElement *FromEl, const Rpl *ToRpl) {
+  this->FromEl = FromEl;
+  if (ToRpl)
+    this->ToRpl = new Rpl(*ToRpl);
+  else
+    this->ToRpl = 0;
+}
+
 void Substitution::applyTo(Rpl *R) const {
   if (FromEl && ToRpl) {
     assert(R);

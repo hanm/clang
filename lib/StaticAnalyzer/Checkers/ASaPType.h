@@ -17,13 +17,14 @@
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_TYPE_H
 
 #include "clang/AST/Type.h"
-#include "Effect.h"
 
 namespace clang {
 namespace asap {
 
 class Rpl;
 class RplVector;
+class Substitution;
+class SubstitutionVector;
 
 class ASaPType {
   friend class ASaPType;
@@ -50,6 +51,8 @@ public:
   const Rpl *getInRpl() const;
   /// \brief Return the In RPL of this after DerefNum dereferences.
   const Rpl *getInRpl(int DerefNum) const;
+  /// \brief Return the Region Arguments Vector
+  const RplVector *getArgV() const;
   /// \brief Return the Argument for substitution after DerefNum dereferences.
   /// FIXME: support multiple region parameters per class type.
   const Rpl *getSubstArg(int DerefNum = 0) const;
@@ -80,10 +83,9 @@ public:
   /// Join returns the smallest common supertype (Base Type).
   void join(ASaPType *That);
   /// \brief Substitution (ASaPType).
-  /// FIXME: use pointer instead of ref type to remove #include "Effect.h".
-  void substitute(const SubstitutionVector &SubV);
+  void substitute(const SubstitutionVector *SubV);
   /// \brief Performs substitution on type: this[FromEl <- ToRpl].
-  void substitute(Substitution &S);
+  void substitute(Substitution *S);
 }; // end class ASaPType
 
 } // End namespace asap.

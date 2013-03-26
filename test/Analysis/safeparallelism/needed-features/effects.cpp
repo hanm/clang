@@ -3,12 +3,14 @@
 [[asap::region("BimBam")]];
 
 class [[asap::param("P"), asap::region("Next, Links")]] Point {
-private:
+public:
+  // Fields
   double x[[asap::arg("P")]];
   double y[[asap::arg("P")]];
   Point *next[[asap::arg("P:Links, P:Next")]];
-public:
+  // Constructor
   Point(double x_, double y_) : x(x_), y(y_) {}
+  // Functions
   double getXVal[[asap::reads("P")]] () { return x; }
   double &getXRef[[asap::arg("P")]] () { return x; }
   Point *getNext[[asap::arg("P:Next"), asap::reads("P:Links")]] () {
@@ -20,13 +22,12 @@ public:
   }
 };
 
-/* TODO support inferable region parameters on functions
+// Support simple inferable region parameters on functions.
 Point *getSelf [[asap::param("Pf"), asap::arg("Pf"), asap::reads("Local")]]
                (Point *arg[[asap::arg("Local, Pf")]]) {
   return arg;
-}*/
+}
 
-#define getSelf(X) (X)
 
 #ifdef CLANG_VERIFIER
   #define printf(X, Y)
@@ -65,5 +66,7 @@ int main [[asap::reads("BimBam:Point::Next"), asap::writes("BimBam, BimBam:Point
   getSelf(&point)->setNext(&next);
   point.setNext(getSelf(&next));
   getSelf(&point)->setNext(getSelf(&next));
+  getSelf(&point)->setNext(getSelf(&point)->getNext());
+  getSelf(&point)->setNext(getSelf(&point)->next);
   return 0;
 }
