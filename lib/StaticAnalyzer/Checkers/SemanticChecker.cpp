@@ -197,30 +197,38 @@ long ASaPSemanticCheckerTraverser::getRegionParamCount(QualType QT) {
   OS << "DEBUG:: calling getRegionParamCount on type: ";
   QT.print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
+
   if (isNonPointerScalarType(QT)) {
+    //OS << "DEBUG:: getRegionParamCount::isNonPointerScalarType\n";
     return 1;
   } else if (QT->isPointerType()) {
-    OS << "DEBUG:: getRegionParamCount::isPointerType\n";
+    //OS << "DEBUG:: getRegionParamCount::isPointerType\n";
     long Result = getRegionParamCount(QT->getPointeeType());
     return (Result == -1) ? Result : Result + 1;
   } else if (QT->isReferenceType()) {
+    //OS << "DEBUG:: getRegionParamCount::isReferenceType\n";
     return getRegionParamCount(QT->getPointeeType());
   } else if (QT->isStructureOrClassType()) {
+    //OS << "DEBUG:: getRegionParamCount::isStructureOrClassType\n";
     // FIXME allow different numbers of parameters on class types
     const RecordType *RT = QT->getAs<RecordType>();
     assert(RT);
     //RegionParamVector *RPV = ParamVectorDeclMap[RT->getDecl()];
     return 1;
   } else if (QT->isFunctionType()) {
-    OS << "DEBUG:: getRegionParamCount::isFunctionType\n";
-    const FunctionType *FT = dyn_cast<FunctionType>(QT.getTypePtr());
+    //OS << "DEBUG:: getRegionParamCount::isFunctionType\n";
+    const FunctionType *FT = QT->getAs<FunctionType>();
+    assert(FT);
     QualType ResultQT = FT->getResultType();
     return getRegionParamCount(ResultQT);
   } else if (QT->isVoidType()) {
+    //OS << "DEBUG:: getRegionParamCount::isVoidType\n";
     return 0;
   } else if (QT->isTemplateTypeParmType()) {
+    //OS << "DEBUG:: getRegionParamCount::isTemplateParmType\n";
     return 0;
   } else {
+    //OS << "DEBUG:: getRegionParamCount::UnexpectedType\n";
     // This should not happen: unknown number of region arguments for type
     return -1;
   }

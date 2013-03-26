@@ -166,11 +166,14 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
 bool AssignmentCheckerVisitor::typecheck(const ASaPType *LHSType,
                                          const ASaPType *RHSType,
                                          bool IsInit) {
-  assert(LHSType);
-  if (RHSType && !RHSType->isAssignableTo(*LHSType, IsInit) )
-    return false;
-  else
-    return true;
+  if (!RHSType)
+    return true; // Clang has done the typechecking
+  else { // RHSType != null
+    if (LHSType)
+      return RHSType->isAssignableTo(*LHSType, IsInit);
+    else
+      return false;
+  }
 }
 
 void AssignmentCheckerVisitor::
@@ -358,7 +361,11 @@ bool AssignmentCheckerVisitor::
 typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
                          SubstitutionVector &SubV) {
   bool Result = true;
-  OS << "DEBUG:: typeckeckSingleParamAssignment\n";
+  OS << "DEBUG:: typeckeckSingleParamAssignment of arg '";
+  Arg->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "' to param '";
+  Param->print(OS, Ctx.getPrintingPolicy());
+  OS << "'\n";
   OS << "SubstitutionVector Size = " << SubV.size() << "\n";
   OS << "SubVec: " << SubV.toString();
 
@@ -478,6 +485,7 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   } // end if (ClassDecl)
   typecheckParamAssignments(FD, Exp->arg_begin(), Exp->arg_end(), SubV);
   OS << "DEBUG:: DONE typecheckCallExpr\n";
+  // Now set Type to the return type of this call
   const ASaPType *RetTyp = SymT.getType(FD);
   if (RetTyp) {
     assert(!Type && "Type must be null");
@@ -602,7 +610,8 @@ void TypeBuilderVisitor::memberSubstitute(const ValueDecl *D) {
   OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
 
   const ASaPType *T = SymT.getType(D);
-  memberSubstitute(T);
+  if (T)
+    memberSubstitute(T);
   OS << "   DONE\n";
 }
 
@@ -627,7 +636,8 @@ void TypeBuilderVisitor::setType(const ValueDecl *D) {
   //OS << "\n Decl pointer address:" << D;
   OS << "\n";
   const ASaPType *T = SymT.getType(D);
-  setType(T);
+  if (T)
+    setType(T);
 }
 
 TypeBuilderVisitor::TypeBuilderVisitor (
