@@ -462,29 +462,30 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   DeclContext *DC = FD->getDeclContext();
   assert(DC);
   RecordDecl *ClassDecl = dyn_cast<RecordDecl>(DC);
-  //assert(ClassDecl);
+  // ClassDecl is allowed to be null
+
   BaseTypeBuilderVisitor  TBV(BR, Ctx, Mgr, AC, OS,
         SymT, Def, Exp->getCallee());
-  if (ClassDecl) {
-    // Build substitution
-    const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
-    if (ParamV) {
-      assert(ParamV->size() == 1); // until we support multiple region params
-      const ParamRplElement *ParamEl = ParamV->getParamAt(0);
+  // Build substitution
+  const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
+  if (ParamV) {
+    assert(ParamV->size() == 1); // until we support multiple region params
+    const ParamRplElement *ParamEl = ParamV->getParamAt(0);
 
-      ASaPType *T = TBV.getType();
-      if (T) {
-        OS << "DEBUG:: Base Type = " << T->toString(Ctx) << "\n";
-        const Rpl *R = T->getSubstArg();
-        Substitution Sub(ParamEl, R);
-        OS << "DEBUG:: typecheckCallExpr Substitution = "
-          << Sub.toString() << "\n";
-        SubV.push_back(&Sub);
-      }
+    ASaPType *T = TBV.getType();
+    if (T) {
+      OS << "DEBUG:: Base Type = " << T->toString(Ctx) << "\n";
+      const Rpl *R = T->getSubstArg();
+      Substitution Sub(ParamEl, R);
+      OS << "DEBUG:: typecheckCallExpr Substitution = "
+        << Sub.toString() << "\n";
+      SubV.push_back(&Sub);
     }
-  } // end if (ClassDecl)
+  }
+
   typecheckParamAssignments(FD, Exp->arg_begin(), Exp->arg_end(), SubV);
   OS << "DEBUG:: DONE typecheckCallExpr\n";
+
   // Now set Type to the return type of this call
   const ASaPType *RetTyp = SymT.getType(FD);
   if (RetTyp) {
