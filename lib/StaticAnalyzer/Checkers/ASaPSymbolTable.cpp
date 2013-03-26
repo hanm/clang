@@ -187,8 +187,8 @@ const ParameterVector *SymbolTable::getParameterVectorFromQualType(QualType QT) 
   if (QT->isReferenceType()) {
     ParamVec = getParameterVectorFromQualType(QT->getPointeeType());
   } else if (const TagType* TT = dyn_cast<TagType>(QT.getTypePtr())) {
-    OSv2 << "getParameterVectorFromQualType::TagType\n";
     const TagDecl* TD = TT->getDecl();
+    TD->dump(OSv2);
     ParamVec = getParameterVector(TD);
   } else if (QT->isBuiltinType() || QT->isPointerType()) {
     // TODO check the number of parameters of the arg attr to be 1

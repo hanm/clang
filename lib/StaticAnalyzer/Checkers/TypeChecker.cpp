@@ -574,6 +574,8 @@ void TypeBuilderVisitor::memberSubstitute(const ASaPType *T) {
   QualType QT = T->getQT(DerefNum);
 
   const ParameterVector *ParamVec = SymT.getParameterVectorFromQualType(QT);
+  if (!ParamVec)
+    return;
 
   // TODO support multiple Parameters
   const ParamRplElement *FromEl = ParamVec->getParamAt(0);

@@ -69,7 +69,7 @@ class ASaPSemanticCheckerTraverser :
                                     const llvm::StringRef &Str,
                                     std::string BugName,
                                     bool AddQuotes = true);
-  /// \brief Issues Warning: '<str>' <bugName> on Attribute.
+  /// \brief Issues Warning: '<str>': <bugName> on Attribute.
   void helperEmitAttributeWarning(const Decl *D,
                                   const Attr *Attr,
                                   const llvm::StringRef &Str,
@@ -88,9 +88,11 @@ class ASaPSemanticCheckerTraverser :
   void emitUndeclaredRplElement(const Decl *D,
                                 const Attr *Attr,
                                 const llvm::StringRef &Str);
-  /// \brief  Declaration D is missing region argument(s).
+  /// \brief Attribute A contains an undeclared nested name specifier
+  void emitNameSpecifierNotFound(Decl *D, Attr *A, StringRef Name);
+  /// \brief Declaration D is missing region argument(s).
   void emitMissingRegionArgs(Decl *D);
-  /// \brief  Declaration D is missing region argument(s).
+  /// \brief Declaration D is missing region argument(s).
   void emitUnknownNumberOfRegionParamsForType(Decl *D);
   /// \brief Region arguments Str on declaration D are superfluous for its type.
   void emitSuperfluousRegionArg(Decl *D, llvm::StringRef Str);
@@ -133,6 +135,7 @@ class ASaPSemanticCheckerTraverser :
       const llvm::StringRef ElmtNames = getRegionOrParamName(*I);
 
       llvm::SmallVector<StringRef, 8> RplElmtVec;
+      //ElmtNames.split(RplElmtVec, Rpl::RPL_LIST_SEPARATE_CHARACTER);
       ElmtNames.split(RplElmtVec, ",");
       for (size_t Idx = 0 ; Idx != RplElmtVec.size(); ++Idx) {
         llvm::StringRef Name = RplElmtVec[Idx].trim();

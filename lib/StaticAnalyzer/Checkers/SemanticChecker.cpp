@@ -57,9 +57,9 @@ helperEmitDeclarationWarning(const Decl *D, const StringRef &Str,
     Description.append("'");
   Description.append(Str);
   if (AddQuotes)
-    Description.append("' ");
+    Description.append("': ");
   else
-    Description.append(" ");
+    Description.append(": ");
   Description.append(BugName);
   StringRef BugCategory = "Safe Parallelism";
   StringRef BugStr = Description;
@@ -70,16 +70,16 @@ helperEmitDeclarationWarning(const Decl *D, const StringRef &Str,
 
 void ASaPSemanticCheckerTraverser::
 helperEmitAttributeWarning(const Decl *D, const Attr *Attr,
-                           const StringRef &Str,std::string BugName,
+                           const StringRef &Str, std::string BugName,
                            bool AddQuotes) {
   std::string Description = "";
   if (AddQuotes)
     Description.append("'");
   Description.append(Str);
   if (AddQuotes)
-    Description.append("' ");
+    Description.append("': ");
   else
-    Description.append(" ");
+    Description.append(": ");
   Description.append(BugName);
   StringRef BugCategory = "Safe Parallelism";
   StringRef BugStr = Description;
@@ -117,6 +117,12 @@ emitUndeclaredRplElement(const Decl *D,
                          const StringRef &Str) {
   StringRef BugName = "RPL element was not declared";
   helperEmitAttributeWarning(D, Attr, Str, BugName);
+}
+
+void ASaPSemanticCheckerTraverser::
+emitNameSpecifierNotFound(Decl *D, Attr *A, StringRef Name) {
+  StringRef BugName = "Name specifier was not found";
+  helperEmitAttributeWarning(D, A, Name, BugName);
 }
 
 void ASaPSemanticCheckerTraverser::emitMissingRegionArgs(Decl *D) {
@@ -194,6 +200,7 @@ long ASaPSemanticCheckerTraverser::getRegionParamCount(QualType QT) {
   if (isNonPointerScalarType(QT)) {
     return 1;
   } else if (QT->isPointerType()) {
+    OS << "DEBUG:: getRegionParamCount::isPointerType\n";
     long Result = getRegionParamCount(QT->getPointeeType());
     return (Result == -1) ? Result : Result + 1;
   } else if (QT->isReferenceType()) {
@@ -205,6 +212,7 @@ long ASaPSemanticCheckerTraverser::getRegionParamCount(QualType QT) {
     //RegionParamVector *RPV = ParamVectorDeclMap[RT->getDecl()];
     return 1;
   } else if (QT->isFunctionType()) {
+    OS << "DEBUG:: getRegionParamCount::isFunctionType\n";
     const FunctionType *FT = dyn_cast<FunctionType>(QT.getTypePtr());
     QualType ResultQT = FT->getResultType();
     return getRegionParamCount(ResultQT);
@@ -287,9 +295,9 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
 
   QualType QT = D->getType();
   // How many In/Arg annotations does the type require?
-  OS << "DEBUG:: calling 'getRegionParamCount(QT)'...";
   int ParamCount = getRegionParamCount(QT);
-  OS << "(" << ParamCount << ") DONE!\n";
+  OS << "DEBUG:: called 'getRegionParamCount(QT)' : "
+     << "(" << ParamCount << ") DONE!\n";
   long Size = (RplVec) ? RplVec->size() : 0;
   OS << "size = " << Size << "\n";
 
@@ -368,9 +376,10 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *A,
     std::pair<StringRef,StringRef> Pair = Rpl::splitRpl(RplStr);
     StringRef Head = Pair.first;
     llvm::SmallVector<StringRef, 8> Vec;
+    //Head.split(Vec, Rpl::RPL_NAME_SPEC_STRING);
     Head.split(Vec, "::");
-    OS << "DEBUG:: Vec.size = " << Vec.size() << ", Vec.back() = "
-      << Vec.back() <<"\n";
+    OS << "DEBUG:: Vec.size = " << Vec.size()
+       << ", Vec.back() = " << Vec.back() <<"\n";
 
     if (Vec.size() > 1) {
       // Find the specified declaration
@@ -387,7 +396,10 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *A,
         OS << "DEBUG:: Lookup Result Size = " << Res.size() << "\n";
         DC = DC->getParent();
       }
-      assert(Res.size() == 1); //emit warning
+      if (Res.size() !=1) {
+        emitNameSpecifierNotFound(D, A, Vec[0]);
+        return 0;
+      }
       DC = Decl::castToDeclContext(Res[0]);
       assert(DC);
 
@@ -400,7 +412,10 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *A,
         OS << "\n";
         Res = DC->lookup(DN);
         OS << "DEBUG:: Lookup Result Size = " << Res.size() << "\n";
-        assert(Res.size() == 1); //emit warning
+        if (Res.size() !=1) {
+          emitNameSpecifierNotFound(D, A, Vec[I]);
+          return 0;
+        }
         DC = Decl::castToDeclContext(Res[0]);
         assert(DC);
       }

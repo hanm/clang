@@ -37,6 +37,8 @@ void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
   QualType QT = T->getQT(DerefNum);
 
   const ParameterVector *ParamVec = SymT.getParameterVectorFromQualType(QT);
+  if (!ParamVec)
+    return;
 
   // TODO support multiple Parameters
   const ParamRplElement *FromEl = ParamVec->getParamAt(0);
