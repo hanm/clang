@@ -843,7 +843,7 @@ void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
     helperBinAddSub(Exp->getLHS(), Exp->getRHS());
   } else if (Exp->isComparisonOp()) {
     assert(!Type && "Type must be null");
-    Rpl LOCALRpl(*LOCALRplElmt);
+    Rpl LOCALRpl(*SymbolTable::LOCAL_RplElmt);
     QualType QT = Exp->getType();
     OS << "DEBUG:: QT = ";
     QT.print(OS, Ctx.getPrintingPolicy());

@@ -221,8 +221,7 @@ public:
   bool isSubEffectOf(const Effect &That) const;
 
   /// \brief Returns covering effect in effect summary or null.
-  const Effect *isCoveredBy(const EffectSummary &ES,
-                            const RplElement *LocalRplElement);
+  const Effect *isCoveredBy(const EffectSummary &ES);
 }; // end class Effect
 
 /////////////////////////////////////////////////////////////////////////////

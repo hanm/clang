@@ -214,13 +214,6 @@ public:
         }
       }
     }
-
-    // Clean-Up
-    delete WritesLocal;
-    delete ROOTRplElmt;
-    delete LOCALRplElmt;
-    delete STARRplElmt;
-    // Note: implicit deallocation of SymT
   }
 }; // end class SafeParallelismChecker
 } // end unnamed namespace

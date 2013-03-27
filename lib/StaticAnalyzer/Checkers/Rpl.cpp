@@ -14,6 +14,7 @@
 //===----------------------------------------------------------------===//
 
 #include "Rpl.h"
+#include "ASaPSymbolTable.h"
 #include "llvm/Support/Casting.h"
 
 using namespace llvm;
@@ -46,18 +47,13 @@ const StringRef Rpl::RPL_LIST_SEPARATOR = ",";
 const StringRef Rpl::RPL_NAME_SPEC = "::";
 
 
-const StarRplElement *STARRplElmt = new StarRplElement();
-const SpecialRplElement *ROOTRplElmt = new SpecialRplElement("Root");
-const SpecialRplElement *LOCALRplElmt = new SpecialRplElement("Local");
-Effect *WritesLocal = 0;
-
 const RplElement* getSpecialRplElement(const llvm::StringRef& s) {
-  if (!s.compare(STARRplElmt->getName()))
-    return STARRplElmt;
-  else if (!s.compare(ROOTRplElmt->getName()))
-    return ROOTRplElmt;
-  else if (!s.compare(LOCALRplElmt->getName()))
-    return LOCALRplElmt;
+  if (!s.compare(SymbolTable::STAR_RplElmt->getName()))
+    return SymbolTable::STAR_RplElmt;
+  else if (!s.compare(SymbolTable::ROOT_RplElmt->getName()))
+    return SymbolTable::ROOT_RplElmt;
+  else if (!s.compare(SymbolTable::LOCAL_RplElmt->getName()))
+    return SymbolTable::LOCAL_RplElmt;
   else
     return 0;
 }
@@ -93,6 +89,49 @@ bool isValidRegionName(const llvm::StringRef& s) {
 }
 } // End namespace asap.
 } // End namespace clang.
+
+    bool Rpl::RplRef::isUnder(RplRef& RHS) {
+      OSv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
+          << this->toString() << ", " << RHS.toString() << ")\n";
+      /// R <= Root
+      if (RHS.isEmpty())
+        return true;
+      if (isEmpty()) /// and RHS is not Empty
+        return false;
+      /// R <= R' <== R c= R'
+      if (isIncludedIn(RHS)) return true;
+      /// R:* <= R' <== R <= R'
+      if (getLastElement() == SymbolTable::STAR_RplElmt)
+        return stripLast().isUnder(RHS);
+      /// R:r <= R' <==  R <= R'
+      /// R:[i] <= R' <==  R <= R'
+      return stripLast().isUnder(RHS);
+      // TODO z-regions
+    }
+
+    bool Rpl::RplRef::isIncludedIn(RplRef& RHS) {
+      OSv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef]("
+          << this->toString() << ", " << RHS.toString() << ")\n";
+      if (RHS.isEmpty()) {
+        /// Root c= Root
+        if (isEmpty()) return true;
+        /// RPL c=? Root and RPL!=Root ==> not included
+        else /*!isEmpty()*/ return false;
+      } else { /// RHS is not empty
+        /// R c= R':* <==  R <= R'
+        if (RHS.getLastElement() == SymbolTable::STAR_RplElmt) {
+          OSv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
+          return isUnder(RHS.stripLast());
+        }
+        ///   R:r c= R':r    <==  R <= R'
+        /// R:[i] c= R':[i]  <==  R <= R'
+        if (!isEmpty()) {
+          if ( *getLastElement() == *RHS.getLastElement() )
+            return stripLast().isIncludedIn(RHS.stripLast());
+        }
+        return false;
+      }
+    }
 
 void Rpl::print(raw_ostream &OS) const {
   RplElementVectorTy::const_iterator I = RplElements.begin();
@@ -201,7 +240,7 @@ void Rpl::join(Rpl* That) {
   if (ThisI != ThisE) {
     // put a star in the middle and join from the right
     assert(ThatI != ThatE);
-    Result.appendElement(STARRplElmt);
+    Result.appendElement(SymbolTable::STAR_RplElmt);
     Result.FullySpecified = false;
     // count how many elements from the right we will need to append
     RplElementVectorTy::const_reverse_iterator

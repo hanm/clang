@@ -15,6 +15,7 @@
 
 #include "Effect.h"
 #include "Rpl.h"
+#include "ASaPSymbolTable.h"
 
 using namespace clang;
 using namespace clang::asap;
@@ -209,14 +210,10 @@ std::string EffectSummary::toString() const {
   return std::string(OS.str());
 }
 
-const Effect *Effect::isCoveredBy(const EffectSummary &ES,
-                                  const RplElement *LocalRplElement) {
-  if (!WritesLocal)
-    WritesLocal = new Effect(Effect::EK_WritesEffect,
-                             new Rpl(*LocalRplElement));
-  bool Result = this->isSubEffectOf(*WritesLocal);
+const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
+  bool Result = this->isSubEffectOf(*SymbolTable::WritesLocal);
   if (Result)
-    return WritesLocal;
+    return SymbolTable::WritesLocal;
   else
     return ES.covers(this);
 }

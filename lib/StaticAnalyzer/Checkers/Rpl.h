@@ -136,11 +136,6 @@ public:
 
 class Effect;
 
-extern const StarRplElement *STARRplElmt;
-extern const SpecialRplElement *ROOTRplElmt;
-extern const SpecialRplElement *LOCALRplElmt;
-extern Effect *WritesLocal;
-
 /// \brief a special RPL element (Root, Local, *, ...) or NULL
 const RplElement* getSpecialRplElement(const llvm::StringRef& s);
 
@@ -231,49 +226,12 @@ typedef llvm::SmallVector<const RplElement*,
       return (lastIdx<firstIdx) ? true : false;
     }
 
-    bool isUnder(RplRef& rhs) {
-      OSv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
-          << this->toString() << ", " << rhs.toString() << ")\n";
-      /// R <= Root
-      if (rhs.isEmpty())
-        return true;
-      if (isEmpty()) /// and rhs is not Empty
-        return false;
-      /// R <= R' <== R c= R'
-      if (isIncludedIn(rhs)) return true;
-      /// R:* <= R' <== R <= R'
-      if (getLastElement() == STARRplElmt)
-        return stripLast().isUnder(rhs);
-      /// R:r <= R' <==  R <= R'
-      /// R:[i] <= R' <==  R <= R'
-      return stripLast().isUnder(rhs);
-      // TODO z-regions
-    }
+    /// \brief Under: true  iff this <= RHS
+    bool isUnder(RplRef& RHS);
 
-    /// Inclusion: this c= rhs
-    bool isIncludedIn(RplRef& rhs) {
-      OSv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef]("
-          << this->toString() << ", " << rhs.toString() << ")\n";
-      if (rhs.isEmpty()) {
-        /// Root c= Root
-        if (isEmpty()) return true;
-        /// RPL c=? Root and RPL!=Root ==> not included
-        else /*!isEmpty()*/ return false;
-      } else { /// rhs is not empty
-        /// R c= R':* <==  R <= R'
-        if (*rhs.getLastElement() == *STARRplElmt) {
-          OSv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
-          return isUnder(rhs.stripLast());
-        }
-        ///   R:r c= R':r    <==  R <= R'
-        /// R:[i] c= R':[i]  <==  R <= R'
-        if (!isEmpty()) {
-          if ( *getLastElement() == *rhs.getLastElement() )
-            return stripLast().isIncludedIn(rhs.stripLast());
-        }
-        return false;
-      }
-    }
+    /// \brief Inclusion: true  iff  this c= rhs
+    bool isIncludedIn(RplRef& RHS);
+
   }; /// end class RplRef
   ///////////////////////////////////////////////////////////////////////////
   public:

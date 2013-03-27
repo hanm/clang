@@ -25,6 +25,17 @@
 using namespace clang;
 using namespace clang::asap;
 
+/// Static Constants
+const StarRplElement *SymbolTable::STAR_RplElmt =
+    new StarRplElement();
+const SpecialRplElement *SymbolTable::ROOT_RplElmt =
+    new SpecialRplElement("Root");
+const SpecialRplElement *SymbolTable::LOCAL_RplElmt =
+    new SpecialRplElement("Local");
+const Effect *SymbolTable::WritesLocal =
+    new Effect(Effect::EK_WritesEffect,new Rpl(*LOCAL_RplElmt));
+
+
 SymbolTable::SymbolTable() {
   BuiltinDefaultRegionParameterVec =
     new ParameterVector(new ParamRplElement("P"));

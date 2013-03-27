@@ -36,6 +36,9 @@ class RegionNameSet;
 class EffectSummary;
 class NamedRplElement;
 class ParamRplElement;
+class StarRplElement;
+class SpecialRplElement;
+class Effect;
 
 class SymbolTable {
   class SymbolTableEntry;
@@ -51,6 +54,13 @@ public:
   SymbolTable();
   virtual ~SymbolTable();
 
+  // Static Constants
+  static const StarRplElement *STAR_RplElmt;
+  static const SpecialRplElement *ROOT_RplElmt;
+  static const SpecialRplElement *LOCAL_RplElmt;
+  static const Effect *WritesLocal;
+
+  // Functions
   bool hasType(const Decl* D) const;
   bool hasParameterVector(const Decl* D) const;
   bool hasRegionNameSet(const Decl* D) const;

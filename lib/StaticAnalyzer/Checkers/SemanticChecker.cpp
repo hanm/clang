@@ -538,7 +538,7 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
   /// B.2 Check ReturnType
   bool Success = checkRpls<RegionArgAttr>(D); // ReturnType
   if (Success) {
-    Rpl Local(*LOCALRplElmt);
+    Rpl Local(*SymbolTable::LOCAL_RplElmt);
     checkTypeRegionArgs(D, &Local); // check return type
   }
 
@@ -649,7 +649,7 @@ bool ASaPSemanticCheckerTraverser::VisitVarDecl(VarDecl *D) {
 
   /// C. Check validity of annotations
   if (Success) {
-    Rpl Local(*LOCALRplElmt);
+    Rpl Local(*SymbolTable::LOCAL_RplElmt);
     checkTypeRegionArgs(D, &Local);
   }
 
