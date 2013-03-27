@@ -210,7 +210,7 @@ public:
     bool InitiallySuppressed = false;
     if (Options.shouldSuppressNullReturnPaths())
       if (Optional<Loc> RetLoc = RetVal.getAs<Loc>())
-        InitiallySuppressed = !State->assume(*RetLoc, true);
+        InitiallySuppressed = State->isNull(*RetLoc).isConstrainedTrue();
 
     BR.markInteresting(CalleeContext);
     BR.addVisitor(new ReturnVisitor(CalleeContext, InitiallySuppressed));
@@ -270,7 +270,7 @@ public:
 
     // If we can't prove the return value is 0, just mark it interesting, and
     // make sure to track it into any further inner functions.
-    if (State->assume(V.castAs<DefinedSVal>(), true)) {
+    if (!State->isNull(V).isConstrainedTrue()) {
       BR.markInteresting(V);
       ReturnVisitor::addVisitorIfNecessary(N, RetE, BR);
       return 0;
@@ -357,7 +357,7 @@ public:
         continue;
 
       // Is it possible for this argument to be non-null?
-      if (State->assume(*ArgV, true))
+      if (!State->isNull(*ArgV).isConstrainedTrue())
         continue;
 
       if (bugreporter::trackNullOrUndefValue(N, ArgE, BR, /*IsArg=*/true))
@@ -650,30 +650,36 @@ const char *TrackConstraintBRVisitor::getTag() {
   return "TrackConstraintBRVisitor";
 }
 
+bool TrackConstraintBRVisitor::isUnderconstrained(const ExplodedNode *N) const {
+  if (IsZeroCheck)
+    return N->getState()->isNull(Constraint).isUnderconstrained();
+  return N->getState()->assume(Constraint, !Assumption);
+}
+
 PathDiagnosticPiece *
 TrackConstraintBRVisitor::VisitNode(const ExplodedNode *N,
                                     const ExplodedNode *PrevN,
                                     BugReporterContext &BRC,
                                     BugReport &BR) {
-  if (isSatisfied)
+  if (IsSatisfied)
     return NULL;
 
   // Check if in the previous state it was feasible for this constraint
   // to *not* be true.
-  if (PrevN->getState()->assume(Constraint, !Assumption)) {
+  if (isUnderconstrained(PrevN)) {
 
-    isSatisfied = true;
+    IsSatisfied = true;
 
     // As a sanity check, make sure that the negation of the constraint
     // was infeasible in the current state.  If it is feasible, we somehow
     // missed the transition point.
-    if (N->getState()->assume(Constraint, !Assumption))
+    if (isUnderconstrained(N))
       return NULL;
 
     // We found the transition point for the constraint.  We now need to
     // pretty-print the constraint. (work-in-progress)
-    std::string sbuf;
-    llvm::raw_string_ostream os(sbuf);
+    SmallString<64> sbuf;
+    llvm::raw_svector_ostream os(sbuf);
 
     if (Constraint.getAs<Loc>()) {
       os << "Assuming pointer value is ";
@@ -701,6 +707,14 @@ TrackConstraintBRVisitor::VisitNode(const ExplodedNode *N,
 SuppressInlineDefensiveChecksVisitor::
 SuppressInlineDefensiveChecksVisitor(DefinedSVal Value, const ExplodedNode *N)
   : V(Value), IsSatisfied(false), IsTrackingTurnedOn(false) {
+
+    // Check if the visitor is disabled.
+    SubEngine *Eng = N->getState()->getStateManager().getOwningEngine();
+    assert(Eng && "Cannot file a bug report without an owning engine");
+    AnalyzerOptions &Options = Eng->getAnalysisManager().options;
+    if (!Options.shouldSuppressInlinedDefensiveChecks())
+      IsSatisfied = true;
+
     assert(N->getState()->isNull(V).isConstrainedTrue() &&
            "The visitor only tracks the cases where V is constrained to 0");
 }
@@ -728,11 +742,6 @@ SuppressInlineDefensiveChecksVisitor::VisitNode(const ExplodedNode *Succ,
     if (Succ->getState()->isNull(V).isConstrainedTrue())
       IsTrackingTurnedOn = true;
   if (!IsTrackingTurnedOn)
-    return 0;
-
-  AnalyzerOptions &Options =
-  BRC.getBugReporter().getEngine().getAnalysisManager().options;
-  if (!Options.shouldSuppressInlinedDefensiveChecks())
     return 0;
 
   // Check if in the previous state it was feasible for this value
@@ -772,26 +781,38 @@ static const MemRegion *getLocationRegionIfReference(const Expr *E,
   return 0;
 }
 
+static const Expr *peelOffOuterExpr(const Stmt *S,
+                                    const ExplodedNode *N) {
+  if (const Expr *Ex = dyn_cast<Expr>(S)) {
+    Ex = Ex->IgnoreParenCasts();
+    if (const ExprWithCleanups *EWC = dyn_cast<ExprWithCleanups>(Ex))
+      return EWC->getSubExpr();
+    if (const OpaqueValueExpr *OVE = dyn_cast<OpaqueValueExpr>(Ex))
+      return OVE->getSourceExpr();
+
+    // Peel off the ternary operator.
+    if (const ConditionalOperator *CO = dyn_cast<ConditionalOperator>(Ex)) {
+      ProgramStateRef State = N->getState();
+      SVal CondVal = State->getSVal(CO->getCond(), N->getLocationContext());
+      if (State->isNull(CondVal).isConstrainedTrue()) {
+        return CO->getTrueExpr();
+      } else {
+        assert(State->isNull(CondVal).isConstrainedFalse());
+        return CO->getFalseExpr();
+      }
+    }
+  }
+  return 0;
+}
+
 bool bugreporter::trackNullOrUndefValue(const ExplodedNode *N,
                                         const Stmt *S,
                                         BugReport &report, bool IsArg) {
   if (!S || !N)
     return false;
 
-  // Peel off OpaqueValueExpr.
-  if (const OpaqueValueExpr *OVE = dyn_cast<OpaqueValueExpr>(S))
-    S = OVE->getSourceExpr();
-
-  // Peel off the ternary operator.
-  if (const ConditionalOperator *CO = dyn_cast<ConditionalOperator>(S)) {
-    ProgramStateRef State = N->getState();
-    SVal CondVal = State->getSVal(CO->getCond(), N->getLocationContext());
-    if (State->isNull(CondVal).isConstrainedTrue()) {
-      S = CO->getTrueExpr();
-    } else {
-      assert(State->isNull(CondVal).isConstrainedFalse());
-      S =  CO->getFalseExpr();
-    }
+  if (const Expr *Ex = peelOffOuterExpr(S, N)) {
+    S = Ex;
   }
 
   const Expr *Inner = 0;
@@ -960,7 +981,7 @@ PathDiagnosticPiece *NilReceiverBRVisitor::VisitNode(const ExplodedNode *N,
                                                      const ExplodedNode *PrevN,
                                                      BugReporterContext &BRC,
                                                      BugReport &BR) {
-  Optional<PostStmt> P = N->getLocationAs<PostStmt>();
+  Optional<PreStmt> P = N->getLocationAs<PreStmt>();
   if (!P)
     return 0;
   const ObjCMessageExpr *ME = P->getStmtAs<ObjCMessageExpr>();
@@ -969,13 +990,10 @@ PathDiagnosticPiece *NilReceiverBRVisitor::VisitNode(const ExplodedNode *N,
   const Expr *Receiver = ME->getInstanceReceiver();
   if (!Receiver)
     return 0;
+
   ProgramStateRef state = N->getState();
-  const SVal &V = state->getSVal(Receiver, N->getLocationContext());
-  Optional<DefinedOrUnknownSVal> DV = V.getAs<DefinedOrUnknownSVal>();
-  if (!DV)
-    return 0;
-  state = state->assume(*DV, true);
-  if (state)
+  SVal V = state->getSVal(Receiver, N->getLocationContext());
+  if (!state->isNull(V).isConstrainedTrue())
     return 0;
 
   // The receiver was nil, and hence the method was skipped.

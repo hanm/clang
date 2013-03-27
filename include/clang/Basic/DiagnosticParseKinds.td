@@ -406,6 +406,8 @@ def err_missing_catch_finally : Error<
 def err_objc_concat_string : Error<"unexpected token after Objective-C string">;
 def err_expected_objc_container : Error<
   "'@end' must appear in an Objective-C context">;
+def err_objc_unexpected_atend : Error<
+  "'@end' appears where closing brace '}' is expected">;
 def error_property_ivar_decl : Error<
   "property synthesize requires specification of an ivar">;
 def err_synthesized_property_name : Error<
@@ -770,7 +772,18 @@ def err_seh___except_filter : Error<
 
 def err_seh___finally_block : Error<
   "%0 only allowed in __finally block">;
-  
+
+// OpenMP support.
+def warn_pragma_omp_ignored : Warning <
+  "unexpected '#pragma omp ...' in program">, InGroup<SourceUsesOpenMP>, DefaultIgnore;
+def warn_omp_extra_tokens_at_eol : Warning <
+  "extra tokens at end of '#pragma omp %0' are ignored">,
+  InGroup<ExtraTokens>;
+def err_omp_unknown_directive : Error <
+  "expected an OpenMP directive">;
+def err_omp_unexpected_directive : Error <
+  "unexpected OpenMP directive '#pragma omp %0'">;
+
 } // end of Parse Issue category.
 
 let CategoryName = "Modules Issue" in {

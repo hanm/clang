@@ -132,6 +132,7 @@ namespace clang {
   class ObjCMethodDecl;
   class ObjCPropertyDecl;
   class ObjCProtocolDecl;
+  class OMPThreadPrivateDecl;
   class OverloadCandidateSet;
   class OverloadExpr;
   class ParenListExpr;
@@ -1357,7 +1358,7 @@ public:
   bool diagnoseQualifiedDeclaration(CXXScopeSpec &SS, DeclContext *DC,
                                     DeclarationName Name,
                                     SourceLocation Loc);
-  void DiagnoseFunctionSpecifiers(Declarator& D);
+  void DiagnoseFunctionSpecifiers(const DeclSpec &DS);
   void CheckShadow(Scope *S, VarDecl *D, const LookupResult& R);
   void CheckShadow(Scope *S, VarDecl *D);
   void CheckCastAlign(Expr *Op, QualType T, SourceRange TRange);
@@ -1516,7 +1517,8 @@ public:
                                    DeclSpec &DS);
   Decl *ParsedFreeStandingDeclSpec(Scope *S, AccessSpecifier AS,
                                    DeclSpec &DS,
-                                   MultiTemplateParamsArg TemplateParams);
+                                   MultiTemplateParamsArg TemplateParams,
+                                   bool IsExplicitInstantiation = false);
 
   Decl *BuildAnonymousStructOrUnion(Scope *S, DeclSpec &DS,
                                     AccessSpecifier AS,
@@ -2636,6 +2638,7 @@ public:
   }
 
   StmtResult ActOnExprStmt(ExprResult Arg);
+  StmtResult ActOnExprStmtError();
 
   StmtResult ActOnNullStmt(SourceLocation SemiLoc,
                            bool HasLeadingEmptyMacro = false);
@@ -3020,7 +3023,8 @@ public:
   ExprResult BuildDeclRefExpr(ValueDecl *D, QualType Ty,
                               ExprValueKind VK,
                               const DeclarationNameInfo &NameInfo,
-                              const CXXScopeSpec *SS = 0);
+                              const CXXScopeSpec *SS = 0,
+                              NamedDecl *FoundD = 0);
   ExprResult
   BuildAnonymousStructUnionMemberReference(const CXXScopeSpec &SS,
                                            SourceLocation nameLoc,
@@ -3053,7 +3057,7 @@ public:
                                       bool NeedsADL);
   ExprResult BuildDeclarationNameExpr(const CXXScopeSpec &SS,
                                       const DeclarationNameInfo &NameInfo,
-                                      NamedDecl *D);
+                                      NamedDecl *D, NamedDecl *FoundD = 0);
 
   ExprResult BuildLiteralOperatorCall(LookupResult &R,
                                       DeclarationNameInfo &SuffixInfo,
@@ -3597,6 +3601,11 @@ public:
   ImplicitExceptionSpecification
   ComputeDefaultedDtorExceptionSpec(CXXMethodDecl *MD);
 
+  /// \brief Determine what sort of exception specification an inheriting
+  /// constructor of a class will have.
+  ImplicitExceptionSpecification
+  ComputeInheritingCtorExceptionSpec(CXXMethodDecl *MD);
+
   /// \brief Evaluate the implicit exception specification for a defaulted
   /// special member function.
   void EvaluateImplicitExceptionSpec(SourceLocation Loc, CXXMethodDecl *MD);
@@ -3649,11 +3658,15 @@ public:
   void AdjustDestructorExceptionSpec(CXXRecordDecl *ClassDecl,
                                      CXXDestructorDecl *Destructor);
 
-  /// \brief Declare all inherited constructors for the given class.
+  /// \brief Declare all inheriting constructors for the given class.
   ///
-  /// \param ClassDecl The class declaration into which the inherited
+  /// \param ClassDecl The class declaration into which the inheriting
   /// constructors will be added.
-  void DeclareInheritedConstructors(CXXRecordDecl *ClassDecl);
+  void DeclareInheritingConstructors(CXXRecordDecl *ClassDecl);
+
+  /// \brief Define the specified inheriting constructor.
+  void DefineInheritingConstructor(SourceLocation UseLoc,
+                                   CXXConstructorDecl *Constructor);
 
   /// \brief Declare the implicit copy constructor for the given class.
   ///
@@ -3742,6 +3755,10 @@ public:
                                SmallVectorImpl<Expr*> &ConvertedArgs,
                                bool AllowExplicit = false,
                                bool IsListInitialization = false);
+
+  ParsedType getInheritingConstructorName(CXXScopeSpec &SS,
+                                          SourceLocation NameLoc,
+                                          IdentifierInfo &Name);
 
   ParsedType getDestructorName(SourceLocation TildeLoc,
                                IdentifierInfo &II, SourceLocation NameLoc,
@@ -6581,6 +6598,18 @@ public:
   void AddAlignedAttr(SourceRange AttrRange, Decl *D, TypeSourceInfo *T,
                       unsigned SpellingListIndex, bool IsPackExpansion);
 
+  // OpenMP directives and clauses.
+
+  /// \brief Called on well-formed '#pragma omp threadprivate'.
+  DeclGroupPtrTy ActOnOpenMPThreadprivateDirective(
+                        SourceLocation Loc,
+                        Scope *CurScope,
+                        ArrayRef<DeclarationNameInfo> IdList);
+  /// \brief Build a new OpenMPThreadPrivateDecl and check its correctness.
+  OMPThreadPrivateDecl *CheckOMPThreadPrivateDecl(
+                        SourceLocation Loc,
+                        ArrayRef<DeclRefExpr *> VarList);
+
   /// \brief The kind of conversion being performed.
   enum CheckedConversionKind {
     /// \brief An implicit conversion.
@@ -7015,6 +7044,11 @@ public:
   /// \brief If the given expression involves a message send to a method
   /// with a related result type, emit a note describing what happened.
   void EmitRelatedResultTypeNote(const Expr *E);
+
+  /// \brief Given that we had incompatible pointer types in a return
+  /// statement, check whether we're in a method with a related result
+  /// type, and if so, emit a note describing what happened.
+  void EmitRelatedResultTypeNoteForReturn(QualType destType);
 
   /// CheckBooleanCondition - Diagnose problems involving the use of
   /// the given expression as a boolean condition (e.g. in an if
