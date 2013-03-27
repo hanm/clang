@@ -135,8 +135,7 @@ class ASaPSemanticCheckerTraverser :
       const llvm::StringRef ElmtNames = getRegionOrParamName(*I);
 
       llvm::SmallVector<StringRef, 8> RplElmtVec;
-      //ElmtNames.split(RplElmtVec, Rpl::RPL_LIST_SEPARATE_CHARACTER);
-      ElmtNames.split(RplElmtVec, ",");
+      ElmtNames.split(RplElmtVec, Rpl::RPL_LIST_SEPARATOR);
       for (size_t Idx = 0 ; Idx != RplElmtVec.size(); ++Idx) {
         llvm::StringRef Name = RplElmtVec[Idx].trim();
         if (isValidRegionName(Name)) {

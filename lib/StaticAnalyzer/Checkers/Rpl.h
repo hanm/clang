@@ -160,8 +160,8 @@ class Rpl {
 public:
   /// Static Constants
   static const char RPL_SPLIT_CHARACTER = ':';
-  // TODO static const char *RPL_LIST_SEPARATE_STRING = ",";
-  // TODO static const char *RPL_NAME_SPEC_STRING = "::";
+  static const StringRef RPL_LIST_SEPARATOR;
+  static const StringRef RPL_NAME_SPEC;
 
   /// Types
 #ifndef RPL_VECTOR_SIZE

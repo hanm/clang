@@ -384,8 +384,7 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *A,
     std::pair<StringRef,StringRef> Pair = Rpl::splitRpl(RplStr);
     StringRef Head = Pair.first;
     llvm::SmallVector<StringRef, 8> Vec;
-    //Head.split(Vec, Rpl::RPL_NAME_SPEC_STRING);
-    Head.split(Vec, "::");
+    Head.split(Vec, Rpl::RPL_NAME_SPEC);
     OS << "DEBUG:: Vec.size = " << Vec.size()
        << ", Vec.back() = " << Vec.back() <<"\n";
 

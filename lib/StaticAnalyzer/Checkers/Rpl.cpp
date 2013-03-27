@@ -40,6 +40,11 @@ std::pair<StringRef, StringRef> clang::asap::Rpl::splitRpl(StringRef &String) {
 
 namespace clang {
 namespace asap {
+/// Static
+//const std::string RPL_LIST_SEPARATOR = ",";
+const StringRef Rpl::RPL_LIST_SEPARATOR = ",";
+const StringRef Rpl::RPL_NAME_SPEC = "::";
+
 
 const StarRplElement *STARRplElmt = new StarRplElement();
 const SpecialRplElement *ROOTRplElmt = new SpecialRplElement("Root");
