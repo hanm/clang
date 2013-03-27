@@ -44,7 +44,7 @@ struct [[asap::param("P")]] link {
     [[asap::param("Q"), asap::reads("Q")]]
     link(const point &pos_in[[asap::arg("Q")]])
         :
-        //pos(pos_in),
+        pos(pos_in),
         next(nullptr) {}
     };
 
