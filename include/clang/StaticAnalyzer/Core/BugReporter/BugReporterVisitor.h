@@ -129,12 +129,14 @@ class TrackConstraintBRVisitor
   : public BugReporterVisitorImpl<TrackConstraintBRVisitor>
 {
   DefinedSVal Constraint;
-  const bool Assumption;
-  bool isSatisfied;
+  bool Assumption;
+  bool IsSatisfied;
+  bool IsZeroCheck;
 
 public:
   TrackConstraintBRVisitor(DefinedSVal constraint, bool assumption)
-  : Constraint(constraint), Assumption(assumption), isSatisfied(false) {}
+  : Constraint(constraint), Assumption(assumption), IsSatisfied(false),
+    IsZeroCheck(!Assumption && Constraint.getAs<Loc>()) {}
 
   void Profile(llvm::FoldingSetNodeID &ID) const;
 
@@ -146,11 +148,17 @@ public:
                                  const ExplodedNode *PrevN,
                                  BugReporterContext &BRC,
                                  BugReport &BR);
+
+private:
+  /// Checks if the constraint is valid in the current state.
+  bool isUnderconstrained(const ExplodedNode *N) const;
+
 };
 
+/// \class NilReceiverBRVisitor
+/// \brief Prints path notes when a message is sent to a nil receiver.
 class NilReceiverBRVisitor
-  : public BugReporterVisitorImpl<NilReceiverBRVisitor>
-{
+  : public BugReporterVisitorImpl<NilReceiverBRVisitor> {
 public:
   void Profile(llvm::FoldingSetNodeID &ID) const {
     static int x = 0;
