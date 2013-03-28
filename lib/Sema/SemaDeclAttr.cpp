@@ -3997,9 +3997,6 @@ static void handleOpenCLKernelAttr(Sema &S, Decl *D, const AttributeList &Attr){
   D->addAttr(::new (S.Context) OpenCLKernelAttr(Attr.getRange(), S.Context));
 }
 
-<<<<<<< HEAD
-bool Sema::CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC,
-=======
 static void handleOpenCLImageAccessAttr(Sema &S, Decl *D, const AttributeList &Attr){
   assert(!Attr.isInvalid());
 
@@ -4017,7 +4014,6 @@ static void handleOpenCLImageAccessAttr(Sema &S, Decl *D, const AttributeList &A
 }
 
 bool Sema::CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC, 
->>>>>>> 87d2a37bde2890745a2d30d27985e354d91c2556
                                 const FunctionDecl *FD) {
   if (attr.isInvalid())
     return true;
