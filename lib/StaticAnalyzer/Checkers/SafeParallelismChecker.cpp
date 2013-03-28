@@ -97,7 +97,7 @@ public:
       Stmt* S = Definition->getBody();
       assert(S);
 
-      StmtVisitorT StmtVisitor(BR, Ctx, Mgr, AC, OS, SymT, Definition, S);
+      StmtVisitorT StmtVisitor(BR, Ctx, Mgr, AC, OS, SymT, Definition, S, true);
 
       FatalError |= StmtVisitor.encounteredFatalError();
     }

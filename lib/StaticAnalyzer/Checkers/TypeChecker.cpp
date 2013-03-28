@@ -34,7 +34,8 @@ AssignmentCheckerVisitor::AssignmentCheckerVisitor(
   raw_ostream &OS,
   SymbolTable &SymT,
   const FunctionDecl *Def,
-  Stmt *S
+  Stmt *S,
+  bool VisitCXXInitializer
   ) : BR(BR),
   Ctx(Ctx),
   Mgr(Mgr),
@@ -45,12 +46,19 @@ AssignmentCheckerVisitor::AssignmentCheckerVisitor(
   FatalError(false), Type(0), SubV(0) {
 
     OS << "DEBUG:: ******** INVOKING AssignmentCheckerVisitor...\n";
+    OS << "DEBUG:: Stmt:";
+    S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\nDEBUG:: Def:\n";
     Def->print(OS, Ctx.getPrintingPolicy());
-    //S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
-    if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
-      // Also visit initialization lists
-      helperVisitCXXConstructorDecl(D);
+    Def->dump(OS);
+    OS << "\n";
+
+    if (VisitCXXInitializer) {
+      if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
+        // Also visit initialization lists
+        helperVisitCXXConstructorDecl(D);
+      }
     }
     Visit(S);
     OS << "DEBUG:: ******** DONE INVOKING AssignmentCheckerVisitor ***\n";
@@ -122,44 +130,44 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
   S->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << ")\n";
   for(DeclGroupRef::const_iterator I = S->decl_begin(), E = S->decl_end();
-    I != E; ++I) {
-      if (VarDecl *VD = dyn_cast<VarDecl>(*I)) {
-        if (VD->hasInit()) {
-          Expr *Init = VD->getInit();
+      I != E; ++I) {
+    if (VarDecl *VD = dyn_cast<VarDecl>(*I)) {
+      if (VD->hasInit()) {
+        Expr *Init = VD->getInit();
 
-          OS << "DEBUG:: TypecheckDeclWithInit: Decl = ";
-          VD->print(OS,  Ctx.getPrintingPolicy());
-          OS << "\n Init Expr = ";
-          Init->printPretty(OS, 0, Ctx.getPrintingPolicy());
-          OS << "\n";
-          Init->dump(OS, BR.getSourceManager());
+        OS << "DEBUG:: TypecheckDeclWithInit: Decl = ";
+        VD->print(OS,  Ctx.getPrintingPolicy());
+        OS << "\n Init Expr = ";
+        Init->printPretty(OS, 0, Ctx.getPrintingPolicy());
+        OS << "\n";
+        Init->dump(OS, BR.getSourceManager());
 
-          OS << "DEBUG:: IsDirectInit = "
-            << (VD->isDirectInit()?"true":"false")
-            << "\n";
-          OS << "DEBUG:: Init Style: ";
-          switch(VD->getInitStyle()) {
-          case VarDecl::CInit:
-            OS << "CInit\n";
-            helperTypecheckDeclWithInit(VD, VD->getInit());
-            break;
-          case VarDecl::ListInit:
-            OS << "ListInit\n";
-            // Intentonally falling through (i.e., no break stmt).
-          case VarDecl::CallInit:
-            OS << "CallInit\n";
-            CXXConstructExpr *Exp = dyn_cast<CXXConstructExpr>(VD->getInit());
-            assert(Exp);
-            assert(!SubV);
-            SubV = new SubstitutionVector();
-            // TODO buildSubstitutionsCallExpr(Exp, *SubV);
-            typecheckCXXConstructExpr(VD, Exp, *SubV);
-            delete SubV;
-            SubV = 0;
-            break;
-          }
+        OS << "DEBUG:: IsDirectInit = "
+           << (VD->isDirectInit()?"true":"false")
+           << "\n";
+        OS << "DEBUG:: Init Style: ";
+        switch(VD->getInitStyle()) {
+        case VarDecl::CInit:
+          OS << "CInit\n";
+          helperTypecheckDeclWithInit(VD, VD->getInit());
+          break;
+        case VarDecl::ListInit:
+          OS << "ListInit\n";
+          // Intentonally falling through (i.e., no break stmt).
+        case VarDecl::CallInit:
+          OS << "CallInit\n";
+          CXXConstructExpr *Exp = dyn_cast<CXXConstructExpr>(VD->getInit());
+          assert(Exp);
+          assert(!SubV);
+          SubV = new SubstitutionVector();
+          buildSubstitutionsCXXConstructExpr(Exp, *SubV);
+          typecheckCXXConstructExpr(VD, Exp, *SubV);
+          delete SubV;
+          SubV = 0;
+          break;
         }
       }
+    }
   } // end for each declaration
 }
 
@@ -342,6 +350,19 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   delete Type;
   Type = 0;
 }
+void AssignmentCheckerVisitor::
+VisitCXXConstructExpr(CXXConstructExpr *Exp) {
+  OS << "DEBUG:: Visiting CXXConstructExpr: ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  assert(!SubV);
+  SubV = new SubstitutionVector();
+  buildSubstitutionsCXXConstructExpr(Exp, *SubV);
+  typecheckParamAssignments(Exp->getConstructor(),
+                            Exp->arg_begin(), Exp->arg_end(), *SubV);
+  delete SubV;
+  SubV = 0;
+}
 
 void AssignmentCheckerVisitor::
 helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init) {
@@ -413,7 +434,7 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
 }
 
 void AssignmentCheckerVisitor::
-typecheckCXXConstructExpr(VarDecl *D,
+typecheckCXXConstructExpr(VarDecl *VarD,
                           CXXConstructExpr *Exp,
                           SubstitutionVector &SubV) {
   CXXConstructorDecl *ConstrDecl =  Exp->getConstructor();
@@ -426,7 +447,7 @@ typecheckCXXConstructExpr(VarDecl *D,
   if (PV) {
     assert(PV->size() == 1); // until we support multiple region params
     const ParamRplElement *ParamEl = PV->getParamAt(0);
-    const ASaPType *T = SymT.getType(D);
+    const ASaPType *T = SymT.getType(VarD);
     if (T) {
       const Rpl *R = T->getSubstArg();
       Substitution Sub(ParamEl, R);
@@ -436,6 +457,21 @@ typecheckCXXConstructExpr(VarDecl *D,
   }
   typecheckParamAssignments(ConstrDecl, Exp->arg_begin(), Exp->arg_end(), SubV);
   OS << "DEBUG:: DONE with typecheckCXXConstructExpr\n";
+
+  // Now set Type to the return type of this call
+  OS << "DEBUG:: ConstrDecl:";
+  ConstrDecl->print(OS, Ctx.getPrintingPolicy());
+  OS << "\n";
+
+  const ASaPType *RetTyp = SymT.getType(VarD);
+  if (RetTyp) {
+    OS << "DEBUG:: ConstrDecl Return Type = " << RetTyp->toString() << "\n";
+
+    delete Type;
+    // set Type
+    Type = new ASaPType(*RetTyp);
+    Type->substitute(&SubV);
+  }
 }
 
 void AssignmentCheckerVisitor::
@@ -514,6 +550,24 @@ buildSubstitutionsCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   //assert(FD);
   if (!FD)
     return;
+  const ParameterVector *ParamV = SymT.getParameterVector(FD);
+  if (!ParamV)
+    return; // The function does not have region parameters->nothing to do
+  buildParamSubstitutions(FD, Exp->arg_begin(), Exp->arg_end(), *ParamV, SubV);
+}
+
+void AssignmentCheckerVisitor::
+buildSubstitutionsCXXConstructExpr(CXXConstructExpr *Exp,
+                                   SubstitutionVector &SubV) {
+  OS << "DEBUG:: buildSubstitutionsCXXConstructExpr: ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  OS << "DEBUG:: Expr:";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  //Exp->dump(OS, BR.getSourceManager());
+  OS << "\n";
+
+  CXXConstructorDecl *FD =  Exp->getConstructor();
   const ParameterVector *ParamV = SymT.getParameterVector(FD);
   if (!ParamV)
     return; // The function does not have region parameters->nothing to do
@@ -690,8 +744,10 @@ void TypeBuilderVisitor::VisitChildren(Stmt *S) {
 
 void TypeBuilderVisitor::VisitStmt(Stmt *S) {
   OS << "DEBUG:: GENERIC:: Visiting Stmt/Expr = \n";
-  S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  S->dump(OS, BR.getSourceManager());
+  //S->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
+
   VisitChildren(S);
 }
 
@@ -906,7 +962,22 @@ VisitBinaryConditionalOperator(BinaryConditionalOperator *Exp) {
   // TODO?
 }
 
-void TypeBuilderVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
+//void TypeBuilderVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
+//}
+
+void TypeBuilderVisitor::VisitCXXConstructExpr(CXXConstructExpr *Exp) {
+  OS << "DEBUG:: VisitCXXConstructExpr:";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  // Call AssignmentChecker recursively
+  AssignmentCheckerVisitor
+    ACV(BR, Ctx, Mgr, AC, OS, SymT, Def, Exp);
+  // CXXConstruct Expr return Types without region constraints.
+  // The region is fresh. Think of it as an object with
+  // parametric region that gets unified based on the region args
+  // of the variable that gets initialized. It's like saying that
+  // a constructor returns T<P>.
+
 }
 
 void TypeBuilderVisitor::VisitCallExpr(CallExpr *Exp) {
@@ -925,6 +996,14 @@ void TypeBuilderVisitor::VisitCallExpr(CallExpr *Exp) {
     setType(T);
   }
 
+}
+
+void TypeBuilderVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr *Exp) {
+  // Visit index expression in case we need to typecheck assignments
+  AssignmentCheckerVisitor
+    ACV(BR, Ctx, Mgr, AC, OS, SymT, Def, Exp->getIdx());
+  // For now ignore the index type
+  Visit(Exp->getBase());
 }
 
 void TypeBuilderVisitor::VisitReturnStmt(ReturnStmt *Ret) {

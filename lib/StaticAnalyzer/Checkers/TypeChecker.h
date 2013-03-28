@@ -67,7 +67,9 @@ public:
     raw_ostream &OS,
     SymbolTable &SymT,
     const FunctionDecl *Def,
-    Stmt *S
+    Stmt *S,
+    bool VisitCXXInitializer = false  // true when called on the function,
+                                      // false when called recursively (default).
     );
 
   ~AssignmentCheckerVisitor();
@@ -81,12 +83,12 @@ public:
 
   void VisitBinAssign(BinaryOperator *E);
   void VisitReturnStmt(ReturnStmt *Ret);
-
-  void VisitCallExpr(CallExpr *Exp);
+  void VisitCXXConstructExpr(CXXConstructExpr *E);
+  void VisitCallExpr(CallExpr *E);
   void VisitMemberExpr(MemberExpr *Exp);
-  void VisitDesignatedInitExpr(DesignatedInitExpr *Exp);
-  void VisitCXXScalarValueInitExpr(CXXScalarValueInitExpr *Exp);
-  void VisitInitListExpr(InitListExpr *Exp);
+  void VisitDesignatedInitExpr(DesignatedInitExpr *E);
+  void VisitCXXScalarValueInitExpr(CXXScalarValueInitExpr *E);
+  void VisitInitListExpr(InitListExpr *E);
   void VisitDeclStmt(DeclStmt *S);
 
 private:
@@ -110,7 +112,8 @@ private:
                                 const ParameterVector &ParamV,
                                 SubstitutionVector &SubV);
   void buildSubstitutionsCallExpr(CallExpr *Exp, SubstitutionVector &SubV);
-
+  void buildSubstitutionsCXXConstructExpr(CXXConstructExpr *Exp,
+                                          SubstitutionVector &SubV);
   void helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init);
   /// \brief Issues Warning: '<str>' <bugName> on Declaration.
   void helperEmitDeclarationWarning(const Decl *D,
@@ -183,18 +186,20 @@ public:
 
   void VisitChildren(Stmt *S);
   void VisitStmt(Stmt *S);
-  void VisitUnaryAddrOf(UnaryOperator *Exp);
+  void VisitUnaryAddrOf(UnaryOperator *E);
   void VisitUnaryDeref(UnaryOperator *E);
   void VisitDeclRefExpr(DeclRefExpr *E);
   void VisitCXXThisExpr(CXXThisExpr *E);
-  void VisitMemberExpr(MemberExpr *Exp);
+  void VisitMemberExpr(MemberExpr *E);
   void helperBinAddSub(Expr *LHS, Expr *RHS);
   void VisitBinaryOperator(BinaryOperator *S);
-  void VisitBinAssign(BinaryOperator *Exp);
-  void VisitConditionalOperator(ConditionalOperator *Exp);
-  void VisitBinaryConditionalOperator(BinaryConditionalOperator *Exp);
-  void VisitCXXNewExpr(CXXNewExpr *Exp);
-  void VisitCallExpr(CallExpr *Exp);
+  void VisitBinAssign(BinaryOperator *E);
+  void VisitConditionalOperator(ConditionalOperator *E);
+  void VisitBinaryConditionalOperator(BinaryConditionalOperator *E);
+  //void VisitCXXNewExpr(CXXNewExpr *Exp);
+  void VisitCXXConstructExpr(CXXConstructExpr *E);
+  void VisitCallExpr(CallExpr *E);
+  void VisitArraySubscriptExpr(ArraySubscriptExpr *E);
   void VisitReturnStmt(ReturnStmt *Ret);
 }; // End class TypeBuilderVisitor.
 

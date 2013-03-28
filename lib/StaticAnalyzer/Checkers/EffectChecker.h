@@ -84,8 +84,9 @@ public:
     raw_ostream &OS,
     SymbolTable &SymT,
     const FunctionDecl* Def,
-    Stmt *S
-    );
+    Stmt *S,
+    bool VisitCXXInitializer = false,
+    bool HasWriteSemantics = false );
 
   /// Getters
   inline bool getIsCoveredBySummary() { return IsCoveredBySummary; }
@@ -93,7 +94,7 @@ public:
 
   void VisitChildren(Stmt *S);
   void VisitStmt(Stmt *S);
-  void VisitMemberExpr(MemberExpr *Exp);
+  void VisitMemberExpr(MemberExpr *E);
   void VisitUnaryAddrOf(UnaryOperator *E);
   void VisitUnaryDeref(UnaryOperator *E);
   void VisitPrePostIncDec(UnaryOperator *E);
@@ -102,16 +103,19 @@ public:
   void VisitUnaryPreInc(UnaryOperator *E);
   void VisitUnaryPreDec(UnaryOperator *E);
   void VisitReturnStmt(ReturnStmt *Ret);
-  void VisitDeclRefExpr(DeclRefExpr *Exp);
+  void VisitDeclRefExpr(DeclRefExpr *E);
   void VisitCXXThisExpr(CXXThisExpr *E);
   void VisitCompoundAssignOperator(CompoundAssignOperator *E);
   void VisitBinAssign(BinaryOperator *E);
-  void VisitCallExpr(CallExpr *E);
+  void VisitCallExpr(CallExpr *Exp);
   /// \brief Visit non-static C++ member function call.
   void VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp);
   /// \brief Visits a C++ overloaded operator call where the operator
   /// is implemented as a non-static member function.
   void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp);
+
+  void VisitArraySubscriptExpr(ArraySubscriptExpr *Exp);
+
 }; // End class StmtVisitor.
 } // End namespace asap.
 } // End namespace clang.

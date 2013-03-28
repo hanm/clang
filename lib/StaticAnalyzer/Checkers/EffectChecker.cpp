@@ -68,7 +68,7 @@ int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
 
   assert(D);
   const ASaPType *T = SymT.getType(D);
-  if (!T) // e.g., method returning null
+  if (!T) // e.g., method returning void
     return 0;
 
   int EffectNr = 0;
@@ -230,7 +230,9 @@ EffectCollectorVisitor::EffectCollectorVisitor (
   raw_ostream &OS,
   SymbolTable &SymT,
   const FunctionDecl* Def,
-  Stmt *S
+  Stmt *S,
+  bool VisitCXXInitializer,
+  bool HasWriteSemantics
   ) : BR(BR),
   Ctx(Ctx),
   AC(AC),
@@ -238,7 +240,7 @@ EffectCollectorVisitor::EffectCollectorVisitor (
   SymT(SymT),
   Def(Def),
   FatalError(false),
-  HasWriteSemantics(false),
+  HasWriteSemantics(HasWriteSemantics),
   IsBase(false),
   DerefNum(0),
   IsCoveredBySummary(true) {
@@ -249,8 +251,10 @@ EffectCollectorVisitor::EffectCollectorVisitor (
     EffSummary = SymT.getEffectSummary(this->Def);
     assert(EffSummary);
 
-    if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
-      helperVisitCXXConstructorDecl(D);
+    if (VisitCXXInitializer) {
+      if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
+        helperVisitCXXConstructorDecl(D);
+      }
     }
 
     Visit(S);
@@ -292,7 +296,8 @@ void EffectCollectorVisitor::VisitMemberExpr(MemberExpr *Exp) {
 
   /// 2.3. Visit Base with read semantics, then restore write semantics
   bool SavedHWS = HasWriteSemantics;
-  bool SavedIsBase = IsBase; // probably not needed to save
+  bool SavedIsBase = IsBase;
+  bool SavedDerefNum = DerefNum;
 
   DerefNum = Exp->isArrow() ? 1 : 0;
   HasWriteSemantics = false;
@@ -302,6 +307,7 @@ void EffectCollectorVisitor::VisitMemberExpr(MemberExpr *Exp) {
   /// Post visitation checking
   HasWriteSemantics = SavedHWS;
   IsBase = SavedIsBase;
+  DerefNum = SavedDerefNum;
   /// Post-Visit Actions: check that effects (after substitutions)
   /// are covered by effect summary
   checkEffectCoverage(Exp, VD, EffectNr);
@@ -312,12 +318,14 @@ void EffectCollectorVisitor::VisitUnaryAddrOf(UnaryOperator *E)  {
   DerefNum--;
   OS << "DEBUG:: Visit Unary: AddrOf (DerefNum=" << DerefNum << ")\n";
   Visit(E->getSubExpr());
+  DerefNum++;
 }
 
 void EffectCollectorVisitor::VisitUnaryDeref(UnaryOperator *E) {
   DerefNum++;
   OS << "DEBUG:: Visit Unary: Deref (DerefNum=" << DerefNum << ")\n";
   Visit(E->getSubExpr());
+  DerefNum--;
 }
 
 void EffectCollectorVisitor::VisitPrePostIncDec(UnaryOperator *E) {
@@ -349,9 +357,12 @@ void EffectCollectorVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   assert(ReturnType);
 
   if (ReturnType->getQT()->isReferenceType()) {
-    DerefNum--; // FIXME: we prob need a stack of DerefNum for complex exprs.
+    DerefNum--;
+    Visit(Ret->getRetValue());
+    DerefNum++;
+  } else {
+    Visit(Ret->getRetValue());
   }
-  Visit(Ret->getRetValue());
 }
 
 void EffectCollectorVisitor::VisitDeclRefExpr(DeclRefExpr *Exp) {
@@ -380,12 +391,12 @@ void EffectCollectorVisitor::VisitDeclRefExpr(DeclRefExpr *Exp) {
   ValueDecl* vd = E->getDecl();
   vd->print(OS, Ctx.getPrintingPolicy());
   OS << "\n";*/
-  DerefNum = 0;
+  //DerefNum = 0;
 }
 
 void EffectCollectorVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
   //OS << "DEBUG:: visiting 'this' expression\n";
-  DerefNum = 0;
+  //DerefNum = 0;
 }
 
 void EffectCollectorVisitor::
@@ -403,8 +414,27 @@ void EffectCollectorVisitor::VisitBinAssign(BinaryOperator *E) {
   helperVisitAssignment(E);
 }
 
-void EffectCollectorVisitor::VisitCallExpr(CallExpr *E) {
+void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
   OS << "DEBUG:: VisitCallExpr\n";
+  Decl *D = Exp->getCalleeDecl();
+  assert(D);
+
+  /*FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
+  // TODO we shouldn't give up like this below, but doing this for now
+  // to see how to fix this here problem...
+  // FD could be null in the case of a dependent type in a template
+  // uninstantiated (i.e., parametric) code.
+  //assert(FD);
+  if (!FD)
+    return;
+
+  /// 2. Add effects to tmp effects
+  int EffectCount = copyAndPushFunctionEffects(D);
+  /// 3. Visit base if it exists
+  //TODO we have to visit call arguments with read semantics
+  VisitChildren(Exp);
+  /// 4. Check coverage
+  checkEffectCoverage(Exp, D, EffectCount);*/
 }
 
 void EffectCollectorVisitor::VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
@@ -447,4 +477,22 @@ VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
   /// 4. Check coverage
   checkEffectCoverage(Exp, D, EffectCount);
 }
+
+void EffectCollectorVisitor::
+VisitArraySubscriptExpr(ArraySubscriptExpr *Exp) {
+  // 1. Visit index with read semantics
+  bool SavedHasWriteSemantics = HasWriteSemantics;
+  HasWriteSemantics = false;
+  Visit(Exp->getIdx());
+  // 2. Restore semantics and visit base
+  HasWriteSemantics = SavedHasWriteSemantics;
+  DerefNum++;
+  Visit(Exp->getBase());
+  DerefNum--;
+}
+
+
+
+
+
 
