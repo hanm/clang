@@ -111,9 +111,6 @@ private:
                                 ExprIterator ArgI, ExprIterator ArgE,
                                 const ParameterVector &ParamV,
                                 SubstitutionVector &SubV);
-  void buildSubstitutionsCallExpr(CallExpr *Exp, SubstitutionVector &SubV);
-  void buildSubstitutionsCXXConstructExpr(CXXConstructExpr *Exp,
-                                          SubstitutionVector &SubV);
   void helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init);
   /// \brief Issues Warning: '<str>' <bugName> on Declaration.
   void helperEmitDeclarationWarning(const Decl *D,
