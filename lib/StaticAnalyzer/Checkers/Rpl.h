@@ -270,9 +270,11 @@ typedef llvm::SmallVector<const RplElement*,
   // Setters
   /// \brief Appends an RPL element to this RPL.
   inline void appendElement(const RplElement* RplElm) {
-    RplElements.push_back(RplElm);
-    if (RplElm->isFullySpecified() == false)
-      FullySpecified = false;
+    if (RplElm) {
+      RplElements.push_back(RplElm);
+      if (RplElm->isFullySpecified() == false)
+        FullySpecified = false;
+    }
   }
   // Predicates
   inline bool isFullySpecified() { return FullySpecified; }

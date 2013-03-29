@@ -297,7 +297,7 @@ void EffectCollectorVisitor::VisitMemberExpr(MemberExpr *Exp) {
   /// 2.3. Visit Base with read semantics, then restore write semantics
   bool SavedHWS = HasWriteSemantics;
   bool SavedIsBase = IsBase;
-  bool SavedDerefNum = DerefNum;
+  int SavedDerefNum = DerefNum;
 
   DerefNum = Exp->isArrow() ? 1 : 0;
   HasWriteSemantics = false;

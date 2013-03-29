@@ -46,6 +46,8 @@ class SymbolTable {
   // Symbol Table Map
   SymbolTableMapT SymTable;
 
+  static int Initialized;
+
   /// \brief The implicit region parameter "P" of implicitly boxed types
   /// such as int or pointers.
   const ParameterVector *BuiltinDefaultRegionParameterVec;
@@ -60,6 +62,10 @@ public:
   static const SpecialRplElement *LOCAL_RplElmt;
   static const Effect *WritesLocal;
 
+  // Static Functions 
+  static void Initialize();
+  static void Destroy();
+  
   // Functions
   bool hasType(const Decl* D) const;
   bool hasParameterVector(const Decl* D) const;

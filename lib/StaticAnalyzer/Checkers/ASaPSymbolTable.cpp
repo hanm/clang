@@ -26,15 +26,40 @@ using namespace clang;
 using namespace clang::asap;
 
 /// Static Constants
-const StarRplElement *SymbolTable::STAR_RplElmt =
-    new StarRplElement();
-const SpecialRplElement *SymbolTable::ROOT_RplElmt =
-    new SpecialRplElement("Root");
-const SpecialRplElement *SymbolTable::LOCAL_RplElmt =
-    new SpecialRplElement("Local");
-const Effect *SymbolTable::WritesLocal =
-    new Effect(Effect::EK_WritesEffect,new Rpl(*LOCAL_RplElmt));
+int asap::SymbolTable::Initialized = 0;
 
+const StarRplElement *SymbolTable::STAR_RplElmt;
+const SpecialRplElement *SymbolTable::ROOT_RplElmt;
+const SpecialRplElement *SymbolTable::LOCAL_RplElmt;
+const Effect *SymbolTable::WritesLocal;
+
+void SymbolTable::Initialize() {
+  if (!Initialized) {
+    STAR_RplElmt = new StarRplElement();
+    ROOT_RplElmt = new SpecialRplElement("Root");
+    LOCAL_RplElmt = new SpecialRplElement("Local");
+    Rpl R(*LOCAL_RplElmt);
+    R.appendElement(STAR_RplElmt);
+    WritesLocal = new Effect(Effect::EK_WritesEffect, &R);
+    Initialized = 1;
+  }
+}
+
+void SymbolTable::Destroy() {
+  if (Initialized) {
+    delete STAR_RplElmt;
+    delete ROOT_RplElmt;
+    delete LOCAL_RplElmt;
+    delete WritesLocal;
+    
+    STAR_RplElmt = 0;
+    ROOT_RplElmt = 0;
+    LOCAL_RplElmt = 0;
+    WritesLocal = 0;
+    
+    Initialized = 0;
+  }
+}
 
 SymbolTable::SymbolTable() {
   BuiltinDefaultRegionParameterVec =
