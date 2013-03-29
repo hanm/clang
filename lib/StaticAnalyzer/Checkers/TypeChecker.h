@@ -95,6 +95,8 @@ private:
   bool typecheck(const ASaPType *LHSType,
                  const ASaPType *RHSType,
                  bool IsInit = false);
+  // These typecheck and build functions below should be static but then 
+  // would not be able to print debug information...                 
   bool typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
                                       SubstitutionVector &SubV);
   void typecheckParamAssignments(FunctionDecl *CalleeDecl,
@@ -102,15 +104,17 @@ private:
                                  ExprIterator ArgE,
                                  SubstitutionVector &SubV);
   void typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV);
-  void typecheckCXXConstructExpr(VarDecl *D, CXXConstructExpr *Exp, SubstitutionVector &SubV);
+  void typecheckCXXConstructExpr(VarDecl *D, CXXConstructExpr *Exp, 
+                                 SubstitutionVector &SubV);
 
   void buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
                                     const ParameterVector &ParamV,
                                     SubstitutionVector &SubV);
   void buildParamSubstitutions(FunctionDecl *CalleeDecl,
-                                ExprIterator ArgI, ExprIterator ArgE,
-                                const ParameterVector &ParamV,
-                                SubstitutionVector &SubV);
+                               ExprIterator ArgI, ExprIterator ArgE,
+                               const ParameterVector &ParamV,
+                               SubstitutionVector &SubV);
+                               
   void helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init);
   /// \brief Issues Warning: '<str>' <bugName> on Declaration.
   void helperEmitDeclarationWarning(const Decl *D,
