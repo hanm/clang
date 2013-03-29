@@ -171,6 +171,7 @@ public:
   void checkASTDecl(const TranslationUnitDecl *D,
                     AnalysisManager &Mgr,
                     BugReporter &BR) const {
+    SymbolTable::Initialize();
     os << "DEBUG:: starting ASaP Semantic Checker\n";
 
     //BuiltinDefaulrRegionParam = ::new(D->getASTContext())
@@ -214,6 +215,7 @@ public:
         }
       }
     }
+    SymbolTable::Destroy();
   }
 }; // end class SafeParallelismChecker
 } // end unnamed namespace
