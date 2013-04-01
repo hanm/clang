@@ -334,6 +334,7 @@ public:
 
   /// \brief Returns the effect that covers Eff or null otherwise.
   const Effect *covers(const Effect *Eff) const;
+  bool covers(const EffectSummary *Sum) const;
 
   /// \brief Returns true iff insertion was successful.
   inline bool insert(const Effect *Eff) {

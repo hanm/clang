@@ -107,10 +107,9 @@ int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
   return EffectNr;
 }
 
-void EffectCollectorVisitor::helperEmitDeclarationWarning(const Decl *D,
-                                                          const StringRef &Str,
-                                                          std::string BugName,
-                                                          bool AddQuotes) {
+void EffectCollectorVisitor::
+helperEmitDeclarationWarning(const Decl *D,const StringRef &Str,
+                             std::string BugName, bool AddQuotes) {
   std::string Description = "";
   if (AddQuotes)
     Description.append("'");
@@ -126,6 +125,20 @@ void EffectCollectorVisitor::helperEmitDeclarationWarning(const Decl *D,
   PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
   BR.EmitBasicReport(D, BugName, BugCategory,
   BugStr, VDLoc, D->getSourceRange());
+}
+
+void EffectCollectorVisitor::
+emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef &Str) {
+  StringRef BugName = "effect summary of canonical declaration does not cover"\
+    " the summary of this declaration";
+  helperEmitDeclarationWarning(D, Str, BugName);
+}
+
+void EffectCollectorVisitor::
+emitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
+    StringRef BugName = "unsupported constructor initializer."
+      " Please file feature support request.";
+    helperEmitDeclarationWarning(D, "", BugName, false);
 }
 
 void EffectCollectorVisitor::
@@ -170,8 +183,8 @@ copyAndPushFunctionEffects(const FunctionDecl *FunD,
   return FunEffects->size();
 }
 
-bool EffectCollectorVisitor::checkEffectCoverage(const Expr *Exp, const Decl *D,
-                                                 int N) {
+bool EffectCollectorVisitor::
+checkEffectCoverage(const Expr *Exp, const Decl *D, int N) {
   bool Result = true;
   for (int I=0; I<N; ++I){
     Effect* E = EffectsTmp.pop_back_val();
@@ -203,13 +216,6 @@ void EffectCollectorVisitor::helperVisitAssignment(BinaryOperator *E) {
   }
 
 void EffectCollectorVisitor::
-helperEmitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
-    StringRef BugName = "unsupported constructor initializer."
-      " Please file feature support request.";
-    helperEmitDeclarationWarning(D, "", BugName, false);
-  }
-
-void EffectCollectorVisitor::
 helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
   CXXConstructorDecl::init_const_iterator
     I = D->init_begin(),
@@ -220,7 +226,7 @@ helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
       //helperTypecheckDeclWithInit(Init->getMember(), Init->getInit());
       Visit(Init->getInit());
     } else {
-      helperEmitUnsupportedConstructorInitializer(D);
+      emitUnsupportedConstructorInitializer(D);
     }
   }
 }
@@ -252,8 +258,16 @@ EffectCollectorVisitor::EffectCollectorVisitor (
     OS << "DEBUG:: ******** INVOKING EffectCheckerVisitor...\n";
     S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
+    // Check that the effect summary on the canonical decl covers this one.
+    const FunctionDecl *CanFD = this->Def->getCanonicalDecl();
+    const EffectSummary *DeclEffSummary = SymT.getEffectSummary(CanFD);
     EffSummary = SymT.getEffectSummary(this->Def);
-    assert(EffSummary);
+    assert(DeclEffSummary);
+    if (!DeclEffSummary->covers(EffSummary)) {
+      emitCanonicalDeclHasSmallerEffectSummary(Def, Def->getName());
+    } else {
+      EffSummary = DeclEffSummary;
+    }
 
     if (VisitCXXInitializer) {
       if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {

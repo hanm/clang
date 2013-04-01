@@ -178,7 +178,7 @@ void ASaPSemanticCheckerTraverser::emitEffectCovered(Decl *D, const Effect *E1,
   llvm::raw_string_ostream StrBuf(sbuf);
   StrBuf << "'"; E1->print(StrBuf);
   StrBuf << "' covered by '";
-  E2->print(StrBuf); StrBuf << "': ";
+  E2->print(StrBuf); StrBuf << "'";
   //StrBuf << BugName;
 
   StringRef BugStr = StrBuf.str();
@@ -564,6 +564,8 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
       std::pair<const Effect*, const Effect*> *PairPtr = ECV.pop_back_val();
       const Effect *E1 = PairPtr->first, *E2 = PairPtr->second;
       emitEffectCovered(D, E1, E2);
+      OS << "DEBUG:: effect " << E1->toString()
+         << " covered by " << E2->toString() << "\n";
       delete E1;
       delete PairPtr;
     }

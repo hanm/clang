@@ -224,7 +224,7 @@ class ASaPSemanticCheckerTraverser :
   /// Called with AttrType being one of ReadsEffectAttr, WritesEffectAttr,
   /// ΑtomicReadsEffectAttr, or AtomicWritesEffectAttr.
   template<typename AttrType>
-  void buildPartialEffectSummary(FunctionDecl* D, EffectSummary &ES) {
+  void buildPartialEffectSummary(FunctionDecl *D, EffectSummary &ES) {
     for (specific_attr_iterator<AttrType>
          I = D->specific_attr_begin<AttrType>(),
          E = D->specific_attr_end<AttrType>();

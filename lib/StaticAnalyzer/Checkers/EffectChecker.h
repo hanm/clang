@@ -64,13 +64,14 @@ class EffectCollectorVisitor
   void helperEmitEffectNotCoveredWarning(const Stmt *S,
                                          const Decl *D,
                                          const StringRef &Str);
+  void emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef &Str);
+  void emitUnsupportedConstructorInitializer(const CXXConstructorDecl *D);
   /// \brief Copy the effect summary of FunD and push it to the TmpEffects.
   int copyAndPushFunctionEffects(const FunctionDecl *FunD, const SubstitutionVector &SubV);
   /// \brief Check that the 'N' last effects are covered by the summary.
   bool checkEffectCoverage(const Expr *Exp, const Decl *D, int N);
 
   void helperVisitAssignment(BinaryOperator *E);
-  void helperEmitUnsupportedConstructorInitializer(const CXXConstructorDecl *D);
   void helperVisitCXXConstructorDecl(const CXXConstructorDecl *D);
 
   void buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,

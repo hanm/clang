@@ -161,6 +161,7 @@ std::string Effect::toString() const {
 }
 
 const Effect *EffectSummary::covers(const Effect *Eff) const {
+  // if the Eff pointer is included in the set, return it
   if (EffectSum.count(Eff))
     return Eff;
 
@@ -172,6 +173,20 @@ const Effect *EffectSummary::covers(const Effect *Eff) const {
       return *I;
   }
   return 0;
+}
+
+bool EffectSummary::covers(const EffectSummary *Sum) const {
+  if (!Sum)
+    return true;
+  
+  EffectSummarySetT::const_iterator
+    I = Sum->begin(),
+    E = Sum->end();
+  for(; I != E; ++I) {
+    if (!this->covers(*I))
+      return false;
+  }
+  return true;
 }
 
 void EffectSummary::makeMinimal(EffectCoverageVector &ECV) {
