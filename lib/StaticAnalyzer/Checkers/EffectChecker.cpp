@@ -491,7 +491,16 @@ VisitArraySubscriptExpr(ArraySubscriptExpr *Exp) {
   DerefNum--;
 }
 
-
+void EffectCollectorVisitor::
+VisitCXXDeleteExpr(CXXDeleteExpr *Exp) {
+  OS << "DEBUG:: VisitCXXDeleteExpr: ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  bool SavedHasWriteSemantics = HasWriteSemantics;
+  HasWriteSemantics = true;
+  Visit(Exp->getArgument());
+  HasWriteSemantics = SavedHasWriteSemantics;  
+}
 
 
 

@@ -107,15 +107,15 @@ public:
   void VisitCXXThisExpr(CXXThisExpr *E);
   void VisitCompoundAssignOperator(CompoundAssignOperator *E);
   void VisitBinAssign(BinaryOperator *E);
-  void VisitCallExpr(CallExpr *Exp);
+  void VisitCallExpr(CallExpr *E);
   /// \brief Visit non-static C++ member function call.
-  void VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp);
+  void VisitCXXMemberCallExpr(CXXMemberCallExpr *E);
   /// \brief Visits a C++ overloaded operator call where the operator
   /// is implemented as a non-static member function.
-  void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp);
+  void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *E);
 
-  void VisitArraySubscriptExpr(ArraySubscriptExpr *Exp);
-
+  void VisitArraySubscriptExpr(ArraySubscriptExpr *E);
+  void VisitCXXDeleteExpr(CXXDeleteExpr *E);
 }; // End class StmtVisitor.
 } // End namespace asap.
 } // End namespace clang.
