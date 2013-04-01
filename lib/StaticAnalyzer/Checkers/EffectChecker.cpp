@@ -455,47 +455,6 @@ void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
   checkEffectCoverage(Exp, D, EffectCount);
 }
 
-/*void EffectCollectorVisitor::VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
-  OS << "DEBUG:: VisitCXXMemberCallExpr\n";
-  CXXMethodDecl *D = Exp->getMethodDecl();
-  assert(D);
-
-  /// 2. Add effects to tmp effects
-  int EffectCount = copyAndPushFunctionEffects(D);
-  /// 3. Visit base if it exists
-  //TODO we have to visit call arguments with read semantics
-  VisitChildren(Exp);
-  /// 4. Check coverage
-  checkEffectCoverage(Exp, D, EffectCount);
-}*/
-
-/*void EffectCollectorVisitor::
-VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
-  OS << "DEBUG:: VisitCXXOperatorCall: ";
-  //Exp->dump(OS, BR.getSourceManager());
-  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
-  OS << "\n";
-
-  Decl *D = Exp->getCalleeDecl();
-  assert(D);
-  FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
-  assert(FD);
-  OS << "DEBUG:: FunctionDecl = ";
-  FD->print(OS, Ctx.getPrintingPolicy());
-  OS << "DEBUG:: isOverloadedOperator = "
-    << FD->isOverloadedOperator() << "\n";
-
-  /// 2. Add effects to tmp effects
-  int EffectCount = copyAndPushFunctionEffects(FD);
-
-  /// 3. Visit base if it exists
-  //TODO we have to visit call arguments with read semantics
-  VisitChildren(Exp);
-
-  /// 4. Check coverage
-  checkEffectCoverage(Exp, D, EffectCount);
-}*/
-
 void EffectCollectorVisitor::
 VisitArraySubscriptExpr(ArraySubscriptExpr *Exp) {
   // 1. Visit index with read semantics

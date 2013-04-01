@@ -62,7 +62,7 @@ class [[asap::param("P")]] chain
     link *start [[asap::arg("P, P")]];
 public:
     chain() : start(nullptr) {}
-    ~chain() {delete_all(start);}
+    [[asap::writes("P")]] ~chain() { delete_all(start); }
    
     // Add a link to the start of the chain
     void add_link [[asap::writes("P")]] (const point &pos[[asap::arg("P")]])
