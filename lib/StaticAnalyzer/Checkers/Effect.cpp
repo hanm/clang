@@ -51,9 +51,14 @@ void Substitution::set(const RplElement *FromEl, const Rpl *ToRpl) {
 }
 
 void Substitution::applyTo(Rpl *R) const {
-  if (FromEl && ToRpl) {
-    assert(R);
+  if (R && FromEl && ToRpl) {
     R->substitute(*FromEl, *ToRpl);
+  }
+}
+
+void Substitution::applyTo(Effect *E) const {
+  if (E && FromEl && ToRpl) {
+    E->substitute(*this);
   }
 }
 

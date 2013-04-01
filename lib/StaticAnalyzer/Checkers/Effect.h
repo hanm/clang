@@ -27,6 +27,7 @@ namespace asap {
 
 class Rpl;
 class RplElement;
+class Effect;
 class EffectSummary;
 
 // TODO support substitution over multiple parameters
@@ -54,6 +55,7 @@ public:
   // Apply
   /// \brief Apply substitution to RPL
   void applyTo(Rpl *R) const;
+  void applyTo(Effect *E) const;
 
   // print
   /// \brief Print Substitution: [From<-To]
@@ -106,11 +108,22 @@ public:
 
   // Apply
   void applyTo(Rpl *R) const {
-    assert(R);
-    for(SubstitutionVecT::const_iterator I = SubV.begin(), E = SubV.end();
-        I != E; ++I) {
-      assert(*I);
-      (*I)->applyTo(R);
+    if (R) {
+      for(SubstitutionVecT::const_iterator I = SubV.begin(), E = SubV.end();
+          I != E; ++I) {
+        assert(*I);
+        (*I)->applyTo(R);
+      }
+    }
+  }
+  
+  void applyTo(Effect *Eff) const {
+    if (Eff) {
+      for(SubstitutionVecT::const_iterator I = SubV.begin(), E = SubV.end();
+          I != E; ++I) {
+        assert(*I);
+        (*I)->applyTo(Eff);
+      }
     }
   }
   // Print

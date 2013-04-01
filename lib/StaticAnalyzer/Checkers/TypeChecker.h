@@ -110,7 +110,7 @@ private:
   void buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
                                     const ParameterVector &ParamV,
                                     SubstitutionVector &SubV);
-  void buildParamSubstitutions(FunctionDecl *CalleeDecl,
+  void buildParamSubstitutions(const FunctionDecl *CalleeDecl,
                                ExprIterator ArgI, ExprIterator ArgE,
                                const ParameterVector &ParamV,
                                SubstitutionVector &SubV);

@@ -14,13 +14,13 @@
 //===----------------------------------------------------------------===//
 
 #include "EffectChecker.h"
+#include "TypeChecker.h"
 #include "ASaPType.h"
 #include "Rpl.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/Stmt.h"
 // FIXME: try clear these headers up.
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/PathDiagnostic.h"
 
 using namespace clang;
@@ -152,7 +152,9 @@ helperEmitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
                      BugStr, VDLoc, S->getSourceRange());
 }
 
-int EffectCollectorVisitor::copyAndPushFunctionEffects(FunctionDecl *FunD) {
+int EffectCollectorVisitor::
+copyAndPushFunctionEffects(const FunctionDecl *FunD, 
+                           const SubstitutionVector &SubV) {
   const EffectSummary *FunEffects = SymT.getEffectSummary(FunD);
   assert(FunEffects);
   // Must make copies because we will substitute, cannot use append:
@@ -162,6 +164,7 @@ int EffectCollectorVisitor::copyAndPushFunctionEffects(FunctionDecl *FunD) {
     E = FunEffects->end();
   I != E; ++I) {
     Effect Eff(*(*I));
+    SubV.applyTo(&Eff);
     EffectsTmp.push_back(&Eff);
   }
   return FunEffects->size();
@@ -235,6 +238,7 @@ EffectCollectorVisitor::EffectCollectorVisitor (
   bool HasWriteSemantics
   ) : BR(BR),
   Ctx(Ctx),
+  Mgr(Mgr),
   AC(AC),
   OS(OS),
   SymT(SymT),
@@ -418,8 +422,17 @@ void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
   OS << "DEBUG:: VisitCallExpr\n";
   Decl *D = Exp->getCalleeDecl();
   assert(D);
+  
+  /// 1. Visit Arguments w. Read semantics
+  bool SavedHasWriteSemantics = HasWriteSemantics;
+  HasWriteSemantics = false;
+  for(ExprIterator I = Exp->arg_begin(), E = Exp->arg_end();
+      I != E; ++I) {
+    Visit(*I);
+  }
+  HasWriteSemantics = SavedHasWriteSemantics;
 
-  /*FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
+  const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
   // TODO we shouldn't give up like this below, but doing this for now
   // to see how to fix this here problem...
   // FD could be null in the case of a dependent type in a template
@@ -427,17 +440,22 @@ void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
   //assert(FD);
   if (!FD)
     return;
+  SubstitutionVector SubV;
+  // Set up Substitution Vector
+  if (const ParameterVector *FD_ParamV = SymT.getParameterVector(FD)) {
+    buildParamSubstitutions(FD, Exp->arg_begin(), 
+                            Exp->arg_end(), *FD_ParamV, SubV);
+  }
 
   /// 2. Add effects to tmp effects
-  int EffectCount = copyAndPushFunctionEffects(D);
+  int EffectCount = copyAndPushFunctionEffects(FD, SubV);
   /// 3. Visit base if it exists
-  //TODO we have to visit call arguments with read semantics
-  VisitChildren(Exp);
+  Visit(Exp->getCallee());
   /// 4. Check coverage
-  checkEffectCoverage(Exp, D, EffectCount);*/
+  checkEffectCoverage(Exp, D, EffectCount);
 }
 
-void EffectCollectorVisitor::VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
+/*void EffectCollectorVisitor::VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
   OS << "DEBUG:: VisitCXXMemberCallExpr\n";
   CXXMethodDecl *D = Exp->getMethodDecl();
   assert(D);
@@ -449,9 +467,9 @@ void EffectCollectorVisitor::VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
   VisitChildren(Exp);
   /// 4. Check coverage
   checkEffectCoverage(Exp, D, EffectCount);
-}
+}*/
 
-void EffectCollectorVisitor::
+/*void EffectCollectorVisitor::
 VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
   OS << "DEBUG:: VisitCXXOperatorCall: ";
   //Exp->dump(OS, BR.getSourceManager());
@@ -476,7 +494,7 @@ VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
 
   /// 4. Check coverage
   checkEffectCoverage(Exp, D, EffectCount);
-}
+}*/
 
 void EffectCollectorVisitor::
 VisitArraySubscriptExpr(ArraySubscriptExpr *Exp) {
@@ -505,3 +523,57 @@ VisitCXXDeleteExpr(CXXDeleteExpr *Exp) {
 
 
 
+void EffectCollectorVisitor::
+buildParamSubstitutions(const FunctionDecl *CalleeDecl,
+                        ExprIterator ArgI, ExprIterator ArgE,
+                        const ParameterVector &ParamV,
+                        SubstitutionVector &SubV) {
+  assert(CalleeDecl);
+  FunctionDecl::param_const_iterator ParamI, ParamE;
+  for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
+      ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
+    Expr *ArgExpr = *ArgI;
+    ParmVarDecl *ParamDecl = *ParamI;
+    buildSingleParamSubstitution(ParamDecl, ArgExpr, ParamV, SubV);
+  }
+}
+
+void EffectCollectorVisitor::
+buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
+                             const ParameterVector &ParamV,
+                             SubstitutionVector &SubV) {
+  // if param has argument that is a parameter, create a substitution
+  // based on the argument
+  const ASaPType *ParamType = SymT.getType(Param);
+  if (!ParamType)
+    return;
+  const RplVector *ParamArgV = ParamType->getArgV();
+  if (!ParamArgV)
+    return;
+  TypeBuilderVisitor TBV(BR, Ctx, Mgr, AC, OS, SymT, Def, Arg);
+  const ASaPType *ArgType = TBV.getType();
+  if (!ArgType)
+    return;
+  const RplVector *ArgArgV = ArgType->getArgV();
+  if (!ArgArgV)
+    return;
+  // For each element of ArgV if it's a simple arg, check if it's
+  // a function region param
+  for(RplVector::const_iterator
+        ParamI = ParamArgV->begin(), ParamE = ParamArgV->end(),
+        ArgI = ArgArgV->begin(), ArgE = ArgArgV->end();
+      ParamI != ParamE && ArgI != ArgE; ++ParamI, ++ArgI) {
+    const Rpl *ParamR = *ParamI;
+    assert(ParamR && "RplVector should not contain null Rpl pointer");
+    if (ParamR->length() != 1)
+      continue;
+    const RplElement *Elmt = ParamR->getFirstElement();
+    assert(Elmt && "Rpl should not contain null RplElement pointer");
+    if (! ParamV.hasElement(Elmt))
+      continue;
+    // Ok find the argument
+    Substitution Sub(Elmt, *ArgI);
+    SubV.push_back(&Sub);
+    OS << "DEBUG:: added function param sub: " << Sub.toString() << "\n";
+  }
+}

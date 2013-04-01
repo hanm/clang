@@ -537,12 +537,12 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
 }
 
 void AssignmentCheckerVisitor::
-buildParamSubstitutions(FunctionDecl *CalleeDecl,
+buildParamSubstitutions(const FunctionDecl *CalleeDecl,
                         ExprIterator ArgI, ExprIterator ArgE,
                         const ParameterVector &ParamV,
                         SubstitutionVector &SubV) {
   assert(CalleeDecl);
-  FunctionDecl::param_iterator ParamI, ParamE;
+  FunctionDecl::param_const_iterator ParamI, ParamE;
   for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
       ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
     Expr *ArgExpr = *ArgI;

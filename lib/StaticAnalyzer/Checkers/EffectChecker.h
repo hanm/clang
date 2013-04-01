@@ -19,8 +19,6 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
-// FIXME: this header should be removed, and AnalysisManager
-// should be removed from interface.
 #include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
 #include "llvm/Support/raw_ostream.h"
 #include "ASaPSymbolTable.h"
@@ -38,6 +36,7 @@ class EffectCollectorVisitor
     : public StmtVisitor<EffectCollectorVisitor> {
   ento::BugReporter &BR;
   ASTContext &Ctx;
+  ento::AnalysisManager &Mgr;
   AnalysisDeclContext *AC;
   raw_ostream &OS;
   SymbolTable &SymT;
@@ -66,13 +65,21 @@ class EffectCollectorVisitor
                                          const Decl *D,
                                          const StringRef &Str);
   /// \brief Copy the effect summary of FunD and push it to the TmpEffects.
-  int copyAndPushFunctionEffects(FunctionDecl *FunD);
+  int copyAndPushFunctionEffects(const FunctionDecl *FunD, const SubstitutionVector &SubV);
   /// \brief Check that the 'N' last effects are covered by the summary.
   bool checkEffectCoverage(const Expr *Exp, const Decl *D, int N);
 
   void helperVisitAssignment(BinaryOperator *E);
   void helperEmitUnsupportedConstructorInitializer(const CXXConstructorDecl *D);
   void helperVisitCXXConstructorDecl(const CXXConstructorDecl *D);
+
+  void buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
+                                    const ParameterVector &ParamV,
+                                    SubstitutionVector &SubV);
+  void buildParamSubstitutions(const FunctionDecl *CalleeDecl,
+                               ExprIterator ArgI, ExprIterator ArgE,
+                               const ParameterVector &ParamV,
+                               SubstitutionVector &SubV);
 
 public:
   /// Constructor
@@ -109,10 +116,10 @@ public:
   void VisitBinAssign(BinaryOperator *E);
   void VisitCallExpr(CallExpr *E);
   /// \brief Visit non-static C++ member function call.
-  void VisitCXXMemberCallExpr(CXXMemberCallExpr *E);
+  //void VisitCXXMemberCallExpr(CXXMemberCallExpr *E);
   /// \brief Visits a C++ overloaded operator call where the operator
   /// is implemented as a non-static member function.
-  void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *E);
+  //void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *E);
 
   void VisitArraySubscriptExpr(ArraySubscriptExpr *E);
   void VisitCXXDeleteExpr(CXXDeleteExpr *E);
