@@ -15,6 +15,7 @@
 
 #include "Rpl.h"
 #include "Effect.h"
+#include "Substitution.h"
 #include "ASaPType.h"
 #include "clang/AST/ASTContext.h"
 

@@ -16,74 +16,13 @@
 #include "Effect.h"
 #include "Rpl.h"
 #include "ASaPSymbolTable.h"
+#include "Substitution.h"
 
 using namespace clang;
 using namespace clang::asap;
 
-Substitution::Substitution(const RplElement *FromEl, const Rpl *ToRpl) :
-  FromEl(FromEl) {
-  assert(FromEl);
-  if (ToRpl)
-    this->ToRpl = new Rpl(*ToRpl);
-  else
-    this->ToRpl = 0;
-}
-
-Substitution::Substitution(const Substitution &Sub) :
-  FromEl(Sub.FromEl) {
-  assert(FromEl);
-  if (Sub.ToRpl)
-    this->ToRpl = new Rpl(*Sub.ToRpl);
-  else
-    this->ToRpl = 0;
-}
-
-Substitution::~Substitution() {
-  delete ToRpl;
-}
-
-void Substitution::set(const RplElement *FromEl, const Rpl *ToRpl) {
-  this->FromEl = FromEl;
-  if (ToRpl)
-    this->ToRpl = new Rpl(*ToRpl);
-  else
-    this->ToRpl = 0;
-}
-
-void Substitution::applyTo(Rpl *R) const {
-  if (R && FromEl && ToRpl) {
-    R->substitute(*FromEl, *ToRpl);
-  }
-}
-
-void Substitution::applyTo(Effect *E) const {
-  if (E && FromEl && ToRpl) {
-    E->substitute(*this);
-  }
-}
-
-void Substitution::print(llvm::raw_ostream &OS) const {
-  OS << "[";
-  if (FromEl) {
-    OS << FromEl->getName();
-  } else {
-    OS << "<MISSING>";
-  }
-  OS << "<-";
-  if (ToRpl) {
-    OS << ToRpl->toString();
-  } else {
-    OS << "<MISSING";
-  }
-  OS << "]";
-}
-
-std::string Substitution::toString() const {
-  std::string SBuf;
-  llvm::raw_string_ostream OS(SBuf);
-  print(OS);
-  return std::string(OS.str());
-}
+namespace clang {
+namespace asap {
 
 Effect::Effect(EffectKind EK, const Rpl* R, const Attr* A)
   : Kind(EK), Attribute(A) {
@@ -96,6 +35,11 @@ Effect::Effect(const Effect &E): Kind(E.Kind), Attribute(E.Attribute) {
 
 Effect::~Effect() {
   delete R;
+}
+
+void Effect::substitute(const Substitution &S) {
+  if (R)
+    S.applyTo(R);
 }
 
 bool Effect::isSubEffectOf(const Effect &That) const {
@@ -238,6 +182,5 @@ const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
     return ES.covers(this);
 }
 
-
-
-
+} // end namespace clang
+} // end namespace asap

@@ -17,6 +17,8 @@
 #include "TypeChecker.h"
 #include "ASaPType.h"
 #include "Rpl.h"
+#include "Effect.h"
+#include "Substitution.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/Stmt.h"
 // FIXME: try clear these headers up.
@@ -53,7 +55,7 @@ void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
     // if (from != to) then substitute
     Substitution S(FromEl, ToRpl);
     /// 2.1.1 Substitution of effects
-    EffectsTmp.substitute(S);
+    EffectsTmp->substitute(S);
   }
   OS << "   DONE\n";
 }
@@ -87,7 +89,7 @@ int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
     if (InRpl) {
       // References do not have an InRpl
       Effect E(Effect::EK_ReadsEffect, InRpl);
-      EffectsTmp.push_back(&E);
+      EffectsTmp->push_back(&E);
       EffectNr++;
     }
     Type->deref();
@@ -99,7 +101,7 @@ int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
     const Rpl *InRpl = Type->getInRpl();
     if (InRpl) {
       Effect E(EK, InRpl);
-      EffectsTmp.push_back(&E);
+      EffectsTmp->push_back(&E);
       EffectNr++;
     }
   }
@@ -171,14 +173,14 @@ copyAndPushFunctionEffects(const FunctionDecl *FunD,
   const EffectSummary *FunEffects = SymT.getEffectSummary(FunD);
   assert(FunEffects);
   // Must make copies because we will substitute, cannot use append:
-  //EffectsTmp.append(EV->size(), (*EV->begin()));
+  //EffectsTmp->append(EV->size(), (*EV->begin()));
   for(EffectSummary::const_iterator
     I = FunEffects->begin(),
     E = FunEffects->end();
   I != E; ++I) {
     Effect Eff(*(*I));
     SubV.applyTo(&Eff);
-    EffectsTmp.push_back(&Eff);
+    EffectsTmp->push_back(&Eff);
   }
   return FunEffects->size();
 }
@@ -187,7 +189,7 @@ bool EffectCollectorVisitor::
 checkEffectCoverage(const Expr *Exp, const Decl *D, int N) {
   bool Result = true;
   for (int I=0; I<N; ++I){
-    Effect* E = EffectsTmp.pop_back_val();
+    Effect* E = EffectsTmp->pop_back_val();
     OS << "### "; E->print(OS); OS << "\n";
     if (!E->isCoveredBy(*EffSummary)) {
       std::string Str = E->toString();
@@ -254,7 +256,7 @@ EffectCollectorVisitor::EffectCollectorVisitor (
   IsBase(false),
   DerefNum(0),
   IsCoveredBySummary(true) {
-
+    EffectsTmp = new EffectVector();
     OS << "DEBUG:: ******** INVOKING EffectCheckerVisitor...\n";
     S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
@@ -277,6 +279,7 @@ EffectCollectorVisitor::EffectCollectorVisitor (
 
     Visit(S);
     OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
+    delete EffectsTmp;
 }
 
 void EffectCollectorVisitor::VisitChildren(Stmt *S) {

@@ -17,6 +17,8 @@
 #include "ASaPType.h"
 #include "Effect.h"
 #include "Rpl.h"
+#include "Substitution.h"
+
 #include "clang/AST/Decl.h"
 #include "clang/AST/Expr.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"

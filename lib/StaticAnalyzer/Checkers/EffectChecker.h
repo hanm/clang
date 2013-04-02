@@ -22,7 +22,6 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
 #include "llvm/Support/raw_ostream.h"
 #include "ASaPSymbolTable.h"
-#include "Effect.h"
 
 namespace clang {
 
@@ -31,6 +30,11 @@ class FunctionDecl;
 class Stmt;
 
 namespace asap {
+
+class Effect;
+class EffectVector;
+class Substitution;
+class SubstitutionVector;
 
 class EffectCollectorVisitor
     : public StmtVisitor<EffectCollectorVisitor> {
@@ -42,7 +46,7 @@ class EffectCollectorVisitor
   SymbolTable &SymT;
   const FunctionDecl *Def;
   bool FatalError;
-  EffectVector EffectsTmp;
+  EffectVector *EffectsTmp;
   /// True when visiting an expression that is being written to.
   bool HasWriteSemantics;
   /// True when visiting a base expression (e.g., B in B.f, or B->f).
@@ -95,7 +99,9 @@ public:
     Stmt *S,
     bool VisitCXXInitializer = false,
     bool HasWriteSemantics = false );
-
+  
+  //~EffectCollectorVisitor();
+  
   /// Getters
   inline bool getIsCoveredBySummary() { return IsCoveredBySummary; }
   inline bool encounteredFatalError() { return FatalError; }
