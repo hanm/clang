@@ -77,14 +77,12 @@ public:
     return (QT->isScalarType() && !QT->isPointerType());
   }
 
-
   // Types
   typedef std::pair<ResultKind, long> ResultPair;
-  // Functions
   
+  // Functions  
   /// \brief return the number of In/Arg annotations needed for type or -1
   /// if unknown.  
-  // long getRegionParamCount(Decl *D);
   ResultPair getRegionParamCount(QualType QT);
   
   bool hasDecl(const Decl *D) const;

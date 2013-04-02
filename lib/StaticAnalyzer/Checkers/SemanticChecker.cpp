@@ -257,12 +257,12 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
   if (A && !RplVec && FatalError)
     return; // don't check an error already occured
 
-  //QualType QT = D->getType();
+  QualType QT = D->getType();
   // How many In/Arg annotations does the type require?
   OS << "DEBUG:: calling getRegionParamCount on type: ";
-  D->getType().print(OS, Ctx.getPrintingPolicy());
+  QT.print(OS, Ctx.getPrintingPolicy());
   OS << "\n";  
-  SymbolTable::ResultPair ResPair = SymT.getRegionParamCount(D->getType());
+  SymbolTable::ResultPair ResPair = SymT.getRegionParamCount(QT);
   ResultKind ResKin = ResPair.first;
   long ParamCount = ResPair.second;
   OS << "DEBUG:: called 'getRegionParamCount(QT)' : "

@@ -37,8 +37,7 @@ ASaPType::ASaPType(QualType QT, RplVector *ArgV, Rpl *InRpl,
   if (!Simple) {
     // 2. If QT is a function type, we're really interested in the
     // return type.
-    if (QT->isFunctionType()) {
-      const FunctionType *FT = dyn_cast<FunctionType>(QT.getTypePtr());
+    if (const FunctionType *FT = QT->getAs<FunctionType>()) {
       this->QT = FT->getResultType();
     }
     // 3. Check if we might need to set InRpl.

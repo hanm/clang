@@ -531,7 +531,8 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   // Now set Type to the return type of this call
   const ASaPType *RetTyp = SymT.getType(FD);
   if (RetTyp) {
-    assert(!Type && "Type must be null");
+        
+    delete Type;
     // set Type
     Type = new ASaPType(*RetTyp);
     Type->substitute(&SubV);
