@@ -262,48 +262,63 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
   OS << "DEBUG:: calling getRegionParamCount on type: ";
   D->getType().print(OS, Ctx.getPrintingPolicy());
   OS << "\n";  
-  int ParamCount = SymT.getRegionParamCount(D->getType());
+  SymbolTable::ResultPair ResPair = SymT.getRegionParamCount(D->getType());
+  ResultKind ResKin = ResPair.first;
+  long ParamCount = ResPair.second;
   OS << "DEBUG:: called 'getRegionParamCount(QT)' : "
-     << "(" << ParamCount << ") DONE!\n";
-  long Size = (RplVec) ? RplVec->size() : 0;
-  OS << "size = " << Size << "\n";
+     << "(" << stringOf(ResKin)
+     << ", " << ParamCount << ") DONE!\n";
+  long ArgCount = (RplVec) ? RplVec->size() : 0;
+  OS << "ArgCount = " << ArgCount << "\n";
 
-  if (ParamCount == -1) {
+  switch(ResKin) {
+  case RK_ERROR:
     emitUnknownNumberOfRegionParamsForType(D);
-  } else if (ParamCount < -1) {
+    break;
+  case RK_VAR:
     // Type is TemplateTypeParam -- Any number of region args 
-    // could be ok. Don't check this. Instead check template
-    // specializations.
-    OS << "DEBUG:: Template Type Param. Not checking #region args\n";
-  } else if (ParamCount > Size &&
-    ParamCount > Size + (DefaultInRpl?1:0)) {
-      emitMissingRegionArgs(D);
-  } else if (ParamCount < Size &&
-    ParamCount < Size + (DefaultInRpl?1:0)) {
-      std::string SBuf;
-      llvm::raw_string_ostream BufStream(SBuf);
-      int I = ParamCount;
-      for (; I < Size-1; ++I) {
-        RplVec->getRplAt(I)->print(BufStream);
-        BufStream << ", ";
-      }
-      if (I < Size)
-        RplVec->getRplAt(I)->print(BufStream);
-      emitSuperfluousRegionArg(D, BufStream.str());
-  } else if (ParamCount > 0) {
-    if (ParamCount > Size) {
-      assert(DefaultInRpl);
-      if (RplVec) {
-        RplVec->push_front(DefaultInRpl);
-      } else {
-        RplVec = new RplVector(*DefaultInRpl);
-      }
+    // could be ok. At least ParamCount are needed though.
+    if (ParamCount > ArgCount &&
+      ParamCount > ArgCount + (DefaultInRpl?1:0)) {
+        emitMissingRegionArgs(D);
     }
-    assert(ParamCount == 0 ||
-      (size_t)ParamCount == RplVec->size());
+    break;
+  case RK_OK:
+    if (ParamCount > ArgCount &&
+      ParamCount > ArgCount + (DefaultInRpl?1:0)) {
+        emitMissingRegionArgs(D);
+    } else if (ParamCount < ArgCount &&
+      ParamCount < ArgCount + (DefaultInRpl?1:0)) {
+        std::string SBuf;
+        llvm::raw_string_ostream BufStream(SBuf);
+        int I = ParamCount;
+        for (; I < ArgCount-1; ++I) {
+          RplVec->getRplAt(I)->print(BufStream);
+          BufStream << ", ";
+        }
+        if (I < ArgCount)
+          RplVec->getRplAt(I)->print(BufStream);
+        emitSuperfluousRegionArg(D, BufStream.str());
+    } else if (ParamCount > 0) {
+      assert(ParamCount>=0);
+      if (ParamCount > ArgCount) {
+        assert(DefaultInRpl);
+        if (RplVec) {
+          RplVec->push_front(DefaultInRpl);
+        } else {
+          RplVec = new RplVector(*DefaultInRpl);
+        }
+      }
+      assert(ParamCount == 0 ||
+        (size_t)ParamCount == RplVec->size());
 
-    addASaPTypeToMap(D, RplVec, 0);
-  }
+      addASaPTypeToMap(D, RplVec, 0);
+    }
+    break;
+    default:
+      //TODO emitInternalError();
+      break;
+  } //  end switch
   OS << "DEBUG:: DONE checkTypeRegionArgs\n";
 }
 

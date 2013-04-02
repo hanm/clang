@@ -25,8 +25,20 @@
 using namespace clang;
 using namespace clang::asap;
 
+namespace clang {
+namespace asap {
+
+StringRef stringOf(ResultKind R) {
+  switch(R) {
+  case RK_OK: return "OK";
+  case RK_ERROR: return "ERROR";
+  case RK_VAR: return "VAR";
+  }
+  return "UNKNOWN!";
+}
+  
 /// Static Constants
-int asap::SymbolTable::Initialized = 0;
+int SymbolTable::Initialized = 0;
 
 const StarRplElement *SymbolTable::STAR_RplElmt;
 const SpecialRplElement *SymbolTable::ROOT_RplElmt;
@@ -76,14 +88,15 @@ SymbolTable::~SymbolTable() {
   }
 }
 
-long SymbolTable::getRegionParamCount(QualType QT) {
+SymbolTable::ResultPair SymbolTable::getRegionParamCount(QualType QT) {
   if (isNonPointerScalarType(QT)) {
     //OS << "DEBUG:: getRegionParamCount::isNonPointerScalarType\n";
-    return 1;
+    return ResultPair(RK_OK, 1);
   } else if (QT->isPointerType()) {
     //OS << "DEBUG:: getRegionParamCount::isPointerType\n";
-    long Result = getRegionParamCount(QT->getPointeeType());
-    return (Result == -1) ? Result : Result + 1;
+    ResultPair Result = getRegionParamCount(QT->getPointeeType());
+    Result.second += 1;
+    return Result; //(Result.first == RT_ERROR) ? Result : Result + 1;
   } else if (QT->isReferenceType()) {
     //OS << "DEBUG:: getRegionParamCount::isReferenceType\n";
     return getRegionParamCount(QT->getPointeeType());
@@ -95,9 +108,9 @@ long SymbolTable::getRegionParamCount(QualType QT) {
     //RegionParamVector *RPV = ParamVectorDeclMap[RT->getDecl()];
     const ParameterVector *ParamV = getParameterVector(RT->getDecl());
     if (ParamV)
-      return ParamV->size();
+      return ResultPair(RK_OK, ParamV->size());
     else
-      return 0;
+      return ResultPair(RK_OK, 0);
   } else if (QT->isFunctionType()) {
     //OS << "DEBUG:: getRegionParamCount::isFunctionType\n";
     const FunctionType *FT = QT->getAs<FunctionType>();
@@ -106,14 +119,14 @@ long SymbolTable::getRegionParamCount(QualType QT) {
     return getRegionParamCount(ResultQT);
   } else if (QT->isVoidType()) {
     //OS << "DEBUG:: getRegionParamCount::isVoidType\n";
-    return 0;
+    return ResultPair(RK_OK, 0);
   } else if (QT->isTemplateTypeParmType()) {
     //OS << "DEBUG:: getRegionParamCount::isTemplateParmType\n";
-    return -100;
+    return ResultPair(RK_VAR, 0);
   } else {
     //OS << "DEBUG:: getRegionParamCount::UnexpectedType\n";
     // This should not happen: unknown number of region arguments for type
-    return -1;
+    return ResultPair(RK_ERROR, 0);
   }
 }
 
@@ -306,3 +319,7 @@ void SymbolTable::SymbolTableEntry::addParameterName(StringRef Name) {
     ParamVec = new ParameterVector();
   ParamVec->push_back(new ParamRplElement(Name));
 }
+
+} // end namespace asap
+} // end namespace clang
+

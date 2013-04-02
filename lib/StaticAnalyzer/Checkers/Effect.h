@@ -236,8 +236,8 @@ public:
   std::string toString() const;
 }; // end class EffectSummary
 
-}
-}
+} // end namespace asap
+} // end namespace clang
 
 #endif
 

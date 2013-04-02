@@ -40,6 +40,14 @@ class StarRplElement;
 class SpecialRplElement;
 class Effect;
 
+enum ResultKind {
+  RK_OK,
+  RK_ERROR,
+  RK_VAR
+};
+
+StringRef stringOf(ResultKind R);
+
 class SymbolTable {
   class SymbolTableEntry;
   typedef llvm::DenseMap<const Decl*, SymbolTableEntry*>  SymbolTableMapT;
@@ -70,12 +78,14 @@ public:
   }
 
 
-  
+  // Types
+  typedef std::pair<ResultKind, long> ResultPair;
   // Functions
+  
   /// \brief return the number of In/Arg annotations needed for type or -1
   /// if unknown.  
-  //long getRegionParamCount(Decl *D);
-  long getRegionParamCount(QualType QT);
+  // long getRegionParamCount(Decl *D);
+  ResultPair getRegionParamCount(QualType QT);
   
   bool hasDecl(const Decl *D) const;
   bool hasType(const Decl *D) const;
