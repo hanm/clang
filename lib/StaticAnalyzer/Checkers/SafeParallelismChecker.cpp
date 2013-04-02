@@ -43,10 +43,6 @@ static void destroyVector(T &V) {
     delete(*I);
 }
 
-inline bool isNonPointerScalarType(QualType QT) {
-  return (QT->isScalarType() && !QT->isPointerType());
-}
-
 namespace {
 ///-///////////////////////////////////////////////////////////////////
 /// GENERIC VISITORS

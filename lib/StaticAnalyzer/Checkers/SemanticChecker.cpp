@@ -28,10 +28,6 @@ using namespace clang::asap;
 using namespace clang::ento;
 using namespace llvm;
 
-static bool isNonPointerScalarType(QualType QT) {
-  return (QT->isScalarType() && !QT->isPointerType());
-}
-
 void ASaPSemanticCheckerTraverser::addASaPTypeToMap(ValueDecl *D, RplVector *RV,
                                                     Rpl *InRpl) {
   assert(!SymT.hasType(D));
@@ -193,47 +189,6 @@ emitNoEffectInNonEmptyEffectSummary(Decl *D, const Attr *A) {
   helperEmitAttributeWarning(D, A, BugStr, BugName, false);
 }
 
-long ASaPSemanticCheckerTraverser::getRegionParamCount(QualType QT) {
-  OS << "DEBUG:: calling getRegionParamCount on type: ";
-  QT.print(OS, Ctx.getPrintingPolicy());
-  OS << "\n";
-
-  if (isNonPointerScalarType(QT)) {
-    //OS << "DEBUG:: getRegionParamCount::isNonPointerScalarType\n";
-    return 1;
-  } else if (QT->isPointerType()) {
-    //OS << "DEBUG:: getRegionParamCount::isPointerType\n";
-    long Result = getRegionParamCount(QT->getPointeeType());
-    return (Result == -1) ? Result : Result + 1;
-  } else if (QT->isReferenceType()) {
-    //OS << "DEBUG:: getRegionParamCount::isReferenceType\n";
-    return getRegionParamCount(QT->getPointeeType());
-  } else if (QT->isStructureOrClassType()) {
-    //OS << "DEBUG:: getRegionParamCount::isStructureOrClassType\n";
-    // FIXME allow different numbers of parameters on class types
-    const RecordType *RT = QT->getAs<RecordType>();
-    assert(RT);
-    //RegionParamVector *RPV = ParamVectorDeclMap[RT->getDecl()];
-    return 1;
-  } else if (QT->isFunctionType()) {
-    //OS << "DEBUG:: getRegionParamCount::isFunctionType\n";
-    const FunctionType *FT = QT->getAs<FunctionType>();
-    assert(FT);
-    QualType ResultQT = FT->getResultType();
-    return getRegionParamCount(ResultQT);
-  } else if (QT->isVoidType()) {
-    //OS << "DEBUG:: getRegionParamCount::isVoidType\n";
-    return 0;
-  } else if (QT->isTemplateTypeParmType()) {
-    //OS << "DEBUG:: getRegionParamCount::isTemplateParmType\n";
-    return 0;
-  } else {
-    //OS << "DEBUG:: getRegionParamCount::UnexpectedType\n";
-    // This should not happen: unknown number of region arguments for type
-    return -1;
-  }
-}
-
 StringRef ASaPSemanticCheckerTraverser::
 getRegionOrParamName(const Attr *Attribute) {
   StringRef Result = "";
@@ -296,21 +251,30 @@ recursiveFindRegionOrParamName(const Decl *D, StringRef Name) {
 
 void ASaPSemanticCheckerTraverser::
 checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
+  assert(D);
   RegionArgAttr *A = D->getAttr<RegionArgAttr>();
   RplVector *RplVec = (A) ? RplVecAttrMap[A] : 0;
   if (A && !RplVec && FatalError)
     return; // don't check an error already occured
 
-  QualType QT = D->getType();
+  //QualType QT = D->getType();
   // How many In/Arg annotations does the type require?
-  int ParamCount = getRegionParamCount(QT);
+  OS << "DEBUG:: calling getRegionParamCount on type: ";
+  D->getType().print(OS, Ctx.getPrintingPolicy());
+  OS << "\n";  
+  int ParamCount = SymT.getRegionParamCount(D->getType());
   OS << "DEBUG:: called 'getRegionParamCount(QT)' : "
      << "(" << ParamCount << ") DONE!\n";
   long Size = (RplVec) ? RplVec->size() : 0;
   OS << "size = " << Size << "\n";
 
-  if (ParamCount < 0) {
+  if (ParamCount == -1) {
     emitUnknownNumberOfRegionParamsForType(D);
+  } else if (ParamCount < -1) {
+    // Type is TemplateTypeParam -- Any number of region args 
+    // could be ok. Don't check this. Instead check template
+    // specializations.
+    OS << "DEBUG:: Template Type Param. Not checking #region args\n";
   } else if (ParamCount > Size &&
     ParamCount > Size + (DefaultInRpl?1:0)) {
       emitMissingRegionArgs(D);
@@ -501,9 +465,22 @@ ASaPSemanticCheckerTraverser::~ASaPSemanticCheckerTraverser() {
 bool ASaPSemanticCheckerTraverser::VisitValueDecl(ValueDecl *D) {
   OS << "DEBUG:: VisitValueDecl : ";
   D->print(OS, Ctx.getPrintingPolicy());
-  //OS << "\n";
+  OS << "\n";
   OS << "DEBUG:: it is " << (D->isTemplateDecl() ? "" : "NOT ")
     << "a template\n";
+  OS << "DEBUG:: it is " << (D->isTemplateParameter() ? "" : "NOT ")
+    << "a template PARAMETER\n";    
+  return true;
+}
+
+bool ASaPSemanticCheckerTraverser::VisitParmVarDecl(ParmVarDecl *D) {
+  OS << "DEBUG:: VisitParmVarDecl : ";
+  D->print(OS, Ctx.getPrintingPolicy());
+  OS << "\n";
+  OS << "DEBUG:: it is " << (D->isTemplateDecl() ? "" : "NOT ")
+    << "a template\n";
+  OS << "DEBUG:: it is " << (D->isTemplateParameter() ? "" : "NOT ")
+    << "a template PARAMETER\n";    
   return true;
 }
 
@@ -692,6 +669,8 @@ VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
   OS << "\n";
   OS << "DEBUG:: it is " << (D->isTemplateDecl() ? "" : "NOT ")
     << "a template\n";
+  OS << "DEBUG:: it is " << (D->isTemplateParameter() ? "" : "NOT ")
+    << "a template PARAMETER\n";    
   NextFunctionIsATemplatePattern = true;
   return true;
 }

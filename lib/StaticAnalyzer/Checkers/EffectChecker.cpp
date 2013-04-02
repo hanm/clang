@@ -31,16 +31,17 @@ using namespace clang::asap;
 using namespace llvm;
 
 void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
-  assert(D);
+  assert(D && "D can't be null");
   const ASaPType *T = SymT.getType(D);
-  assert(T);
+  if (!T) 
+    return; // Nothing to do here
   OS << "DEBUG:: Type used for substitution = " << T->toString(Ctx) << "\n";
 
   QualType QT = T->getQT(DerefNum);
 
   const ParameterVector *ParamVec = SymT.getParameterVectorFromQualType(QT);
   if (!ParamVec)
-    return;
+    return; // Nothing to do here
 
   // TODO support multiple Parameters
   const ParamRplElement *FromEl = ParamVec->getParamAt(0);

@@ -65,15 +65,26 @@ public:
   // Static Functions 
   static void Initialize();
   static void Destroy();
+  static inline bool isNonPointerScalarType(QualType QT) {
+    return (QT->isScalarType() && !QT->isPointerType());
+  }
+
+
   
   // Functions
-  bool hasType(const Decl* D) const;
-  bool hasParameterVector(const Decl* D) const;
-  bool hasRegionNameSet(const Decl* D) const;
-  bool hasEffectSummary(const Decl* D) const;
+  /// \brief return the number of In/Arg annotations needed for type or -1
+  /// if unknown.  
+  //long getRegionParamCount(Decl *D);
+  long getRegionParamCount(QualType QT);
+  
+  bool hasDecl(const Decl *D) const;
+  bool hasType(const Decl *D) const;
+  bool hasParameterVector(const Decl *D) const;
+  bool hasRegionNameSet(const Decl *D) const;
+  bool hasEffectSummary(const Decl *D) const;
 
   /// \brief Returns the ASaP Type for D or null.
-  const ASaPType *getType(const Decl* D) const;
+  const ASaPType *getType(const Decl *D) const;
   /// \brief Retuns the parameter vector for D or null.
   const ParameterVector *getParameterVector(const Decl *D) const;
   /// \brief Returns the region names declarations for D or null.
@@ -90,7 +101,7 @@ public:
   bool setEffectSummary(const Decl *D, EffectSummary *ES);
   // Lookup
   /// \brief Returns a named RPL element of the same name or null.
-  const NamedRplElement *lookupRegionName(const Decl* D, llvm::StringRef Name);
+  const NamedRplElement *lookupRegionName(const Decl *D, llvm::StringRef Name);
   /// \brief Returns a parameter RPL element of the same name or null.
   const ParamRplElement *lookupParameterName(const Decl *D,
                                              llvm::StringRef Name);

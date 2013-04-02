@@ -102,9 +102,6 @@ class ASaPSemanticCheckerTraverser :
   /// \brief Effect summary not minimal: effect E1 is covered by effect E2.
   void emitEffectCovered(Decl *D, const Effect *E1, const Effect *E2);
   void emitNoEffectInNonEmptyEffectSummary(Decl *D, const Attr *A);
-  /// \brief return the number of In/Arg annotations needed for type or -1
-  /// if unknown.
-  long getRegionParamCount(QualType QT);
   /// \brief Print to the debug output stream (os) the attribute.
   template<typename AttrType>
   inline void helperPrintAttributes(Decl *D) {
@@ -259,6 +256,7 @@ public:
   bool shouldVisitImplicitCode() const { return true; }
 
   bool VisitValueDecl(ValueDecl *D);
+  bool VisitParmVarDecl(ParmVarDecl *D);
   bool VisitFunctionDecl(FunctionDecl *D);
   bool VisitRecordDecl (RecordDecl *D);
   bool VisitEmptyDecl(EmptyDecl *D);
