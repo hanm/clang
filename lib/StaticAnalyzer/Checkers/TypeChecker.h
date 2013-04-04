@@ -95,8 +95,8 @@ private:
   bool typecheck(const ASaPType *LHSType,
                  const ASaPType *RHSType,
                  bool IsInit = false);
-  // These typecheck and build functions below should be static but then 
-  // would not be able to print debug information...                 
+  // These typecheck and build functions below should be static but then
+  // would not be able to print debug information...
   bool typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
                                       SubstitutionVector &SubV);
   void typecheckParamAssignments(FunctionDecl *CalleeDecl,
@@ -104,7 +104,7 @@ private:
                                  ExprIterator ArgE,
                                  SubstitutionVector &SubV);
   void typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV);
-  void typecheckCXXConstructExpr(VarDecl *D, CXXConstructExpr *Exp, 
+  void typecheckCXXConstructExpr(VarDecl *D, CXXConstructExpr *Exp,
                                  SubstitutionVector &SubV);
 
   void buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
@@ -114,7 +114,7 @@ private:
                                ExprIterator ArgI, ExprIterator ArgE,
                                const ParameterVector &ParamV,
                                SubstitutionVector &SubV);
-                               
+
   void helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init);
   /// \brief Issues Warning: '<str>' <bugName> on Declaration.
   void helperEmitDeclarationWarning(const Decl *D,
@@ -194,7 +194,6 @@ public:
   void VisitMemberExpr(MemberExpr *E);
   void helperBinAddSub(Expr *LHS, Expr *RHS);
   void VisitBinaryOperator(BinaryOperator *S);
-  void VisitBinAssign(BinaryOperator *E);
   void VisitConditionalOperator(ConditionalOperator *E);
   void VisitBinaryConditionalOperator(BinaryConditionalOperator *E);
   //void VisitCXXNewExpr(CXXNewExpr *Exp);

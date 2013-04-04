@@ -170,11 +170,10 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
   } // end for each declaration
 }
 
-bool AssignmentCheckerVisitor::typecheck(const ASaPType *LHSType,
-                                         const ASaPType *RHSType,
-                                         bool IsInit) {
+bool AssignmentCheckerVisitor::
+typecheck(const ASaPType *LHSType, const ASaPType *RHSType, bool IsInit) {
   if (!RHSType)
-    return true; // Clang has done the typechecking
+    return true; // RHS has no region info && Clang has done typechecking
   else { // RHSType != null
     if (LHSType)
       return RHSType->isAssignableTo(*LHSType, IsInit);
@@ -300,7 +299,7 @@ helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
     }
   }
 }
-
+// TODO: does this cover compound assignment?
 void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
   OS << "DEBUG:: >>>>>>>>>> TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";
   E->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -338,7 +337,11 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   OS << "\n";
 
   TypeBuilderVisitor TBVR(BR, Ctx, Mgr, AC, OS, SymT, Def, RetExp);
-  const ASaPType *LHSType = SymT.getType(Def);
+  const ASaPType *FunType = SymT.getType(Def);
+  assert(FunType);
+  assert(FunType->isFunctionType());
+  ASaPType *LHSType = new ASaPType(*FunType);
+  LHSType = LHSType->getReturnType();
   assert(LHSType);
   ASaPType *RHSType = TBVR.getType();
   if (! typecheck(LHSType, RHSType, true)) {
@@ -346,9 +349,9 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
     helperEmitInvalidReturnTypeWarning(Ret, LHSType, RHSType);
     FatalError = true;
   }
-  delete Type;
-  Type = 0;
+  delete LHSType;
 }
+
 void AssignmentCheckerVisitor::
 VisitCXXConstructExpr(CXXConstructExpr *Exp) {
   OS << "DEBUG:: Visiting CXXConstructExpr: ";
@@ -421,8 +424,8 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
   assert(CalleeDecl);
   // Build SubV for function region params
   if (const ParameterVector *ParamV = SymT.getParameterVector(CalleeDecl))
-    buildParamSubstitutions(CalleeDecl, ArgI, ArgE, *ParamV, SubV);  
-                            
+    buildParamSubstitutions(CalleeDecl, ArgI, ArgE, *ParamV, SubV);
+
   OS << "DEBUG:: CALLING typecheckParamAssignments\n";
   FunctionDecl::param_iterator ParamI, ParamE;
   for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
@@ -497,10 +500,10 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
     return;
   // Set up Substitution Vector
   if (const ParameterVector *FD_ParamV = SymT.getParameterVector(FD)) {
-    buildParamSubstitutions(FD, Exp->arg_begin(), 
+    buildParamSubstitutions(FD, Exp->arg_begin(),
                             Exp->arg_end(), *FD_ParamV, SubV);
   }
-  
+
   DeclContext *DC = FD->getDeclContext();
   assert(DC);
   RecordDecl *ClassDecl = dyn_cast<RecordDecl>(DC);
@@ -529,15 +532,19 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   OS << "DEBUG:: DONE typecheckCallExpr\n";
 
   // Now set Type to the return type of this call
-  const ASaPType *RetTyp = SymT.getType(FD);
-  if (RetTyp) {
-        
-    delete Type;
-    // set Type
-    Type = new ASaPType(*RetTyp);
-    Type->substitute(&SubV);
+  const ASaPType *FunType = SymT.getType(FD);
+  if (FunType) {
+    assert(FunType->isFunctionType());
+    ASaPType *RetTyp = new ASaPType(*FunType);
+    RetTyp = RetTyp->getReturnType();
+    if (RetTyp) {
+      delete Type;
+      // set Type
+      Type = RetTyp; // RetTyp is already a copy, no need to re-copy
+      Type->substitute(&SubV);
+    }
   }
-}
+} // End typecheckCallExpr
 
 void AssignmentCheckerVisitor::
 buildParamSubstitutions(const FunctionDecl *CalleeDecl,
@@ -856,13 +863,41 @@ void TypeBuilderVisitor::helperBinAddSub(Expr *LHS, Expr* RHS) {
     Type->join(T);
   else
     Type = T;
+  // memory leak? do we need to dealloc T?
 }
 
+
+// isPtrMemOp : BO_PtrMemD || BO_PtrMemI
+// isMultiplicativeOp: BO_Mul || BO_Div || BO_Rem
+// isAdditiveOp: BO_Add || BO_Sub
+// isShiftOp: BO_Shl || BO_Shr
+// isBitwiseOp: BO_And || BO_Xor || BO_Or
+// isRelationalOp: BO_LT || BO_GT || BO_LE || BO_GE
+// isEqualityOp:                                       BO_EQ || BO_NE
+// isComparisonOp  BO_LT || BO_GT || BO_LE || BO_GE || BO_EQ || BO_NE
+// isLogicalOp: BO_LAnd || BO_LOr
+// isAssignmetOp:    BO_Assign    || BO_MulAssign || BO_DivAssign || BO_RemAssign
+//                || BO_AddAssign || BO_SubAssign || BO_ShlAssign || BO_ShrAssign
+//                || BO_AndAssign || BO_XorAssign || BO_OrAssign
+// BO_Comma
 void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
   OS << "Visiting Operator " << Exp->getOpcodeStr() << "\n";
-  if (Exp->isAdditiveOp()) {
+  if (Exp->isPtrMemOp()) {
+    // TODO
+    OS << "DEBUG: iz a PtrMemOp!! ";
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    VisitChildren(Exp);
+  } else if (Exp->isMultiplicativeOp()) {
+    // TODO
     helperBinAddSub(Exp->getLHS(), Exp->getRHS());
-  } else if (Exp->isComparisonOp()) {
+  } else if (Exp->isAdditiveOp()) {
+    helperBinAddSub(Exp->getLHS(), Exp->getRHS());
+  } else if (Exp->isBitwiseOp()) {
+    // TODO
+    helperBinAddSub(Exp->getLHS(), Exp->getRHS());
+  } else if (Exp->isComparisonOp() || Exp->isLogicalOp()) {
+    // BO_LT || BO_NE
     assert(!Type && "Type must be null");
     Rpl LOCALRpl(*SymbolTable::LOCAL_RplElmt);
     QualType QT = Exp->getType();
@@ -870,28 +905,27 @@ void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
     QT.print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
     Type = new ASaPType(QT, 0, &LOCALRpl);
-    OS << "DEBUG:: (VisitComparisonOp) Type = " << Type->toString() << "\n";
+    OS << "DEBUG:: (VisitComparisonOrLogicalOp) Type = " << Type->toString() << "\n";
     AssignmentCheckerVisitor
       ACVR(BR, Ctx, Mgr, AC, OS, SymT, Def, Exp->getRHS());
     AssignmentCheckerVisitor
       ACVL(BR, Ctx, Mgr, AC, OS, SymT, Def, Exp->getLHS());
-    OS << "DEBUG:: (VisitComparisonOp) Type = " << Type->toString() << "\n";
+    OS << "DEBUG:: (VisitComparisonOrLogicalOp) Type = " << Type->toString() << "\n";
+  } else if (Exp->isAssignmentOp()) {
+    OS << "DEBUG:: >>>>>>>>>>VisitBinOpAssign<<<<<<<<<<<<<<<<<\n";
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+
+    AssignmentCheckerVisitor ACV(BR, Ctx, Mgr, AC, OS, SymT, Def, Exp);
+    assert(!Type && "Type must be null here");
+    Type = ACV.stealType();
+    assert(Type && "Type must not be null here");
   } else {
-    // TODO!!!
-    VisitChildren(Exp);
+    // CommaOp
+    Visit(Exp->getRHS()); // visit to typeckeck possible assignments
+    delete Type; Type = 0; // discard results
+    Visit(Exp->getLHS());
   }
-}
-
-
-void TypeBuilderVisitor::VisitBinAssign(BinaryOperator *Exp) {
-  OS << "DEBUG:: >>>>>>>>>>VisitBinAssign<<<<<<<<<<<<<<<<<\n";
-  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
-  OS << "\n";
-
-  AssignmentCheckerVisitor ACV(BR, Ctx, Mgr, AC, OS, SymT, Def, Exp);
-  assert(!Type && "Type must be null here");
-  Type = ACV.stealType();
-  assert(Type && "Type must not be null here");
 }
 
 void TypeBuilderVisitor::VisitConditionalOperator(ConditionalOperator *Exp) {
@@ -960,7 +994,6 @@ void TypeBuilderVisitor::VisitCallExpr(CallExpr *Exp) {
   } else {
     setType(T);
   }
-
 }
 
 void TypeBuilderVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr *Exp) {

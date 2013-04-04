@@ -30,9 +30,11 @@ class ASaPType {
   friend class ASaPType;
   QualType QT;
   RplVector *ArgV;
-  // InRpl can be null.
-  Rpl *InRpl;
+  Rpl *InRpl; // InRpl can be null.
   // Private Functions
+  /// \brief Depending on QT, removes the head of ArgV to set InRpl
+  void adjust();
+  //
   inline static bool areQTsEqual(const QualType QT1, const QualType QT2) {
     return QT1.getUnqualifiedType().getCanonicalType()
               == QT2.getUnqualifiedType().getCanonicalType();
@@ -61,7 +63,7 @@ public:
   /// \brief Return the QualType of this after DerefNum dereferences.
   QualType getQT(int DerefNum) const;
   /// \brief If this is a function type, return its return type; else null.
-  //ASaPType *getReturnType() const;
+  ASaPType *getReturnType();
   /// \brief Dereferences this type DerefNum times.
   void deref(int DerefNum = 1);
   /// \brief Modifies this type as if its address were taken.

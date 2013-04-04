@@ -22,6 +22,18 @@
 using namespace clang;
 using namespace clang::asap;
 
+void ASaPType::adjust() {
+  // Check if we might need to set InRpl.
+  if (!this->InRpl) {
+    // Figure out based on QT if we need an InRpl.
+    if (this->QT->isScalarType() && !this->QT->isReferenceType()) {
+      // Get it from the head of ArgV.
+      assert(this->ArgV && this->ArgV->size() > 0);
+      this->InRpl = this->ArgV->pop_front();
+    }
+  }
+}
+
 ASaPType::ASaPType(QualType QT, RplVector *ArgV, Rpl *InRpl,
                    bool Simple): QT(QT) {
   // 1. Set InRpl & ArgV.
@@ -33,22 +45,8 @@ ASaPType::ASaPType(QualType QT, RplVector *ArgV, Rpl *InRpl,
     this->ArgV = new RplVector(*ArgV);
   else
     this->ArgV = new RplVector();
-
   if (!Simple) {
-    // 2. If QT is a function type, we're really interested in the
-    // return type.
-    if (const FunctionType *FT = QT->getAs<FunctionType>()) {
-      this->QT = FT->getResultType();
-    }
-    // 3. Check if we might need to set InRpl.
-    if (!this->InRpl) {
-      // Figure out based on QT if we need an InRpl.
-      if (this->QT->isScalarType() && !this->QT->isReferenceType()) {
-        // Get it from the head of ArgV.
-        assert(this->ArgV && this->ArgV->size() > 0);
-        this->InRpl = this->ArgV->pop_front();
-      }
-    }
+    adjust();
   } // End if (!Simple).
 }
 
@@ -58,10 +56,11 @@ ASaPType::ASaPType(const ASaPType &T) : QT(T.QT) {
     this->InRpl = new Rpl(*T.InRpl);
   else
     this->InRpl = 0;
+
   if (T.ArgV)
     this->ArgV = new RplVector(*T.ArgV);
   else
-    this->ArgV = 0;
+    this->ArgV = new RplVector();
 }
 
 ASaPType::~ASaPType() {
@@ -71,7 +70,12 @@ ASaPType::~ASaPType() {
 
 bool ASaPType::isFunctionType() const { return QT->isFunctionType(); }
 
-int ASaPType::getArgVSize() const { return ArgV->size(); }
+int ASaPType::getArgVSize() const {
+  if (ArgV)
+    return ArgV->size();
+  else
+    return 0;
+}
 
 const RplVector *ASaPType::getArgV() const { return ArgV; }
 
@@ -107,14 +111,16 @@ QualType ASaPType::getQT(int DerefNum) const {
   return Result;
 }
 
-/*ASaPType *ASaPType::getReturnType() const {
+ASaPType *ASaPType::getReturnType() {
   if (QT->isFunctionType()) {
-    const FunctionType *FT = dyn_cast<FunctionType>(QT.getTypePtr());
-    QualType ResultQT = FT->getResultType();
-    return new ASaPType(ResultQT, ArgV, InRpl);
-  } else
+    const FunctionType *FT = QT->getAs<FunctionType>();
+    QT = FT->getResultType();
+    adjust();
+    return this;
+  } else {
     return 0;
-}*/
+  }
+}
 
 void ASaPType::deref(int DerefNum) {
   assert(DerefNum >= 0);

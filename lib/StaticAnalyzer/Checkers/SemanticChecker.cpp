@@ -28,8 +28,8 @@ using namespace clang::asap;
 using namespace clang::ento;
 using namespace llvm;
 
-void ASaPSemanticCheckerTraverser::addASaPTypeToMap(ValueDecl *D, RplVector *RV,
-                                                    Rpl *InRpl) {
+void ASaPSemanticCheckerTraverser::
+addASaPTypeToMap(ValueDecl *D, RplVector *RV, Rpl *InRpl) {
   assert(!SymT.hasType(D));
   ASaPType *T = new ASaPType(D->getType(), RV, InRpl);
   OS << "DEBUG:: D->getType() = ";
@@ -38,10 +38,10 @@ void ASaPSemanticCheckerTraverser::addASaPTypeToMap(ValueDecl *D, RplVector *RV,
   OS << "Debug:: RV.size=" << (RV ? RV->size() : 0)
 
     << ", T.RV.size=" << T->getArgVSize() << "\n";
-  bool Result = SymT.setType(D, T);
   OS << "Debug :: adding type: " << T->toString(Ctx) << " to Decl: ";
   D->print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
+  bool Result = SymT.setType(D, T);
   assert(Result);
 }
 
@@ -261,7 +261,7 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
   // How many In/Arg annotations does the type require?
   OS << "DEBUG:: calling getRegionParamCount on type: ";
   QT.print(OS, Ctx.getPrintingPolicy());
-  OS << "\n";  
+  OS << "\n";
   SymbolTable::ResultPair ResPair = SymT.getRegionParamCount(QT);
   ResultKind ResKin = ResPair.first;
   long ParamCount = ResPair.second;
@@ -276,7 +276,7 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
     emitUnknownNumberOfRegionParamsForType(D);
     break;
   case RK_VAR:
-    // Type is TemplateTypeParam -- Any number of region args 
+    // Type is TemplateTypeParam -- Any number of region args
     // could be ok. At least ParamCount are needed though.
     if (ParamCount > ArgCount &&
       ParamCount > ArgCount + (DefaultInRpl?1:0)) {
@@ -299,7 +299,7 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
         if (I < ArgCount)
           RplVec->getRplAt(I)->print(BufStream);
         emitSuperfluousRegionArg(D, BufStream.str());
-    } else if (ParamCount > 0) {
+    } else /*if (ParamCount > 0) */{
       assert(ParamCount>=0);
       if (ParamCount > ArgCount) {
         assert(DefaultInRpl);
@@ -484,7 +484,7 @@ bool ASaPSemanticCheckerTraverser::VisitValueDecl(ValueDecl *D) {
   OS << "DEBUG:: it is " << (D->isTemplateDecl() ? "" : "NOT ")
     << "a template\n";
   OS << "DEBUG:: it is " << (D->isTemplateParameter() ? "" : "NOT ")
-    << "a template PARAMETER\n";    
+    << "a template PARAMETER\n";
   return true;
 }
 
@@ -495,7 +495,7 @@ bool ASaPSemanticCheckerTraverser::VisitParmVarDecl(ParmVarDecl *D) {
   OS << "DEBUG:: it is " << (D->isTemplateDecl() ? "" : "NOT ")
     << "a template\n";
   OS << "DEBUG:: it is " << (D->isTemplateParameter() ? "" : "NOT ")
-    << "a template PARAMETER\n";    
+    << "a template PARAMETER\n";
   return true;
 }
 
@@ -685,7 +685,7 @@ VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
   OS << "DEBUG:: it is " << (D->isTemplateDecl() ? "" : "NOT ")
     << "a template\n";
   OS << "DEBUG:: it is " << (D->isTemplateParameter() ? "" : "NOT ")
-    << "a template PARAMETER\n";    
+    << "a template PARAMETER\n";
   NextFunctionIsATemplatePattern = true;
   return true;
 }

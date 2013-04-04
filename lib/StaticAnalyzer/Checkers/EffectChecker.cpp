@@ -32,12 +32,17 @@ using namespace llvm;
 
 void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
   assert(D && "D can't be null");
-  const ASaPType *T = SymT.getType(D);
-  if (!T) 
+  const ASaPType *T0 = SymT.getType(D);
+  if (!T0)
     return; // Nothing to do here
-  OS << "DEBUG:: Type used for substitution = " << T->toString(Ctx) << "\n";
+  ASaPType *T1 = new ASaPType(*T0);
+  if (T1->isFunctionType())
+    T1 = T1->getReturnType();
+  if (!T1)
+    return;
+ OS << "DEBUG:: Type used for substitution = " << T1->toString(Ctx) << "\n";
 
-  QualType QT = T->getQT(DerefNum);
+  QualType QT = T1->getQT(DerefNum);
 
   const ParameterVector *ParamVec = SymT.getParameterVectorFromQualType(QT);
   if (!ParamVec)
@@ -47,7 +52,7 @@ void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
   const ParamRplElement *FromEl = ParamVec->getParamAt(0);
   assert(FromEl);
 
-  const Rpl *ToRpl = T->getSubstArg(DerefNum);
+  const Rpl *ToRpl = T1->getSubstArg(DerefNum);
   assert(ToRpl);
   OS << "DEBUG:: gonna substitute... " << FromEl->getName()
     << "->" << ToRpl->toString() << "\n";
@@ -59,6 +64,7 @@ void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
     EffectsTmp->substitute(S);
   }
   OS << "   DONE\n";
+  delete T1;
 }
 
 int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
@@ -70,22 +76,25 @@ int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
   OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
 
   assert(D);
-  const ASaPType *T = SymT.getType(D);
-  if (!T) // e.g., method returning void
+  const ASaPType *T0 = SymT.getType(D);
+  if (!T0) // e.g., method returning void
+    return 0;
+  ASaPType *T1 = new ASaPType(*T0);
+  if (T1->isFunctionType())
+    T1 = T1->getReturnType();
+  if (!T1)
     return 0;
 
   int EffectNr = 0;
-  ASaPType *Type = 0;
-  Type = new ASaPType(*T); // Make a copy of T.
 
   OS << "DEBUG:: Type used for collecting effects = "
-    << Type->toString(Ctx) << "\n";
+    << T1->toString(Ctx) << "\n";
 
 
   // Dereferences have read effects
   // TODO is this atomic or not? just ignore atomic for now
   for (int I = DerefNum; I > 0; --I) {
-    const Rpl *InRpl = Type->getInRpl();
+    const Rpl *InRpl = T1->getInRpl();
     assert(InRpl);
     if (InRpl) {
       // References do not have an InRpl
@@ -93,20 +102,20 @@ int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
       EffectsTmp->push_back(&E);
       EffectNr++;
     }
-    Type->deref();
+    T1->deref();
   }
   if (!IsBase) {
     // TODO is this atomic or not? just ignore atomic for now
     Effect::EffectKind EK = (HasWriteSemantics) ?
       Effect::EK_WritesEffect : Effect::EK_ReadsEffect;
-    const Rpl *InRpl = Type->getInRpl();
+    const Rpl *InRpl = T1->getInRpl();
     if (InRpl) {
       Effect E(EK, InRpl);
       EffectsTmp->push_back(&E);
       EffectNr++;
     }
   }
-  delete Type;
+  delete T1;
   return EffectNr;
 }
 
@@ -145,7 +154,7 @@ emitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
 }
 
 void EffectCollectorVisitor::
-helperEmitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
+emitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
                                   const StringRef &Str) {
   StringRef BugName = "effect not covered by effect summary";
   OS << "DEBUG::" << BugName << "\n";
@@ -169,7 +178,7 @@ helperEmitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
 }
 
 int EffectCollectorVisitor::
-copyAndPushFunctionEffects(const FunctionDecl *FunD, 
+copyAndPushFunctionEffects(const FunctionDecl *FunD,
                            const SubstitutionVector &SubV) {
   const EffectSummary *FunEffects = SymT.getEffectSummary(FunD);
   assert(FunEffects);
@@ -193,8 +202,14 @@ checkEffectCoverage(const Expr *Exp, const Decl *D, int N) {
     Effect* E = EffectsTmp->pop_back_val();
     OS << "### "; E->print(OS); OS << "\n";
     if (!E->isCoveredBy(*EffSummary)) {
+      OS << "DEBUG:: effect not covered: Expr = ";
+      Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+      OS << "\n";
+      OS << "\tDecl = ";
+      D->print(OS, Ctx.getPrintingPolicy());
+      OS << "\n";
       std::string Str = E->toString();
-      helperEmitEffectNotCoveredWarning(Exp, D, Str);
+      emitEffectNotCoveredWarning(Exp, D, Str);
       Result = false;
     }
   }
@@ -259,7 +274,8 @@ EffectCollectorVisitor::EffectCollectorVisitor (
   IsCoveredBySummary(true) {
     EffectsTmp = new EffectVector();
     OS << "DEBUG:: ******** INVOKING EffectCheckerVisitor...\n";
-    S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    Def->print(OS, Ctx.getPrintingPolicy());
+    //S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
     // Check that the effect summary on the canonical decl covers this one.
     const FunctionDecl *CanFD = this->Def->getCanonicalDecl();
@@ -375,16 +391,21 @@ void EffectCollectorVisitor::VisitUnaryPreDec(UnaryOperator *E) {
 
 void EffectCollectorVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   // This next lookup actually returns the function type.
-  const ASaPType *ReturnType = SymT.getType(Def);
-  assert(ReturnType);
+  const ASaPType *FunType = SymT.getType(Def);
+  assert(FunType);
 
-  if (ReturnType->getQT()->isReferenceType()) {
+  ASaPType *RetTyp = new ASaPType(*FunType);
+  RetTyp = RetTyp->getReturnType();
+  assert(RetTyp);
+
+  if (RetTyp->getQT()->isReferenceType()) {
     DerefNum--;
     Visit(Ret->getRetValue());
     DerefNum++;
   } else {
     Visit(Ret->getRetValue());
   }
+  delete RetTyp;
 }
 
 void EffectCollectorVisitor::VisitDeclRefExpr(DeclRefExpr *Exp) {
@@ -440,7 +461,7 @@ void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
   OS << "DEBUG:: VisitCallExpr\n";
   Decl *D = Exp->getCalleeDecl();
   assert(D);
-  
+
   /// 1. Visit Arguments w. Read semantics
   bool SavedHasWriteSemantics = HasWriteSemantics;
   HasWriteSemantics = false;
@@ -461,7 +482,7 @@ void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
   SubstitutionVector SubV;
   // Set up Substitution Vector
   if (const ParameterVector *FD_ParamV = SymT.getParameterVector(FD)) {
-    buildParamSubstitutions(FD, Exp->arg_begin(), 
+    buildParamSubstitutions(FD, Exp->arg_begin(),
                             Exp->arg_end(), *FD_ParamV, SubV);
   }
 
@@ -494,7 +515,7 @@ VisitCXXDeleteExpr(CXXDeleteExpr *Exp) {
   bool SavedHasWriteSemantics = HasWriteSemantics;
   HasWriteSemantics = true;
   Visit(Exp->getArgument());
-  HasWriteSemantics = SavedHasWriteSemantics;  
+  HasWriteSemantics = SavedHasWriteSemantics;
 }
 
 

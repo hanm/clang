@@ -36,7 +36,7 @@ StringRef stringOf(ResultKind R) {
   }
   return "UNKNOWN!";
 }
-  
+
 /// Static Constants
 int SymbolTable::Initialized = 0;
 
@@ -63,12 +63,12 @@ void SymbolTable::Destroy() {
     delete ROOT_RplElmt;
     delete LOCAL_RplElmt;
     delete WritesLocal;
-    
+
     STAR_RplElmt = 0;
     ROOT_RplElmt = 0;
     LOCAL_RplElmt = 0;
     WritesLocal = 0;
-    
+
     Initialized = 0;
   }
 }
@@ -90,41 +90,40 @@ SymbolTable::~SymbolTable() {
 
 SymbolTable::ResultPair SymbolTable::getRegionParamCount(QualType QT) {
   if (isNonPointerScalarType(QT)) {
-    //OS << "DEBUG:: getRegionParamCount::isNonPointerScalarType\n";
+    OSv2 << "DEBUG:: getRegionParamCount::isNonPointerScalarType\n";
     return ResultPair(RK_OK, 1);
   } else if (QT->isPointerType()) {
-    //OS << "DEBUG:: getRegionParamCount::isPointerType\n";
+    OSv2 << "DEBUG:: getRegionParamCount::isPointerType\n";
     ResultPair Result = getRegionParamCount(QT->getPointeeType());
     Result.second += 1;
-    return Result; //(Result.first == RT_ERROR) ? Result : Result + 1;
+    return Result;
   } else if (QT->isReferenceType()) {
-    //OS << "DEBUG:: getRegionParamCount::isReferenceType\n";
+    OSv2 << "DEBUG:: getRegionParamCount::isReferenceType\n";
     return getRegionParamCount(QT->getPointeeType());
   } else if (QT->isStructureOrClassType()) {
-    //OS << "DEBUG:: getRegionParamCount::isStructureOrClassType\n";
-    // FIXME allow different numbers of parameters on class types
+    OSv2 << "DEBUG:: getRegionParamCount::isStructureOrClassType\n";
     const RecordType *RT = QT->getAs<RecordType>();
     assert(RT);
-    //RegionParamVector *RPV = ParamVectorDeclMap[RT->getDecl()];
     const ParameterVector *ParamV = getParameterVector(RT->getDecl());
     if (ParamV)
       return ResultPair(RK_OK, ParamV->size());
     else
       return ResultPair(RK_OK, 0);
   } else if (QT->isFunctionType()) {
-    //OS << "DEBUG:: getRegionParamCount::isFunctionType\n";
+    OSv2 << "DEBUG:: getRegionParamCount::isFunctionType\n";
     const FunctionType *FT = QT->getAs<FunctionType>();
     assert(FT);
+
     QualType ResultQT = FT->getResultType();
     return getRegionParamCount(ResultQT);
   } else if (QT->isVoidType()) {
-    //OS << "DEBUG:: getRegionParamCount::isVoidType\n";
+    OSv2 << "DEBUG:: getRegionParamCount::isVoidType\n";
     return ResultPair(RK_OK, 0);
   } else if (QT->isTemplateTypeParmType()) {
-    //OS << "DEBUG:: getRegionParamCount::isTemplateParmType\n";
+    OSv2 << "DEBUG:: getRegionParamCount::isTemplateParmType\n";
     return ResultPair(RK_VAR, 0);
   } else {
-    //OS << "DEBUG:: getRegionParamCount::UnexpectedType\n";
+    OSv2 << "DEBUG:: getRegionParamCount::UnexpectedType\n";
     // This should not happen: unknown number of region arguments for type
     return ResultPair(RK_ERROR, 0);
   }
@@ -133,7 +132,7 @@ SymbolTable::ResultPair SymbolTable::getRegionParamCount(QualType QT) {
 bool SymbolTable::hasDecl(const Decl* D) const {
   if (!SymTable.lookup(D))
     return false;
-  else 
+  else
     return true;
 }
 

@@ -65,7 +65,7 @@ class EffectCollectorVisitor
                                     const StringRef &Str,
                                     std::string BugName,
                                     bool AddQuotes = true);
-  void helperEmitEffectNotCoveredWarning(const Stmt *S,
+  void emitEffectNotCoveredWarning(const Stmt *S,
                                          const Decl *D,
                                          const StringRef &Str);
   void emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef &Str);
@@ -99,9 +99,9 @@ public:
     Stmt *S,
     bool VisitCXXInitializer = false,
     bool HasWriteSemantics = false );
-  
+
   //~EffectCollectorVisitor();
-  
+
   /// Getters
   inline bool getIsCoveredBySummary() { return IsCoveredBySummary; }
   inline bool encounteredFatalError() { return FatalError; }
