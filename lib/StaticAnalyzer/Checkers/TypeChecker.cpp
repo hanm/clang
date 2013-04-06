@@ -190,17 +190,15 @@ helperEmitDeclarationWarning(const Decl *D, const StringRef &Str,
     Description.append("'");
   Description.append(Str);
   if (AddQuotes)
-    Description.append("' ");
+    Description.append("': ");
   else
-    Description.append(" ");
+    Description.append(": ");
   Description.append(BugName);
   StringRef BugCategory = "Safe Parallelism";
   StringRef BugStr = Description;
-
   PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
   BR.EmitBasicReport(D, BugName, BugCategory,
-    BugStr, VDLoc, D->getSourceRange());
-
+                     BugStr, VDLoc, D->getSourceRange());
 }
 
 void AssignmentCheckerVisitor::

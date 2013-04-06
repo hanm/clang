@@ -86,7 +86,7 @@ helperEmitAttributeWarning(const Decl *D, const Attr *Attr,
 
 void ASaPSemanticCheckerTraverser::
 emitRedeclaredRegionName(const Decl *D, const StringRef &Str) {
-  StringRef BugName = "Region name already declared at this scope";
+  StringRef BugName = "region name already declared at this scope";
   helperEmitDeclarationWarning(D, Str, BugName);
   // Not a Fatal Error
 }
@@ -94,7 +94,7 @@ emitRedeclaredRegionName(const Decl *D, const StringRef &Str) {
 inline void ASaPSemanticCheckerTraverser::
 emitRedeclaredRegionParameter(const Decl *D, const StringRef &Str) {
   FatalError = true;
-  StringRef BugName = "Region name already declared at this scope";
+  StringRef BugName = "region parameter already declared at this scope";
   helperEmitDeclarationWarning(D, Str, BugName);
 }
 

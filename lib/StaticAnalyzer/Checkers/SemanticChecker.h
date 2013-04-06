@@ -149,13 +149,13 @@ class ASaPSemanticCheckerTraverser :
               emitRedeclaredRegionName(D, Name);
               Result = false;
             }
-          }
-          else if (isa<RegionParamAttr>(*I))
+          } else if (isa<RegionParamAttr>(*I)) {
             if (!SymT.addParameterName(D, Name)) {
               // Region parameter already declared at this scope.
               emitRedeclaredRegionParameter(D, Name);
               Result = false;
             }
+          }
         } else {
           /// Emit bug report: ill formed region or parameter name.
           emitIllFormedRegionNameOrParameter(D, *I, Name);

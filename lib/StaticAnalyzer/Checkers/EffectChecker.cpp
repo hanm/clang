@@ -120,23 +120,22 @@ int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
 }
 
 void EffectCollectorVisitor::
-helperEmitDeclarationWarning(const Decl *D,const StringRef &Str,
+helperEmitDeclarationWarning(const Decl *D, const StringRef &Str,
                              std::string BugName, bool AddQuotes) {
   std::string Description = "";
   if (AddQuotes)
     Description.append("'");
   Description.append(Str);
   if (AddQuotes)
-    Description.append("' ");
+    Description.append("': ");
   else
-    Description.append(" ");
+    Description.append(": ");
   Description.append(BugName);
   StringRef BugCategory = "Safe Parallelism";
   StringRef BugStr = Description;
-
   PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
   BR.EmitBasicReport(D, BugName, BugCategory,
-  BugStr, VDLoc, D->getSourceRange());
+                     BugStr, VDLoc, D->getSourceRange());
 }
 
 void EffectCollectorVisitor::
