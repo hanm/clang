@@ -135,7 +135,7 @@ class ASaPSemanticCheckerTraverser :
       ElmtNames.split(RplElmtVec, Rpl::RPL_LIST_SEPARATOR);
       for (size_t Idx = 0 ; Idx != RplElmtVec.size(); ++Idx) {
         llvm::StringRef Name = RplElmtVec[Idx].trim();
-        if (isValidRegionName(Name)) {
+        if (Rpl::isValidRegionName(Name)) {
           /// Add it to the vector.
           OS << "DEBUG:: creating RPL Element called " << Name << "\n";
           if (isa<RegionAttr>(*I)) {

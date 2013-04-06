@@ -47,38 +47,21 @@ const StringRef Rpl::RPL_LIST_SEPARATOR = ",";
 const StringRef Rpl::RPL_NAME_SPEC = "::";
 
 
-const RplElement* getSpecialRplElement(const llvm::StringRef& s) {
-  if (!s.compare(SymbolTable::STAR_RplElmt->getName()))
-    return SymbolTable::STAR_RplElmt;
-  else if (!s.compare(SymbolTable::ROOT_RplElmt->getName()))
-    return SymbolTable::ROOT_RplElmt;
-  else if (!s.compare(SymbolTable::LOCAL_RplElmt->getName()))
-    return SymbolTable::LOCAL_RplElmt;
-  else
-    return 0;
-}
-
-bool isSpecialRplElement(const llvm::StringRef& s) {
-  if (!s.compare("*"))
-    return true;
-  else
-    return false;
-}
-
-bool isValidRegionName(const llvm::StringRef& s) {
+bool Rpl::isValidRegionName(const llvm::StringRef& Str) {
   // false if it is one of the Special Rpl Elements
   // => it is not allowed to redeclare them
-  if (isSpecialRplElement(s)) return false;
+  if (SymbolTable::isSpecialRplElement(Str))
+    return false;
 
   // must start with [_a-zA-Z]
-  const char c = s.front();
+  const char c = Str.front();
   if (c != '_' &&
     !( c >= 'a' && c <= 'z') &&
     !( c >= 'A' && c <= 'Z'))
     return false;
   // all remaining characters must be in [_a-zA-Z0-9]
   for (size_t i=0; i < s.size(); i++) {
-    const char c = s[i];
+    const char c = Str[i];
     if (c != '_' &&
       !( c >= 'a' && c <= 'z') &&
       !( c >= 'A' && c <= 'Z') &&

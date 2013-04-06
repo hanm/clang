@@ -136,19 +136,6 @@ public:
 
 class Effect;
 
-/// \brief a special RPL element (Root, Local, *, ...) or NULL
-const RplElement* getSpecialRplElement(const llvm::StringRef& s);
-
-/// Return true when the input string is a special RPL element
-/// (e.g., '*', '?', 'Root'.
-// TODO (?): '?', 'Root'
-bool isSpecialRplElement(const llvm::StringRef& s);
-
-/**
-*  Return true when the input string is a valid region
-*  name or region parameter declaration
-*/
-bool isValidRegionName(const llvm::StringRef& s);
 
 class Rpl {
   friend class Rpl;
@@ -157,6 +144,11 @@ public:
   static const char RPL_SPLIT_CHARACTER = ':';
   static const StringRef RPL_LIST_SEPARATOR;
   static const StringRef RPL_NAME_SPEC;
+
+  /// Static Functions
+  /// \brief Return true when input is a valid region name or param declaration
+  static bool isValidRegionName(const llvm::StringRef& s);
+
 
   /// Types
 #ifndef RPL_VECTOR_SIZE

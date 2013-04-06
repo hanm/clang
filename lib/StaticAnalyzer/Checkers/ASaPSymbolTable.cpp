@@ -40,16 +40,21 @@ StringRef stringOf(ResultKind R) {
 /// Static Constants
 int SymbolTable::Initialized = 0;
 
-const StarRplElement *SymbolTable::STAR_RplElmt;
-const SpecialRplElement *SymbolTable::ROOT_RplElmt;
-const SpecialRplElement *SymbolTable::LOCAL_RplElmt;
-const Effect *SymbolTable::WritesLocal;
+const StarRplElement *SymbolTable::STAR_RplElmt = 0;
+const SpecialRplElement *SymbolTable::ROOT_RplElmt = 0;
+const SpecialRplElement *SymbolTable::LOCAL_RplElmt = 0;
+const SpecialRplElement *SymbolTable::GLOBAL_RplElmt = 0;
+const SpecialRplElement *SymbolTable::IMMUTABLE_RplElmt = 0;
+const Effect *SymbolTable::WritesLocal = 0;
 
+/// Static Functions
 void SymbolTable::Initialize() {
   if (!Initialized) {
     STAR_RplElmt = new StarRplElement();
     ROOT_RplElmt = new SpecialRplElement("Root");
     LOCAL_RplElmt = new SpecialRplElement("Local");
+    GLOBAL_RplElmt = new SpecialRplElement("Global");
+    IMMUTABLE_RplElmt = new SpecialRplElement("Immutable");
     Rpl R(*LOCAL_RplElmt);
     R.appendElement(STAR_RplElmt);
     WritesLocal = new Effect(Effect::EK_WritesEffect, &R);
@@ -59,20 +64,54 @@ void SymbolTable::Initialize() {
 
 void SymbolTable::Destroy() {
   if (Initialized) {
+    Initialized = 0;
+
     delete STAR_RplElmt;
     delete ROOT_RplElmt;
     delete LOCAL_RplElmt;
+    delete GLOBAL_RplElmt;
+    delete IMMUTABLE_RplElmt;
     delete WritesLocal;
 
     STAR_RplElmt = 0;
     ROOT_RplElmt = 0;
     LOCAL_RplElmt = 0;
+    GLOBAL_RplElmt = 0;
+    IMMUTABLE_RplElmt = 0;
     WritesLocal = 0;
-
-    Initialized = 0;
   }
 }
 
+const RplElement *SymbolTable::
+getSpecialRplElement(const llvm::StringRef& Str) {
+  if (!Str.compare(SymbolTable::STAR_RplElmt->getName()))
+    return SymbolTable::STAR_RplElmt;
+  else if (!Str.compare(SymbolTable::ROOT_RplElmt->getName()))
+    return SymbolTable::ROOT_RplElmt;
+  else if (!Str.compare(SymbolTable::LOCAL_RplElmt->getName()))
+    return SymbolTable::LOCAL_RplElmt;
+  else if (!Str.compare(SymbolTable::GLOBAL_RplElmt->getName()))
+    return SymbolTable::GLOBAL_RplElmt;
+  else if (!Str.compare(SymbolTable::IMMUTABLE_RplElmt->getName()))
+    return SymbolTable::IMMUTABLE_RplElmt;
+  else
+    return 0;
+}
+
+bool SymbolTable::
+isSpecialRplElement(const llvm::StringRef& Str) {
+  if (!Str.compare("*")
+      || !Str.compare("Local")
+      || !Str.compare("Global")
+      || !Str.compare("Immutable")
+      || !Str.compare("Root"))
+    return true;
+  else
+    return false;
+}
+
+
+/// Non-Static Functions
 SymbolTable::SymbolTable() {
   BuiltinDefaultRegionParameterVec =
     new ParameterVector(new ParamRplElement("P"));

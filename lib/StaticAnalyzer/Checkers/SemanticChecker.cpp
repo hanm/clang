@@ -410,7 +410,7 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *A,
       assert(Vec.size() == 1);
       Head = Vec.back();
       /// head: is it a special RPL element? if not, is it declared?
-      RplEl = getSpecialRplElement(Head);
+      RplEl = SymbolTable::getSpecialRplElement(Head);
       if (!RplEl)
         RplEl = recursiveFindRegionOrParamName(D, Head);
     }
@@ -643,8 +643,15 @@ bool ASaPSemanticCheckerTraverser::VisitVarDecl(VarDecl *D) {
 
   /// C. Check validity of annotations
   if (Success) {
-    Rpl Local(*SymbolTable::LOCAL_RplElmt);
-    checkTypeRegionArgs(D, &Local);
+    // Get context to select default annotation
+    if (D->isStaticLocal() || D->isStaticDataMember()
+        || D->getDeclContext()->isFileContext()) {
+      Rpl Global(*SymbolTable::GLOBAL_RplElmt);
+      checkTypeRegionArgs(D, &Global);
+    } else {
+      Rpl Local(*SymbolTable::LOCAL_RplElmt);
+      checkTypeRegionArgs(D, &Local);
+    }
   }
 
   return true;

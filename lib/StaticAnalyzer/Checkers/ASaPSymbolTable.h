@@ -34,6 +34,7 @@ class ParameterVector;
 class ASaPType;
 class RegionNameSet;
 class EffectSummary;
+class RplElement;
 class NamedRplElement;
 class ParamRplElement;
 class StarRplElement;
@@ -68,23 +69,30 @@ public:
   static const StarRplElement *STAR_RplElmt;
   static const SpecialRplElement *ROOT_RplElmt;
   static const SpecialRplElement *LOCAL_RplElmt;
+  static const SpecialRplElement *GLOBAL_RplElmt;
+  static const SpecialRplElement *IMMUTABLE_RplElmt;
   static const Effect *WritesLocal;
 
-  // Static Functions 
+  // Static Functions
   static void Initialize();
   static void Destroy();
   static inline bool isNonPointerScalarType(QualType QT) {
     return (QT->isScalarType() && !QT->isPointerType());
   }
+  /// \brief a special RPL element (Root, Local, *, ...) or NULL
+  static const RplElement *getSpecialRplElement(const llvm::StringRef& S);
+  /// \brief Return true when the input string is a special RPL element
+  /// (e.g., '*', '?', 'Root', 'Local', 'Globa', ...)
+  static bool isSpecialRplElement(const llvm::StringRef& S);
 
   // Types
   typedef std::pair<ResultKind, long> ResultPair;
-  
-  // Functions  
+
+  // Functions
   /// \brief return the number of In/Arg annotations needed for type or -1
-  /// if unknown.  
+  /// if unknown.
   ResultPair getRegionParamCount(QualType QT);
-  
+
   bool hasDecl(const Decl *D) const;
   bool hasType(const Decl *D) const;
   bool hasParameterVector(const Decl *D) const;
