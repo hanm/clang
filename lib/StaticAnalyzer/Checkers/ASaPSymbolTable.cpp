@@ -32,6 +32,7 @@ StringRef stringOf(ResultKind R) {
   switch(R) {
   case RK_OK: return "OK";
   case RK_ERROR: return "ERROR";
+  case RK_NOT_VISITED: return "NOT_VISITED";
   case RK_VAR: return "VAR";
   }
   return "UNKNOWN!";
@@ -127,14 +128,14 @@ SymbolTable::~SymbolTable() {
   }
 }
 
-SymbolTable::ResultPair SymbolTable::getRegionParamCount(QualType QT) {
+SymbolTable::ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
   if (isNonPointerScalarType(QT)) {
     OSv2 << "DEBUG:: getRegionParamCount::isNonPointerScalarType\n";
-    return ResultPair(RK_OK, 1);
+    return ResultTriplet(RK_OK, 1, 0);
   } else if (QT->isPointerType()) {
     OSv2 << "DEBUG:: getRegionParamCount::isPointerType\n";
-    ResultPair Result = getRegionParamCount(QT->getPointeeType());
-    Result.second += 1;
+    ResultTriplet Result = getRegionParamCount(QT->getPointeeType());
+    Result.NumArgs += 1;
     return Result;
   } else if (QT->isReferenceType()) {
     OSv2 << "DEBUG:: getRegionParamCount::isReferenceType\n";
@@ -143,11 +144,12 @@ SymbolTable::ResultPair SymbolTable::getRegionParamCount(QualType QT) {
     OSv2 << "DEBUG:: getRegionParamCount::isStructureOrClassType\n";
     const RecordType *RT = QT->getAs<RecordType>();
     assert(RT);
-    const ParameterVector *ParamV = getParameterVector(RT->getDecl());
+    RecordDecl *D = RT->getDecl();
+    const ParameterVector *ParamV = getParameterVector(D);
     if (ParamV)
-      return ResultPair(RK_OK, ParamV->size());
+      return ResultTriplet(RK_OK, ParamV->size(), 0);
     else
-      return ResultPair(RK_OK, 0);
+      return ResultTriplet(RK_NOT_VISITED, 0, D);
   } else if (QT->isFunctionType()) {
     OSv2 << "DEBUG:: getRegionParamCount::isFunctionType\n";
     const FunctionType *FT = QT->getAs<FunctionType>();
@@ -157,14 +159,14 @@ SymbolTable::ResultPair SymbolTable::getRegionParamCount(QualType QT) {
     return getRegionParamCount(ResultQT);
   } else if (QT->isVoidType()) {
     OSv2 << "DEBUG:: getRegionParamCount::isVoidType\n";
-    return ResultPair(RK_OK, 0);
+    return ResultTriplet(RK_OK, 0, 0);
   } else if (QT->isTemplateTypeParmType()) {
     OSv2 << "DEBUG:: getRegionParamCount::isTemplateParmType\n";
-    return ResultPair(RK_VAR, 0);
+    return ResultTriplet(RK_VAR, 0, 0);
   } else {
     OSv2 << "DEBUG:: getRegionParamCount::UnexpectedType\n";
     // This should not happen: unknown number of region arguments for type
-    return ResultPair(RK_ERROR, 0);
+    return ResultTriplet(RK_ERROR, 0, 0);
   }
 }
 
@@ -239,6 +241,18 @@ bool SymbolTable::setType(const Decl* D, ASaPType *T) {
   }
 }
 
+bool SymbolTable::initParameterVector(const Decl *D) {
+  if (!SymTable[D])
+    SymTable[D] = new SymbolTableEntry();
+  // invariant: SymTable[D] not null
+  if (SymTable[D]->hasParameterVector())
+    return false;
+  else {
+    SymTable[D]->setParameterVector(new ParameterVector());
+    return true;
+  }
+}
+
 bool SymbolTable::setParameterVector(const Decl *D, ParameterVector *PV) {
   if (!SymTable[D])
     SymTable[D] = new SymbolTableEntry();
@@ -271,6 +285,21 @@ bool SymbolTable::setEffectSummary(const Decl *D, EffectSummary *ES) {
     return false;
   else {
     SymTable[D]->setEffectSummary(ES);
+    return true;
+  }
+}
+
+bool SymbolTable::setEffectSummary(const Decl *D, const Decl *Dfrom) {
+  if (!SymTable[Dfrom] || !SymTable[Dfrom]->hasEffectSummary())
+    return false;
+
+  if (!SymTable[D])
+    SymTable[D] = new SymbolTableEntry();
+  // invariant: SymTable[D] not null
+  if (SymTable[D]->hasEffectSummary())
+    return false;
+  else {
+    SymTable[D]->setEffectSummary(SymTable[Dfrom]->getNonConstEffectSummary());
     return true;
   }
 }
@@ -331,8 +360,17 @@ const ParameterVector *SymbolTable::getParameterVectorFromQualType(QualType QT) 
   } /// else result = NULL;
   return ParamVec;
 }
+//////////////////////////////////////////////////////////////////////////
 
-SymbolTable::SymbolTableEntry::SymbolTableEntry() : Typ(0), ParamVec(0), RegnNameSet(0), EffSum(0) {}
+SymbolTable::SymbolTableEntry::SymbolTableEntry() :
+    Typ(0), ParamVec(0), RegnNameSet(0), EffSum(0) {}
+
+SymbolTable::SymbolTableEntry::~SymbolTableEntry() {
+  //delete Typ;
+  //delete ParamVec;
+  //delete RegnNameSet;
+  //delete EffSum;
+}
 
 const NamedRplElement *SymbolTable::SymbolTableEntry::lookupRegionName(StringRef Name) {
   if (!RegnNameSet)

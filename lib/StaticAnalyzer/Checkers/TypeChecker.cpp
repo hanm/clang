@@ -421,8 +421,10 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
                           SubstitutionVector &SubV) {
   assert(CalleeDecl);
   // Build SubV for function region params
-  if (const ParameterVector *ParamV = SymT.getParameterVector(CalleeDecl))
+  const ParameterVector *ParamV = SymT.getParameterVector(CalleeDecl);
+  if (ParamV && ParamV->size() > 0) {
     buildParamSubstitutions(CalleeDecl, ArgI, ArgE, *ParamV, SubV);
+  }
 
   OS << "DEBUG:: CALLING typecheckParamAssignments\n";
   FunctionDecl::param_iterator ParamI, ParamE;
@@ -446,7 +448,7 @@ typecheckCXXConstructExpr(VarDecl *VarD,
   assert(ClassDecl);
   // Set up Substitution Vector
   const ParameterVector *PV = SymT.getParameterVector(ClassDecl);
-  if (PV) {
+  if (PV && PV->size() > 0) {
     assert(PV->size() == 1); // until we support multiple region params
     const ParamRplElement *ParamEl = PV->getParamAt(0);
     const ASaPType *T = SymT.getType(VarD);
@@ -497,7 +499,8 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   if (!FD)
     return;
   // Set up Substitution Vector
-  if (const ParameterVector *FD_ParamV = SymT.getParameterVector(FD)) {
+  const ParameterVector *FD_ParamV = SymT.getParameterVector(FD);
+  if (FD_ParamV && FD_ParamV->size() > 0) {
     buildParamSubstitutions(FD, Exp->arg_begin(),
                             Exp->arg_end(), *FD_ParamV, SubV);
   }
@@ -511,7 +514,7 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
         SymT, Def, Exp->getCallee());
   // Build substitution
   const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
-  if (ParamV) {
+  if (ParamV && ParamV->size() > 0) {
     assert(ParamV->size() == 1); // until we support multiple region params
     const ParamRplElement *ParamEl = ParamV->getParamAt(0);
 
@@ -607,7 +610,7 @@ void TypeBuilderVisitor::memberSubstitute(const ASaPType *T) {
   QualType QT = T->getQT(DerefNum);
 
   const ParameterVector *ParamVec = SymT.getParameterVectorFromQualType(QT);
-  if (!ParamVec)
+  if (!ParamVec || ParamVec->size() == 0)
     return;
 
   // TODO support multiple Parameters

@@ -104,10 +104,18 @@ std::string Effect::toString() const {
   return std::string(OS.str());
 }
 
+//////////////////////////////////////////////////////////////////////////
+// EffectSummary
+
 const Effect *EffectSummary::covers(const Effect *Eff) const {
-  // if the Eff pointer is included in the set, return it
-  if (EffectSum.count(Eff))
+  assert(Eff);
+  if (Eff->isNoEffect())
     return Eff;
+
+  // if the Eff pointer is included in the set, return it
+  if (EffectSum.count(Eff)) {
+    return Eff;
+  }
 
   EffectSummarySetT::const_iterator
     I = EffectSum.begin(),
@@ -122,7 +130,7 @@ const Effect *EffectSummary::covers(const Effect *Eff) const {
 bool EffectSummary::covers(const EffectSummary *Sum) const {
   if (!Sum)
     return true;
-  
+
   EffectSummarySetT::const_iterator
     I = Sum->begin(),
     E = Sum->end();
@@ -151,9 +159,9 @@ void EffectSummary::makeMinimal(EffectCoverageVector &ECV) {
       bool Success = EffectSum.erase(*I);
       assert(Success);
       I = EffectSum.begin();
-    }
-    else
+    } else {
       ++I;
+    }
   } // end while loop
 }
 
@@ -175,8 +183,7 @@ std::string EffectSummary::toString() const {
 }
 
 const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
-  bool Result = this->isSubEffectOf(*SymbolTable::WritesLocal);
-  if (Result)
+  if (this->isSubEffectOf(*SymbolTable::WritesLocal))
     return SymbolTable::WritesLocal;
   else
     return ES.covers(this);

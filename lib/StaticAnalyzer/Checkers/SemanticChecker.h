@@ -99,6 +99,8 @@ class ASaPSemanticCheckerTraverser :
   /// \brief Region name or parameter contains illegal characters.
   void emitIllFormedRegionNameOrParameter(Decl *D, Attr *A,
                                           llvm::StringRef Name);
+  void emitCanonicalDeclHasSmallerEffectSummary(const Decl *D,
+                                                const StringRef &S);
   /// \brief Effect summary not minimal: effect E1 is covered by effect E2.
   void emitEffectCovered(Decl *D, const Effect *E1, const Effect *E2);
   void emitNoEffectInNonEmptyEffectSummary(Decl *D, const Attr *A);
@@ -141,6 +143,8 @@ class ASaPSemanticCheckerTraverser :
           if (isa<RegionAttr>(*I)) {
             const Decl *ScopeDecl = D;
             if (isa<EmptyDecl>(D)) {
+              // An empty declaration is typically at global scope
+              // E.g., [[asap::name("X")]];
               ScopeDecl = getDeclFromContext(D->getDeclContext());
               assert(ScopeDecl);
             }
@@ -232,8 +236,8 @@ class ASaPSemanticCheckerTraverser :
       if (Tmp) { /// Tmp may be NULL if the RPL was ill formed (e.g., contained
                  /// undeclared RPL elements).
         for (size_t Idx = 0; Idx < Tmp->size(); ++Idx) {
-          const Effect *E = new Effect(EK, Tmp->getRplAt(Idx), *I);
-          bool Success = ES.insert(E);
+          const Effect E(EK, Tmp->getRplAt(Idx), *I);
+          bool Success = ES.insert(&E);
           assert(Success);
         }
       }

@@ -219,9 +219,13 @@ public:
 
   /// \brief Returns true iff insertion was successful.
   inline bool insert(const Effect *Eff) {
-    return EffectSum.insert(Eff);
+    if (Eff)
+      return EffectSum.insert(new Effect(*Eff));
+    else
+      return false;
   }
 
+  // contains effect pairs (E1, E2) such that E1 is covered by E2.
   typedef llvm::SmallVector<std::pair<const Effect*, const Effect*> *, 8>
     EffectCoverageVector;
 

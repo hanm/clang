@@ -13,6 +13,9 @@ void C::do_something [[asap::writes("Class")]]  () { // expected-warning{{effect
 
 [[asap::region("R")]];
 void func ( C *c [[asap::arg("Local,R")]] ) {
-  c->do_something(); // expected-warning{{effect not covered}}
+  c->do_something(); // Note: the checker uses the canonical decl of do_something
+                     // which has no declared effects. Therefore, the call here
+                     // is assumed to have no effects (other than the default
+                     // writes Local:*
 }
 

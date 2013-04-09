@@ -45,7 +45,7 @@ void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
   QualType QT = T1->getQT(DerefNum);
 
   const ParameterVector *ParamVec = SymT.getParameterVectorFromQualType(QT);
-  if (!ParamVec)
+  if (!ParamVec || ParamVec->size() == 0)
     return; // Nothing to do here
 
   // TODO support multiple Parameters
@@ -179,7 +179,10 @@ emitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
 int EffectCollectorVisitor::
 copyAndPushFunctionEffects(const FunctionDecl *FunD,
                            const SubstitutionVector &SubV) {
-  const EffectSummary *FunEffects = SymT.getEffectSummary(FunD);
+  if (!FunD)
+    return 0;
+  const EffectSummary *FunEffects =
+    SymT.getEffectSummary(FunD->getCanonicalDecl());
   assert(FunEffects);
   // Must make copies because we will substitute, cannot use append:
   //EffectsTmp->append(EV->size(), (*EV->begin()));
@@ -196,6 +199,8 @@ copyAndPushFunctionEffects(const FunctionDecl *FunD,
 
 bool EffectCollectorVisitor::
 checkEffectCoverage(const Expr *Exp, const Decl *D, int N) {
+  if (N<=0)
+    return true;
   bool Result = true;
   for (int I=0; I<N; ++I){
     Effect* E = EffectsTmp->pop_back_val();
@@ -212,6 +217,7 @@ checkEffectCoverage(const Expr *Exp, const Decl *D, int N) {
       Result = false;
     }
   }
+  OS << "DEBUG:: effect covered (OK)\n";
   IsCoveredBySummary &= Result;
   return Result;
 }
@@ -277,15 +283,9 @@ EffectCollectorVisitor::EffectCollectorVisitor (
     //S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
     // Check that the effect summary on the canonical decl covers this one.
-    const FunctionDecl *CanFD = this->Def->getCanonicalDecl();
-    const EffectSummary *DeclEffSummary = SymT.getEffectSummary(CanFD);
+
     EffSummary = SymT.getEffectSummary(this->Def);
-    assert(DeclEffSummary);
-    if (!DeclEffSummary->covers(EffSummary)) {
-      emitCanonicalDeclHasSmallerEffectSummary(Def, Def->getName());
-    } else {
-      EffSummary = DeclEffSummary;
-    }
+    assert(EffSummary);
 
     if (VisitCXXInitializer) {
       if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
@@ -480,7 +480,8 @@ void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
     return;
   SubstitutionVector SubV;
   // Set up Substitution Vector
-  if (const ParameterVector *FD_ParamV = SymT.getParameterVector(FD)) {
+  const ParameterVector *FD_ParamV = SymT.getParameterVector(FD);
+  if (FD_ParamV && FD_ParamV->size() > 0) {
     buildParamSubstitutions(FD, Exp->arg_begin(),
                             Exp->arg_end(), *FD_ParamV, SubV);
   }
@@ -566,11 +567,11 @@ buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
       continue;
     const RplElement *Elmt = ParamR->getFirstElement();
     assert(Elmt && "Rpl should not contain null RplElement pointer");
-    if (! ParamV.hasElement(Elmt))
-      continue;
-    // Ok find the argument
-    Substitution Sub(Elmt, *ArgI);
-    SubV.push_back(&Sub);
-    OS << "DEBUG:: added function param sub: " << Sub.toString() << "\n";
+    if (ParamV.hasElement(Elmt)) {
+      // Ok find the argument
+      Substitution Sub(Elmt, *ArgI);
+      SubV.push_back(&Sub);
+      OS << "DEBUG:: added function param sub: " << Sub.toString() << "\n";
+    }
   }
 }

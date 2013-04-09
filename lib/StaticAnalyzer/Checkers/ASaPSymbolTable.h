@@ -44,6 +44,7 @@ class Effect;
 enum ResultKind {
   RK_OK,
   RK_ERROR,
+  RK_NOT_VISITED,
   RK_VAR
 };
 
@@ -86,12 +87,19 @@ public:
   static bool isSpecialRplElement(const llvm::StringRef& S);
 
   // Types
-  typedef std::pair<ResultKind, long> ResultPair;
+  class ResultTriplet {
+  public:
+    ResultKind ResKin;
+    long NumArgs;
+    RecordDecl *DeclNotVis;
+    ResultTriplet(ResultKind ReKi, long NumA, RecordDecl *D) :
+      ResKin(ReKi), NumArgs(NumA), DeclNotVis(D) {}
+  };
 
   // Functions
   /// \brief return the number of In/Arg annotations needed for type or -1
   /// if unknown.
-  ResultPair getRegionParamCount(QualType QT);
+  ResultTriplet getRegionParamCount(QualType QT);
 
   bool hasDecl(const Decl *D) const;
   bool hasType(const Decl *D) const;
@@ -109,12 +117,16 @@ public:
   const EffectSummary *getEffectSummary(const Decl *D) const;
   /// \brief Returns true iff the type for D was not already set.
   bool setType(const Decl* D, ASaPType *T);
+
+  bool initParameterVector(const Decl *D);
   /// \brief Returns true iff the parameter vector for D was not already set.
   bool setParameterVector(const Decl *D, ParameterVector *PV);
   /// \brief Returns true iff the region names for D were not already set.
   bool setRegionNameSet(const Decl *D, RegionNameSet *RNS);
   /// \brief Returns true iff the effect summary for D was not already set.
   bool setEffectSummary(const Decl *D, EffectSummary *ES);
+  /// \brief Sets the effect summary of D to that of Dfrom if it was set
+  bool setEffectSummary(const Decl *D, const Decl *Dfrom);
   // Lookup
   /// \brief Returns a named RPL element of the same name or null.
   const NamedRplElement *lookupRegionName(const Decl *D, llvm::StringRef Name);
@@ -144,6 +156,7 @@ private:
     EffectSummary *EffSum;
   public:
     SymbolTableEntry();
+    ~SymbolTableEntry();
 
     // Predicates.
     inline bool hasType() const { return (Typ) ? true : false; }
@@ -170,6 +183,10 @@ private:
     // Adders.
     void addRegionName(llvm::StringRef Name);
     void addParameterName(llvm::StringRef Name);
+
+  protected:
+    inline EffectSummary *getNonConstEffectSummary() const { return EffSum; }
+
   }; // End class SymbolTableEntry.
 }; // End class SymbolTable.
 } // End namespace asap.
