@@ -3348,13 +3348,12 @@ void Sema::CodeCompleteDeclSpec(Scope *S, DeclSpec &DS,
   // be a receiver of a class message, this may be a class message send with
   // the initial opening bracket '[' missing. Add appropriate completions.
   if (AllowNonIdentifiers && !AllowNestedNameSpecifiers &&
+      DS.getParsedSpecifiers() == DeclSpec::PQ_TypeSpecifier &&
       DS.getTypeSpecType() == DeclSpec::TST_typename &&
-      DS.getStorageClassSpecAsWritten() == DeclSpec::SCS_unspecified &&
-      !DS.isThreadSpecified() && !DS.isExternInLinkageSpec() &&
       DS.getTypeSpecComplex() == DeclSpec::TSC_unspecified &&
       DS.getTypeSpecSign() == DeclSpec::TSS_unspecified &&
-      DS.getTypeQualifiers() == 0 &&
-      S && 
+      !DS.isTypeAltiVecVector() &&
+      S &&
       (S->getFlags() & Scope::DeclScope) != 0 &&
       (S->getFlags() & (Scope::ClassScope | Scope::TemplateParamScope |
                         Scope::FunctionPrototypeScope | 
@@ -3729,6 +3728,9 @@ void Sema::CodeCompleteTypeQualifiers(DeclSpec &DS) {
   if (getLangOpts().C99 &&
       !(DS.getTypeQualifiers() & DeclSpec::TQ_restrict))
     Results.AddResult("restrict");
+  if (getLangOpts().C11 &&
+      !(DS.getTypeQualifiers() & DeclSpec::TQ_atomic))
+    Results.AddResult("_Atomic");
   Results.ExitScope();
   HandleCodeCompleteResults(this, CodeCompleter, 
                             Results.getCompletionContext(),

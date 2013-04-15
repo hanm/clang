@@ -197,6 +197,7 @@ int test29() {
   exit(1);
 }
 
+#ifndef __hexagon__
 #include <setjmp.h>
 jmp_buf test30_j;
 int test30() {
@@ -209,6 +210,7 @@ int test30() {
     _longjmp(test30_j, 1);
 #endif
 }
+#endif
 
 typedef void test31_t(int status);
 void test31(test31_t *callback __attribute__((noreturn)));
@@ -243,6 +245,11 @@ static inline int si_forward() {} // expected-warning{{control reaches end of no
 const int ignored_c_quals(); // expected-warning{{'const' type qualifier on return type has no effect}}
 const volatile int ignored_cv_quals(); // expected-warning{{'const volatile' type qualifiers on return type have no effect}}
 char* const volatile restrict ignored_cvr_quals(); // expected-warning{{'const volatile restrict' type qualifiers on return type have no effect}}
+
+typedef const int CI;
+CI ignored_quals_typedef();
+
+const CI ignored_quals_typedef_2(); // expected-warning{{'const' type qualifier}}
 
 // Test that for switch(enum) that if the switch statement covers all the cases
 // that we don't consider that for -Wreturn-type.

@@ -305,6 +305,12 @@ class CodeGenModule : public CodeGenTypeCache {
   llvm::DenseMap<QualType, llvm::Constant *> AtomicSetterHelperFnMap;
   llvm::DenseMap<QualType, llvm::Constant *> AtomicGetterHelperFnMap;
 
+  /// Map used to track internal linkage functions declared within
+  /// extern "C" regions.
+  typedef llvm::MapVector<IdentifierInfo *,
+                          llvm::GlobalValue *> StaticExternCMap;
+  StaticExternCMap StaticExternCValues;
+
   /// CXXGlobalInits - Global variables with initializers that need to run
   /// before main.
   std::vector<llvm::Constant*> CXXGlobalInits;
@@ -501,14 +507,24 @@ public:
   llvm::MDNode *getTBAAInfo(QualType QTy);
   llvm::MDNode *getTBAAInfoForVTablePtr();
   llvm::MDNode *getTBAAStructInfo(QualType QTy);
+  /// Return the MDNode in the type DAG for the given struct type.
+  llvm::MDNode *getTBAAStructTypeInfo(QualType QTy);
+  /// Return the path-aware tag for given base type, access node and offset.
+  llvm::MDNode *getTBAAStructTagInfo(QualType BaseTy, llvm::MDNode *AccessN,
+                                     uint64_t O);
 
   bool isTypeConstant(QualType QTy, bool ExcludeCtorDtor);
 
   bool isPaddedAtomicType(QualType type);
   bool isPaddedAtomicType(const AtomicType *type);
 
-  static void DecorateInstruction(llvm::Instruction *Inst,
-                                  llvm::MDNode *TBAAInfo);
+  /// Decorate the instruction with a TBAA tag. For scalar TBAA, the tag
+  /// is the same as the type. For struct-path aware TBAA, the tag
+  /// is different from the type: base type, access type and offset.
+  /// When ConvertTypeToTag is true, we create a tag based on the scalar type.
+  void DecorateInstruction(llvm::Instruction *Inst,
+                           llvm::MDNode *TBAAInfo,
+                           bool ConvertTypeToTag = true);
 
   /// getSize - Emit the given number of characters as a value of type size_t.
   llvm::ConstantInt *getSize(CharUnits numChars);
@@ -730,6 +746,12 @@ public:
   /// HandleCXXStaticMemberVarInstantiation - Tell the consumer that this
   // variable has been instantiated.
   void HandleCXXStaticMemberVarInstantiation(VarDecl *VD);
+
+  /// \brief If the declaration has internal linkage but is inside an
+  /// extern "C" linkage specification, prepare to emit an alias for it
+  /// to the expected name.
+  template<typename SomeDecl>
+  void MaybeHandleStaticInExternC(const SomeDecl *D, llvm::GlobalValue *GV);
 
   /// AddUsedGlobal - Add a global which should be forced to be
   /// present in the object file; these are emitted to the llvm.used
@@ -1042,6 +1064,10 @@ private:
 
   /// \brief Emit the link options introduced by imported modules.
   void EmitModuleLinkOptions();
+
+  /// \brief Emit aliases for internal-linkage declarations inside "C" language
+  /// linkage specifications, giving them the "expected" name where possible.
+  void EmitStaticExternCAliases();
 
   void EmitDeclMetadata();
 

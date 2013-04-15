@@ -24,6 +24,7 @@
 #include "clang/Sema/Sema.h"
 #include "clang/Sema/SemaDiagnostic.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cstring>
 using namespace clang;
@@ -169,6 +170,9 @@ DeclaratorChunk DeclaratorChunk::getFunction(bool hasProto,
                                              SourceLocation LocalRangeEnd,
                                              Declarator &TheDeclarator,
                                              TypeResult TrailingReturnType) {
+  assert(!(TypeQuals & DeclSpec::TQ_atomic) &&
+         "function cannot have _Atomic qualifier");
+
   DeclaratorChunk I;
   I.Kind                        = Function;
   I.Loc                         = LocalRangeBegin;
@@ -322,7 +326,7 @@ bool Declarator::isDeclarationOfFunction() const {
 unsigned DeclSpec::getParsedSpecifiers() const {
   unsigned Res = 0;
   if (StorageClassSpec != SCS_unspecified ||
-      SCS_thread_specified)
+      ThreadStorageClassSpec != TSCS_unspecified)
     Res |= PQ_StorageClassSpecifier;
 
   if (TypeQualifiers != TQ_unspecified)
@@ -360,6 +364,16 @@ const char *DeclSpec::getSpecifierName(DeclSpec::SCS S) {
   case DeclSpec::SCS_register:    return "register";
   case DeclSpec::SCS_private_extern: return "__private_extern__";
   case DeclSpec::SCS_mutable:     return "mutable";
+  }
+  llvm_unreachable("Unknown typespec!");
+}
+
+const char *DeclSpec::getSpecifierName(DeclSpec::TSCS S) {
+  switch (S) {
+  case DeclSpec::TSCS_unspecified:   return "unspecified";
+  case DeclSpec::TSCS___thread:      return "__thread";
+  case DeclSpec::TSCS_thread_local:  return "thread_local";
+  case DeclSpec::TSCS__Thread_local: return "_Thread_local";
   }
   llvm_unreachable("Unknown typespec!");
 }
@@ -442,6 +456,7 @@ const char *DeclSpec::getSpecifierName(TQ T) {
   case DeclSpec::TQ_const:       return "const";
   case DeclSpec::TQ_restrict:    return "restrict";
   case DeclSpec::TQ_volatile:    return "volatile";
+  case DeclSpec::TQ_atomic:      return "_Atomic";
   }
   llvm_unreachable("Unknown typespec!");
 }
@@ -506,16 +521,14 @@ bool DeclSpec::SetStorageClassSpec(Sema &S, SCS SC, SourceLocation Loc,
   return false;
 }
 
-bool DeclSpec::SetStorageClassSpecThread(SourceLocation Loc,
+bool DeclSpec::SetStorageClassSpecThread(TSCS TSC, SourceLocation Loc,
                                          const char *&PrevSpec,
                                          unsigned &DiagID) {
-  if (SCS_thread_specified) {
-    PrevSpec = "__thread";
-    DiagID = diag::ext_duplicate_declspec;
-    return true;
-  }
-  SCS_thread_specified = true;
-  SCS_threadLoc = Loc;
+  if (ThreadStorageClassSpec != TSCS_unspecified)
+    return BadSpecifier(TSC, (TSCS)ThreadStorageClassSpec, PrevSpec, DiagID);
+
+  ThreadStorageClassSpec = TSC;
+  ThreadStorageClassSpecLoc = Loc;
   return false;
 }
 
@@ -710,12 +723,14 @@ bool DeclSpec::SetTypeQual(TQ T, SourceLocation Loc, const char *&PrevSpec,
   TypeQualifiers |= T;
 
   switch (T) {
-  default: llvm_unreachable("Unknown type qualifier!");
-  case TQ_const:    TQ_constLoc = Loc; break;
-  case TQ_restrict: TQ_restrictLoc = Loc; break;
-  case TQ_volatile: TQ_volatileLoc = Loc; break;
+  case TQ_unspecified: break;
+  case TQ_const:    TQ_constLoc = Loc; return false;
+  case TQ_restrict: TQ_restrictLoc = Loc; return false;
+  case TQ_volatile: TQ_volatileLoc = Loc; return false;
+  case TQ_atomic:   TQ_atomicLoc = Loc; return false;
   }
-  return false;
+
+  llvm_unreachable("Unknown type qualifier!");
 }
 
 bool DeclSpec::setFunctionSpecInline(SourceLocation Loc) {
@@ -809,15 +824,6 @@ void DeclSpec::SaveWrittenBuiltinSpecs() {
   }
 }
 
-void DeclSpec::SaveStorageSpecifierAsWritten() {
-  if (SCS_extern_in_linkage_spec && StorageClassSpec == SCS_extern)
-    // If 'extern' is part of a linkage specification,
-    // then it is not a storage class "as written".
-    StorageClassSpecAsWritten = SCS_unspecified;
-  else
-    StorageClassSpecAsWritten = StorageClassSpec;
-}
-
 /// Finish - This does final analysis of the declspec, rejecting things like
 /// "_Imaginary" (lacking an FP type).  This returns a diagnostic to issue or
 /// diag::NUM_DIAGNOSTICS if there is no error.  After calling this method,
@@ -825,7 +831,6 @@ void DeclSpec::SaveStorageSpecifierAsWritten() {
 void DeclSpec::Finish(DiagnosticsEngine &D, Preprocessor &PP) {
   // Before possibly changing their values, save specs as written.
   SaveWrittenBuiltinSpecs();
-  SaveStorageSpecifierAsWritten();
 
   // Check the type specifier components first.
 
@@ -927,6 +932,34 @@ void DeclSpec::Finish(DiagnosticsEngine &D, Preprocessor &PP) {
     }
   }
 
+  // C11 6.7.1/3, C++11 [dcl.stc]p1, GNU TLS: __thread, thread_local and
+  // _Thread_local can only appear with the 'static' and 'extern' storage class
+  // specifiers. We also allow __private_extern__ as an extension.
+  if (ThreadStorageClassSpec != TSCS_unspecified) {
+    switch (StorageClassSpec) {
+    case SCS_unspecified:
+    case SCS_extern:
+    case SCS_private_extern:
+    case SCS_static:
+      break;
+    default:
+      if (PP.getSourceManager().isBeforeInTranslationUnit(
+            getThreadStorageClassSpecLoc(), getStorageClassSpecLoc()))
+        Diag(D, getStorageClassSpecLoc(),
+             diag::err_invalid_decl_spec_combination)
+          << DeclSpec::getSpecifierName(getThreadStorageClassSpec())
+          << SourceRange(getThreadStorageClassSpecLoc());
+      else
+        Diag(D, getThreadStorageClassSpecLoc(),
+             diag::err_invalid_decl_spec_combination)
+          << DeclSpec::getSpecifierName(getStorageClassSpec())
+          << SourceRange(getStorageClassSpecLoc());
+      // Discard the thread storage class specifier to recover.
+      ThreadStorageClassSpec = TSCS_unspecified;
+      ThreadStorageClassSpecLoc = SourceLocation();
+    }
+  }
+
   // If no type specifier was provided and we're parsing a language where
   // the type specifier is not optional, but we got 'auto' as a storage
   // class specifier, then assume this is an attempt to use C++0x's 'auto'
@@ -935,7 +968,7 @@ void DeclSpec::Finish(DiagnosticsEngine &D, Preprocessor &PP) {
   if (PP.getLangOpts().CPlusPlus && !PP.getLangOpts().MicrosoftExt &&
       TypeSpecType == TST_unspecified && StorageClassSpec == SCS_auto) {
     TypeSpecType = TST_auto;
-    StorageClassSpec = StorageClassSpecAsWritten = SCS_unspecified;
+    StorageClassSpec = SCS_unspecified;
     TSTLoc = TSTNameLoc = StorageClassSpecLoc;
     StorageClassSpecLoc = SourceLocation();
   }
@@ -956,16 +989,27 @@ void DeclSpec::Finish(DiagnosticsEngine &D, Preprocessor &PP) {
   // C++ [class.friend]p6:
   //   No storage-class-specifier shall appear in the decl-specifier-seq
   //   of a friend declaration.
-  if (isFriendSpecified() && getStorageClassSpec()) {
-    DeclSpec::SCS SC = getStorageClassSpec();
-    const char *SpecName = getSpecifierName(SC);
+  if (isFriendSpecified() &&
+      (getStorageClassSpec() || getThreadStorageClassSpec())) {
+    SmallString<32> SpecName;
+    SourceLocation SCLoc;
+    FixItHint StorageHint, ThreadHint;
 
-    SourceLocation SCLoc = getStorageClassSpecLoc();
-    SourceLocation SCEndLoc = SCLoc.getLocWithOffset(strlen(SpecName));
+    if (DeclSpec::SCS SC = getStorageClassSpec()) {
+      SpecName = getSpecifierName(SC);
+      SCLoc = getStorageClassSpecLoc();
+      StorageHint = FixItHint::CreateRemoval(SCLoc);
+    }
+
+    if (DeclSpec::TSCS TSC = getThreadStorageClassSpec()) {
+      if (!SpecName.empty()) SpecName += " ";
+      SpecName += getSpecifierName(TSC);
+      SCLoc = getThreadStorageClassSpecLoc();
+      ThreadHint = FixItHint::CreateRemoval(SCLoc);
+    }
 
     Diag(D, SCLoc, diag::err_friend_storage_spec)
-      << SpecName
-      << FixItHint::CreateRemoval(SourceRange(SCLoc, SCEndLoc));
+      << SpecName << StorageHint << ThreadHint;
 
     ClearStorageClassSpecs();
   }
