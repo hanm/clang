@@ -294,7 +294,7 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
     }
   }
 
-  SanitizerArgs Sanitize(getDriver(), Args);
+  SanitizerArgs Sanitize(*this, Args);
 
   // Add Ubsan runtime library, if required.
   if (Sanitize.needsUbsanRt()) {
@@ -878,6 +878,10 @@ bool Darwin::isPICDefault() const {
   return true;
 }
 
+bool Darwin::isPIEDefault() const {
+  return false;
+}
+
 bool Darwin::isPICDefaultForced() const {
   return getArch() == llvm::Triple::x86_64;
 }
@@ -1082,6 +1086,7 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(
   };
   static const char *const ARMHFTriples[] = {
     "arm-linux-gnueabihf",
+    "armv7hl-redhat-linux-gnueabi"
   };
 
   static const char *const X86_64LibDirs[] = { "/lib64", "/lib" };
@@ -1396,6 +1401,10 @@ bool Generic_GCC::isPICDefault() const {
   return false;
 }
 
+bool Generic_GCC::isPIEDefault() const {
+  return false;
+}
+
 bool Generic_GCC::isPICDefaultForced() const {
   return false;
 }
@@ -1630,6 +1639,10 @@ bool TCEToolChain::isPICDefault() const {
   return false;
 }
 
+bool TCEToolChain::isPIEDefault() const {
+  return false;
+}
+
 bool TCEToolChain::isPICDefaultForced() const {
   return false;
 }
@@ -1837,9 +1850,9 @@ Tool *Solaris::buildLinker() const {
   return new tools::solaris::Link(*this);
 }
 
-/// Linux toolchain (very bare-bones at the moment).
+/// Distribution (very bare-bones at the moment).
 
-enum LinuxDistro {
+enum Distro {
   ArchLinux,
   DebianLenny,
   DebianSqueeze,
@@ -1872,33 +1885,33 @@ enum LinuxDistro {
   UnknownDistro
 };
 
-static bool IsRedhat(enum LinuxDistro Distro) {
+static bool IsRedhat(enum Distro Distro) {
   return (Distro >= Fedora13 && Distro <= FedoraRawhide) ||
          (Distro >= RHEL4    && Distro <= RHEL6);
 }
 
-static bool IsOpenSuse(enum LinuxDistro Distro) {
+static bool IsOpenSuse(enum Distro Distro) {
   return Distro >= OpenSuse11_3 && Distro <= OpenSuse12_2;
 }
 
-static bool IsDebian(enum LinuxDistro Distro) {
+static bool IsDebian(enum Distro Distro) {
   return Distro >= DebianLenny && Distro <= DebianJessie;
 }
 
-static bool IsUbuntu(enum LinuxDistro Distro) {
+static bool IsUbuntu(enum Distro Distro) {
   return Distro >= UbuntuHardy && Distro <= UbuntuRaring;
 }
 
-static LinuxDistro DetectLinuxDistro(llvm::Triple::ArchType Arch) {
+static Distro DetectDistro(llvm::Triple::ArchType Arch) {
   OwningPtr<llvm::MemoryBuffer> File;
   if (!llvm::MemoryBuffer::getFile("/etc/lsb-release", File)) {
     StringRef Data = File.get()->getBuffer();
     SmallVector<StringRef, 8> Lines;
     Data.split(Lines, "\n");
-    LinuxDistro Version = UnknownDistro;
+    Distro Version = UnknownDistro;
     for (unsigned i = 0, s = Lines.size(); i != s; ++i)
       if (Version == UnknownDistro && Lines[i].startswith("DISTRIB_CODENAME="))
-        Version = llvm::StringSwitch<LinuxDistro>(Lines[i].substr(17))
+        Version = llvm::StringSwitch<Distro>(Lines[i].substr(17))
           .Case("hardy", UbuntuHardy)
           .Case("intrepid", UbuntuIntrepid)
           .Case("jaunty", UbuntuJaunty)
@@ -1955,7 +1968,7 @@ static LinuxDistro DetectLinuxDistro(llvm::Triple::ArchType Arch) {
   }
 
   if (!llvm::MemoryBuffer::getFile("/etc/SuSE-release", File))
-    return llvm::StringSwitch<LinuxDistro>(File.get()->getBuffer())
+    return llvm::StringSwitch<Distro>(File.get()->getBuffer())
       .StartsWith("openSUSE 11.3", OpenSuse11_3)
       .StartsWith("openSUSE 11.4", OpenSuse11_4)
       .StartsWith("openSUSE 12.1", OpenSuse12_1)
@@ -2089,7 +2102,7 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
 
   Linker = GetProgramPath("ld");
 
-  LinuxDistro Distro = DetectLinuxDistro(Arch);
+  Distro Distro = DetectDistro(Arch);
 
   if (IsOpenSuse(Distro) || IsUbuntu(Distro)) {
     ExtraOpts.push_back("-z");
@@ -2197,6 +2210,8 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
   }
   addPathIfExists(SysRoot + "/lib", Paths);
   addPathIfExists(SysRoot + "/usr/lib", Paths);
+
+  IsPIEDefault = SanitizerArgs(*this, Args).hasZeroBaseShadow();
 }
 
 bool Linux::HasNativeLLVMSupport() const {
@@ -2204,11 +2219,11 @@ bool Linux::HasNativeLLVMSupport() const {
 }
 
 Tool *Linux::buildLinker() const {
-  return new tools::linuxtools::Link(*this);
+  return new tools::gnutools::Link(*this);
 }
 
 Tool *Linux::buildAssembler() const {
-  return new tools::linuxtools::Assemble(*this);
+  return new tools::gnutools::Assemble(*this);
 }
 
 void Linux::addClangTargetOptions(const ArgList &DriverArgs,
@@ -2422,6 +2437,10 @@ void Linux::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
   }
 }
 
+bool Linux::isPIEDefault() const {
+  return IsPIEDefault;
+}
+
 /// DragonFly - DragonFly tool chain which can call as(1) and ld(1) directly.
 
 DragonFly::DragonFly(const Driver &D, const llvm::Triple& Triple, const ArgList &Args)
@@ -2434,7 +2453,10 @@ DragonFly::DragonFly(const Driver &D, const llvm::Triple& Triple, const ArgList 
 
   getFilePaths().push_back(getDriver().Dir + "/../lib");
   getFilePaths().push_back("/usr/lib");
-  getFilePaths().push_back("/usr/lib/gcc41");
+  if (llvm::sys::fs::exists("/usr/lib/gcc47"))
+    getFilePaths().push_back("/usr/lib/gcc47");
+  else
+    getFilePaths().push_back("/usr/lib/gcc44");
 }
 
 Tool *DragonFly::buildAssembler() const {

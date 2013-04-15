@@ -393,7 +393,7 @@ void DeclPrinter::VisitEnumConstantDecl(EnumConstantDecl *D) {
 void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
   CXXConstructorDecl *CDecl = dyn_cast<CXXConstructorDecl>(D);
   if (!Policy.SuppressSpecifiers) {
-    switch (D->getStorageClassAsWritten()) {
+    switch (D->getStorageClass()) {
     case SC_None: break;
     case SC_Extern: Out << "extern "; break;
     case SC_Static: Out << "static "; break;
@@ -641,14 +641,25 @@ void DeclPrinter::VisitLabelDecl(LabelDecl *D) {
 
 
 void DeclPrinter::VisitVarDecl(VarDecl *D) {
-  StorageClass SCAsWritten = D->getStorageClassAsWritten();
-  if (!Policy.SuppressSpecifiers && SCAsWritten != SC_None)
-    Out << VarDecl::getStorageClassSpecifierString(SCAsWritten) << " ";
+  if (!Policy.SuppressSpecifiers) {
+    StorageClass SC = D->getStorageClass();
+    if (SC != SC_None)
+      Out << VarDecl::getStorageClassSpecifierString(SC) << " ";
 
-  if (!Policy.SuppressSpecifiers && D->isThreadSpecified())
-    Out << "__thread ";
-  if (!Policy.SuppressSpecifiers && D->isModulePrivate())
-    Out << "__module_private__ ";
+    switch (D->getTLSKind()) {
+    case VarDecl::TLS_None:
+      break;
+    case VarDecl::TLS_Static:
+      Out << "_Thread_local ";
+      break;
+    case VarDecl::TLS_Dynamic:
+      Out << "thread_local ";
+      break;
+    }
+
+    if (D->isModulePrivate())
+      Out << "__module_private__ ";
+  }
 
   QualType T = D->getType();
   if (ParmVarDecl *Parm = dyn_cast<ParmVarDecl>(D))

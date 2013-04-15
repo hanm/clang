@@ -65,12 +65,13 @@ ObjCContainerDecl::getIvarDecl(IdentifierInfo *Id) const {
 
 // Get the local instance/class method declared in this interface.
 ObjCMethodDecl *
-ObjCContainerDecl::getMethod(Selector Sel, bool isInstance) const {
+ObjCContainerDecl::getMethod(Selector Sel, bool isInstance,
+                             bool AllowHidden) const {
   // If this context is a hidden protocol definition, don't find any
   // methods there.
   if (const ObjCProtocolDecl *Proto = dyn_cast<ObjCProtocolDecl>(this)) {
     if (const ObjCProtocolDecl *Def = Proto->getDefinition())
-      if (Def->isHidden())
+      if (Def->isHidden() && !AllowHidden)
         return 0;
   }
 
@@ -854,7 +855,8 @@ static void CollectOverriddenMethodsRecurse(const ObjCContainerDecl *Container,
     if (MovedToSuper)
       if (ObjCMethodDecl *
             Overridden = Container->getMethod(Method->getSelector(),
-                                              Method->isInstanceMethod()))
+                                              Method->isInstanceMethod(),
+                                              /*AllowHidden=*/true))
         if (Method != Overridden) {
           // We found an override at this category; there is no need to look
           // into its protocols.
@@ -872,7 +874,8 @@ static void CollectOverriddenMethodsRecurse(const ObjCContainerDecl *Container,
   // Check whether we have a matching method at this level.
   if (const ObjCMethodDecl *
         Overridden = Container->getMethod(Method->getSelector(),
-                                                    Method->isInstanceMethod()))
+                                          Method->isInstanceMethod(),
+                                          /*AllowHidden=*/true))
     if (Method != Overridden) {
       // We found an override at this level; there is no need to look
       // into other protocols or categories.
@@ -894,9 +897,9 @@ static void CollectOverriddenMethodsRecurse(const ObjCContainerDecl *Container,
          P != PEnd; ++P)
       CollectOverriddenMethodsRecurse(*P, Method, Methods, MovedToSuper);
 
-    for (ObjCInterfaceDecl::visible_categories_iterator
-           Cat = Interface->visible_categories_begin(),
-           CatEnd = Interface->visible_categories_end();
+    for (ObjCInterfaceDecl::known_categories_iterator
+           Cat = Interface->known_categories_begin(),
+           CatEnd = Interface->known_categories_end();
          Cat != CatEnd; ++Cat) {
       CollectOverriddenMethodsRecurse(*Cat, Method, Methods,
                                       MovedToSuper);
@@ -931,7 +934,8 @@ static void collectOverriddenMethodsSlow(const ObjCMethodDecl *Method,
     // Start searching for overridden methods using the method from the
     // interface as starting point.
     if (const ObjCMethodDecl *IFaceMeth = ID->getMethod(Method->getSelector(),
-                                                  Method->isInstanceMethod()))
+                                                    Method->isInstanceMethod(),
+                                                    /*AllowHidden=*/true))
       Method = IFaceMeth;
     CollectOverriddenMethods(ID, Method, overridden);
 
@@ -943,7 +947,8 @@ static void collectOverriddenMethodsSlow(const ObjCMethodDecl *Method,
     // Start searching for overridden methods using the method from the
     // interface as starting point.
     if (const ObjCMethodDecl *IFaceMeth = ID->getMethod(Method->getSelector(),
-                                                  Method->isInstanceMethod()))
+                                                     Method->isInstanceMethod(),
+                                                     /*AllowHidden=*/true))
       Method = IFaceMeth;
     CollectOverriddenMethods(ID, Method, overridden);
 
@@ -952,26 +957,6 @@ static void collectOverriddenMethodsSlow(const ObjCMethodDecl *Method,
                   dyn_cast_or_null<ObjCContainerDecl>(Method->getDeclContext()),
                   Method, overridden);
   }
-}
-
-static void collectOnCategoriesAfterLocation(SourceLocation Loc,
-                                             const ObjCInterfaceDecl *Class,
-                                             SourceManager &SM,
-                                             const ObjCMethodDecl *Method,
-                             SmallVectorImpl<const ObjCMethodDecl *> &Methods) {
-  if (!Class)
-    return;
-
-  for (ObjCInterfaceDecl::visible_categories_iterator
-         Cat = Class->visible_categories_begin(),
-         CatEnd = Class->visible_categories_end();
-       Cat != CatEnd; ++Cat) {
-    if (SM.isBeforeInTranslationUnit(Loc, Cat->getLocation()))
-      CollectOverriddenMethodsRecurse(*Cat, Method, Methods, true);
-  }
-  
-  collectOnCategoriesAfterLocation(Loc, Class->getSuperClass(), SM,
-                                   Method, Methods);
 }
 
 /// \brief Faster collection that is enabled when ObjCMethodDecl::isOverriding()
@@ -983,7 +968,7 @@ static void collectOnCategoriesAfterLocation(SourceLocation Loc,
 /// further in super classes.
 /// Methods in an implementation can overide methods in super class's category
 /// but not in current class's category. But, such methods
-static void collectOverriddenMethodsFast(SourceManager &SM,
+static void collectOverriddenMethodsFast(ASTContext &Ctx,
                                          const ObjCMethodDecl *Method,
                              SmallVectorImpl<const ObjCMethodDecl *> &Methods) {
   assert(!Method->isOverriding());
@@ -996,8 +981,11 @@ static void collectOverriddenMethodsFast(SourceManager &SM,
   if (!Class)
     return;
 
-  collectOnCategoriesAfterLocation(Class->getLocation(), Class->getSuperClass(),
-                                   SM, Method, Methods);
+  SmallVector<const ObjCCategoryDecl *, 32> Cats;
+  Ctx.getBaseObjCCategoriesAfterInterface(Class, Cats);
+  for (SmallVectorImpl<const ObjCCategoryDecl *>::iterator
+         I = Cats.begin(), E = Cats.end(); I != E; ++I)
+    CollectOverriddenMethodsRecurse(*I, Method, Methods, true);
 }
 
 void ObjCMethodDecl::getOverriddenMethods(
@@ -1010,8 +998,7 @@ void ObjCMethodDecl::getOverriddenMethods(
   }
 
   if (!Method->isOverriding()) {
-    collectOverriddenMethodsFast(getASTContext().getSourceManager(),
-                                 Method, Overridden);
+    collectOverriddenMethodsFast(getASTContext(), Method, Overridden);
   } else {
     collectOverriddenMethodsSlow(Method, Overridden);
     assert(!Overridden.empty() &&

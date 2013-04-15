@@ -1563,9 +1563,9 @@ void ASTReader::installPCHMacroDirectives(IdentifierInfo *II,
 }
 
 /// \brief For the given macro definitions, check if they are both in system
-/// modules and if one of the two is in the clang builtin headers.
-static bool isSystemAndClangMacro(MacroInfo *PrevMI, MacroInfo *NewMI,
-                                  Module *NewOwner, ASTReader &Reader) {
+/// modules.
+static bool areDefinedInSystemModules(MacroInfo *PrevMI, MacroInfo *NewMI,
+                                       Module *NewOwner, ASTReader &Reader) {
   assert(PrevMI && NewMI);
   if (!NewOwner)
     return false;
@@ -1576,22 +1576,7 @@ static bool isSystemAndClangMacro(MacroInfo *PrevMI, MacroInfo *NewMI,
     return false;
   if (PrevOwner == NewOwner)
     return false;
-  if (!PrevOwner->IsSystem || !NewOwner->IsSystem)
-    return false;
-
-  SourceManager &SM = Reader.getSourceManager();
-  FileID PrevFID = SM.getFileID(PrevMI->getDefinitionLoc());
-  FileID NewFID = SM.getFileID(NewMI->getDefinitionLoc());
-  const FileEntry *PrevFE = SM.getFileEntryForID(PrevFID);
-  const FileEntry *NewFE = SM.getFileEntryForID(NewFID);
-  if (PrevFE == 0 || NewFE == 0)
-    return false;
-
-  Preprocessor &PP = Reader.getPreprocessor();
-  ModuleMap &ModMap = PP.getHeaderSearchInfo().getModuleMap();
-  const DirectoryEntry *BuiltinDir = ModMap.getBuiltinIncludeDir();
-
-  return (PrevFE->getDir() == BuiltinDir) != (NewFE->getDir() == BuiltinDir);
+  return PrevOwner->IsSystem && NewOwner->IsSystem;
 }
 
 void ASTReader::installImportedMacro(IdentifierInfo *II, MacroDirective *MD,
@@ -1604,17 +1589,15 @@ void ASTReader::installImportedMacro(IdentifierInfo *II, MacroDirective *MD,
     MacroDirective::DefInfo PrevDef = Prev->getDefinition();
     MacroInfo *PrevMI = PrevDef.getMacroInfo();
     MacroInfo *NewMI = DefMD->getInfo();
-    if (NewMI != PrevMI && !PrevMI->isIdenticalTo(*NewMI, PP)) {
+    if (NewMI != PrevMI && !PrevMI->isIdenticalTo(*NewMI, PP,
+                                                  /*Syntactically=*/true)) {
       // Before marking the macros as ambiguous, check if this is a case where
-      // the system macro uses a not identical definition compared to a macro
-      // from the clang headers. For example:
+      // both macros are in system headers. If so, we trust that the system
+      // did not get it wrong. This also handles cases where Clang's own
+      // headers have a different spelling of certain system macros:
       //   #define LONG_MAX __LONG_MAX__ (clang's limits.h)
       //   #define LONG_MAX 0x7fffffffffffffffL (system's limits.h)
-      // in which case don't mark them to avoid the "ambiguous macro expansion"
-      // warning.
-      // FIXME: This should go away if the system headers get "fixed" to use
-      // identical definitions.
-      if (!isSystemAndClangMacro(PrevMI, NewMI, Owner, *this)) {
+      if (!areDefinedInSystemModules(PrevMI, NewMI, Owner, *this)) {
         PrevDef.getDirective()->setAmbiguous(true);
         DefMD->setAmbiguous(true);
       }
@@ -1994,8 +1977,14 @@ bool ASTReader::ReadASTBlock(ModuleFile &F) {
       Error("error at end of module block in AST file");
       return true;
     case llvm::BitstreamEntry::EndBlock: {
+      // Outside of C++, we do not store a lookup map for the translation unit.
+      // Instead, mark it as needing a lookup map to be built if this module
+      // contains any declarations lexically within it (which it always does!).
+      // This usually has no cost, since we very rarely need the lookup map for
+      // the translation unit outside C++.
       DeclContext *DC = Context.getTranslationUnitDecl();
-      if (!DC->hasExternalVisibleStorage() && DC->hasExternalLexicalStorage())
+      if (DC->hasExternalLexicalStorage() &&
+          !getContext().getLangOpts().CPlusPlus)
         DC->setMustBuildLookupTable();
       
       return false;
@@ -3900,6 +3889,7 @@ bool ASTReader::ParseLanguageOptions(const RecordData &Record,
     LangOpts.CommentOpts.BlockCommandNames.push_back(
       ReadString(Record, Idx));
   }
+  LangOpts.CommentOpts.ParseAllComments = Record[Idx++];
 
   return Listener.ReadLanguageOptions(LangOpts, Complain);
 }
@@ -7158,9 +7148,9 @@ void ASTReader::ReadComments() {
             (RawComment::CommentKind) Record[Idx++];
         bool IsTrailingComment = Record[Idx++];
         bool IsAlmostTrailingComment = Record[Idx++];
-        Comments.push_back(new (Context) RawComment(SR, Kind,
-                                                    IsTrailingComment,
-                                                    IsAlmostTrailingComment));
+        Comments.push_back(new (Context) RawComment(
+            SR, Kind, IsTrailingComment, IsAlmostTrailingComment,
+            Context.getLangOpts().CommentOpts.ParseAllComments));
         break;
       }
       }

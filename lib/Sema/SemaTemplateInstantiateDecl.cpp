@@ -338,9 +338,8 @@ Decl *TemplateDeclInstantiator::VisitVarDecl(VarDecl *D) {
                                  D->getInnerLocStart(),
                                  D->getLocation(), D->getIdentifier(),
                                  DI->getType(), DI,
-                                 D->getStorageClass(),
-                                 D->getStorageClassAsWritten());
-  Var->setThreadSpecified(D->isThreadSpecified());
+                                 D->getStorageClass());
+  Var->setTLSKind(D->getTLSKind());
   Var->setInitStyle(D->getInitStyle());
   Var->setCXXForRangeDecl(D->isCXXForRangeDecl());
   Var->setConstexpr(D->isConstexpr());
@@ -1163,7 +1162,7 @@ Decl *TemplateDeclInstantiator::VisitFunctionDecl(FunctionDecl *D,
   FunctionDecl *Function =
       FunctionDecl::Create(SemaRef.Context, DC, D->getInnerLocStart(),
                            D->getNameInfo(), T, TInfo,
-                           D->getStorageClass(), D->getStorageClassAsWritten(),
+                           D->getStorageClass(),
                            D->isInlineSpecified(), D->hasWrittenPrototype(),
                            D->isConstexpr());
 
@@ -1514,6 +1513,10 @@ TemplateDeclInstantiator::VisitCXXMethodDecl(CXXMethodDecl *D,
                                         Constructor->isExplicit(),
                                         Constructor->isInlineSpecified(),
                                         false, Constructor->isConstexpr());
+    // Claim that the instantiation of a constructor or constructor template
+    // inherits the same constructor that the template does.
+    if (const CXXConstructorDecl *Inh = Constructor->getInheritedConstructor())
+      cast<CXXConstructorDecl>(Method)->setInheritedConstructor(Inh);
   } else if (CXXDestructorDecl *Destructor = dyn_cast<CXXDestructorDecl>(D)) {
     Method = CXXDestructorDecl::Create(SemaRef.Context, Record,
                                        StartLoc, NameInfo, T, TInfo,
@@ -1527,11 +1530,10 @@ TemplateDeclInstantiator::VisitCXXMethodDecl(CXXMethodDecl *D,
                                        Conversion->isConstexpr(),
                                        Conversion->getLocEnd());
   } else {
+    StorageClass SC = D->isStatic() ? SC_Static : SC_None;
     Method = CXXMethodDecl::Create(SemaRef.Context, Record,
                                    StartLoc, NameInfo, T, TInfo,
-                                   D->isStatic(),
-                                   D->getStorageClassAsWritten(),
-                                   D->isInlineSpecified(),
+                                   SC, D->isInlineSpecified(),
                                    D->isConstexpr(), D->getLocEnd());
   }
 
@@ -2690,15 +2692,16 @@ TemplateDeclInstantiator::InitFunctionInstantiation(FunctionDecl *New,
       FunctionDecl *ExceptionSpecTemplate = Tmpl;
       if (EPI.ExceptionSpecType == EST_Uninstantiated)
         ExceptionSpecTemplate = EPI.ExceptionSpecTemplate;
-      assert(EPI.ExceptionSpecType != EST_Unevaluated &&
-             "instantiating implicitly-declared special member");
+      ExceptionSpecificationType NewEST = EST_Uninstantiated;
+      if (EPI.ExceptionSpecType == EST_Unevaluated)
+        NewEST = EST_Unevaluated;
 
       // Mark the function has having an uninstantiated exception specification.
       const FunctionProtoType *NewProto
         = New->getType()->getAs<FunctionProtoType>();
       assert(NewProto && "Template instantiation without function prototype?");
       EPI = NewProto->getExtProtoInfo();
-      EPI.ExceptionSpecType = EST_Uninstantiated;
+      EPI.ExceptionSpecType = NewEST;
       EPI.ExceptionSpecDecl = New;
       EPI.ExceptionSpecTemplate = ExceptionSpecTemplate;
       New->setType(SemaRef.Context.getFunctionType(NewProto->getResultType(),
@@ -2735,7 +2738,6 @@ TemplateDeclInstantiator::InitMethodInstantiation(CXXMethodDecl *New,
   if (Tmpl->isVirtualAsWritten())
     New->setVirtualAsWritten(true);
 
-  // FIXME: attributes
   // FIXME: New needs a pointer to Tmpl
   return false;
 }

@@ -296,9 +296,9 @@ def warn_exit_time_destructor : Warning<
   InGroup<ExitTimeDestructors>, DefaultIgnore;
 
 def err_invalid_thread : Error<
-  "'__thread' is only allowed on variable declarations">;
+  "'%0' is only allowed on variable declarations">;
 def err_thread_non_global : Error<
-  "'__thread' variables must have global storage">;
+  "'%0' variables must have global storage">;
 def err_thread_unsupported : Error<
   "thread-local storage is unsupported for the current target">;
 
@@ -867,7 +867,8 @@ def err_friend_def_in_local_class : Error<
   "friend function cannot be defined in a local class">;
 def err_friend_not_first_in_declaration : Error<
   "'friend' must appear first in a non-function declaration">;
-
+def err_using_decl_friend : Error<
+  "cannot befriend target of using declaration">;
 def err_invalid_member_in_interface : Error<
   "%select{data member |non-public member function |static member function |"
           "user-declared constructor|user-declared destructor|operator |"
@@ -1166,8 +1167,7 @@ def warn_cxx98_compat_static_data_member_in_union : Warning<
 def err_union_member_of_reference_type : Error<
   "union member %0 has reference type %1">;
 def ext_anonymous_struct_union_qualified : Extension<
-  "anonymous %select{struct|union}0 cannot be '%select{const|volatile|"
-  "restrict}1'">;
+  "anonymous %select{struct|union}0 cannot be '%1'">;
 def err_different_return_type_for_overriding_virtual_function : Error<
   "virtual function %0 has a different return type "
   "%diff{($) than the function it overrides (which has return type $)|"
@@ -2381,7 +2381,11 @@ def note_ovl_candidate_failed_overload_resolution : Note<
     "function %0">;
 def note_ovl_candidate_non_deduced_mismatch : Note<
     "candidate template ignored: could not match %diff{$ against $|types}0,1">;
-
+// This note is needed because the above note would sometimes print two
+// different types with the same name.  Remove this note when the above note
+// can handle that case properly.
+def note_ovl_candidate_non_deduced_mismatch_qualified : Note<
+    "candidate template ignored: could not match %q0 against %q1">;
 // Note that we don't treat templates differently for this diagnostic.
 def note_ovl_candidate_arity : Note<"candidate "
     "%select{function|function|constructor|function|function|constructor|"
@@ -3341,6 +3345,9 @@ def warn_internal_in_extern_inline : ExtWarn<
 def ext_internal_in_extern_inline : Extension<
   "static %select{function|variable}0 %1 is used in an inline function with "
   "external linkage">, InGroup<StaticInInline>;
+def warn_static_local_in_extern_inline : Warning<
+  "non-constant static local variable in inline function may be different "
+  "in different files">, InGroup<StaticLocalInInline>;
 def note_convert_inline_to_static : Note<
   "use 'static' to give inline function %0 internal linkage">;
 def note_internal_decl_declared_here : Note<
@@ -3372,6 +3379,9 @@ def err_non_thread_thread : Error<
   "non-thread-local declaration of %0 follows thread-local declaration">;
 def err_thread_non_thread : Error<
   "thread-local declaration of %0 follows non-thread-local declaration">;
+def err_thread_thread_different_kind : Error<
+  "thread-local declaration of %0 with %select{static|dynamic}1 initialization "
+  "follows declaration with %select{dynamic|static}1 initialization">;
 def err_redefinition_different_type : Error<
   "redefinition of %0 with a different type%diff{: $ vs $|}1,2">;
 def err_redefinition_different_kind : Error<
@@ -4046,6 +4056,10 @@ def warn_sizeof_array_param : Warning<
   "sizeof on array function parameter will return size of %0 instead of %1">,
   InGroup<SizeofArrayArgument>;
 
+def warn_sizeof_array_decay : Warning<
+  "sizeof on pointer operation will return size of %0 instead of %1">,
+  InGroup<SizeofArrayDecay>;
+
 def err_sizeof_nonfragile_interface : Error<
   "application of '%select{alignof|sizeof}1' to interface %0 is "
   "not supported on this architecture and platform">;
@@ -4472,8 +4486,7 @@ def err_catch_param_not_objc_type : Error<
 def err_illegal_qualifiers_on_catch_parm : Error<
   "illegal qualifiers on @catch parameter">;
 def err_storage_spec_on_catch_parm : Error<
-  "@catch parameter cannot have storage specifier %select{|'typedef'|'extern'|"
-  "'static'|'auto'|'register'|'__private_extern__'|'mutable'}0">;
+  "@catch parameter cannot have storage specifier '%0'">;
 def warn_register_objc_catch_parm : Warning<
   "'register' storage specifier on @catch parameter will be ignored">;
 def err_qualified_objc_catch_parm : Error<
@@ -4690,7 +4703,16 @@ def warn_overloaded_virtual : Warning<
   "%q0 hides overloaded virtual %select{function|functions}1">,
   InGroup<OverloadedVirtual>, DefaultIgnore;
 def note_hidden_overloaded_virtual_declared_here : Note<
-  "hidden overloaded virtual function %q0 declared here">;
+  "hidden overloaded virtual function %q0 declared here"
+  "%select{|: different classes%diff{ ($ vs $)|}2,3"
+  "|: different number of parameters (%2 vs %3)"
+  "|: type mismatch at %ordinal2 parameter%diff{ ($ vs $)|}3,4"
+  "|: different return type%diff{ ($ vs $)|}2,3"
+  "|: different qualifiers ("
+  "%select{none|const|restrict|const and restrict|volatile|const and volatile|"
+  "volatile and restrict|const, volatile, and restrict}2 vs "
+  "%select{none|const|restrict|const and restrict|volatile|const and volatile|"
+  "volatile and restrict|const, volatile, and restrict}3)}1">;
 def warn_using_directive_in_header : Warning<
   "using namespace directive in global context in header">,
   InGroup<HeaderHygiene>, DefaultIgnore;
@@ -5406,6 +5428,13 @@ def ext_in_class_initializer_non_constant : Extension<
   "in-class initializer for static data member is not a constant expression; "
   "folding it to a constant is a GNU extension">, InGroup<GNU>;
 
+def err_thread_dynamic_init : Error<
+  "initializer for thread-local variable must be a constant expression">;
+def err_thread_nontrivial_dtor : Error<
+  "type of thread-local variable has non-trivial destruction">;
+def note_use_thread_local : Note<
+  "use 'thread_local' to allow this">;
+
 // C++ anonymous unions and GNU anonymous structs/unions
 def ext_anonymous_union : Extension<
   "anonymous unions are a C11 extension">, InGroup<C11>;
@@ -6023,9 +6052,10 @@ def err_constant_integer_arg_type : Error<
 def ext_mixed_decls_code : Extension<
   "ISO C90 forbids mixing declarations and code">,
   InGroup<DiagGroup<"declaration-after-statement">>;
-
-def err_non_variable_decl_in_for : Error<
+def err_non_local_variable_decl_in_for : Error<
   "declaration of non-local variable in 'for' loop">;
+def err_non_variable_decl_in_for : Error<
+  "non-variable declaration in 'for' loop">;
 def err_toomany_element_decls : Error<
   "only one element declaration is allowed">;
 def err_selector_element_not_lvalue : Error<
@@ -6209,7 +6239,9 @@ def err_sampler_argument_required : Error<
   "sampler_t variable required - got %0">;
 def err_wrong_sampler_addressspace: Error<
   "sampler type cannot be used with the __local and __global address space qualifiers">;
-
+def err_opencl_global_invalid_addr_space : Error<
+  "global variables must have a constant address space qualifier">;
+  
 // OpenMP support.
 def err_omp_expected_var_arg_suggest : Error<
   "%0 is not a global variable, static local variable or static data member%select{|; did you mean %2?}1">;

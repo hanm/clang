@@ -1,5 +1,4 @@
 // RUN: %clang_cc1 -Wparentheses -fsyntax-only -verify %s
-// RUN: %clang_cc1 -Wparentheses -fixit %s -o - | %clang_cc1 -Wparentheses -Werror -
 
 bool someConditionFunc();
 
@@ -56,4 +55,16 @@ void test(int a, int b, int c) {
   Stream() << b + c;
   Stream() >> b + c; // expected-warning {{operator '>>' has lower precedence than '+'; '+' will be evaluated first}} \
                         expected-note {{place parentheses around the '+' expression to silence this warning}}
+}
+
+namespace PR15628 {
+  struct BlockInputIter {
+    void* operator++(int);
+    void* operator--(int);
+  };
+
+  void test(BlockInputIter i) {
+    (void)(i++ ? true : false); // no-warning
+    (void)(i-- ? true : false); // no-warning
+  }
 }
