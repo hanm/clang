@@ -1961,6 +1961,7 @@ def warn_safepar_attribute_wrong_decl_type : Warning<
   "%0 attribute only applies to %select{"
   "classes and structs and functions and empty declarations ([[attr]];)|"
   "classes and structs and functions|"
+  "classes and structs|"
   "fields or function parameters or variables|"
   "functions}1">,
   InGroup<SafeParallelismAttributes>;

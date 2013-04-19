@@ -4,7 +4,8 @@
 #ifdef ASAP_GNU_SYNTAX
 class 
 __attribute__ ((param("P1"), param("P2"))) // expected-warning {{duplicate attribute not allowed:}}
-__attribute__((region("R"))) 
+__attribute__((region("R"), region("R2"))) 
+__attribute__((base_arg("Boo", "P1"), base_arg("Baa", "P2")))
 Coo {
   int money __attribute__((arg("P1:R"))) __attribute__((arg("P2:R"))); // expected-warning {{duplicate attribute not allowed:}}
 
@@ -32,7 +33,8 @@ int main (void) {
 #ifdef ASAP_CXX11_SYNTAX
 class 
 [[asap::param("P1")]] [[asap::param("P2")]] // expected-warning {{duplicate attribute not allowed:}}
-[[asap::region("R")]] 
+[[asap::region("R"), asap::region("R2")]] 
+[[asap::base_arg("Boo", "P1"), asap::base_arg("Baa", "P2")]]
 Coo {
   int money [[asap::arg("P1:R")]] [[asap::arg("P2:R")]]; // expected-warning {{duplicate attribute not allowed:}}
 

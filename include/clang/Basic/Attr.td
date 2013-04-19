@@ -585,7 +585,7 @@ def Overloadable : Attr {
   let Spellings = [GNU<"overloadable">];
 }
 
-def Override : InheritableAttr { 
+def Override : InheritableAttr {
   let Spellings = [];
   let SemaHandler = 0;
 }
@@ -641,7 +641,7 @@ def Endian : InheritableAttr {
 
 def WorkGroupSizeHint :  InheritableAttr {
   let Spellings = [GNU<"work_group_size_hint">];
-  let Args = [UnsignedArgument<"XDim">, 
+  let Args = [UnsignedArgument<"XDim">,
               UnsignedArgument<"YDim">,
               UnsignedArgument<"ZDim">];
 }
@@ -1004,6 +1004,12 @@ def RegionArg : InheritableAttr {
   let Spellings = [GNU<"arg">, CXX11<"asap", "arg">];
   let Subjects = [Var, ParmVar];
   let Args = [StringArgument<"rpl">];
+}
+
+def RegionBaseArg : InheritableAttr {
+  let Spellings = [GNU<"base_arg">, CXX11<"asap", "base_arg">];
+  let Subjects = [Record];
+  let Args = [StringArgument<"baseType">, StringArgument<"rpl">];
 }
 
 

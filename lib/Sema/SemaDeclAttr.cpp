@@ -4690,6 +4690,7 @@ static void handleForceInlineAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 enum SafeParallelismAttributeDeclKind {      // Type of Attribute
   SafeParExpectedClassOrFunctionOrFloating,  // region (region_name)
   SafeParExpectedClassOrFunction, 	         // param(region_name)
+  SafeParExpectedClass,                      // basearg
   SafeParExpectedFieldOrParamOrVariable,     // arg(RPL)
   SafeParExpectedFunction 		               // Effects
 };
@@ -4777,6 +4778,33 @@ static void handleSafeParRegionArgAttr(Sema &S, Decl *D,
 
   D->addAttr(::new (S.Context)
              RegionArgAttr(Attr.getRange(), S.Context, Str->getString(),
+                           Attr.getAttributeSpellingListIndex()));
+}
+
+static void handleSafeParRegionBaseArgAttr(Sema &S, Decl *D,
+                                           const AttributeList &Attr) {
+  assert(!Attr.isInvalid());
+  if (!checkAttributeNumArgs(S, Attr, 2))
+    return;
+
+  if (!isa<RecordDecl>(D)) {
+
+    S.Diag(Attr.getLoc(), diag::warn_safepar_attribute_wrong_decl_type)
+      << Attr.getName() << SafeParExpectedClass;
+    return;
+  }
+
+  Expr *Arg0 = Attr.getArg(0);
+  Arg0 = Arg0->IgnoreParenCasts();
+  StringLiteral *BaseType = dyn_cast<StringLiteral>(Arg0);
+
+  Expr *Arg1 = Attr.getArg(1);
+  Arg1 = Arg1->IgnoreParenCasts();
+  StringLiteral *Rpls = dyn_cast<StringLiteral>(Arg1);
+
+  D->addAttr(::new (S.Context)
+             RegionBaseArgAttr(Attr.getRange(), S.Context,
+                           BaseType->getString(), Rpls->getString(),
                            Attr.getAttributeSpellingListIndex()));
 }
 
@@ -5136,6 +5164,10 @@ static void ProcessInheritableDeclAttr(Sema &S, Scope *scope, Decl *D,
     //break;
   case AttributeList::AT_RegionArg:
     handleSafeParRegionArgAttr(S, D, Attr);
+    break;
+
+  case AttributeList::AT_RegionBaseArg:
+    handleSafeParRegionBaseArgAttr(S, D, Attr);
     break;
 
   // 3. Effect Declarations
