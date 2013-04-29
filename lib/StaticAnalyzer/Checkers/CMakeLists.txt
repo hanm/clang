@@ -11,7 +11,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   Rpl.cpp
   TypeChecker.cpp
   SemanticChecker.cpp
-  AnalyzerStatsChecker.cpp
+  AllocationDiagnostics.cpp
   ArrayBoundChecker.cpp
   ArrayBoundCheckerV2.cpp
   BasicObjCFoundationChecks.cpp
@@ -49,8 +49,8 @@ add_clang_library(clangStaticAnalyzerCheckers
   MallocSizeofChecker.cpp
   NSAutoreleasePoolChecker.cpp
   NSErrorChecker.cpp
-  NonNullParamChecker.cpp
   NoReturnFunctionChecker.cpp
+  NonNullParamChecker.cpp
   ObjCAtSyncChecker.cpp
   ObjCContainersASTChecker.cpp
   ObjCContainersChecker.cpp

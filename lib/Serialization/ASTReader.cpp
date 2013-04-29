@@ -257,7 +257,8 @@ static bool checkPreprocessorOptions(const PreprocessorOptions &PPOpts,
                                      const PreprocessorOptions &ExistingPPOpts,
                                      DiagnosticsEngine *Diags,
                                      FileManager &FileMgr,
-                                     std::string &SuggestedPredefines) {
+                                     std::string &SuggestedPredefines,
+                                     const LangOptions &LangOpts) {
   // Check macro definitions.
   MacroDefinitionsMap ASTFileMacros;
   collectMacroDefinitions(PPOpts, ASTFileMacros);
@@ -323,6 +324,15 @@ static bool checkPreprocessorOptions(const PreprocessorOptions &PPOpts,
     return true;
   }
 
+  // Detailed record is important since it is used for the module cache hash.
+  if (LangOpts.Modules &&
+      PPOpts.DetailedRecord != ExistingPPOpts.DetailedRecord) {
+    if (Diags) {
+      Diags->Report(diag::err_pch_pp_detailed_record) << PPOpts.DetailedRecord;
+    }
+    return true;
+  }
+
   // Compute the #include and #include_macros lines we need.
   for (unsigned I = 0, N = ExistingPPOpts.Includes.size(); I != N; ++I) {
     StringRef File = ExistingPPOpts.Includes[I];
@@ -363,7 +373,8 @@ bool PCHValidator::ReadPreprocessorOptions(const PreprocessorOptions &PPOpts,
   return checkPreprocessorOptions(PPOpts, ExistingPPOpts,
                                   Complain? &Reader.Diags : 0,
                                   PP.getFileManager(),
-                                  SuggestedPredefines);
+                                  SuggestedPredefines,
+                                  PP.getLangOpts());
 }
 
 void PCHValidator::ReadHeaderFileInfo(const HeaderFileInfo &HFI,
@@ -428,8 +439,12 @@ ASTSelectorLookupTrait::ReadData(Selector, const unsigned char* d,
   data_type Result;
 
   Result.ID = Reader.getGlobalSelectorID(F, ReadUnalignedLE32(d));
-  unsigned NumInstanceMethods = ReadUnalignedLE16(d);
-  unsigned NumFactoryMethods = ReadUnalignedLE16(d);
+  unsigned NumInstanceMethodsAndBits = ReadUnalignedLE16(d);
+  unsigned NumFactoryMethodsAndBits = ReadUnalignedLE16(d);
+  Result.InstanceBits = NumInstanceMethodsAndBits & 0x3;
+  Result.FactoryBits = NumFactoryMethodsAndBits & 0x3;
+  unsigned NumInstanceMethods = NumInstanceMethodsAndBits >> 2;
+  unsigned NumFactoryMethods = NumFactoryMethodsAndBits >> 2;
 
   // Load instance methods
   for (unsigned I = 0; I != NumInstanceMethods; ++I) {
@@ -2736,7 +2751,7 @@ static void moveMethodToBackOfGlobalList(Sema &S, ObjCMethodDecl *Method) {
   ObjCMethodList &Start = Method->isInstanceMethod()? Known->second.first
                                                     : Known->second.second;
   bool Found = false;
-  for (ObjCMethodList *List = &Start; List; List = List->Next) {
+  for (ObjCMethodList *List = &Start; List; List = List->getNext()) {
     if (!Found) {
       if (List->Method == Method) {
         Found = true;
@@ -2746,8 +2761,8 @@ static void moveMethodToBackOfGlobalList(Sema &S, ObjCMethodDecl *Method) {
       }
     }
 
-    if (List->Next)
-      List->Method = List->Next->Method;
+    if (List->getNext())
+      List->Method = List->getNext()->Method;
     else
       List->Method = Method;
   }
@@ -3423,7 +3438,7 @@ namespace {
                                          bool Complain,
                                          std::string &SuggestedPredefines) {
       return checkPreprocessorOptions(ExistingPPOpts, PPOpts, 0, FileMgr,
-                                      SuggestedPredefines);
+                                      SuggestedPredefines, ExistingLangOpts);
     }
   };
 }
@@ -4000,6 +4015,7 @@ bool ASTReader::ParsePreprocessorOptions(const RecordData &Record,
   }
 
   PPOpts.UsePredefines = Record[Idx++];
+  PPOpts.DetailedRecord = Record[Idx++];
   PPOpts.ImplicitPCHInclude = ReadString(Record, Idx);
   PPOpts.ImplicitPTHInclude = ReadString(Record, Idx);
   PPOpts.ObjCXXARCStandardLibrary =
@@ -4622,8 +4638,11 @@ QualType ASTReader::readTypeRecord(unsigned Index) {
     return Context.getUnaryTransformType(BaseType, UnderlyingType, UKind);
   }
 
-  case TYPE_AUTO:
-    return Context.getAutoType(readType(*Loc.F, Record, Idx));
+  case TYPE_AUTO: {
+    QualType Deduced = readType(*Loc.F, Record, Idx);
+    bool IsDecltypeAuto = Record[Idx++];
+    return Context.getAutoType(Deduced, IsDecltypeAuto);
+  }
 
   case TYPE_RECORD: {
     if (Record.size() != 2) {
@@ -5998,8 +6017,8 @@ void ASTReader::InitializeSema(Sema &S) {
   // Makes sure any declarations that were deserialized "too early"
   // still get added to the identifier's declaration chains.
   for (unsigned I = 0, N = PreloadedDecls.size(); I != N; ++I) {
-    NamedDecl *ND = cast<NamedDecl>(PreloadedDecls[I]->getMostRecentDecl());
-    SemaObj->pushExternalDeclIntoScope(ND, PreloadedDecls[I]->getDeclName());
+    pushExternalDeclIntoScope(PreloadedDecls[I],
+                              PreloadedDecls[I]->getDeclName());
   }
   PreloadedDecls.clear();
 
@@ -6105,7 +6124,10 @@ StringRef ASTIdentifierIterator::Next() {
   return Result;
 }
 
-IdentifierIterator *ASTReader::getIdentifiers() const {
+IdentifierIterator *ASTReader::getIdentifiers() {
+  if (!loadGlobalIndex())
+    return GlobalIndex->createIdentifierIterator();
+
   return new ASTIdentifierIterator(*this);
 }
 
@@ -6114,13 +6136,16 @@ namespace clang { namespace serialization {
     ASTReader &Reader;
     Selector Sel;
     unsigned PriorGeneration;
+    unsigned InstanceBits;
+    unsigned FactoryBits;
     SmallVector<ObjCMethodDecl *, 4> InstanceMethods;
     SmallVector<ObjCMethodDecl *, 4> FactoryMethods;
 
   public:
     ReadMethodPoolVisitor(ASTReader &Reader, Selector Sel, 
                           unsigned PriorGeneration)
-      : Reader(Reader), Sel(Sel), PriorGeneration(PriorGeneration) { }
+      : Reader(Reader), Sel(Sel), PriorGeneration(PriorGeneration),
+        InstanceBits(0), FactoryBits(0) { }
     
     static bool visit(ModuleFile &M, void *UserData) {
       ReadMethodPoolVisitor *This
@@ -6153,6 +6178,8 @@ namespace clang { namespace serialization {
       
       This->InstanceMethods.append(Data.Instance.begin(), Data.Instance.end());
       This->FactoryMethods.append(Data.Factory.begin(), Data.Factory.end());
+      This->InstanceBits = Data.InstanceBits;
+      This->FactoryBits = Data.FactoryBits;
       return true;
     }
     
@@ -6165,6 +6192,9 @@ namespace clang { namespace serialization {
     ArrayRef<ObjCMethodDecl *> getFactoryMethods() const { 
       return FactoryMethods;
     }
+
+    unsigned getInstanceBits() const { return InstanceBits; }
+    unsigned getFactoryBits() const { return FactoryBits; }
   };
 } } // end namespace clang::serialization
 
@@ -6202,6 +6232,8 @@ void ASTReader::ReadMethodPool(Selector Sel) {
   
   addMethodsToPool(S, Visitor.getInstanceMethods(), Pos->second.first);
   addMethodsToPool(S, Visitor.getFactoryMethods(), Pos->second.second);
+  Pos->second.first.setBits(Visitor.getInstanceBits());
+  Pos->second.second.setBits(Visitor.getFactoryBits());
 }
 
 void ASTReader::ReadKnownNamespaces(
@@ -6400,8 +6432,7 @@ ASTReader::SetGloballyVisibleDecls(IdentifierInfo *II,
       // Introduce this declaration into the translation-unit scope
       // and add it to the declaration chain for this identifier, so
       // that (unqualified) name lookup will find it.
-      NamedDecl *ND = cast<NamedDecl>(D->getMostRecentDecl());
-      SemaObj->pushExternalDeclIntoScope(ND, II);
+      pushExternalDeclIntoScope(D, II);
     } else {
       // Queue this declaration so that it will be added to the
       // translation unit scope and identifier's declaration chain
@@ -7188,8 +7219,7 @@ void ASTReader::finishPendingActions() {
          TLD != TLDEnd; ++TLD) {
       IdentifierInfo *II = TLD->first;
       for (unsigned I = 0, N = TLD->second.size(); I != N; ++I) {
-        NamedDecl *ND = cast<NamedDecl>(TLD->second[I]->getMostRecentDecl());
-        SemaObj->pushExternalDeclIntoScope(ND, II);
+        pushExternalDeclIntoScope(cast<NamedDecl>(TLD->second[I]), II);
       }
     }
 
@@ -7326,6 +7356,21 @@ void ASTReader::FinishedDeserializing() {
       InterestingDecls.pop_front();
       PassInterestingDeclToConsumer(D);
     }
+  }
+}
+
+void ASTReader::pushExternalDeclIntoScope(NamedDecl *D, DeclarationName Name) {
+  D = cast<NamedDecl>(D->getMostRecentDecl());
+
+  if (SemaObj->IdResolver.tryAddTopLevelDecl(D, Name) && SemaObj->TUScope) {
+    SemaObj->TUScope->AddDecl(D);
+  } else if (SemaObj->TUScope) {
+    // Adding the decl to IdResolver may have failed because it was already in
+    // (even though it was not added in scope). If it is already in, make sure
+    // it gets in the scope as well.
+    if (std::find(SemaObj->IdResolver.begin(Name),
+                  SemaObj->IdResolver.end(), D) != SemaObj->IdResolver.end())
+      SemaObj->TUScope->AddDecl(D);
   }
 }
 
