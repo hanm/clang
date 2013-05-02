@@ -46,7 +46,12 @@ addASaPTypeToMap(ValueDecl *D, RplVector *RV, Rpl *InRpl) {
 }
 
 void ASaPSemanticCheckerTraverser::
-helperEmitDeclarationWarning(const Decl *D, const StringRef &Str,
+addASaPBaseTypeToMap(CXXRecordDecl *CXXRD, QualType QT, RplVector *RplVec) {
+  // TODO
+}
+
+void ASaPSemanticCheckerTraverser::
+helperEmitDeclarationWarning(const Decl *D, const StringRef Str,
                              std::string BugName, bool AddQuotes) {
   std::string Description = "";
   if (AddQuotes)
@@ -116,43 +121,53 @@ emitUndeclaredRplElement(const Decl *D,
 }
 
 void ASaPSemanticCheckerTraverser::
-emitNameSpecifierNotFound(Decl *D, Attr *A, StringRef Name) {
+emitNameSpecifierNotFound(const Decl *D, const Attr *A, StringRef Name) {
   StringRef BugName = "Name specifier was not found";
   helperEmitAttributeWarning(D, A, Name, BugName);
 }
 
-void ASaPSemanticCheckerTraverser::emitMissingRegionArgs(Decl *D) {
+void ASaPSemanticCheckerTraverser::
+emitMissingRegionArgs(const Decl *D, const Attr* A, int ParamCount) {
   FatalError = true;
-  std::string bugName = "missing region argument(s)";
+  std::string BugName;
+  llvm::raw_string_ostream BugNameOS(BugName);
+  BugNameOS << "expects " << ParamCount
+    << " region arguments [-> missing region argument(s)]";
+
+  std::string SBuf;
+  llvm::raw_string_ostream DeclOS(SBuf);
+  D->print(DeclOS, Ctx.getPrintingPolicy());
+
+  helperEmitDeclarationWarning(D, DeclOS.str(), BugNameOS.str());
+}
+
+void ASaPSemanticCheckerTraverser::
+emitUnknownNumberOfRegionParamsForType(const Decl *D) {
+  FatalError = true;
+  std::string BugName = "unknown number of region parameters for type";
 
   std::string sbuf;
   llvm::raw_string_ostream strbuf(sbuf);
   D->print(strbuf, Ctx.getPrintingPolicy());
 
-  helperEmitDeclarationWarning(D, strbuf.str(), bugName);
+  helperEmitDeclarationWarning(D, strbuf.str(), BugName);
 }
 
 void ASaPSemanticCheckerTraverser::
-emitUnknownNumberOfRegionParamsForType(Decl *D) {
+emitSuperfluousRegionArg(const Decl *D, const Attr *A,
+                         int ParamCount, StringRef Str) {
   FatalError = true;
-  std::string bugName = "unknown number of region parameters for type";
+  std::string BugName;
+  llvm::raw_string_ostream BugNameOS(BugName);
+  BugNameOS << "expects " << ParamCount
+    << " region arguments [-> superfluous region argument(s)]";
 
-  std::string sbuf;
-  llvm::raw_string_ostream strbuf(sbuf);
-  D->print(strbuf, Ctx.getPrintingPolicy());
-
-  helperEmitDeclarationWarning(D, strbuf.str(), bugName);
+  helperEmitAttributeWarning(D, A, Str, BugNameOS.str());
 }
 
 void ASaPSemanticCheckerTraverser::
-emitSuperfluousRegionArg(Decl *D, StringRef Str) {
-  FatalError = true;
-  std::string bugName = "superfluous region argument(s)";
-  helperEmitDeclarationWarning(D, Str, bugName);
-}
-
-void ASaPSemanticCheckerTraverser::
-emitIllFormedRegionNameOrParameter(Decl *D, Attr *A, StringRef Name) {
+emitIllFormedRegionNameOrParameter(const Decl *D,
+                                   const Attr *A, StringRef Name) {
   // Not a fatal error (e.g., if region name is not actually used)
   std::string AttrTypeStr = "";
   assert(A);
@@ -173,8 +188,8 @@ emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef &Str) {
   helperEmitDeclarationWarning(D, Str, BugName);
 }
 
-void ASaPSemanticCheckerTraverser::emitEffectCovered(Decl *D, const Effect *E1,
-                                                     const Effect *E2) {
+void ASaPSemanticCheckerTraverser::
+emitEffectCovered(const Decl *D, const Effect *E1, const Effect *E2) {
   // warning: e1 is covered by e2
   StringRef BugName = "effect summary is not minimal";
   std::string sbuf;
@@ -189,13 +204,63 @@ void ASaPSemanticCheckerTraverser::emitEffectCovered(Decl *D, const Effect *E1,
 }
 
 void ASaPSemanticCheckerTraverser::
-emitNoEffectInNonEmptyEffectSummary(Decl *D, const Attr *A) {
+emitNoEffectInNonEmptyEffectSummary(const Decl *D, const Attr *A) {
   StringRef BugName = "no_effect is illegal in non-empty effect summary";
   StringRef BugStr = "";
 
   helperEmitAttributeWarning(D, A, BugStr, BugName, false);
 }
 
+void ASaPSemanticCheckerTraverser::
+emitMissingBaseClassArgument(const Decl *D, StringRef Str) {
+  FatalError = true;
+  StringRef BugName = "base class requires region argument(s)";
+  helperEmitDeclarationWarning(D, Str, BugName);
+}
+
+/*void ASaPSemanticCheckerTraverser::
+emitMultipleAttributesForBaseClass(const Decl *D,
+                                   const Attr *A, StringRef Str) {
+  FatalError = true; // could also not be a fatal error
+  StringRef BugName = "duplicate attribute for base class specifier";
+  helperEmitAttributeWarning(D, A, Str, BugName);
+}*/
+void ASaPSemanticCheckerTraverser::
+emitAttributeMustReferToDirectBaseClass(const Decl *D,
+                                        const RegionBaseArgAttr *A) {
+  StringRef BugName =
+    "attribute's first argument must refer to direct base class";
+  helperEmitAttributeWarning(D, A, A->getBaseType(), BugName);
+}
+
+void ASaPSemanticCheckerTraverser::
+emitDuplicateBaseArgAttributesForSameBase(const Decl *D,
+                                          const RegionBaseArgAttr *A1,
+                                          const RegionBaseArgAttr *A2) {
+  // Not a fatal error
+  StringRef BugName = "duplicate attribute for single base class specifier";
+
+  helperEmitAttributeWarning(D, A1, A1->getBaseType(), BugName);
+}
+
+void ASaPSemanticCheckerTraverser::
+emitMissingBaseArgAttribute(const Decl *D, StringRef BaseClass) {
+  FatalError = true;
+  StringRef BugName = "missing base_arg attribute";
+  helperEmitDeclarationWarning(D, BaseClass, BugName);
+
+}
+
+void ASaPSemanticCheckerTraverser::
+emitEmptyStringRplDisallowed(const Decl *D, Attr *A) {
+  FatalError = true;
+  StringRef BugName = "the empty string is not a valid RPL";
+
+  helperEmitAttributeWarning(D, A, "", BugName);
+}
+
+// End Emit Functions
+//////////////////////////////////////////////////////////////////////////
 StringRef ASaPSemanticCheckerTraverser::
 getRegionOrParamName(const Attr *Attribute) {
   StringRef Result = "";
@@ -257,6 +322,25 @@ recursiveFindRegionOrParamName(const Decl *D, StringRef Name) {
 }
 
 void ASaPSemanticCheckerTraverser::
+checkBaseTypeRegionArgs(NamedDecl *D, const RegionBaseArgAttr *Att,
+                        QualType BaseQT, const Rpl *DefaultInRpl) {
+  assert(D && "Decl argument should not be null");
+  assert(Att && "Attr argument should not be null");
+  RplVector *RplVec = RplVecAttrMap[Att];
+  if (Att && !RplVec && FatalError)
+    return; // don't check an error already occured
+
+  // How many In/Arg annotations does the type require?
+  OS << "DEBUG:: calling getRegionParamCount on type: ";
+  BaseQT.print(OS, Ctx.getPrintingPolicy());
+  OS << "\n";
+
+  SymbolTable::ResultTriplet ResTriplet = SymT.getRegionParamCount(BaseQT);
+
+  checkParamAndArgCounts(D, Att, BaseQT, ResTriplet, RplVec, DefaultInRpl);
+}
+
+void ASaPSemanticCheckerTraverser::
 checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
   assert(D);
   RegionArgAttr *A = D->getAttr<RegionArgAttr>();
@@ -265,6 +349,7 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
     return; // don't check an error already occured
 
   QualType QT = D->getType();
+
   // How many In/Arg annotations does the type require?
   OS << "DEBUG:: calling getRegionParamCount on type: ";
   QT.print(OS, Ctx.getPrintingPolicy());
@@ -275,6 +360,30 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
 
   SymbolTable::ResultTriplet ResTriplet = SymT.getRegionParamCount(QT);
   ResultKind ResKin = ResTriplet.ResKin;
+
+  if (ResKin == RK_NOT_VISITED) {
+    assert(ResTriplet.DeclNotVis);
+    OS << "DEBUG:: DeclNotVisited : ";
+    ResTriplet.DeclNotVis->print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+    // Calling visitor on the Declaration which has not yet been visited
+    // to learn how many region parameters this type takes.
+    VisitRecordDecl(ResTriplet.DeclNotVis);
+    OS << "DEBUG:: done with the recursive visiting\n";
+    checkTypeRegionArgs(D, DefaultInRpl);
+  } else {
+    checkParamAndArgCounts(D, A, QT, ResTriplet, RplVec, DefaultInRpl);
+  }
+
+  OS << "DEBUG:: DONE checkTypeRegionArgs\n";
+}
+
+void ASaPSemanticCheckerTraverser::
+checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
+                       SymbolTable::ResultTriplet ResTriplet,
+                       RplVector *RplVec, const Rpl *DefaultInRpl) {
+
+  ResultKind ResKin = ResTriplet.ResKin;
   long ParamCount = ResTriplet.NumArgs;
   OS << "DEBUG:: called 'getRegionParamCount(QT)' : "
      << "(" << stringOf(ResKin)
@@ -283,16 +392,6 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
   OS << "ArgCount = " << ArgCount << "\n";
 
   switch(ResKin) {
-  case RK_NOT_VISITED:
-    assert(ResTriplet.DeclNotVis);
-    OS << "DEBUG:: DeclNotVisited : ";
-    ResTriplet.DeclNotVis->print(OS, Ctx.getPrintingPolicy());
-    OS << "\n";
-
-    VisitRecordDecl(ResTriplet.DeclNotVis);
-    OS << "DEBUG:: done with the recursive visiting\n";
-    checkTypeRegionArgs(D, DefaultInRpl);
-    break;
   case RK_ERROR:
     emitUnknownNumberOfRegionParamsForType(D);
     break;
@@ -301,15 +400,16 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
     // could be ok. At least ParamCount are needed though.
     if (ParamCount > ArgCount &&
       ParamCount > ArgCount + (DefaultInRpl?1:0)) {
-        emitMissingRegionArgs(D);
+        emitMissingRegionArgs(D, Att, ParamCount);
     }
     break;
   case RK_OK:
     if (ParamCount > ArgCount &&
       ParamCount > ArgCount + (DefaultInRpl?1:0)) {
-        emitMissingRegionArgs(D);
+        emitMissingRegionArgs(D, Att, ParamCount);
     } else if (ParamCount < ArgCount &&
       ParamCount < ArgCount + (DefaultInRpl?1:0)) {
+        // Superfluous region args
         std::string SBuf;
         llvm::raw_string_ostream BufStream(SBuf);
         int I = ParamCount;
@@ -317,10 +417,11 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
           RplVec->getRplAt(I)->print(BufStream);
           BufStream << ", ";
         }
-        if (I < ArgCount)
+        if (I < ArgCount) {
           RplVec->getRplAt(I)->print(BufStream);
-        emitSuperfluousRegionArg(D, BufStream.str());
-    } else /*if (ParamCount > 0) */{
+        }
+        emitSuperfluousRegionArg(D, Att, ParamCount, BufStream.str());
+    } else {
       assert(ParamCount>=0);
       if (ParamCount > ArgCount) {
         assert(DefaultInRpl);
@@ -332,32 +433,37 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
       }
       assert(ParamCount == 0 ||
         (size_t)ParamCount == RplVec->size());
-
-      addASaPTypeToMap(D, RplVec, 0);
+      if (ValueDecl *VD = dyn_cast<ValueDecl>(D)) {
+        addASaPTypeToMap(VD, RplVec, 0);
+      } else if (CXXRecordDecl *CXXRD = dyn_cast<CXXRecordDecl>(D)) {
+        addASaPBaseTypeToMap(CXXRD, QT, RplVec);
+      } else {
+        assert(false && "Called 'checkParamAndArgCounts' with invalid Decl type.");
+      }
     }
     break;
     default:
-      //TODO emitInternalError();
+      assert(false && "Called 'checkParamAndArgCounts' with invalid ResTriplet.ResKind");
       break;
   } //  end switch
-  OS << "DEBUG:: DONE checkTypeRegionArgs\n";
 }
 
-bool ASaPSemanticCheckerTraverser::checkRpls(Decl *D, Attr *A,
+bool ASaPSemanticCheckerTraverser::checkRpls(Decl *D, Attr *Att,
                                              StringRef RplsStr) {
   /// First check that we have not already parsed this attribute's RPL
-  RplVector *RV = RplVecAttrMap[A];
+  RplVector *RV = RplVecAttrMap[Att];
   if (RV)
-    return new RplVector(*RV);
+    return true;
   // else:
   bool Failed = false;
 
   RV = new RplVector();
   llvm::SmallVector<StringRef, 8> RplVec;
-  RplsStr.split(RplVec, ",");
+  RplsStr.split(RplVec, ","); // split into vector of string per RPL
+  //OS << "DEBUG:: checkRpls: #Rpls=" << RplVec.size() << "\n";
 
   for (size_t I = 0 ; !Failed && I != RplVec.size(); ++I) {
-    Rpl *R = checkRpl(D, A, RplVec[I].trim());
+    Rpl *R = checkRpl(D, Att, RplVec[I].trim());
     if (R) {
       RV->push_back(R);
     } else {
@@ -369,16 +475,21 @@ bool ASaPSemanticCheckerTraverser::checkRpls(Decl *D, Attr *A,
     RV = 0;
     return false;
   } else {
-    RplVecAttrMap[A] = RV;
+    RplVecAttrMap[Att] = RV;
     return true;
   }
 }
 
-Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *A,
+Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *Att,
                                             StringRef RplStr) {
+  if (RplStr.size() <= 0) {
+    emitEmptyStringRplDisallowed(D, Att);
+    return false;
+  }
   bool Result = true;
   int Count = 0;
   Rpl *R = new Rpl();
+
   while(RplStr.size() > 0) { /// for all RPL elements of the RPL
     const RplElement *RplEl = 0;
     std::pair<StringRef,StringRef> Pair = Rpl::splitRpl(RplStr);
@@ -404,7 +515,7 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *A,
         DC = DC->getParent();
       }
       if (Res.size() !=1) {
-        emitNameSpecifierNotFound(D, A, Vec[0]);
+        emitNameSpecifierNotFound(D, Att, Vec[0]);
         return 0;
       }
       DC = Decl::castToDeclContext(Res[0]);
@@ -420,7 +531,7 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *A,
         Res = DC->lookup(DN);
         OS << "DEBUG:: Lookup Result Size = " << Res.size() << "\n";
         if (Res.size() !=1) {
-          emitNameSpecifierNotFound(D, A, Vec[I]);
+          emitNameSpecifierNotFound(D, Att, Vec[I]);
           return 0;
         }
         DC = Decl::castToDeclContext(Res[0]);
@@ -437,13 +548,14 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *A,
     }
     if (!RplEl) {
       // Emit bug report!
-      emitUndeclaredRplElement(D, A, Head);
+      emitUndeclaredRplElement(D, Att, Head);
       Result = false;
     } else { // RplEl != NULL
+      OS << "DEBUG:: found RplElement:" << RplEl->getName() << "\n";
       if (Count>0 && (isa<ParamRplElement>(RplEl)
         || isa<CaptureRplElement>(RplEl))) {
           /// Error: region parameter is only allowed at the head of an Rpl
-          emitMisplacedRegionParameter(D, A, Head);
+          emitMisplacedRegionParameter(D, Att, Head);
       } else
         R->appendElement(RplEl);
     }
@@ -474,6 +586,148 @@ void ASaPSemanticCheckerTraverser::buildEffectSummary(FunctionDecl *D,
       assert(Success);
     }
   }
+}
+
+const RegionBaseArgAttr *ASaPSemanticCheckerTraverser::
+findBaseArg(const CXXRecordDecl *D, StringRef BaseStr) {
+  OS << "DEBUG:: findBaseArg for type '" << BaseStr <<"'\n";
+  const RegionBaseArgAttr *Result = 0;
+  bool multipleAttrs = false;
+  // iterate over base_args of D
+  for (specific_attr_iterator<RegionBaseArgAttr>
+       I = D->specific_attr_begin<RegionBaseArgAttr>(),
+       E = D->specific_attr_end<RegionBaseArgAttr>();
+       I != E; ++I) {
+    RegionBaseArgAttr *A = *I;
+    // FIXME: string comparisons are only going to get as this far...
+    if (!BaseStr.compare(A->getBaseType())) { // found!!
+      if (!Result) {
+        Result = *I;
+      } else {
+        multipleAttrs = true;
+        //emitMultipleAttributesForBaseClass(D, A, BaseStr);
+        emitDuplicateBaseArgAttributesForSameBase(D, Result, A);
+      }
+    }
+  }
+  return Result;
+}
+
+const CXXBaseSpecifier *ASaPSemanticCheckerTraverser::
+findBaseDecl(const CXXRecordDecl *D, StringRef BaseStr) {
+  const CXXBaseSpecifier *Result = 0;
+  for (CXXRecordDecl::base_class_const_iterator
+       I = D->bases_begin(), E = D->bases_end();
+       I!=E; ++I) {
+
+    std::string BaseClassStr = (*I).getType().getAsString();
+    OS << "DEBUG::: BaseClass = " << BaseClassStr << "\n";
+    std::string prefix("class ");
+    if (!BaseClassStr.compare(0, prefix.length(), prefix)) {
+      BaseClassStr = BaseClassStr.substr(prefix.length(),
+                                        BaseClassStr.length()-prefix.length());
+    }
+
+    // FIXME: string comparisons are only going to get as this far...
+    if (BaseStr.compare(BaseClassStr)==0) {
+      Result = I;
+      break;
+    }
+  }
+  return Result;
+}
+
+void ASaPSemanticCheckerTraverser::
+checkBaseSpecifierArgs(CXXRecordDecl *D) {
+  assert(D);
+  OS << "DEBUG:: checkBaseSpecifierArgs\n";
+  // 1. Before actually doing any checking, for each base class,
+  // check that it has been visited and that we know how many region
+  // arguments it takes
+  bool Error = false;
+  for (CXXRecordDecl::base_class_const_iterator
+          I = D->bases_begin(), E = D->bases_end();
+       I!=E; ++I) {
+    //const CXXBaseSpecifier *BS = *I;
+    //QualType QT = BS->getType();
+    SymbolTable::ResultTriplet ResTriplet =
+      SymT.getRegionParamCount((*I).getType());
+    switch(ResTriplet.ResKin) {
+    case RK_NOT_VISITED:
+      assert(ResTriplet.DeclNotVis);
+      ResTriplet.DeclNotVis->print(OS, Ctx.getPrintingPolicy());
+      // Calling visitor on the Declaration which has not yet been visited
+      // to learn how many region parameters this type takes.
+      VisitRecordDecl(ResTriplet.DeclNotVis);
+      break;
+    case RK_ERROR:
+      emitUnknownNumberOfRegionParamsForType(D);
+      Error = true;
+      break;
+    case RK_VAR:
+    case RK_OK:
+      // do nothing
+      OS << "DEBUG:: #args needed = " << ResTriplet.NumArgs << "\n";
+      break;
+    }
+  }
+  OS << "DEBUG:: checkBaseSpecifierArgs (DONE w. Step 1)\n";
+  // 2. Check that for each base class there is an attribute.
+  for (CXXRecordDecl::base_class_const_iterator
+       I = D->bases_begin(), E = D->bases_end();
+       I!=E; ++I) {
+    std::string BaseClassStr = (*I).getType().getAsString();
+    OS << "DEBUG::: BaseClass = " << BaseClassStr << "\n";
+    std::string prefix("class ");
+    if (!BaseClassStr.compare(0, prefix.length(), prefix)) {
+      BaseClassStr = BaseClassStr.substr(prefix.length(),
+                                        BaseClassStr.length()-prefix.length());
+    }
+    OS << "DEBUG::: BaseClass = " << BaseClassStr << "\n";
+    const RegionBaseArgAttr *Att = findBaseArg(D, BaseClassStr);
+    if (!Att) {
+      emitMissingBaseArgAttribute(D, BaseClassStr);
+    }
+  }
+
+  // 3. For each attributetakes region arguments, find if the needed
+  // annotation (attribute) was provided.
+  for (specific_attr_iterator<RegionBaseArgAttr>
+       I = D->specific_attr_begin<RegionBaseArgAttr>(),
+       E = D->specific_attr_end<RegionBaseArgAttr>();
+       I != E; ++I) {
+    // 1. Check that attribute refers to valid base type
+    StringRef BaseStr =  (*I)->getBaseType();
+    const CXXBaseSpecifier *BaseSpec = findBaseDecl(D,BaseStr);
+    if (!BaseSpec) {
+      emitAttributeMustReferToDirectBaseClass(D, *I);
+      continue;
+    }
+    // 2. Check for duplicates
+    bool FoundDuplicate = false;
+    for (specific_attr_iterator<RegionBaseArgAttr> J = I;
+         J != E; ++J) {
+      if (J!=I) { // this is because I can't init J = I+1;
+        if ((*I)->getBaseType().compare((*J)->getBaseType())==0) {
+          emitDuplicateBaseArgAttributesForSameBase(D, *I, *J);
+          FoundDuplicate = true;
+        }
+      }
+    }
+    if (FoundDuplicate) {
+      // skip this one, we'll use the last attribute (this choise is arbitrary)
+      continue;
+    }
+    // 3. Now check that the number of arguments given by the annotation
+    // is valid for the base class.
+    StringRef Rpls = (*I)->getRpl();
+    bool Success = checkRpls(D, *I, Rpls);
+    if (Success) {
+      //Rpl Local(*SymbolTable::LOCAL_RplElmt);
+      checkBaseTypeRegionArgs(D, *I, BaseSpec->getType(), 0);
+    }
+  }
+  OS << "DEBUG:: checkBaseSpecifierArgs (DONE!)\n";
 }
 
 ASaPSemanticCheckerTraverser::ASaPSemanticCheckerTraverser(
@@ -629,20 +883,39 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
 }
 
 bool ASaPSemanticCheckerTraverser::VisitRecordDecl (RecordDecl *D) {
+  if (SymT.hasDecl(D)) // in case we have already visited this don't re-visit.
+    return true;
   OS << "DEBUG:: printing ASaP attributes for class or struct '";
   D->getDeclName().printName(OS);
   OS << "':\n";
-  if (SymT.hasDecl(D)) // in case we have already visited this don't re-visit.
-    return true;
   /// A. Detect Region & Param Annotations
   helperPrintAttributes<RegionAttr>(D);
   helperPrintAttributes<RegionParamAttr>(D);
-
-  /// B. Check Region & Param Names
+  helperPrintAttributes<RegionBaseArgAttr>(D);
+  /// B. Check Region Names
   checkRegionOrParamDecls<RegionAttr>(D);
+
+  /// C. Check Param Names
   SymT.initParameterVector(D); // An empty param vector means the class was
                                // visited and takes no region arguments.
   checkRegionOrParamDecls<RegionParamAttr>(D);
+
+  /// D. Check BaseArg Attributes (or lack thereof)
+  OS << "DEBUG:: D:" << D << "\n";
+  OS << "DEBUG:: D->getDefinition:" << D->getDefinition() << "\n";
+  OS << "DEBUG:: D:" << D << "\n";
+
+  CXXRecordDecl *CxD = dyn_cast<CXXRecordDecl>(D);
+  OS << "DEBUG:: CxD:" << CxD << "\n";
+
+  if (CxD && CxD->getDefinition()) {
+    //assert(isa<CXXRecordDecl>(D));
+    //assert(CxD->getDefinition());
+    OS << "DEBUG:: D is a CXXRecordDecl and has numBases = ";
+    unsigned int num = CxD->getNumBases();
+    OS <<  num <<"\n";
+    checkBaseSpecifierArgs(CxD->getDefinition());
+  }
   return true;
 }
 
@@ -758,6 +1031,4 @@ VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
   NextFunctionIsATemplatePattern = true;
   return true;
 }
-
-
 

@@ -147,7 +147,7 @@ SymbolTable::ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
     RecordDecl *D = RT->getDecl();
     const ParameterVector *ParamV = getParameterVector(D);
     if (ParamV)
-      return ResultTriplet(RK_OK, ParamV->size(), 0);
+      return ResultTriplet(RK_OK, ParamV->size(), D);
     else
       return ResultTriplet(RK_NOT_VISITED, 0, D);
   } else if (QT->isFunctionType()) {

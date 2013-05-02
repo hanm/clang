@@ -65,13 +65,14 @@ class ASaPSemanticCheckerTraverser :
   bool NextFunctionIsATemplatePattern;
 
   void addASaPTypeToMap(ValueDecl *D, RplVector *RV, Rpl *InRpl);
+  void addASaPBaseTypeToMap(CXXRecordDecl *CXXRD, QualType QT, RplVector *RplVec);
   void helperEmitDeclarationWarning(const Decl *D,
-                                    const llvm::StringRef &Str,
+                                    const llvm::StringRef Str,
                                     std::string BugName,
                                     bool AddQuotes = true);
   /// \brief Issues Warning: '<str>': <bugName> on Attribute.
   void helperEmitAttributeWarning(const Decl *D,
-                                  const Attr *Attr,
+                                  const Attr *A,
                                   const llvm::StringRef &Str,
                                   std::string BugName,
                                   bool AddQuotes = true);
@@ -86,24 +87,37 @@ class ASaPSemanticCheckerTraverser :
   /// \brief Emit a Warning when the input string (which is assumed to be an
   /// RPL element) is not declared.
   void emitUndeclaredRplElement(const Decl *D,
-                                const Attr *Attr,
+                                const Attr *A,
                                 const llvm::StringRef &Str);
   /// \brief Attribute A contains an undeclared nested name specifier
-  void emitNameSpecifierNotFound(Decl *D, Attr *A, StringRef Name);
+  void emitNameSpecifierNotFound(const Decl *D, const Attr *A, StringRef Name);
   /// \brief Declaration D is missing region argument(s).
-  void emitMissingRegionArgs(Decl *D);
-  /// \brief Declaration D is missing region argument(s).
-  void emitUnknownNumberOfRegionParamsForType(Decl *D);
+  void emitMissingRegionArgs(const Decl *D, const Attr* A, int Expects);
+  /// \brief The number of region argument(s) of D is unknown.
+  void emitUnknownNumberOfRegionParamsForType(const Decl *D);
   /// \brief Region arguments Str on declaration D are superfluous for its type.
-  void emitSuperfluousRegionArg(Decl *D, llvm::StringRef Str);
+  void emitSuperfluousRegionArg(const Decl *D, const Attr *A,
+                                int Expects, llvm::StringRef Str);
   /// \brief Region name or parameter contains illegal characters.
-  void emitIllFormedRegionNameOrParameter(Decl *D, Attr *A,
+  void emitIllFormedRegionNameOrParameter(const Decl *D, const Attr *A,
                                           llvm::StringRef Name);
   void emitCanonicalDeclHasSmallerEffectSummary(const Decl *D,
                                                 const StringRef &S);
   /// \brief Effect summary not minimal: effect E1 is covered by effect E2.
-  void emitEffectCovered(Decl *D, const Effect *E1, const Effect *E2);
-  void emitNoEffectInNonEmptyEffectSummary(Decl *D, const Attr *A);
+  void emitEffectCovered(const Decl *D, const Effect *E1, const Effect *E2);
+  void emitNoEffectInNonEmptyEffectSummary(const Decl *D, const Attr *A);
+  void emitMissingBaseClassArgument(const Decl *D, StringRef Str);
+  /*void emitMultipleAttributesForBaseClass(const Decl *D,
+                                          const Attr *A, StringRef Str);*/
+  void emitAttributeMustReferToDirectBaseClass(const Decl *D,
+                                               const RegionBaseArgAttr *A);
+  void emitDuplicateBaseArgAttributesForSameBase(const Decl *D,
+                                                 const RegionBaseArgAttr *A1,
+                                                 const RegionBaseArgAttr *A2);
+
+  void emitMissingBaseArgAttribute(const Decl *D, StringRef BaseClass);
+  void emitEmptyStringRplDisallowed(const Decl *D, Attr *A);
+
   /// \brief Print to the debug output stream (os) the attribute.
   template<typename AttrType>
   inline void helperPrintAttributes(Decl *D) {
@@ -176,6 +190,12 @@ class ASaPSemanticCheckerTraverser :
   const RplElement *recursiveFindRegionOrParamName(const Decl *D,
                                                    llvm::StringRef Name);
   void checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl);
+  void checkBaseTypeRegionArgs(NamedDecl *D, const RegionBaseArgAttr *Att,
+                        QualType BaseQT, const Rpl *DefaultInRpl);
+  void checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
+                              SymbolTable::ResultTriplet ResTriplet,
+                              RplVector *RplVec, const Rpl *DefaultInRpl);
+
   /// \brief Check that the annotations of type AttrType of declaration
   /// D have RPLs whose elements have been declared, and if so, add RPL
   /// to the map from Attrs to Rpls.
@@ -245,6 +265,13 @@ class ASaPSemanticCheckerTraverser :
   }
 
   void buildEffectSummary(FunctionDecl* D, EffectSummary &ES);
+
+  void checkBaseSpecifierArgs(CXXRecordDecl *D);
+
+  //FIXME make this function static
+  const RegionBaseArgAttr *findBaseArg(const CXXRecordDecl *D, StringRef S);
+  //FIXME make this function static
+  const CXXBaseSpecifier *findBaseDecl(const CXXRecordDecl *D, StringRef S);
 
 public:
   typedef RecursiveASTVisitor<ASaPSemanticCheckerTraverser> BaseClass;
