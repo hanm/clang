@@ -1,4 +1,4 @@
-//===--- WhitespaceManager.h - Format C++ code ----------------------------===//
+//===--- WhitespaceManager.h - Format C++ code ------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -66,48 +66,47 @@ public:
 
   void addUntouchableComment(unsigned Column);
 
+  /// \brief Try to align all stashed comments.
+  void alignComments();
+  /// \brief Try to align all stashed escaped newlines.
+  void alignEscapedNewlines();
+
 private:
-  static StringRef getLineCommentPrefix(StringRef Comment);
-
-  /// \brief Splits one line in a line comment, if it doesn't fit to
-  /// provided column limit. Removes trailing whitespace in each line.
-  ///
-  /// \param Line points to the line contents without leading // or /*.
-  ///
-  /// \param StartColumn is the column where the first character of Line will be
-  /// located after formatting.
-  ///
-  /// \param LinePrefix is inserted after each line break.
-  void splitLineComment(const FormatToken &Tok, StringRef Line,
-                        size_t StartColumn, StringRef LinePrefix,
-                        const char *WhiteSpaceChars = " ");
-
   std::string getNewLineText(unsigned NewLines, unsigned Spaces);
 
   std::string getNewLineText(unsigned NewLines, unsigned Spaces,
-                             unsigned WhitespaceStartColumn);
+                             unsigned WhitespaceStartColumn,
+                             unsigned EscapedNewlineColumn);
 
-  /// \brief Structure to store a comment for later layout and alignment.
-  struct StoredComment {
-    FormatToken Tok;
+  /// \brief Structure to store tokens for later layout and alignment.
+  struct StoredToken {
+    StoredToken(SourceLocation ReplacementLoc, unsigned ReplacementLength,
+                unsigned MinColumn, unsigned MaxColumn, unsigned NewLines,
+                unsigned Spaces)
+        : ReplacementLoc(ReplacementLoc), ReplacementLength(ReplacementLength),
+          MinColumn(MinColumn), MaxColumn(MaxColumn), NewLines(NewLines),
+          Spaces(Spaces), Untouchable(false) {}
+    SourceLocation ReplacementLoc;
+    unsigned ReplacementLength;
     unsigned MinColumn;
     unsigned MaxColumn;
     unsigned NewLines;
     unsigned Spaces;
     bool Untouchable;
+    std::string Prefix;
+    std::string Postfix;
   };
-  SmallVector<StoredComment, 16> Comments;
-  typedef SmallVector<StoredComment, 16>::iterator comment_iterator;
-
-  /// \brief Try to align all stashed comments.
-  void alignComments();
+  SmallVector<StoredToken, 16> Comments;
+  SmallVector<StoredToken, 16> EscapedNewlines;
+  typedef SmallVector<StoredToken, 16>::iterator token_iterator;
 
   /// \brief Put all the comments between \p I and \p E into \p Column.
-  void alignComments(comment_iterator I, comment_iterator E, unsigned Column);
+  void alignComments(token_iterator I, token_iterator E, unsigned Column);
 
   /// \brief Stores \p Text as the replacement for the whitespace in front of
   /// \p Tok.
-  void storeReplacement(const FormatToken &Tok, const std::string Text);
+  void storeReplacement(SourceLocation Loc, unsigned Length,
+                        const std::string Text);
 
   SourceManager &SourceMgr;
   tooling::Replacements Replaces;

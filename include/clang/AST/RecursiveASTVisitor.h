@@ -1230,8 +1230,9 @@ bool RecursiveASTVisitor<Derived>::TraverseDeclContextHelper(DeclContext *DC) {
   for (DeclContext::decl_iterator Child = DC->decls_begin(),
            ChildEnd = DC->decls_end();
        Child != ChildEnd; ++Child) {
-    // BlockDecls are traversed through BlockExprs.
-    if (!isa<BlockDecl>(*Child))
+    // BlockDecls and CapturedDecls are traversed through BlockExprs and
+    // CapturedStmts respectively.
+    if (!isa<BlockDecl>(*Child) && !isa<CapturedDecl>(*Child))
       TRY_TO(TraverseDecl(*Child));
   }
 
@@ -1253,6 +1254,14 @@ DEF_TRAVERSE_DECL(AccessSpecDecl, { })
 DEF_TRAVERSE_DECL(BlockDecl, {
     if (TypeSourceInfo *TInfo = D->getSignatureAsWritten())
       TRY_TO(TraverseTypeLoc(TInfo->getTypeLoc()));
+    TRY_TO(TraverseStmt(D->getBody()));
+    // This return statement makes sure the traversal of nodes in
+    // decls_begin()/decls_end() (done in the DEF_TRAVERSE_DECL macro)
+    // is skipped - don't remove it.
+    return true;
+  })
+
+DEF_TRAVERSE_DECL(CapturedDecl, {
     TRY_TO(TraverseStmt(D->getBody()));
     // This return statement makes sure the traversal of nodes in
     // decls_begin()/decls_end() (done in the DEF_TRAVERSE_DECL macro)
@@ -1673,6 +1682,10 @@ bool RecursiveASTVisitor<Derived>::TraverseDeclaratorHelper(DeclaratorDecl *D) {
   return true;
 }
 
+DEF_TRAVERSE_DECL(MSPropertyDecl, {
+    TRY_TO(TraverseDeclaratorHelper(D));
+  })
+
 DEF_TRAVERSE_DECL(FieldDecl, {
     TRY_TO(TraverseDeclaratorHelper(D));
     if (D->isBitField())
@@ -2060,6 +2073,10 @@ DEF_TRAVERSE_STMT(CXXTypeidExpr, {
       TRY_TO(TraverseTypeLoc(S->getTypeOperandSourceInfo()->getTypeLoc()));
   })
 
+DEF_TRAVERSE_STMT(MSPropertyRefExpr, {
+  TRY_TO(TraverseNestedNameSpecifierLoc(S->getQualifierLoc()));
+})
+
 DEF_TRAVERSE_STMT(CXXUuidofExpr, {
     // The child-iterator will pick up the arg if it's an expression,
     // but not if it's a type.
@@ -2155,6 +2172,7 @@ DEF_TRAVERSE_STMT(CompoundLiteralExpr, {
 DEF_TRAVERSE_STMT(CXXBindTemporaryExpr, { })
 DEF_TRAVERSE_STMT(CXXBoolLiteralExpr, { })
 DEF_TRAVERSE_STMT(CXXDefaultArgExpr, { })
+DEF_TRAVERSE_STMT(CXXDefaultInitExpr, { })
 DEF_TRAVERSE_STMT(CXXDeleteExpr, { })
 DEF_TRAVERSE_STMT(ExprWithCleanups, { })
 DEF_TRAVERSE_STMT(CXXNullPtrLiteralExpr, { })
@@ -2212,6 +2230,9 @@ DEF_TRAVERSE_STMT(UnresolvedMemberExpr, {
 DEF_TRAVERSE_STMT(SEHTryStmt, {})
 DEF_TRAVERSE_STMT(SEHExceptStmt, {})
 DEF_TRAVERSE_STMT(SEHFinallyStmt,{})
+DEF_TRAVERSE_STMT(CapturedStmt, {
+  TRY_TO(TraverseDecl(S->getCapturedDecl()));
+})
 
 DEF_TRAVERSE_STMT(CXXOperatorCallExpr, { })
 DEF_TRAVERSE_STMT(OpaqueValueExpr, { })

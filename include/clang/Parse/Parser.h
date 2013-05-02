@@ -172,6 +172,25 @@ class Parser : public CodeCompletionHandler {
   /// The "depth" of the template parameters currently being parsed.
   unsigned TemplateParameterDepth;
 
+  /// \brief RAII class that manages the template parameter depth.
+  class TemplateParameterDepthRAII {
+    unsigned &Depth;
+    unsigned AddedLevels;
+  public:
+    explicit TemplateParameterDepthRAII(unsigned &Depth)
+      : Depth(Depth), AddedLevels(0) {}
+
+    ~TemplateParameterDepthRAII() {
+      Depth -= AddedLevels;
+    }
+
+    void operator++() {
+      ++Depth;
+      ++AddedLevels;
+    }
+    unsigned getDepth() const { return Depth; }
+  };
+
   /// Factory object for creating AttributeList objects.
   AttributeFactory AttrFactory;
 
@@ -422,6 +441,10 @@ private:
   /// #pragma OPENCL EXTENSION...
   void HandlePragmaOpenCLExtension();
 
+  /// \brief Handle the annotation token produced for
+  /// #pragma clang __debug captured
+  StmtResult HandlePragmaCaptured();
+
   /// GetLookAheadToken - This peeks ahead N tokens and returns that token
   /// without consuming any tokens.  LookAhead(0) returns 'Tok', LookAhead(1)
   /// returns the token after Tok, etc.
@@ -454,19 +477,13 @@ private:
   /// \brief Read an already-translated primary expression out of an annotation
   /// token.
   static ExprResult getExprAnnotation(Token &Tok) {
-    if (Tok.getAnnotationValue())
-      return ExprResult((Expr *)Tok.getAnnotationValue());
-
-    return ExprResult(true);
+    return ExprResult::getFromOpaquePointer(Tok.getAnnotationValue());
   }
 
   /// \brief Set the primary expression corresponding to the given annotation
   /// token.
   static void setExprAnnotation(Token &Tok, ExprResult ER) {
-    if (ER.isInvalid())
-      Tok.setAnnotationValue(0);
-    else
-      Tok.setAnnotationValue(ER.get());
+    Tok.setAnnotationValue(ER.getAsOpaquePointer());
   }
 
 public:
