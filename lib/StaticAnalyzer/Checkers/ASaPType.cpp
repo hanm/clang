@@ -34,6 +34,7 @@ void ASaPType::adjust() {
   }
 }
 
+// Constructor
 ASaPType::ASaPType(QualType QT, RplVector *ArgV, Rpl *InRpl,
                    bool Simple): QT(QT) {
   // 1. Set InRpl & ArgV.
@@ -48,21 +49,30 @@ ASaPType::ASaPType(QualType QT, RplVector *ArgV, Rpl *InRpl,
   if (!Simple) {
     adjust();
   } // End if (!Simple).
+  //InheritanceMap = 0;
+  //OwnsMap = true;
 }
 
+// Copy Constructor
 ASaPType::ASaPType(const ASaPType &T) : QT(T.QT) {
+  // 1. Copy QT
   this->QT = T.QT;
+  // 2. Copy InRpl
   if (T.InRpl)
     this->InRpl = new Rpl(*T.InRpl);
   else
     this->InRpl = 0;
-
+  // 3. Copy ArgV
   if (T.ArgV)
     this->ArgV = new RplVector(*T.ArgV);
   else
     this->ArgV = new RplVector();
+  // 5. Get a pointer to the map
+  //this->InheritanceMap = T.InheritanceMap;
+  //this->OwnsMap = false;
 }
 
+// Destructor
 ASaPType::~ASaPType() {
   delete InRpl;
   delete ArgV;

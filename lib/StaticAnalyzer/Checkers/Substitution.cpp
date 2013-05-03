@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This files defines the Substitution and SubstitutionVector classes used 
-// by the Safe Parallelism checker, which tries to prove the safety of 
+// This files defines the Substitution and SubstitutionVector classes used
+// by the Safe Parallelism checker, which tries to prove the safety of
 // parallelism given region and effect annotations.
 //
 //===----------------------------------------------------------------===//
@@ -87,6 +87,15 @@ std::string Substitution::toString() const {
   llvm::raw_string_ostream OS(SBuf);
   print(OS);
   return std::string(OS.str());
+}
+
+void SubstitutionVector::
+buildSubstitutionVector(const ParameterVector *ParV, RplVector *RplVec) {
+  for (size_t I = 0; I < ParV->size(); ++I) {
+    Substitution *Sub =
+        new Substitution(ParV->getParamAt(I), RplVec->getRplAt(I));
+    this->push_back(Sub);
+  }
 }
 
 } // end namespace clang

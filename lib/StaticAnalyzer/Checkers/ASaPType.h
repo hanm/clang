@@ -28,9 +28,14 @@ class SubstitutionVector;
 
 class ASaPType {
   friend class ASaPType;
+
+  /// \brief C++ Qualified Type of ASaPType
   QualType QT;
+  /// \brief Region Argument Vector
   RplVector *ArgV;
-  Rpl *InRpl; // InRpl can be null.
+  /// \brief In RPL (can be null)
+  Rpl *InRpl;
+
   // Private Functions
   /// \brief Depending on QT, removes the head of ArgV to set InRpl
   void adjust();

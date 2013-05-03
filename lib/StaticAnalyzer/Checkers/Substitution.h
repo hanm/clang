@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This files defines the Substitution and SubstitutionVector classes used 
-// by the Safe Parallelism checker, which tries to prove the safety of 
+// This files defines the Substitution and SubstitutionVector classes used
+// by the Safe Parallelism checker, which tries to prove the safety of
 // parallelism given region and effect annotations.
 //
 //===----------------------------------------------------------------===//
@@ -24,9 +24,11 @@
 
 namespace clang {
 namespace asap {
-  
+
 class Rpl;
 class RplElement;
+class RplVector;
+class ParameterVector;
 class Effect;
 class EffectSummary;
 
@@ -77,12 +79,14 @@ public:
 private:
   SubstitutionVecT SubV;
 public:
-  // Constructor
+  // Constructors & Destructor
   SubstitutionVector() {}
+
   SubstitutionVector(Substitution *S) {
     if (S)
       SubV.push_back(new Substitution(*S));
   }
+
   virtual ~SubstitutionVector() {
     for (SubstitutionVecT::const_iterator I = SubV.begin(), E = SubV.end();
          I != E; ++I) {
@@ -90,6 +94,9 @@ public:
     }
   }
   // Methods
+  void buildSubstitutionVector(const ParameterVector *ParV,
+                                              RplVector *RplVec);
+
   /// \brief Return an iterator at the first RPL of the vector.
   inline SubstitutionVecT::iterator begin () { return SubV.begin(); }
   /// \brief Return an iterator past the last RPL of the vector.
@@ -116,7 +123,7 @@ public:
       }
     }
   }
-  
+
   void applyTo(Effect *Eff) const {
     if (Eff) {
       for(SubstitutionVecT::const_iterator I = SubV.begin(), E = SubV.end();
@@ -146,7 +153,7 @@ public:
     return std::string(OS.str());
   }
 }; // End class Substituion.
-  
+
 } // end namespace clang
 } // end namespace asap
 #endif

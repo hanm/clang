@@ -16,6 +16,7 @@
 #include "SemanticChecker.h"
 #include "ASaPType.h"
 #include "clang/AST/Decl.h"
+#include "Substitution.h"
 // FIXME: Include these static analyzer core headers are really unfortunate given
 // we only traverse AST without any path sensitive analysis. These header should be
 // removed.
@@ -29,25 +30,43 @@ using namespace clang::ento;
 using namespace llvm;
 
 void ASaPSemanticCheckerTraverser::
-addASaPTypeToMap(ValueDecl *D, RplVector *RV, Rpl *InRpl) {
-  assert(!SymT.hasType(D));
-  ASaPType *T = new ASaPType(D->getType(), RV, InRpl);
+addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
+  assert(!SymT.hasType(ValD));
+  ASaPType *T = new ASaPType(ValD->getType(), RplV, InRpl);
   OS << "DEBUG:: D->getType() = ";
-  D->getType().print(OS, Ctx.getPrintingPolicy());
-  OS << ", isFunction = " << D->getType()->isFunctionType() << "\n";
-  OS << "Debug:: RV.size=" << (RV ? RV->size() : 0)
+  ValD->getType().print(OS, Ctx.getPrintingPolicy());
+  OS << ", isFunction = " << ValD->getType()->isFunctionType() << "\n";
+  OS << "Debug:: RV.size=" << (RplV ? RplV->size() : 0)
 
     << ", T.RV.size=" << T->getArgVSize() << "\n";
   OS << "Debug :: adding type: " << T->toString(Ctx) << " to Decl: ";
-  D->print(OS, Ctx.getPrintingPolicy());
+  ValD->print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
-  bool Result = SymT.setType(D, T);
+  bool Result = SymT.setType(ValD, T);
   assert(Result);
 }
 
 void ASaPSemanticCheckerTraverser::
-addASaPBaseTypeToMap(CXXRecordDecl *CXXRD, QualType QT, RplVector *RplVec) {
-  // TODO
+addASaPBaseTypeToMap(CXXRecordDecl *CXXRD,
+                     QualType BaseQT, RplVector *RplVec) {
+  if (!RplVec)
+    return; // Nothing to do
+  const ParameterVector *ParV = SymT.getParameterVectorFromQualType(BaseQT);
+
+  // These next two assertions should have been checked before calling this
+  assert(ParV && "Base class takes no region parameter");
+  assert(ParV->size() == RplVec->size()
+         && "Base class and RPL vector must have the same # of region args");
+  // Build Substitution Vector
+  SubstitutionVector *SubV = new SubstitutionVector();
+  SubV->buildSubstitutionVector(ParV, RplVec);
+
+  const RecordType *RT = BaseQT->getAs<RecordType>();
+  assert(RT);
+  RecordDecl *BaseD = RT->getDecl();
+  assert(BaseD);
+
+  SymT.addBaseTypeAndSub(CXXRD, BaseD, SubV);
 }
 
 void ASaPSemanticCheckerTraverser::
@@ -484,7 +503,7 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *Att,
                                             StringRef RplStr) {
   if (RplStr.size() <= 0) {
     emitEmptyStringRplDisallowed(D, Att);
-    return false;
+    return 0;
   }
   bool Result = true;
   int Count = 0;

@@ -31,6 +31,7 @@ class Decl;
 namespace asap {
 
 class ParameterVector;
+class SubstitutionVector;
 class ASaPType;
 class RegionNameSet;
 class EffectSummary;
@@ -129,31 +130,45 @@ public:
   bool setEffectSummary(const Decl *D, const Decl *Dfrom);
   // Lookup
   /// \brief Returns a named RPL element of the same name or null.
-  const NamedRplElement *lookupRegionName(const Decl *D, llvm::StringRef Name);
+  const NamedRplElement *lookupRegionName(const Decl *D,
+                                          llvm::StringRef Name) const;
   /// \brief Returns a parameter RPL element of the same name or null.
   const ParamRplElement *lookupParameterName(const Decl *D,
-                                             llvm::StringRef Name);
+                                             llvm::StringRef Name) const;
   // Others
   /// \brief Returns true iff D has a declared region-name Name.
-  bool hasRegionName(const Decl *D, llvm::StringRef Name);
+  bool hasRegionName(const Decl *D, llvm::StringRef Name) const;
   /// \brief Returns true iff D has a declared region parameter Name.
-  bool hasParameterName(const Decl *D, llvm::StringRef Name);
+  bool hasParameterName(const Decl *D, llvm::StringRef Name) const;
   /// \brief Returns true iff D has a declared region-name or parameter Name.
-  bool hasRegionOrParameterName(const Decl *D, llvm::StringRef Name);
+  bool hasRegionOrParameterName(const Decl *D, llvm::StringRef Name) const;
+
+  bool hasBase(const Decl *D, const Decl *Base) const;
   /// \brief Adds a region name to declaration D. Return false if name exists.
   bool addRegionName(const Decl *D, llvm::StringRef Name);
   /// \brief Adds a region parameter to D. Return false if name exists.
   bool addParameterName(const Decl *D, llvm::StringRef Name);
+
+  bool addBaseTypeAndSub(const Decl *D, const Decl *Base,
+                         SubstitutionVector *&SubV);
+
+
+
   /// \brief Get parameter vector from Clang::Type
   const ParameterVector *getParameterVectorFromQualType(QualType QT);
 
 private:
   class SymbolTableEntry {
     friend class SymbolTable;
+    // Fields
     ASaPType *Typ;
     ParameterVector *ParamVec;
     RegionNameSet *RegnNameSet;
     EffectSummary *EffSum;
+
+    typedef llvm::DenseMap<const Decl*, SubstitutionVector*>  InheritanceMapT;
+    InheritanceMapT *InheritanceMap;
+
   public:
     SymbolTableEntry();
     ~SymbolTableEntry();
@@ -163,18 +178,21 @@ private:
     inline bool hasParameterVector() const { return (ParamVec) ? true : false; }
     inline bool hasRegionNameSet() const { return (RegnNameSet) ? true :false; }
     inline bool hasEffectSummary() const { return (EffSum) ? true : false; }
+    inline bool hasInheritanceMap() const { return (InheritanceMap) ? true : false; }
 
     // Getters.
     inline const ASaPType *getType() const { return Typ; }
     inline const ParameterVector *getParameterVector() const { return ParamVec; }
     inline const RegionNameSet *getRegionNameSet() const { return RegnNameSet; }
     inline const EffectSummary *getEffectSummary() const { return EffSum; }
+    inline const InheritanceMapT *getInheritanceMap() const { return InheritanceMap; }
 
     // Setters.
     inline void setType(ASaPType *T) { Typ = T; }
     inline void setParameterVector(ParameterVector *PV) { ParamVec = PV; }
     inline void setRegionNameSet(RegionNameSet *RNS) { RegnNameSet = RNS; }
     inline void setEffectSummary(EffectSummary *ES) { EffSum = ES; }
+    inline void setInheritanceMap(InheritanceMapT *Map) { InheritanceMap = Map; }
 
     // Lookup.
     const NamedRplElement *lookupRegionName(llvm::StringRef Name);
@@ -183,6 +201,9 @@ private:
     // Adders.
     void addRegionName(llvm::StringRef Name);
     void addParameterName(llvm::StringRef Name);
+    bool addBaseTypeAndSub(const Decl *Base, SubstitutionVector *&SubV);
+
+    const SubstitutionVector *getSubstitutionVec(const Decl *Base) const;
 
   protected:
     inline EffectSummary *getNonConstEffectSummary() const { return EffSum; }
