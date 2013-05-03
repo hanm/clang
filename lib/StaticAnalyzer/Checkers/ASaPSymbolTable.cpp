@@ -496,15 +496,18 @@ computeInheritanceSubVec() {
     for(InheritanceMapT::iterator
           I = InheritanceMap->begin(), E = InheritanceMap->end();
         I != E; ++I) {
-      const SubstitutionVector *SubV = (*I).second;
-      InheritanceSubVec->push_back(SubV);
       SymbolTableEntry *STE = (*I).first;
       InheritanceSubVec->push_back(STE->getInheritanceSubVec());
+      const SubstitutionVector *SubV = (*I).second;
+      InheritanceSubVec->push_back(SubV);
+      // Note: this order is important (i.e., first push_back the
+      // base class inheritance substitutions (recursively) then
+      // the substitution from for this base class to the next.
+      // FIXME: for performance, we should collapse chains of
+      // substitutions by applying one to the next. E.g.,
+      // [P1<-P2][P2<-P3][P3<-P4] => [P1<-P4][P2<-P4][P3<-P4];
     }
   }
-
-    //1. SyBase.getInheritanceSubVec
-    //2. merge SubVecs
   ComputedInheritanceSubVec = true;
 }
 

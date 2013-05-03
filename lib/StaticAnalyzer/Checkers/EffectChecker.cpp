@@ -247,10 +247,11 @@ helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
     E = D->init_end();
   for(; I != E; ++I) {
     CXXCtorInitializer *Init = *I;
-    if (Init->isMemberInitializer()) {
-      //helperTypecheckDeclWithInit(Init->getMember(), Init->getInit());
+    if (Init->isMemberInitializer() || Init->isBaseInitializer()) {
       Visit(Init->getInit());
     } else {
+      OS << "DEBUG:: unsupported initializer:\n";
+      Init->getInit()->printPretty(OS, 0, Ctx.getPrintingPolicy());
       emitUnsupportedConstructorInitializer(D);
     }
   }
@@ -441,6 +442,16 @@ void EffectCollectorVisitor::VisitDeclRefExpr(DeclRefExpr *Exp) {
 void EffectCollectorVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
   //OS << "DEBUG:: visiting 'this' expression\n";
   //DerefNum = 0;
+  OS << "DEBUG:: VisitCXXThisExpr!! :)\n";
+  OS << "DEBUG:: Type of 'this' = " << E->getType().getAsString() << "\n";
+  const SubstitutionVector *InheritanceSubV =
+      SymT.getInheritanceSubVec(E->getType()->getPointeeType());
+  if(InheritanceSubV) {
+    OS << "DEBUG:: InheritanceSubV.size = " << InheritanceSubV->size() << "\n";
+
+    EffectsTmp->substitute(*InheritanceSubV);
+  }
+
 }
 
 void EffectCollectorVisitor::

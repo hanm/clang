@@ -292,6 +292,11 @@ helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
     CXXCtorInitializer *Init = *I;
     if (Init->isMemberInitializer()) {
       helperTypecheckDeclWithInit(Init->getMember(), Init->getInit());
+    } else if (Init->isBaseInitializer()) {
+      //AssignmentCheckerVisitor ACV(BR, Ctx, Mgr, AC, OS,
+      //  SymT, Def, Init->getInit());
+      //FatalError |= ACV.encounteredFatalError();
+      Visit(Init->getInit());
     } else {
       helperEmitUnsupportedConstructorInitializer(D);
     }
