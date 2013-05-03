@@ -48,21 +48,23 @@ void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
   if (!ParamVec || ParamVec->size() == 0)
     return; // Nothing to do here
 
-  // TODO support multiple Parameters
-  const ParamRplElement *FromEl = ParamVec->getParamAt(0);
-  assert(FromEl);
+  // First, compute inheritance induced substitutions
+  const SubstitutionVector *InheritanceSubV =
+      SymT.getInheritanceSubVec(QT);
+  if(InheritanceSubV)
+    EffectsTmp->substitute(*InheritanceSubV);
 
-  const Rpl *ToRpl = T1->getSubstArg(DerefNum);
-  assert(ToRpl);
-  OS << "DEBUG:: gonna substitute... " << FromEl->getName()
-    << "->" << ToRpl->toString() << "\n";
-
-  if (*ToRpl != *FromEl) {
-    // if (from != to) then substitute
-    Substitution S(FromEl, ToRpl);
-    /// 2.1.1 Substitution of effects
-    EffectsTmp->substitute(S);
+  // Next, build&apply SubstitutionVector
+  RplVector RplVec;
+  for (size_t I = 0; I < ParamVec->size(); ++I) {
+    const Rpl *ToRpl = T1->getSubstArg(DerefNum+I);
+    assert(ToRpl);
+    RplVec.push_back(ToRpl);
   }
+  SubstitutionVector SubV;
+  SubV.buildSubstitutionVector(ParamVec, &RplVec);
+  EffectsTmp->substitute(SubV);
+
   OS << "   DONE\n";
   delete T1;
 }

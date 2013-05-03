@@ -152,7 +152,10 @@ public:
     print(OS);
     return std::string(OS.str());
   }
-}; // End class Substituion.
+
+  void push_back(const SubstitutionVector *SubV);
+
+}; // End class SubstituionVector.
 
 } // end namespace clang
 } // end namespace asap

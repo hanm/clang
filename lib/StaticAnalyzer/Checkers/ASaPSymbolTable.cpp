@@ -217,6 +217,14 @@ const ParameterVector *SymbolTable::getParameterVector(const Decl *D) const {
     return SymTable.lookup(D)->getParameterVector();
 }
 
+const SubstitutionVector *SymbolTable::
+getInheritanceSubVec(const Decl *D) const {
+  if (!SymTable.lookup(D))
+    return 0;
+  else
+    return SymTable.lookup(D)->getInheritanceSubVec();
+}
+
 const RegionNameSet *SymbolTable::getRegionNameSet(const Decl *D) const {
   if (!SymTable.lookup(D))
     return 0;
@@ -336,9 +344,10 @@ hasRegionOrParameterName(const Decl *D, StringRef Name) const {
 }
 
 bool SymbolTable::hasBase(const Decl *D, const Decl *Base) const {
-  if (!SymTable.lookup(D))
+  if (!SymTable.lookup(D) || !SymTable.lookup(Base))
     return false;
-  return (SymTable.lookup(D)->getSubstitutionVec(Base) == 0)? false : true;
+  return (SymTable.lookup(D)->
+            getSubVec(SymTable.lookup(Base)) == 0)? false : true;
 }
 
 bool SymbolTable::addRegionName(const Decl *D, StringRef Name) {
@@ -364,11 +373,15 @@ bool SymbolTable::addBaseTypeAndSub(const Decl *D, const Decl *Base,
   if (!SubV)
     return true; // Nothing to do here
   if (hasBase(D, Base)) {
-    return true; // FIXME: should we instead merge SubVs?...
+    return false; // FIXME: should we instead merge SubVs?...
   }
   if (!SymTable.lookup(D))
     SymTable[D] = new SymbolTableEntry();
-  SymTable[D]->addBaseTypeAndSub(Base, SubV);
+
+  if (!SymTable.lookup(Base))
+    SymTable[Base] = new SymbolTableEntry();
+
+  SymTable[D]->addBaseTypeAndSub(SymTable.lookup(Base), SubV);
   return true;
 }
 
@@ -387,10 +400,28 @@ const ParameterVector *SymbolTable::getParameterVectorFromQualType(QualType QT) 
   } /// else result = NULL;
   return ParamVec;
 }
+
+const SubstitutionVector *SymbolTable::
+getInheritanceSubVec(QualType QT) {
+  const SubstitutionVector *SubV = 0;
+  if (QT->isReferenceType()) {
+    SubV = getInheritanceSubVec(QT->getPointeeType());
+  } else if (const TagType* TT = dyn_cast<TagType>(QT.getTypePtr())) {
+    const TagDecl* TD = TT->getDecl();
+    //TD->dump(OSv2);
+    SubV = this->getInheritanceSubVec(TD);
+  } else if (QT->isBuiltinType() || QT->isPointerType()) {
+    SubV = 0;
+  } /// else result = NULL;
+  return SubV;
+}
+
 //////////////////////////////////////////////////////////////////////////
+// SymbolTableEntry
 
 SymbolTable::SymbolTableEntry::SymbolTableEntry() :
-    Typ(0), ParamVec(0), RegnNameSet(0), EffSum(0), InheritanceMap(0) {}
+    Typ(0), ParamVec(0), RegnNameSet(0), EffSum(0), InheritanceMap(0),
+    ComputedInheritanceSubVec(false), InheritanceSubVec(0) {}
 
 SymbolTable::SymbolTableEntry::~SymbolTableEntry() {
   // FIXME uncommenting these lines causes some tests to fail
@@ -406,6 +437,7 @@ SymbolTable::SymbolTableEntry::~SymbolTableEntry() {
     }
     delete InheritanceMap;
   }
+  delete InheritanceSubVec;
 }
 
 const NamedRplElement *SymbolTable::SymbolTableEntry::lookupRegionName(StringRef Name) {
@@ -433,7 +465,7 @@ void SymbolTable::SymbolTableEntry::addParameterName(StringRef Name) {
 }
 
 bool SymbolTable::SymbolTableEntry::
-addBaseTypeAndSub(const Decl *Base, SubstitutionVector *&SubV) {
+addBaseTypeAndSub(SymbolTableEntry *Base, SubstitutionVector *&SubV) {
   // If we're not adding a substitution then skip it altogether.
   if (!SubV)
     return true;
@@ -447,11 +479,44 @@ addBaseTypeAndSub(const Decl *Base, SubstitutionVector *&SubV) {
 }
 
 const SubstitutionVector *SymbolTable::SymbolTableEntry::
-getSubstitutionVec(const Decl *Base) const {
+getSubVec(SymbolTableEntry *Base) const {
   if (!InheritanceMap)
     return 0;
   return (*InheritanceMap)[Base];
 }
+
+void SymbolTable::SymbolTableEntry::
+computeInheritanceSubVec() {
+
+  if (!ComputedInheritanceSubVec
+      && InheritanceMap && InheritanceMap->size() > 0) {
+
+    assert(!InheritanceSubVec);
+    InheritanceSubVec = new SubstitutionVector();
+    for(InheritanceMapT::iterator
+          I = InheritanceMap->begin(), E = InheritanceMap->end();
+        I != E; ++I) {
+      const SubstitutionVector *SubV = (*I).second;
+      InheritanceSubVec->push_back(SubV);
+      SymbolTableEntry *STE = (*I).first;
+      InheritanceSubVec->push_back(STE->getInheritanceSubVec());
+    }
+  }
+
+    //1. SyBase.getInheritanceSubVec
+    //2. merge SubVecs
+  ComputedInheritanceSubVec = true;
+}
+
+const SubstitutionVector *SymbolTable::SymbolTableEntry::
+getInheritanceSubVec() {
+  if (!InheritanceMap)
+    return 0;
+  if (!ComputedInheritanceSubVec)
+    computeInheritanceSubVec();
+  return InheritanceSubVec;
+}
+
 
 } // end namespace asap
 } // end namespace clang

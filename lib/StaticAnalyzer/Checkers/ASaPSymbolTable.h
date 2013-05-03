@@ -112,6 +112,9 @@ public:
   const ASaPType *getType(const Decl *D) const;
   /// \brief Retuns the parameter vector for D or null.
   const ParameterVector *getParameterVector(const Decl *D) const;
+
+  const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;
+
   /// \brief Returns the region names declarations for D or null.
   const RegionNameSet *getRegionNameSet(const Decl *D) const;
   /// \brief Returns the effect summmary for D or null.
@@ -157,6 +160,8 @@ public:
   /// \brief Get parameter vector from Clang::Type
   const ParameterVector *getParameterVectorFromQualType(QualType QT);
 
+  const SubstitutionVector *getInheritanceSubVec(QualType QT);
+
 private:
   class SymbolTableEntry {
     friend class SymbolTable;
@@ -166,8 +171,18 @@ private:
     RegionNameSet *RegnNameSet;
     EffectSummary *EffSum;
 
-    typedef llvm::DenseMap<const Decl*, SubstitutionVector*>  InheritanceMapT;
+    // Instead of Map(Decl -> SubVec) we use the SymbolTableEntry that
+    // corresponds to the Decl so we won't have to store a pointer to
+    // the SymbolTable from the SymbolTableEntries, in order to resolve
+    // the Decls
+    typedef llvm::DenseMap<SymbolTableEntry *, const SubstitutionVector *>
+        InheritanceMapT;
     InheritanceMapT *InheritanceMap;
+    bool ComputedInheritanceSubVec;
+    SubstitutionVector *InheritanceSubVec;
+
+    // Private Methods
+    void computeInheritanceSubVec();
 
   public:
     SymbolTableEntry();
@@ -201,9 +216,13 @@ private:
     // Adders.
     void addRegionName(llvm::StringRef Name);
     void addParameterName(llvm::StringRef Name);
-    bool addBaseTypeAndSub(const Decl *Base, SubstitutionVector *&SubV);
+    bool addBaseTypeAndSub(SymbolTableEntry *Base,
+                           SubstitutionVector *&SubV);
 
-    const SubstitutionVector *getSubstitutionVec(const Decl *Base) const;
+    const SubstitutionVector *getSubVec(SymbolTableEntry *Base) const;
+
+    const SubstitutionVector *getInheritanceSubVec();
+
 
   protected:
     inline EffectSummary *getNonConstEffectSummary() const { return EffSum; }

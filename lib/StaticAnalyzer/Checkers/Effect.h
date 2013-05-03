@@ -105,6 +105,7 @@ public:
 
   /// \brief substitute (Effect)
   void substitute(const Substitution &S);
+  void substitute(const SubstitutionVector &SubV);
 
 
   /// \brief SubEffect Rule: true if this <= e
@@ -174,6 +175,16 @@ public:
          I != E; ++I) {
       Effect *Eff = *I;
       Eff->substitute(S);
+    }
+  }
+
+  void substitute(const SubstitutionVector &SubV) {
+    for (EffectVectorT::const_iterator
+            I = EffV.begin(),
+            E = EffV.end();
+         I != E; ++I) {
+      Effect *Eff = *I;
+      Eff->substitute(SubV);
     }
   }
 

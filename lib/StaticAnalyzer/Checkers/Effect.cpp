@@ -42,6 +42,11 @@ void Effect::substitute(const Substitution &S) {
     S.applyTo(R);
 }
 
+void Effect::substitute(const SubstitutionVector &S) {
+  if (R)
+    S.applyTo(R);
+}
+
 bool Effect::isSubEffectOf(const Effect &That) const {
   bool Result = (isNoEffect() ||
                  (isSubEffectKindOf(That) && R->isIncludedIn(*(That.R))));

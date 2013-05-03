@@ -91,10 +91,25 @@ std::string Substitution::toString() const {
 
 void SubstitutionVector::
 buildSubstitutionVector(const ParameterVector *ParV, RplVector *RplVec) {
+  assert(ParV && RplVec);
+  assert(ParV->size() <= RplVec->size());
   for (size_t I = 0; I < ParV->size(); ++I) {
-    Substitution *Sub =
-        new Substitution(ParV->getParamAt(I), RplVec->getRplAt(I));
-    this->push_back(Sub);
+    const Rpl *ToRpl = RplVec->getRplAt(I);
+    const ParamRplElement *FromEl = ParV->getParamAt(I);
+    if (*ToRpl != *FromEl) {
+      Substitution *Sub =
+        new Substitution(FromEl, ToRpl);
+      this->push_back(Sub);
+    }
+  }
+}
+
+void SubstitutionVector::push_back(const SubstitutionVector *SubV) {
+  if (SubV) {
+    for(SubstitutionVecT::const_iterator I = SubV->begin(), E = SubV->end();
+        I != E; ++I) {
+      this->push_back(*I);
+    }
   }
 }
 
