@@ -140,7 +140,19 @@ helperEmitDeclarationWarning(const Decl *D, const StringRef &Str,
 }
 
 void EffectCollectorVisitor::
+emitOverridenVirtualFunctionMustCoverEffectsOfChildren(
+    const CXXMethodDecl *Parent, const CXXMethodDecl *Child) {
+  StringRef BugName = "overridden virtual function does not cover the effects "\
+      "of the overridding methods";
+  std::string Str;
+  llvm::raw_string_ostream StrOS(Str);
+  StrOS << "[in derived class '" << Child->getParent()->getName() << "']";
+  helperEmitDeclarationWarning(Parent, StrOS.str(), BugName, false);
+}
+
+void EffectCollectorVisitor::
 emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef &Str) {
+  FatalError = true;
   StringRef BugName = "effect summary of canonical declaration does not cover"\
     " the summary of this declaration";
   helperEmitDeclarationWarning(D, Str, BugName);
@@ -148,6 +160,7 @@ emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef &Str) {
 
 void EffectCollectorVisitor::
 emitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
+  FatalError = true;
     StringRef BugName = "unsupported constructor initializer."
       " Please file feature support request.";
     helperEmitDeclarationWarning(D, "", BugName, false);
@@ -156,6 +169,7 @@ emitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
 void EffectCollectorVisitor::
 emitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
                                   const StringRef &Str) {
+  FatalError = true;
   StringRef BugName = "effect not covered by effect summary";
   OS << "DEBUG::" << BugName << "\n";
   OS << "DEBUG:: Stmt:";
@@ -294,8 +308,23 @@ EffectCollectorVisitor::EffectCollectorVisitor (
         helperVisitCXXConstructorDecl(D);
       }
     }
-
     Visit(S);
+    if (const CXXMethodDecl *CXXD = dyn_cast<CXXMethodDecl>(Def)) {
+      // check overidden methods have an effect summary that covers this one
+      const EffectSummary *MySum = SymT.getEffectSummary(CXXD);
+      assert(MySum);
+      for(CXXMethodDecl::method_iterator
+          I = CXXD->begin_overridden_methods(),
+          E = CXXD->end_overridden_methods();
+          I != E; ++I) {
+        // aloha
+        const EffectSummary *OverriddenSum = SymT.getEffectSummary(*I);
+        assert(OverriddenSum);
+        if ( ! OverriddenSum->covers(MySum) ) {
+          emitOverridenVirtualFunctionMustCoverEffectsOfChildren(*I, CXXD);
+        }
+      }
+    }
     OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
     delete EffectsTmp;
 }
@@ -530,9 +559,8 @@ VisitCXXDeleteExpr(CXXDeleteExpr *Exp) {
   HasWriteSemantics = SavedHasWriteSemantics;
 }
 
-
-
-
+// End Visitors
+//////////////////////////////////////////////////////////////////////////
 void EffectCollectorVisitor::
 buildParamSubstitutions(const FunctionDecl *CalleeDecl,
                         ExprIterator ArgI, ExprIterator ArgE,
