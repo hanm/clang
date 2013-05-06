@@ -14,6 +14,7 @@
 //===----------------------------------------------------------------===//
 
 #include "TypeChecker.h"
+#include "ASaPUtil.h"
 #include "ASaPType.h"
 #include "Effect.h"
 #include "Rpl.h"
@@ -183,25 +184,6 @@ typecheck(const ASaPType *LHSType, const ASaPType *RHSType, bool IsInit) {
 }
 
 void AssignmentCheckerVisitor::
-helperEmitDeclarationWarning(const Decl *D, const StringRef &Str,
-                             std::string BugName, bool AddQuotes) {
-  std::string Description = "";
-  if (AddQuotes)
-    Description.append("'");
-  Description.append(Str);
-  if (AddQuotes)
-    Description.append("': ");
-  else
-    Description.append(": ");
-  Description.append(BugName);
-  StringRef BugCategory = "Safe Parallelism";
-  StringRef BugStr = Description;
-  PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
-  BR.EmitBasicReport(D, BugName, BugCategory,
-                     BugStr, VDLoc, D->getSourceRange());
-}
-
-void AssignmentCheckerVisitor::
 helperEmitInvalidAliasingModificationWarning(Stmt *S, Decl *D,
                                              const StringRef &Str) {
   StringRef BugName =
@@ -280,7 +262,7 @@ void AssignmentCheckerVisitor::
 helperEmitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
   StringRef BugName = "unsupported constructor initializer."
     " Please file feature support request.";
-  helperEmitDeclarationWarning(D, "", BugName, false);
+  helperEmitDeclarationWarning(BR, D, "", BugName, false);
 }
 
 void AssignmentCheckerVisitor::
@@ -633,24 +615,6 @@ void TypeBuilderVisitor::memberSubstitute(const ASaPType *T) {
   SubstitutionVector SubV;
   SubV.buildSubstitutionVector(ParamVec, &RplVec);
   Type->substitute(&SubV);
-
-
-  // TODO support multiple Parameters
-  /*
-  const ParamRplElement *FromEl = ParamVec->getParamAt(0);
-  assert(FromEl && "FromEl can't be null");
-
-  const Rpl *ToRpl = T->getSubstArg(DerefNum);
-  assert(ToRpl && "ToRpl can't be null");
-  OS << "DEBUG:: gonna substitute... " << FromEl->getName()
-    << "<-" << ToRpl->toString() << "\n";
-
-  if (*ToRpl != *FromEl) {
-    OS <<" GO!!\n";
-    assert(Type && "Type can't be null");
-    Substitution Sub(FromEl, ToRpl);
-    Type->substitute(&Sub);
-  }*/
 }
 
 void TypeBuilderVisitor::memberSubstitute(const ValueDecl *D) {

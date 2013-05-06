@@ -13,6 +13,7 @@
 //
 //===----------------------------------------------------------------===//
 
+#include "ASaPUtil.h"
 #include "SemanticChecker.h"
 #include "ASaPType.h"
 #include "clang/AST/Decl.h"
@@ -70,48 +71,9 @@ addASaPBaseTypeToMap(CXXRecordDecl *CXXRD,
 }
 
 void ASaPSemanticCheckerTraverser::
-helperEmitDeclarationWarning(const Decl *D, const StringRef Str,
-                             std::string BugName, bool AddQuotes) {
-  std::string Description = "";
-  if (AddQuotes)
-    Description.append("'");
-  Description.append(Str);
-  if (AddQuotes)
-    Description.append("': ");
-  else
-    Description.append(": ");
-  Description.append(BugName);
-  StringRef BugCategory = "Safe Parallelism";
-  StringRef BugStr = Description;
-  PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
-  BR.EmitBasicReport(D, BugName, BugCategory,
-                     BugStr, VDLoc, D->getSourceRange());
-}
-
-void ASaPSemanticCheckerTraverser::
-helperEmitAttributeWarning(const Decl *D, const Attr *Attr,
-                           const StringRef &Str, std::string BugName,
-                           bool AddQuotes) {
-  std::string Description = "";
-  if (AddQuotes)
-    Description.append("'");
-  Description.append(Str);
-  if (AddQuotes)
-    Description.append("': ");
-  else
-    Description.append(": ");
-  Description.append(BugName);
-  StringRef BugCategory = "Safe Parallelism";
-  StringRef BugStr = Description;
-  PathDiagnosticLocation VDLoc(Attr->getLocation(), BR.getSourceManager());
-  BR.EmitBasicReport(D, BugName, BugCategory,
-                     BugStr, VDLoc, Attr->getRange());
-}
-
-void ASaPSemanticCheckerTraverser::
 emitRedeclaredRegionName(const Decl *D, const StringRef &Str) {
   StringRef BugName = "region name already declared at this scope";
-  helperEmitDeclarationWarning(D, Str, BugName);
+  helperEmitDeclarationWarning(BR, D, Str, BugName);
   // Not a Fatal Error
 }
 
@@ -119,7 +81,7 @@ inline void ASaPSemanticCheckerTraverser::
 emitRedeclaredRegionParameter(const Decl *D, const StringRef &Str) {
   FatalError = true;
   StringRef BugName = "region parameter already declared at this scope";
-  helperEmitDeclarationWarning(D, Str, BugName);
+  helperEmitDeclarationWarning(BR, D, Str, BugName);
 }
 
 void ASaPSemanticCheckerTraverser::
@@ -128,7 +90,7 @@ emitMisplacedRegionParameter(const Decl *D,
                              const StringRef &S) {
   StringRef BugName = "Misplaced Region Parameter: Region parameters "
                         "may only appear at the head of an RPL.";
-  helperEmitAttributeWarning(D, A, S, BugName);
+  helperEmitAttributeWarning(BR, D, A, S, BugName);
 }
 
 void ASaPSemanticCheckerTraverser::
@@ -136,13 +98,13 @@ emitUndeclaredRplElement(const Decl *D,
                          const Attr *Attr,
                          const StringRef &Str) {
   StringRef BugName = "RPL element was not declared";
-  helperEmitAttributeWarning(D, Attr, Str, BugName);
+  helperEmitAttributeWarning(BR, D, Attr, Str, BugName);
 }
 
 void ASaPSemanticCheckerTraverser::
 emitNameSpecifierNotFound(const Decl *D, const Attr *A, StringRef Name) {
   StringRef BugName = "Name specifier was not found";
-  helperEmitAttributeWarning(D, A, Name, BugName);
+  helperEmitAttributeWarning(BR, D, A, Name, BugName);
 }
 
 void ASaPSemanticCheckerTraverser::
@@ -157,7 +119,7 @@ emitMissingRegionArgs(const Decl *D, const Attr* A, int ParamCount) {
   llvm::raw_string_ostream DeclOS(SBuf);
   D->print(DeclOS, Ctx.getPrintingPolicy());
 
-  helperEmitDeclarationWarning(D, DeclOS.str(), BugNameOS.str());
+  helperEmitDeclarationWarning(BR, D, DeclOS.str(), BugNameOS.str());
 }
 
 void ASaPSemanticCheckerTraverser::
@@ -169,7 +131,7 @@ emitUnknownNumberOfRegionParamsForType(const Decl *D) {
   llvm::raw_string_ostream strbuf(sbuf);
   D->print(strbuf, Ctx.getPrintingPolicy());
 
-  helperEmitDeclarationWarning(D, strbuf.str(), BugName);
+  helperEmitDeclarationWarning(BR, D, strbuf.str(), BugName);
 }
 
 void ASaPSemanticCheckerTraverser::
@@ -181,7 +143,7 @@ emitSuperfluousRegionArg(const Decl *D, const Attr *A,
   BugNameOS << "expects " << ParamCount
     << " region arguments [-> superfluous region argument(s)]";
 
-  helperEmitAttributeWarning(D, A, Str, BugNameOS.str());
+  helperEmitAttributeWarning(BR, D, A, Str, BugNameOS.str());
 }
 
 void ASaPSemanticCheckerTraverser::
@@ -197,14 +159,14 @@ emitIllFormedRegionNameOrParameter(const Decl *D,
   std::string BugName = "invalid ";
   BugName.append(AttrTypeStr);
   BugName.append(" name");
-  helperEmitAttributeWarning(D, A, Name, BugName);
+  helperEmitAttributeWarning(BR, D, A, Name, BugName);
 }
 
 void ASaPSemanticCheckerTraverser::
 emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef &Str) {
   StringRef BugName = "effect summary of canonical declaration does not cover"\
     " the summary of this declaration";
-  helperEmitDeclarationWarning(D, Str, BugName);
+  helperEmitDeclarationWarning(BR, D, Str, BugName);
 }
 
 void ASaPSemanticCheckerTraverser::
@@ -219,7 +181,7 @@ emitEffectCovered(const Decl *D, const Effect *E1, const Effect *E2) {
   //StrBuf << BugName;
 
   StringRef BugStr = StrBuf.str();
-  helperEmitAttributeWarning(D, E1->getAttr(), BugStr, BugName, false);
+  helperEmitAttributeWarning(BR, D, E1->getAttr(), BugStr, BugName, false);
 }
 
 void ASaPSemanticCheckerTraverser::
@@ -227,29 +189,22 @@ emitNoEffectInNonEmptyEffectSummary(const Decl *D, const Attr *A) {
   StringRef BugName = "no_effect is illegal in non-empty effect summary";
   StringRef BugStr = "";
 
-  helperEmitAttributeWarning(D, A, BugStr, BugName, false);
+  helperEmitAttributeWarning(BR, D, A, BugStr, BugName, false);
 }
 
 void ASaPSemanticCheckerTraverser::
 emitMissingBaseClassArgument(const Decl *D, StringRef Str) {
   FatalError = true;
   StringRef BugName = "base class requires region argument(s)";
-  helperEmitDeclarationWarning(D, Str, BugName);
+  helperEmitDeclarationWarning(BR, D, Str, BugName);
 }
 
-/*void ASaPSemanticCheckerTraverser::
-emitMultipleAttributesForBaseClass(const Decl *D,
-                                   const Attr *A, StringRef Str) {
-  FatalError = true; // could also not be a fatal error
-  StringRef BugName = "duplicate attribute for base class specifier";
-  helperEmitAttributeWarning(D, A, Str, BugName);
-}*/
 void ASaPSemanticCheckerTraverser::
 emitAttributeMustReferToDirectBaseClass(const Decl *D,
                                         const RegionBaseArgAttr *A) {
   StringRef BugName =
     "attribute's first argument must refer to direct base class";
-  helperEmitAttributeWarning(D, A, A->getBaseType(), BugName);
+  helperEmitAttributeWarning(BR, D, A, A->getBaseType(), BugName);
 }
 
 void ASaPSemanticCheckerTraverser::
@@ -259,14 +214,14 @@ emitDuplicateBaseArgAttributesForSameBase(const Decl *D,
   // Not a fatal error
   StringRef BugName = "duplicate attribute for single base class specifier";
 
-  helperEmitAttributeWarning(D, A1, A1->getBaseType(), BugName);
+  helperEmitAttributeWarning(BR, D, A1, A1->getBaseType(), BugName);
 }
 
 void ASaPSemanticCheckerTraverser::
 emitMissingBaseArgAttribute(const Decl *D, StringRef BaseClass) {
   FatalError = true;
   StringRef BugName = "missing base_arg attribute";
-  helperEmitDeclarationWarning(D, BaseClass, BugName);
+  helperEmitDeclarationWarning(BR, D, BaseClass, BugName);
 
 }
 
@@ -275,7 +230,7 @@ emitEmptyStringRplDisallowed(const Decl *D, Attr *A) {
   FatalError = true;
   StringRef BugName = "the empty string is not a valid RPL";
 
-  helperEmitAttributeWarning(D, A, "", BugName);
+  helperEmitAttributeWarning(BR, D, A, "", BugName);
 }
 
 // End Emit Functions

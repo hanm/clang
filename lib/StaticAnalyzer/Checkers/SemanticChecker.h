@@ -32,10 +32,12 @@
 #include "clang/AST/Type.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
+
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/raw_ostream.h"
+
 #include "ASaPSymbolTable.h"
 #include "Rpl.h"
 #include "Effect.h"
@@ -66,16 +68,7 @@ class ASaPSemanticCheckerTraverser :
 
   void addASaPTypeToMap(ValueDecl *D, RplVector *RV, Rpl *InRpl);
   void addASaPBaseTypeToMap(CXXRecordDecl *CXXRD, QualType QT, RplVector *RplVec);
-  void helperEmitDeclarationWarning(const Decl *D,
-                                    const llvm::StringRef Str,
-                                    std::string BugName,
-                                    bool AddQuotes = true);
-  /// \brief Issues Warning: '<str>': <bugName> on Attribute.
-  void helperEmitAttributeWarning(const Decl *D,
-                                  const Attr *A,
-                                  const llvm::StringRef &Str,
-                                  std::string BugName,
-                                  bool AddQuotes = true);
+
   /// \brief Emit error for redeclared region name within scope.
   void emitRedeclaredRegionName(const Decl *D, const llvm::StringRef &Str);
   /// \brief Emit error for redeclared region parameter name within scope.

@@ -20,7 +20,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Support/raw_ostream.h"
-#include "clang/AST/Attr.h"
+//#include "clang/AST/Attr.h"
 
 namespace clang {
 namespace asap {
@@ -135,7 +135,7 @@ public:
   }
   // Print
   /// \brief Print Substitution vector.
-  void print(raw_ostream &OS) const {
+  void print(llvm::raw_ostream &OS) const {
     SubstitutionVecT::const_iterator
       I = SubV.begin(),
       E = SubV.end();

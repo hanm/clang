@@ -37,13 +37,15 @@ namespace asap {
 class ASaPType;
 class SubstitutionVector;
 
-/// Find assignments and call Typechecking on them. Assignments include
-/// * simple assignments: a = b
-/// * complex assignments: a = b (where a and b are not scalars) TODO
-/// * assignment of actuals to formals: f(a)
-/// * return statements assigning expr to formal return type
-/// * ...stay tuned, more to come
-
+//////////////////////////////////////////////////////////////////////////
+// class AssignmentCheckerVisitor
+//
+// Find assignments and call Typechecking on them. Assignments include
+// * simple assignments: a = b
+// * complex assignments: a = b (where a and b are not scalars) TODO
+// * assignment of actuals to formals: f(a)
+// * return statements assigning expr to formal return type
+// * ...stay tuned, more to come
 class AssignmentCheckerVisitor
     : public StmtVisitor<AssignmentCheckerVisitor> {
 
@@ -55,6 +57,7 @@ class AssignmentCheckerVisitor
   SymbolTable &SymT;
   const FunctionDecl *Def;
   bool FatalError;
+
   ASaPType *Type;
   SubstitutionVector *SubV;
 
@@ -116,11 +119,7 @@ private:
                                SubstitutionVector &SubV);
 
   void helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init);
-  /// \brief Issues Warning: '<str>' <bugName> on Declaration.
-  void helperEmitDeclarationWarning(const Decl *D,
-                                    const llvm::StringRef &Str,
-                                    std::string BugName,
-                                    bool AddQuotes = true);
+
   void helperEmitInvalidAliasingModificationWarning(Stmt *S, Decl *D,
                                                     const llvm::StringRef &Str);
   void helperEmitInvalidAssignmentWarning(const Stmt *S,
@@ -144,6 +143,9 @@ private:
   void helperVisitCXXConstructorDecl(const CXXConstructorDecl *D);
 }; // end class AssignmentCheckerVisitor
 
+
+//////////////////////////////////////////////////////////////////////////
+// class TypeBuilder
 class TypeBuilderVisitor
     : public StmtVisitor<TypeBuilderVisitor, void> {
   ento::BugReporter &BR;
@@ -203,6 +205,9 @@ public:
   void VisitReturnStmt(ReturnStmt *Ret);
 }; // End class TypeBuilderVisitor.
 
+
+//////////////////////////////////////////////////////////////////////////
+// class BaseTypeBuilderVisitor
 class BaseTypeBuilderVisitor
     : public StmtVisitor<BaseTypeBuilderVisitor, void> {
   ento::BugReporter &BR;

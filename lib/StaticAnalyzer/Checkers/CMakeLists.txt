@@ -6,6 +6,7 @@ clang_tablegen(Checkers.inc -gen-clang-sa-checkers
 add_clang_library(clangStaticAnalyzerCheckers
   ASaPSymbolTable.cpp
   ASaPType.cpp
+  ASaPUtil.cpp
   Effect.cpp
   EffectChecker.cpp
   Rpl.cpp

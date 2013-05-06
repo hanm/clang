@@ -21,6 +21,7 @@
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
 #include "llvm/Support/raw_ostream.h"
+
 #include "ASaPSymbolTable.h"
 
 namespace clang {
@@ -46,6 +47,7 @@ class EffectCollectorVisitor
   SymbolTable &SymT;
   const FunctionDecl *Def;
   bool FatalError;
+
   EffectVector *EffectsTmp;
   /// True when visiting an expression that is being written to.
   bool HasWriteSemantics;
@@ -60,11 +62,7 @@ class EffectCollectorVisitor
   void memberSubstitute(const ValueDecl *D);
   /// \brief Adds effects to TmpEffects and returns the number of effects added.
   int collectEffects(const ValueDecl *D);
-  /// \brief Issues Warning: '<str>' <bugName> on Declaration.
-  void helperEmitDeclarationWarning(const Decl *D,
-                                    const StringRef &Str,
-                                    std::string BugName,
-                                    bool AddQuotes = true);
+
   void emitEffectNotCoveredWarning(const Stmt *S,
                                          const Decl *D,
                                          const StringRef &Str);

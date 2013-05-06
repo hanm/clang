@@ -44,8 +44,8 @@ static void destroyVector(T &V) {
 }
 
 namespace {
-///-///////////////////////////////////////////////////////////////////
-/// GENERIC VISITORS
+///////////////////////////////////////////////////////////////////////
+// GENERIC VISITORS
 using clang::asap::SymbolTable;
 
 /// 1. Wrapper pass that calls a Stmt visitor on each function definition.
@@ -159,6 +159,8 @@ public:
   }
 
 }; // End class StmtVisitor.
+// END GENERIC VISITORS
+///////////////////////////////////////////////////////////////////////
 
 class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {

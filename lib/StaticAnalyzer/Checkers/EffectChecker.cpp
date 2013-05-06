@@ -13,12 +13,14 @@
 //
 //===----------------------------------------------------------------===//
 
+#include "ASaPUtil.h"
 #include "EffectChecker.h"
 #include "TypeChecker.h"
 #include "ASaPType.h"
 #include "Rpl.h"
 #include "Effect.h"
 #include "Substitution.h"
+
 #include "clang/AST/Decl.h"
 #include "clang/AST/Stmt.h"
 // FIXME: try clear these headers up.
@@ -121,25 +123,6 @@ int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
 }
 
 void EffectCollectorVisitor::
-helperEmitDeclarationWarning(const Decl *D, const StringRef &Str,
-                             std::string BugName, bool AddQuotes) {
-  std::string Description = "";
-  if (AddQuotes)
-    Description.append("'");
-  Description.append(Str);
-  if (AddQuotes)
-    Description.append("': ");
-  else
-    Description.append(": ");
-  Description.append(BugName);
-  StringRef BugCategory = "Safe Parallelism";
-  StringRef BugStr = Description;
-  PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
-  BR.EmitBasicReport(D, BugName, BugCategory,
-                     BugStr, VDLoc, D->getSourceRange());
-}
-
-void EffectCollectorVisitor::
 emitOverridenVirtualFunctionMustCoverEffectsOfChildren(
     const CXXMethodDecl *Parent, const CXXMethodDecl *Child) {
   StringRef BugName = "overridden virtual function does not cover the effects "\
@@ -147,7 +130,7 @@ emitOverridenVirtualFunctionMustCoverEffectsOfChildren(
   std::string Str;
   llvm::raw_string_ostream StrOS(Str);
   StrOS << "[in derived class '" << Child->getParent()->getName() << "']";
-  helperEmitDeclarationWarning(Parent, StrOS.str(), BugName, false);
+  helperEmitDeclarationWarning(BR, Parent, StrOS.str(), BugName, false);
 }
 
 void EffectCollectorVisitor::
@@ -155,7 +138,7 @@ emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef &Str) {
   FatalError = true;
   StringRef BugName = "effect summary of canonical declaration does not cover"\
     " the summary of this declaration";
-  helperEmitDeclarationWarning(D, Str, BugName);
+  helperEmitDeclarationWarning(BR, D, Str, BugName);
 }
 
 void EffectCollectorVisitor::
@@ -163,7 +146,7 @@ emitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
   FatalError = true;
     StringRef BugName = "unsupported constructor initializer."
       " Please file feature support request.";
-    helperEmitDeclarationWarning(D, "", BugName, false);
+    helperEmitDeclarationWarning(BR, D, "", BugName, false);
 }
 
 void EffectCollectorVisitor::
