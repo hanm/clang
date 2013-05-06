@@ -51,8 +51,7 @@ void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
   // First, compute inheritance induced substitutions
   const SubstitutionVector *InheritanceSubV =
       SymT.getInheritanceSubVec(QT);
-  if(InheritanceSubV)
-    EffectsTmp->substitute(*InheritanceSubV);
+  EffectsTmp->substitute(InheritanceSubV);
 
   // Next, build&apply SubstitutionVector
   RplVector RplVec;
@@ -63,7 +62,7 @@ void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
   }
   SubstitutionVector SubV;
   SubV.buildSubstitutionVector(ParamVec, &RplVec);
-  EffectsTmp->substitute(SubV);
+  EffectsTmp->substitute(&SubV);
 
   OS << "   DONE\n";
   delete T1;
@@ -449,7 +448,7 @@ void EffectCollectorVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
   if(InheritanceSubV) {
     OS << "DEBUG:: InheritanceSubV.size = " << InheritanceSubV->size() << "\n";
 
-    EffectsTmp->substitute(*InheritanceSubV);
+    EffectsTmp->substitute(InheritanceSubV);
   }
 
 }

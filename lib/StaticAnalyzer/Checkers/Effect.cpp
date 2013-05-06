@@ -37,14 +37,14 @@ Effect::~Effect() {
   delete R;
 }
 
-void Effect::substitute(const Substitution &S) {
-  if (R)
-    S.applyTo(R);
+void Effect::substitute(const Substitution *S) {
+  if (S && R)
+    S->applyTo(R);
 }
 
-void Effect::substitute(const SubstitutionVector &S) {
-  if (R)
-    S.applyTo(R);
+void Effect::substitute(const SubstitutionVector *S) {
+  if (S && R)
+    S->applyTo(R);
 }
 
 bool Effect::isSubEffectOf(const Effect &That) const {

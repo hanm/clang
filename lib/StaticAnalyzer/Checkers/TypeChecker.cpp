@@ -618,7 +618,25 @@ void TypeBuilderVisitor::memberSubstitute(const ASaPType *T) {
   if (!ParamVec || ParamVec->size() == 0)
     return;
 
+  // First, compute inheritance induced substitutions
+  const SubstitutionVector *InheritanceSubV =
+      SymT.getInheritanceSubVec(QT);
+  Type->substitute(InheritanceSubV);
+
+  // Next, build&apply SubstitutionVector
+  RplVector RplVec;
+  for (size_t I = 0; I < ParamVec->size(); ++I) {
+    const Rpl *ToRpl = T->getSubstArg(DerefNum+I);
+    assert(ToRpl);
+    RplVec.push_back(ToRpl);
+  }
+  SubstitutionVector SubV;
+  SubV.buildSubstitutionVector(ParamVec, &RplVec);
+  Type->substitute(&SubV);
+
+
   // TODO support multiple Parameters
+  /*
   const ParamRplElement *FromEl = ParamVec->getParamAt(0);
   assert(FromEl && "FromEl can't be null");
 
@@ -632,7 +650,7 @@ void TypeBuilderVisitor::memberSubstitute(const ASaPType *T) {
     assert(Type && "Type can't be null");
     Substitution Sub(FromEl, ToRpl);
     Type->substitute(&Sub);
-  }
+  }*/
 }
 
 void TypeBuilderVisitor::memberSubstitute(const ValueDecl *D) {
@@ -824,7 +842,12 @@ void TypeBuilderVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
     OS << "DEBUG:: type actually added: " << Type->toString(Ctx) << "\n";
 
     //TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));
+  } else { // IsBase == true
+    const SubstitutionVector *InheritanceSubV =
+        SymT.getInheritanceSubVec(E->getType()->getPointeeType());
+    Type->substitute(InheritanceSubV);
   }
+
   OS << "DEBUG:: DONE visiting 'this' expression\n";
 }
 

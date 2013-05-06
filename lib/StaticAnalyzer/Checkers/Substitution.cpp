@@ -62,7 +62,7 @@ void Substitution::applyTo(Rpl *R) const {
 
 void Substitution::applyTo(Effect *E) const {
   if (E && FromEl && ToRpl) {
-    E->substitute(*this);
+    E->substitute(this);
   }
 }
 

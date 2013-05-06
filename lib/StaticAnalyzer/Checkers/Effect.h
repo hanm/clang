@@ -104,8 +104,8 @@ public:
   }
 
   /// \brief substitute (Effect)
-  void substitute(const Substitution &S);
-  void substitute(const SubstitutionVector &SubV);
+  void substitute(const Substitution *S);
+  void substitute(const SubstitutionVector *SubV);
 
 
   /// \brief SubEffect Rule: true if this <= e
@@ -168,7 +168,9 @@ public:
   /// \brief Return the last Effect in the vector after removing it.
   inline Effect *pop_back_val() { return EffV.pop_back_val(); }
 
-  void substitute(const Substitution &S) {
+  void substitute(const Substitution *S) {
+    if (!S)
+      return; // Nothing to do.
     for (EffectVectorT::const_iterator
             I = EffV.begin(),
             E = EffV.end();
@@ -178,7 +180,9 @@ public:
     }
   }
 
-  void substitute(const SubstitutionVector &SubV) {
+  void substitute(const SubstitutionVector *SubV) {
+    if (!SubV)
+      return; // Nothing to do.
     for (EffectVectorT::const_iterator
             I = EffV.begin(),
             E = EffV.end();
