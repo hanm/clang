@@ -16,31 +16,13 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_EFFECT_CHECKER_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_EFFECT_CHECKER_H
 
+#include "ASaPFwdDecl.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/StmtVisitor.h"
-#include "llvm/Support/raw_ostream.h"
 
 
 namespace clang {
-
-class AnalysisDeclContext;
-class FunctionDecl;
-class Stmt;
-
-namespace ento {
-class BugReporter;
-class AnalysisManager;
-}
-
 namespace asap {
-
-class ParameterVector;
-class Effect;
-class EffectVector;
-class EffectSummary;
-class Substitution;
-class SubstitutionVector;
-class SymbolTable;
 
 class EffectCollectorVisitor
     : public StmtVisitor<EffectCollectorVisitor> {

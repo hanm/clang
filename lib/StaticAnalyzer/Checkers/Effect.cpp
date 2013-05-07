@@ -20,9 +20,6 @@
 #include "ASaPSymbolTable.h"
 #include "Substitution.h"
 
-using namespace clang;
-using namespace clang::asap;
-
 namespace clang {
 namespace asap {
 

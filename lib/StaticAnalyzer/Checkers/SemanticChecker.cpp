@@ -16,19 +16,12 @@
 #include "ASaPUtil.h"
 #include "SemanticChecker.h"
 #include "ASaPType.h"
-#include "clang/AST/Decl.h"
 #include "Substitution.h"
-// FIXME: Include these static analyzer core headers are really unfortunate given
-// we only traverse AST without any path sensitive analysis. These header should be
-// removed.
-#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
-#include "clang/StaticAnalyzer/Core/BugReporter/PathDiagnostic.h"
 
-using namespace clang;
-using namespace clang::asap;
-using namespace clang::ento;
-using namespace llvm;
+#include "clang/AST/Decl.h"
+
+namespace clang {
+namespace asap {
 
 void ASaPSemanticCheckerTraverser::
 addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
@@ -1006,3 +999,5 @@ VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
   return true;
 }
 
+} // end namespace asap
+} // end namespace clang

@@ -16,62 +16,38 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_UTIL_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_UTIL_H
 
-#include "llvm/ADT/StringRef.h"
-#include "llvm/Support/raw_ostream.h"
-
+#include "ASaPFwdDecl.h"
 
 namespace clang {
-
-class Attr;
-class Decl;
-class Stmt;
-class CXXConstructorDecl;
-class ASTContext;
-class AnalysisDeclContext;
-
-namespace ento {
-  class BugReporter;
-}
-
 namespace asap {
-class ASaPType;
 
 #define ASAP_DEBUG
 #define ASAP_DEBUG_VERBOSE2
+extern llvm::raw_ostream &os;
+extern llvm::raw_ostream &OSv2;
 
-#ifdef ASAP_DEBUG
-  static llvm::raw_ostream& os = llvm::errs();
-#else
-  static llvm::raw_ostream &os = llvm::nulls();
-#endif
-
-#ifdef ASAP_DEBUG_VERBOSE2
-  static llvm::raw_ostream &OSv2 = llvm::errs();
-#else
-  static llvm::raw_ostream &OSv2 = llvm::nulls();
-#endif
 
 /// \brief Issues Warning: '<str>': <bugName> on Declaration.
 void helperEmitDeclarationWarning(ento::BugReporter &BR,
                                   const Decl *D,
-                                  const llvm::StringRef Str,
-                                  std::string BugName,
+                                  const StringRef &Str,
+                                  const StringRef &BugName,
                                   bool AddQuotes = true);
 
 /// \brief Issues Warning: '<str>': <bugName> on Attribute.
 void helperEmitAttributeWarning(ento::BugReporter &BR,
                                 const Decl *D,
                                 const Attr *A,
-                                const llvm::StringRef Str,
-                                std::string BugName,
+                                const StringRef &Str,
+                                const StringRef &BugName,
                                 bool AddQuotes = true);
 
 void helperEmitStatementWarning(ento::BugReporter &BR,
                                 AnalysisDeclContext *AC,
                                 const Stmt *S,
                                 const Decl *D,
-                                const llvm::StringRef &Str,
-                                std::string BugName);
+                                const StringRef &Str,
+                                const StringRef &BugName);
 
 void helperEmitInvalidAssignmentWarning(ento::BugReporter &BR,
                                         AnalysisDeclContext *AC,
@@ -79,7 +55,7 @@ void helperEmitInvalidAssignmentWarning(ento::BugReporter &BR,
                                         const Stmt *S,
                                         const ASaPType *LHS,
                                         const ASaPType *RHS,
-                                        llvm::StringRef BugName);
+                                        StringRef &BugName);
 
 } // end namespace asap
 } // end namespace clang

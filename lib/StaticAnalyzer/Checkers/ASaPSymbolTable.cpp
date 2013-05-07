@@ -24,9 +24,6 @@
 #include "Substitution.h"
 #include "clang/AST/Decl.h"
 
-using namespace clang;
-using namespace clang::asap;
-
 namespace clang {
 namespace asap {
 

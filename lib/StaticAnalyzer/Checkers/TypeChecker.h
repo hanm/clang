@@ -19,25 +19,10 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Type.h"
 #include "clang/AST/StmtVisitor.h"
-#include "llvm/Support/raw_ostream.h"
-#include "ASaPSymbolTable.h"
+#include "ASaPFwdDecl.h"
 
 namespace clang {
-
-class FunctionDecl;
-class Stmt;
-class Expr;
-class AnalysisDeclContext;
-
-namespace ento {
-class BugReporter;
-class AnalysisManager;
-}
-
 namespace asap {
-
-class ASaPType;
-class SubstitutionVector;
 
 //////////////////////////////////////////////////////////////////////////
 // class AssignmentCheckerVisitor

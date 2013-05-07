@@ -17,17 +17,10 @@
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_SUBSTITUTION_H
 
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/Support/raw_ostream.h"
+#include "ASaPFwdDecl.h"
 
 namespace clang {
 namespace asap {
-
-class Rpl;
-class RplElement;
-class RplVector;
-class ParameterVector;
-class Effect;
-class EffectSummary;
 
 // TODO support substitution over multiple parameters
 class Substitution {
@@ -111,44 +104,15 @@ public:
   }
 
   // Apply
-  void applyTo(Rpl *R) const {
-    if (R) {
-      for(SubstitutionVecT::const_iterator I = SubV.begin(), E = SubV.end();
-          I != E; ++I) {
-        assert(*I);
-        (*I)->applyTo(R);
-      }
-    }
-  }
+  void applyTo(Rpl *R) const;
 
-  void applyTo(Effect *Eff) const {
-    if (Eff) {
-      for(SubstitutionVecT::const_iterator I = SubV.begin(), E = SubV.end();
-          I != E; ++I) {
-        assert(*I);
-        (*I)->applyTo(Eff);
-      }
-    }
-  }
+  void applyTo(Effect *Eff) const;
   // Print
   /// \brief Print Substitution vector.
-  void print(llvm::raw_ostream &OS) const {
-    SubstitutionVecT::const_iterator
-      I = SubV.begin(),
-      E = SubV.end();
-    for(; I != E; ++I) {
-      assert(*I);
-      (*I)->print(OS);
-    }
-  }
+  void print(llvm::raw_ostream &OS) const;
 
   /// \brief Return a string for the Substitution vector.
-  inline std::string toString() const {
-    std::string SBuf;
-    llvm::raw_string_ostream OS(SBuf);
-    print(OS);
-    return std::string(OS.str());
-  }
+  std::string toString() const;
 
   void push_back(const SubstitutionVector *SubV);
 

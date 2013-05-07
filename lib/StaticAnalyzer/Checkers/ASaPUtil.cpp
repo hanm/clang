@@ -23,18 +23,26 @@
 #include "llvm/Support/raw_ostream.h"
 
 namespace clang {
-
-using ento::PathDiagnosticLocation;
-using ento::BugReporter;
-
 namespace asap {
 
-StringRef BugCategory = "Safe Parallelism";
+static StringRef BugCategory = "Safe Parallelism";
+
+#ifdef ASAP_DEBUG
+llvm::raw_ostream& os = llvm::errs();
+#else
+llvm::raw_ostream &os = llvm::nulls();
+#endif
+
+#ifdef ASAP_DEBUG_VERBOSE2
+llvm::raw_ostream &OSv2 = llvm::errs();
+#else
+llvm::raw_ostream &OSv2 = llvm::nulls();
+#endif
 
 void helperEmitDeclarationWarning(BugReporter &BR,
                                   const Decl *D,
-                                  const StringRef Str,
-                                  std::string BugName,
+                                  const StringRef &Str,
+                                  const StringRef &BugName,
                                   bool AddQuotes) {
   std::string Description;
   llvm::raw_string_ostream DescrOS(Description);
@@ -50,8 +58,8 @@ void helperEmitDeclarationWarning(BugReporter &BR,
 void helperEmitAttributeWarning(BugReporter &BR,
                                 const Decl *D,
                                 const Attr *Attr,
-                                const StringRef Str,
-                                std::string BugName,
+                                const StringRef &Str,
+                                const StringRef &BugName,
                                 bool AddQuotes) {
   std::string Description;
   llvm::raw_string_ostream DescrOS(Description);
@@ -70,7 +78,7 @@ void helperEmitStatementWarning(BugReporter &BR,
                                 const Stmt *S,
                                 const Decl *D,
                                 const StringRef &Str,
-                                std::string BugName) {
+                                const StringRef &BugName) {
   std::string Description;
   llvm::raw_string_ostream DescrOS(Description);
   DescrOS << "'" << Str << "' " << BugName;
@@ -90,7 +98,7 @@ void helperEmitInvalidAssignmentWarning(BugReporter &BR,
                                         const Stmt *S,
                                         const ASaPType *LHS,
                                         const ASaPType *RHS,
-                                        StringRef BugName) {
+                                        StringRef &BugName) {
   std::string Description;
   llvm::raw_string_ostream DescrOS(Description);
 

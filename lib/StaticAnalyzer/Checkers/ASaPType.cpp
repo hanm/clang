@@ -20,8 +20,8 @@
 #include "ASaPType.h"
 #include "clang/AST/ASTContext.h"
 
-using namespace clang;
-using namespace clang::asap;
+namespace clang {
+namespace asap {
 
 void ASaPType::adjust() {
   // Check if we might need to set InRpl.
@@ -294,5 +294,5 @@ void ASaPType::substitute(Substitution *Sub) {
     ArgV->substitute(*FromEl, *ToRpl);
 }
 
-
-
+} // end namespace clang
+} // end namespace asap

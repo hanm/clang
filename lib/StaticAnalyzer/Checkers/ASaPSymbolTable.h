@@ -23,24 +23,10 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "clang/AST/Type.h"
+#include "ASaPFwdDecl.h"
 
 namespace clang {
-
-class Decl;
-
 namespace asap {
-
-class ParameterVector;
-class SubstitutionVector;
-class ASaPType;
-class RegionNameSet;
-class EffectSummary;
-class RplElement;
-class NamedRplElement;
-class ParamRplElement;
-class StarRplElement;
-class SpecialRplElement;
-class Effect;
 
 enum ResultKind {
   RK_OK,

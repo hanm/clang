@@ -17,6 +17,7 @@
 #include "ASaPUtil.h"
 #include "TypeChecker.h"
 #include "ASaPType.h"
+#include "ASaPSymbolTable.h"
 #include "Rpl.h"
 #include "Effect.h"
 #include "Substitution.h"
@@ -24,10 +25,8 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/Stmt.h"
 
-using namespace clang;
-using namespace clang::ento;
-using namespace clang::asap;
-using namespace llvm;
+namespace clang {
+namespace asap {
 
 void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
   assert(D && "D can't be null");
@@ -578,3 +577,6 @@ buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
     }
   }
 }
+
+} // end namespace asap
+} // end namespace clang

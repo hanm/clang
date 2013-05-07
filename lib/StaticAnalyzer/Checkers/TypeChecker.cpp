@@ -19,14 +19,14 @@
 #include "Effect.h"
 #include "Rpl.h"
 #include "Substitution.h"
+#include "ASaPSymbolTable.h"
 
 #include "clang/AST/Decl.h"
 #include "clang/AST/Expr.h"
 
-using namespace clang;
-using namespace clang::asap;
-using namespace clang::ento;
-using namespace llvm;
+namespace clang {
+namespace asap {
+
 
 AssignmentCheckerVisitor::AssignmentCheckerVisitor(
   ento::BugReporter &BR,
@@ -1017,6 +1017,5 @@ void BaseTypeBuilderVisitor::VisitMemberExpr(MemberExpr *Exp) {
     Type->deref(1);
 }
 
-
-
-
+} // end namespace asap
+} // end namespace clang

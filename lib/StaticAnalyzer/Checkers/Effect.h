@@ -20,15 +20,10 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Support/raw_ostream.h"
 #include "clang/AST/Attr.h"
+#include "ASaPFwdDecl.h"
 
 namespace clang {
 namespace asap {
-
-class Rpl;
-class RplElement;
-class EffectSummary;
-class Substitution;
-class SubstitutionVector;
 
 class Effect {
 public:

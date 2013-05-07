@@ -104,6 +104,43 @@ buildSubstitutionVector(const ParameterVector *ParV, RplVector *RplVec) {
   }
 }
 
+void SubstitutionVector::applyTo(Rpl *R) const {
+  if (R) {
+    for(SubstitutionVecT::const_iterator I = SubV.begin(), E = SubV.end();
+        I != E; ++I) {
+      assert(*I);
+      (*I)->applyTo(R);
+    }
+  }
+}
+
+void SubstitutionVector::applyTo(Effect *Eff) const {
+  if (Eff) {
+    for(SubstitutionVecT::const_iterator I = SubV.begin(), E = SubV.end();
+        I != E; ++I) {
+      assert(*I);
+      (*I)->applyTo(Eff);
+    }
+  }
+}
+
+void SubstitutionVector::print(llvm::raw_ostream &OS) const {
+  SubstitutionVecT::const_iterator
+    I = SubV.begin(),
+    E = SubV.end();
+  for(; I != E; ++I) {
+    assert(*I);
+    (*I)->print(OS);
+  }
+}
+
+std::string SubstitutionVector::toString() const {
+  std::string SBuf;
+  llvm::raw_string_ostream OS(SBuf);
+  print(OS);
+  return std::string(OS.str());
+}
+
 void SubstitutionVector::push_back(const SubstitutionVector *SubV) {
   if (SubV) {
     for(SubstitutionVecT::const_iterator I = SubV->begin(), E = SubV->end();

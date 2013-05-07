@@ -39,12 +39,6 @@ using namespace clang;
 using namespace ento;
 using namespace clang::asap;
 
-template<typename T>
-static void destroyVector(T &V) {
-  for (typename T::const_iterator I = V.begin(), E = V.end(); I != E; ++I)
-    delete(*I);
-}
-
 namespace {
 ///////////////////////////////////////////////////////////////////////
 // GENERIC VISITORS

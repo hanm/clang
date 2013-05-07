@@ -24,8 +24,6 @@
 
 #include "ASaPUtil.h"  // Included for the 2 uses of OSv2
 
-using llvm::StringRef;
-
 namespace clang {
 namespace asap {
 
@@ -49,7 +47,7 @@ public:
 
   virtual bool isFullySpecified() const { return true; }
 
-  virtual llvm::StringRef getName() const = 0;
+  virtual StringRef getName() const = 0;
   virtual bool operator == (const RplElement &That) const {
     return (this == &That) ? true : false;
   }
@@ -58,15 +56,15 @@ public:
 
 class SpecialRplElement : public RplElement {
   /// Fields
-  const llvm::StringRef name;
+  const StringRef name;
 
 public:
   /// Constructor
-  SpecialRplElement(llvm::StringRef name) : RplElement(RK_Special), name(name) {}
+  SpecialRplElement(StringRef name) : RplElement(RK_Special), name(name) {}
   virtual ~SpecialRplElement() {}
 
   /// Methods
-  virtual llvm::StringRef getName() const { return name; }
+  virtual StringRef getName() const { return name; }
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Special;
@@ -81,7 +79,7 @@ public:
 
   /// Methods
   virtual bool isFullySpecified() const { return false; }
-  virtual llvm::StringRef getName() const { return "*"; }
+  virtual StringRef getName() const { return "*"; }
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Star;
@@ -91,14 +89,14 @@ public:
 ///-////////////////////////////////////////
 class NamedRplElement : public RplElement {
   /// Fields
-  const llvm::StringRef name;
+  const StringRef name;
 
 public:
   /// Constructor
-  NamedRplElement(llvm::StringRef name) : RplElement(RK_Named), name(name) {}
+  NamedRplElement(StringRef name) : RplElement(RK_Named), name(name) {}
   virtual ~NamedRplElement() {}
   /// Methods
-  virtual llvm::StringRef getName() const { return name; }
+  virtual StringRef getName() const { return name; }
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Named;
@@ -109,15 +107,15 @@ public:
 ///-////////////////////////////////////////
 class ParamRplElement : public RplElement {
   ///Fields
-  llvm::StringRef name;
+  StringRef name;
 
 public:
   /// Constructor
-  ParamRplElement(llvm::StringRef name) : RplElement(RK_Parameter), name(name) {}
+  ParamRplElement(StringRef name) : RplElement(RK_Parameter), name(name) {}
   virtual ~ParamRplElement() {}
 
   /// Methods
-  virtual llvm::StringRef getName() const { return name; }
+  virtual StringRef getName() const { return name; }
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Parameter;
@@ -137,7 +135,7 @@ public:
 
   /// Static Functions
   /// \brief Return true when input is a valid region name or param declaration
-  static bool isValidRegionName(const llvm::StringRef& s);
+  static bool isValidRegionName(const StringRef& s);
 
 
   /// Types
@@ -231,7 +229,7 @@ typedef llvm::SmallVector<const RplElement*,
       FullySpecified(That.FullySpecified)
   {}
 
-  static std::pair<llvm::StringRef, llvm::StringRef> splitRpl(llvm::StringRef &String);
+  static std::pair<StringRef, StringRef> splitRpl(StringRef &String);
   void print(llvm::raw_ostream &OS) const;
   std::string toString() const;
 
@@ -310,7 +308,7 @@ public:
   { /*assert(includedIn.isFullySpecified() == false);*/ }
   virtual ~CaptureRplElement() {}
   /// Methods
-  virtual llvm::StringRef getName() const { return "rho"; }
+  virtual StringRef getName() const { return "rho"; }
 
   virtual bool isFullySpecified() const { return false; }
 
@@ -365,7 +363,7 @@ public:
     return ParamVec[Idx];
   }
   /// \brief Returns the ParamRplElement with name=Name or null.
-  const ParamRplElement *lookup(llvm::StringRef Name) const {
+  const ParamRplElement *lookup(StringRef Name) const {
     for(ParamVecT::const_iterator
           I = ParamVec.begin(),
           E = ParamVec.end();
@@ -637,7 +635,7 @@ public:
   inline size_t size() const { return RegnNameSet.size(); }
 
   /// \brief Returns the NamedRplElement with name=Name or null.
-  const NamedRplElement *lookup (llvm::StringRef Name) {
+  const NamedRplElement *lookup (StringRef Name) {
     for (RegnNameSetTy::iterator
            I = RegnNameSet.begin(),
            E = RegnNameSet.end();

@@ -1,4 +1,4 @@
-//=== ASaPType.h - Safe Parallelism checker -----*- C++ -*---------===//
+//=== ASaPType.h - Safe Parallelism checker -------*- C++ -*---------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -16,15 +16,11 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_TYPE_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_TYPE_H
 
+#include "ASaPFwdDecl.h"
 #include "clang/AST/Type.h"
 
 namespace clang {
 namespace asap {
-
-class Rpl;
-class RplVector;
-class Substitution;
-class SubstitutionVector;
 
 class ASaPType {
   friend class ASaPType;

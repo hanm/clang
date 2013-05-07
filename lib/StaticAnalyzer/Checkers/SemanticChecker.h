@@ -28,6 +28,7 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_SEMANTIC_CHECKER_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_SEMANTIC_CHECKER_H
 
+#include "ASaPFwdDecl.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Type.h"
 #include "clang/AST/RecursiveASTVisitor.h"
@@ -35,7 +36,6 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/raw_ostream.h"
 
 #include "ASaPSymbolTable.h"
 #include "Rpl.h"
@@ -44,17 +44,7 @@
 
 
 namespace clang {
-
-class Attr;
-class AnalysisDeclContext;
-class Decl;
-class DeclContext;
-class FunctionDecl;
-class ValueDecl;
-
 namespace asap {
-
-class SymbolTable;
 
 class ASaPSemanticCheckerTraverser :
   public RecursiveASTVisitor<ASaPSemanticCheckerTraverser> {
