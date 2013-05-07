@@ -14,6 +14,8 @@
 //===----------------------------------------------------------------===//
 
 #include "Effect.h"
+#include "ASaPUtil.h"
+
 #include "Rpl.h"
 #include "ASaPSymbolTable.h"
 #include "Substitution.h"

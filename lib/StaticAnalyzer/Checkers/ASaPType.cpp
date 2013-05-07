@@ -13,6 +13,7 @@
 //
 //===----------------------------------------------------------------===//
 
+#include "ASaPUtil.h"
 #include "Rpl.h"
 #include "Effect.h"
 #include "Substitution.h"

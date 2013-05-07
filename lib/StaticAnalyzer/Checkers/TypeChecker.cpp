@@ -22,7 +22,6 @@
 
 #include "clang/AST/Decl.h"
 #include "clang/AST/Expr.h"
-#include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 
 using namespace clang;
 using namespace clang::asap;
@@ -141,7 +140,7 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
         OS << "\n Init Expr = ";
         Init->printPretty(OS, 0, Ctx.getPrintingPolicy());
         OS << "\n";
-        Init->dump(OS, BR.getSourceManager());
+        //Init->dump(OS, BR.getSourceManager());
 
         OS << "DEBUG:: IsDirectInit = "
            << (VD->isDirectInit()?"true":"false")
@@ -184,78 +183,31 @@ typecheck(const ASaPType *LHSType, const ASaPType *RHSType, bool IsInit) {
 }
 
 void AssignmentCheckerVisitor::
-helperEmitInvalidAliasingModificationWarning(Stmt *S, Decl *D,
-                                             const StringRef &Str) {
-  StringRef BugName =
-    "cannot modify aliasing through pointer to partly specified region";
-  std::string description_std = "'";
-  description_std.append(Str);
-  description_std.append("' ");
-  description_std.append(BugName);
-
-  StringRef BugCategory = "Safe Parallelism";
-  StringRef BugStr = description_std;
-
-  PathDiagnosticLocation VDLoc =
-    PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
-
-  BR.EmitBasicReport(D, BugName, BugCategory,
-    BugStr, VDLoc, S->getSourceRange());
-}
-
-void AssignmentCheckerVisitor::
-helperEmitInvalidAssignmentWarning(const Stmt *S, const ASaPType *LHS,
-                                   const ASaPType *RHS, StringRef BugName) {
-  std::string description_std = "The RHS type [";
-  description_std.append(RHS ? RHS->toString(Ctx) : "");
-  description_std.append("] is not assignable to the LHS type [");
-  description_std.append(LHS ? LHS->toString(Ctx) : "");
-  description_std.append("] ");
-  description_std.append(BugName);
-  std::string SBuf;
-  llvm::raw_string_ostream StrBuf(SBuf);
-  StrBuf << ": ";
-  S->printPretty(StrBuf, 0, Ctx.getPrintingPolicy());
-  StrBuf << "]";
-  description_std.append(StrBuf.str());
-
-  StringRef BugCategory = "Safe Parallelism";
-  StringRef BugStr = description_std;
-
-  PathDiagnosticLocation VDLoc =
-    PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
-
-  BugType *BT = new BugType(BugName, BugCategory);
-  BugReport *R = new BugReport(*BT, BugStr, VDLoc);
-  BR.emitReport(R);
-}
-
-void AssignmentCheckerVisitor::
 helperEmitInvalidArgToFunctionWarning(const Stmt *S, const ASaPType *LHS,
                                       const ASaPType *RHS) {
   StringRef BugName = "invalid argument to function call";
-  helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
+  helperEmitInvalidAssignmentWarning(BR, AC, Ctx, S, LHS, RHS, BugName);
 }
 
 void AssignmentCheckerVisitor::
 helperEmitInvalidExplicitAssignmentWarning(const Stmt *S, const ASaPType *LHS,
                                            const ASaPType *RHS) {
   StringRef BugName = "invalid assignment";
-  helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
+  helperEmitInvalidAssignmentWarning(BR, AC, Ctx, S, LHS, RHS, BugName);
 }
 
 void AssignmentCheckerVisitor::
 helperEmitInvalidReturnTypeWarning(const Stmt *S, const ASaPType *LHS,
                                    const ASaPType *RHS) {
   StringRef BugName = "invalid return type";
-  helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
+  helperEmitInvalidAssignmentWarning(BR, AC, Ctx, S, LHS, RHS, BugName);
 }
 
 void AssignmentCheckerVisitor::
 helperEmitInvalidInitializationWarning(const Stmt *S, const ASaPType *LHS,
                                        const ASaPType *RHS) {
   StringRef BugName = "invalid initialization";
-  helperEmitInvalidAssignmentWarning(S, LHS, RHS, BugName);
+  helperEmitInvalidAssignmentWarning(BR, AC, Ctx, S, LHS, RHS, BugName);
 }
 
 void AssignmentCheckerVisitor::
@@ -471,7 +423,7 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
   OS << "DEBUG:: Expr:";
-  Exp->dump(OS, BR.getSourceManager());
+  //Exp->dump(OS, BR.getSourceManager());
   OS << "\n";
 
   Decl *D = Exp->getCalleeDecl();
@@ -704,8 +656,8 @@ void TypeBuilderVisitor::VisitChildren(Stmt *S) {
 
 void TypeBuilderVisitor::VisitStmt(Stmt *S) {
   OS << "DEBUG:: GENERIC:: Visiting Stmt/Expr = \n";
-  S->dump(OS, BR.getSourceManager());
-  //S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  //S->dump(OS, BR.getSourceManager());
+  S->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
 
   VisitChildren(S);

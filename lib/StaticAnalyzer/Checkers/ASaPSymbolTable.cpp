@@ -16,7 +16,7 @@
 /// Maps AST Decl* nodes to ASaP info that appertains to the node
 /// such information includes ASaPType*, ParamVector, RegionNameSet,
 /// and EffectSummary
-
+#include "ASaPUtil.h"
 #include "ASaPType.h"
 #include "ASaPSymbolTable.h"
 #include "Rpl.h"

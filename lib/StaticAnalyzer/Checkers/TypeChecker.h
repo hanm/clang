@@ -19,9 +19,6 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Type.h"
 #include "clang/AST/StmtVisitor.h"
-#include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
-#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/raw_ostream.h"
 #include "ASaPSymbolTable.h"
 
@@ -31,6 +28,11 @@ class FunctionDecl;
 class Stmt;
 class Expr;
 class AnalysisDeclContext;
+
+namespace ento {
+class BugReporter;
+class AnalysisManager;
+}
 
 namespace asap {
 
@@ -120,12 +122,6 @@ private:
 
   void helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init);
 
-  void helperEmitInvalidAliasingModificationWarning(Stmt *S, Decl *D,
-                                                    const llvm::StringRef &Str);
-  void helperEmitInvalidAssignmentWarning(const Stmt *S,
-                                          const ASaPType *LHS,
-                                          const ASaPType *RHS,
-                                          llvm::StringRef BugName);
   void helperEmitInvalidArgToFunctionWarning(const Stmt *S,
                                                   const ASaPType *LHS,
                                                   const ASaPType *RHS);

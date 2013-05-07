@@ -354,7 +354,7 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
 
 void ASaPSemanticCheckerTraverser::
 checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
-                       SymbolTable::ResultTriplet ResTriplet,
+                       const SymbolTable::ResultTriplet &ResTriplet,
                        RplVector *RplVec, const Rpl *DefaultInRpl) {
 
   ResultKind ResKin = ResTriplet.ResKin;

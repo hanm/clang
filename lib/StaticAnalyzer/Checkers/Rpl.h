@@ -19,25 +19,15 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/SmallPtrSet.h"
+
 #include "llvm/Support/raw_ostream.h"
-#include "clang/AST/Attr.h"
+
+#include "ASaPUtil.h"  // Included for the 2 uses of OSv2
+
+using llvm::StringRef;
 
 namespace clang {
 namespace asap {
-
-#define ASAP_DEBUG
-#define ASAP_DEBUG_VERBOSE2
-#ifdef ASAP_DEBUG
-  static raw_ostream& os = llvm::errs();
-#else
-  static raw_ostream &os = llvm::nulls();
-#endif
-
-#ifdef ASAP_DEBUG_VERBOSE2
-  static raw_ostream &OSv2 = llvm::errs();
-#else
-  static raw_ostream &OSv2 = llvm::nulls();
-#endif
 
 class RplElement {
 public:
@@ -492,12 +482,7 @@ class RplVector {
 
   /// \brief Return a pointer to the RPL at position Idx in the vector.
   inline const Rpl *getRplAt(size_t Idx) const {
-    //assert(Idx>=0);
-    if (Idx >= RplV.size()) {
-      OSv2 << "DEBUG:: getRplAt(" << Idx << "), but size = " << RplV.size()
-           << "\n";
-    }
-    assert(Idx < RplV.size());
+    assert(Idx < RplV.size() && "attempted to access beyond last RPL element");
     return RplV[Idx];
   }
 
@@ -593,7 +578,6 @@ class RplVector {
     // invariant henceforth A!=null && B!=null
     RplVector *LHS;
     const RplVector *RHS;
-    OSv2 << "DEBUG:: RplVector::merge : both Vectors are non-null!\n";
     (A->size() >= B->size()) ? ( LHS = new RplVector(*A), RHS = B)
                              : ( LHS = new RplVector(*B), RHS = A);
     // fold RHS into LHS

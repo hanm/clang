@@ -14,6 +14,8 @@
 //===----------------------------------------------------------------===//
 
 #include "Rpl.h"
+#include "ASaPUtil.h"
+
 #include "ASaPSymbolTable.h"
 #include "llvm/Support/Casting.h"
 

@@ -13,59 +13,103 @@
 //
 //===----------------------------------------------------------------===//
 #include "ASaPUtil.h"
+#include "ASaPType.h"
 
 #include "clang/AST/Attr.h"
 
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
+#include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
+
 #include "llvm/Support/raw_ostream.h"
 
 namespace clang {
+
+using ento::PathDiagnosticLocation;
+using ento::BugReporter;
+
 namespace asap {
 
-void helperEmitDeclarationWarning(ento::BugReporter &BR,
+StringRef BugCategory = "Safe Parallelism";
+
+void helperEmitDeclarationWarning(BugReporter &BR,
                                   const Decl *D,
                                   const StringRef Str,
                                   std::string BugName,
                                   bool AddQuotes) {
-  std::string Description = "";
-  if (AddQuotes)
-    Description.append("'");
-  Description.append(Str);
-  if (AddQuotes)
-    Description.append("': ");
-  else
-    Description.append(": ");
-  Description.append(BugName);
-  StringRef BugCategory = "Safe Parallelism";
-  StringRef BugStr = Description;
-  ento::PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
+  std::string Description;
+  llvm::raw_string_ostream DescrOS(Description);
+  DescrOS << (AddQuotes ? "'" : "") << Str
+          << (AddQuotes ? "'" : "") << ": " << BugName;
+
+  StringRef BugStr = DescrOS.str();
+  PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
   BR.EmitBasicReport(D, BugName, BugCategory,
                      BugStr, VDLoc, D->getSourceRange());
 }
 
-void helperEmitAttributeWarning(ento::BugReporter &BR,
+void helperEmitAttributeWarning(BugReporter &BR,
                                 const Decl *D,
                                 const Attr *Attr,
                                 const StringRef Str,
                                 std::string BugName,
                                 bool AddQuotes) {
-  std::string Description = "";
-  if (AddQuotes)
-    Description.append("'");
-  Description.append(Str);
-  if (AddQuotes)
-    Description.append("': ");
-  else
-    Description.append(": ");
-  Description.append(BugName);
-  StringRef BugCategory = "Safe Parallelism";
-  StringRef BugStr = Description;
-  ento::PathDiagnosticLocation VDLoc(Attr->getLocation(), BR.getSourceManager());
+  std::string Description;
+  llvm::raw_string_ostream DescrOS(Description);
+  DescrOS << (AddQuotes ? "'" : "") << Str
+          << (AddQuotes ? "'" : "") << ": " << BugName;
+
+  StringRef BugStr = DescrOS.str();
+  PathDiagnosticLocation VDLoc(Attr->getLocation(), BR.getSourceManager());
   BR.EmitBasicReport(D, BugName, BugCategory,
                      BugStr, VDLoc, Attr->getRange());
 }
 
 
+void helperEmitStatementWarning(BugReporter &BR,
+                                AnalysisDeclContext *AC,
+                                const Stmt *S,
+                                const Decl *D,
+                                const StringRef &Str,
+                                std::string BugName) {
+  std::string Description;
+  llvm::raw_string_ostream DescrOS(Description);
+  DescrOS << "'" << Str << "' " << BugName;
+
+  StringRef BugStr = DescrOS.str();
+
+  PathDiagnosticLocation VDLoc =
+      PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
+
+  BR.EmitBasicReport(D, BugName, BugCategory,
+                     BugStr, VDLoc, S->getSourceRange());
+}
+
+void helperEmitInvalidAssignmentWarning(BugReporter &BR,
+                                        AnalysisDeclContext *AC,
+                                        ASTContext &Ctx,
+                                        const Stmt *S,
+                                        const ASaPType *LHS,
+                                        const ASaPType *RHS,
+                                        StringRef BugName) {
+  std::string Description;
+  llvm::raw_string_ostream DescrOS(Description);
+
+  DescrOS << "The RHS type [" << (RHS ? RHS->toString(Ctx) : "")
+          << "] is not assignable to the LHS type ["
+          << (LHS ? LHS->toString(Ctx) : "")
+          << "] " << BugName << ": ";
+  S->printPretty(DescrOS, 0, Ctx.getPrintingPolicy());
+  DescrOS << "]";
+
+  StringRef BugStr = DescrOS.str();
+
+  PathDiagnosticLocation VDLoc =
+      PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
+
+  ento::BugType *BT = new ento::BugType(BugName, BugCategory);
+  ento::BugReport *R = new ento::BugReport(*BT, BugStr, VDLoc);
+  BR.emitReport(R);
+}
 
 } // end namespace asap
 } // end namespace clang

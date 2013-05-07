@@ -18,11 +18,8 @@
 
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/StmtVisitor.h"
-#include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "ASaPSymbolTable.h"
 
 namespace clang {
 
@@ -30,12 +27,20 @@ class AnalysisDeclContext;
 class FunctionDecl;
 class Stmt;
 
+namespace ento {
+class BugReporter;
+class AnalysisManager;
+}
+
 namespace asap {
 
+class ParameterVector;
 class Effect;
 class EffectVector;
+class EffectSummary;
 class Substitution;
 class SubstitutionVector;
+class SymbolTable;
 
 class EffectCollectorVisitor
     : public StmtVisitor<EffectCollectorVisitor> {

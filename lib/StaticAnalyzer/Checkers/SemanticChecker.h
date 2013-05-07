@@ -31,7 +31,6 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Type.h"
 #include "clang/AST/RecursiveASTVisitor.h"
-#include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
@@ -41,6 +40,8 @@
 #include "ASaPSymbolTable.h"
 #include "Rpl.h"
 #include "Effect.h"
+#include "clang/AST/Attr.h"
+
 
 namespace clang {
 
@@ -52,6 +53,8 @@ class FunctionDecl;
 class ValueDecl;
 
 namespace asap {
+
+class SymbolTable;
 
 class ASaPSemanticCheckerTraverser :
   public RecursiveASTVisitor<ASaPSemanticCheckerTraverser> {
@@ -100,8 +103,6 @@ class ASaPSemanticCheckerTraverser :
   void emitEffectCovered(const Decl *D, const Effect *E1, const Effect *E2);
   void emitNoEffectInNonEmptyEffectSummary(const Decl *D, const Attr *A);
   void emitMissingBaseClassArgument(const Decl *D, StringRef Str);
-  /*void emitMultipleAttributesForBaseClass(const Decl *D,
-                                          const Attr *A, StringRef Str);*/
   void emitAttributeMustReferToDirectBaseClass(const Decl *D,
                                                const RegionBaseArgAttr *A);
   void emitDuplicateBaseArgAttributesForSameBase(const Decl *D,
@@ -186,7 +187,7 @@ class ASaPSemanticCheckerTraverser :
   void checkBaseTypeRegionArgs(NamedDecl *D, const RegionBaseArgAttr *Att,
                         QualType BaseQT, const Rpl *DefaultInRpl);
   void checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
-                              SymbolTable::ResultTriplet ResTriplet,
+                              const SymbolTable::ResultTriplet &ResTriplet,
                               RplVector *RplVec, const Rpl *DefaultInRpl);
 
   /// \brief Check that the annotations of type AttrType of declaration

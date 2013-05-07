@@ -23,6 +23,8 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
+
+#include "ASaPUtil.h"
 #include "Rpl.h"
 #include "Effect.h"
 #include "ASaPType.h"

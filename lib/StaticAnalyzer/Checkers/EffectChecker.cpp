@@ -13,8 +13,8 @@
 //
 //===----------------------------------------------------------------===//
 
-#include "ASaPUtil.h"
 #include "EffectChecker.h"
+#include "ASaPUtil.h"
 #include "TypeChecker.h"
 #include "ASaPType.h"
 #include "Rpl.h"
@@ -23,9 +23,6 @@
 
 #include "clang/AST/Decl.h"
 #include "clang/AST/Stmt.h"
-// FIXME: try clear these headers up.
-#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
-#include "clang/StaticAnalyzer/Core/BugReporter/PathDiagnostic.h"
 
 using namespace clang;
 using namespace clang::ento;
@@ -154,24 +151,7 @@ emitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
                                   const StringRef &Str) {
   FatalError = true;
   StringRef BugName = "effect not covered by effect summary";
-  OS << "DEBUG::" << BugName << "\n";
-  OS << "DEBUG:: Stmt:";
-  S->printPretty(OS, 0, Ctx.getPrintingPolicy());
-  OS << "\nDEBUG:: Decl:";
-  D->print(OS, Ctx.getPrintingPolicy());
-  OS << "\n";
-  std::string description_std = "'";
-  description_std.append(Str);
-  description_std.append("' ");
-  description_std.append(BugName);
-
-  StringRef BugCategory = "Safe Parallelism";
-  StringRef BugStr = description_std;
-  PathDiagnosticLocation VDLoc =
-    PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
-
-  BR.EmitBasicReport(D, BugName, BugCategory,
-                     BugStr, VDLoc, S->getSourceRange());
+  helperEmitStatementWarning(BR, AC, S, D, Str, BugName);
 }
 
 int EffectCollectorVisitor::
