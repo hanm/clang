@@ -16,10 +16,10 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_TYPE_CHECKER_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_TYPE_CHECKER_H
 
-#include "clang/AST/ASTContext.h"
-#include "clang/AST/Type.h"
 #include "clang/AST/StmtVisitor.h"
+
 #include "ASaPFwdDecl.h"
+#include "ASaPGenericStmtVisitor.h"
 
 namespace clang {
 namespace asap {
@@ -34,18 +34,9 @@ namespace asap {
 // * return statements assigning expr to formal return type
 // * ...stay tuned, more to come
 class AssignmentCheckerVisitor
-    : public StmtVisitor<AssignmentCheckerVisitor> {
+    : public ASaPStmtVisitor<AssignmentCheckerVisitor> {
 
-  VisitorBundle &VB;
-
-  BugReporter &BR;
-  ASTContext &Ctx;
-  AnalysisDeclContext *AC;
-  raw_ostream &OS;
-  SymbolTable &SymT;
-
-  const FunctionDecl *Def;
-  bool FatalError;
+  typedef ASaPStmtVisitor<AssignmentCheckerVisitor> BaseClass;
 
   ASaPType *Type;
   SubstitutionVector *SubV;
@@ -64,9 +55,6 @@ public:
   inline bool encounteredFatalError() { return FatalError; }
   inline ASaPType *getType() { return Type; }
   ASaPType *stealType();
-
-  void VisitChildren(Stmt *S);
-  void VisitStmt(Stmt *S);
 
   void VisitBinAssign(BinaryOperator *E);
   void VisitReturnStmt(ReturnStmt *Ret);
@@ -125,15 +113,10 @@ private:
 //////////////////////////////////////////////////////////////////////////
 // class TypeBuilder
 class TypeBuilderVisitor
-    : public StmtVisitor<TypeBuilderVisitor, void> {
-  VisitorBundle &VB;
+    : public ASaPStmtVisitor<TypeBuilderVisitor> {
 
-  ASTContext &Ctx;
-  raw_ostream &OS;
-  SymbolTable &SymT;
+  typedef ASaPStmtVisitor<TypeBuilderVisitor> BaseClass;
 
-  const FunctionDecl *Def;
-  bool FatalError;
   /// true when visiting a base expression (e.g., B in B.f, or B->f)
   bool IsBase;
   /// count of number of dereferences on expression (values in [-1, 0, ...] )
@@ -160,8 +143,6 @@ public:
   inline ASaPType *getType() { return Type; }
   ASaPType *stealType();
 
-  void VisitChildren(Stmt *S);
-  void VisitStmt(Stmt *S);
   void VisitUnaryAddrOf(UnaryOperator *E);
   void VisitUnaryDeref(UnaryOperator *E);
   void VisitDeclRefExpr(DeclRefExpr *E);
@@ -182,12 +163,9 @@ public:
 //////////////////////////////////////////////////////////////////////////
 // class BaseTypeBuilderVisitor
 class BaseTypeBuilderVisitor
-    : public StmtVisitor<BaseTypeBuilderVisitor, void> {
-  VisitorBundle &VB;
-  ASTContext &Ctx;
-  raw_ostream &OS;
-  const FunctionDecl *Def;
-  bool FatalError;
+    : public ASaPStmtVisitor<BaseTypeBuilderVisitor> {
+  typedef ASaPStmtVisitor<BaseTypeBuilderVisitor> BaseClass;
+
   ASaPType *Type;
   QualType RefQT;
 
@@ -204,8 +182,6 @@ public:
   inline ASaPType *getType() { return Type; }
   ASaPType *stealType();
 
-  void VisitChildren(Stmt *S);
-  void VisitStmt(Stmt *S);
   void VisitMemberExpr(MemberExpr *Exp);
 }; // end class BaseTypeBuilderVisitor
 } // End namespace asap.

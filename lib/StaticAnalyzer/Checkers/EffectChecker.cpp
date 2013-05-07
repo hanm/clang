@@ -22,6 +22,7 @@
 #include "Effect.h"
 #include "Substitution.h"
 
+#include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/Stmt.h"
 
@@ -238,63 +239,46 @@ EffectCollectorVisitor::EffectCollectorVisitor (
   Stmt *S,
   bool VisitCXXInitializer,
   bool HasWriteSemantics
-  ) : VB(VB),
-  BR(VB.BR),
-  Ctx(VB.Ctx),
-  AC(VB.AC),
-  OS(VB.OS),
-  SymT(VB.SymT),
-  Def(Def),
-  FatalError(false),
-  HasWriteSemantics(HasWriteSemantics),
-  IsBase(false),
-  DerefNum(0),
-  IsCoveredBySummary(true) {
-    EffectsTmp = new EffectVector();
-    OS << "DEBUG:: ******** INVOKING EffectCheckerVisitor...\n";
-    Def->print(OS, Ctx.getPrintingPolicy());
-    //S->printPretty(OS, 0, Ctx.getPrintingPolicy());
-    OS << "\n";
-    // Check that the effect summary on the canonical decl covers this one.
+  ) : BaseClass(VB, Def),
+      HasWriteSemantics(HasWriteSemantics),
+      IsBase(false),
+      DerefNum(0),
+      IsCoveredBySummary(true) {
+  EffectsTmp = new EffectVector();
+  OS << "DEBUG:: ******** INVOKING EffectCheckerVisitor...\n";
+  Def->print(OS, Ctx.getPrintingPolicy());
+  //S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  // Check that the effect summary on the canonical decl covers this one.
 
-    EffSummary = SymT.getEffectSummary(this->Def);
-    assert(EffSummary);
+  EffSummary = SymT.getEffectSummary(this->Def);
+  assert(EffSummary);
 
-    if (VisitCXXInitializer) {
-      if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
-        helperVisitCXXConstructorDecl(D);
+  if (VisitCXXInitializer) {
+    if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
+      helperVisitCXXConstructorDecl(D);
+    }
+  }
+  Visit(S);
+  OS << "DEBUG:: done running Visit\n";
+  if (const CXXMethodDecl *CXXD = dyn_cast<CXXMethodDecl>(Def)) {
+    // check overidden methods have an effect summary that covers this one
+    const EffectSummary *MySum = SymT.getEffectSummary(CXXD);
+    assert(MySum);
+    for(CXXMethodDecl::method_iterator
+        I = CXXD->begin_overridden_methods(),
+        E = CXXD->end_overridden_methods();
+        I != E; ++I) {
+      // aloha
+      const EffectSummary *OverriddenSum = SymT.getEffectSummary(*I);
+      assert(OverriddenSum);
+      if ( ! OverriddenSum->covers(MySum) ) {
+        emitOverridenVirtualFunctionMustCoverEffectsOfChildren(*I, CXXD);
       }
     }
-    Visit(S);
-    if (const CXXMethodDecl *CXXD = dyn_cast<CXXMethodDecl>(Def)) {
-      // check overidden methods have an effect summary that covers this one
-      const EffectSummary *MySum = SymT.getEffectSummary(CXXD);
-      assert(MySum);
-      for(CXXMethodDecl::method_iterator
-          I = CXXD->begin_overridden_methods(),
-          E = CXXD->end_overridden_methods();
-          I != E; ++I) {
-        // aloha
-        const EffectSummary *OverriddenSum = SymT.getEffectSummary(*I);
-        assert(OverriddenSum);
-        if ( ! OverriddenSum->covers(MySum) ) {
-          emitOverridenVirtualFunctionMustCoverEffectsOfChildren(*I, CXXD);
-        }
-      }
-    }
-    OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
-    delete EffectsTmp;
-}
-
-void EffectCollectorVisitor::VisitChildren(Stmt *S) {
-  for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
-    I!=E; ++I)
-    if (Stmt *child = *I)
-      Visit(child);
-}
-
-void EffectCollectorVisitor::VisitStmt(Stmt *S) {
-  VisitChildren(S);
+  }
+  OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
+  delete EffectsTmp;
 }
 
 void EffectCollectorVisitor::VisitMemberExpr(MemberExpr *Exp) {

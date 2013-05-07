@@ -16,27 +16,19 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_EFFECT_CHECKER_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_EFFECT_CHECKER_H
 
-#include "ASaPFwdDecl.h"
-#include "clang/AST/ASTContext.h"
 #include "clang/AST/StmtVisitor.h"
+
+#include "ASaPFwdDecl.h"
+#include "ASaPGenericStmtVisitor.h"
+
 
 
 namespace clang {
 namespace asap {
 
 class EffectCollectorVisitor
-    : public StmtVisitor<EffectCollectorVisitor> {
-
-  VisitorBundle &VB;
-
-  BugReporter &BR;
-  ASTContext &Ctx;
-  AnalysisDeclContext *AC;
-  raw_ostream &OS;
-  SymbolTable &SymT;
-
-  const FunctionDecl *Def;
-  bool FatalError;
+    : public ASaPStmtVisitor<EffectCollectorVisitor> {
+  typedef ASaPStmtVisitor<EffectCollectorVisitor> BaseClass;
 
   EffectVector *EffectsTmp;
   /// True when visiting an expression that is being written to.
@@ -95,8 +87,6 @@ public:
   inline bool getIsCoveredBySummary() { return IsCoveredBySummary; }
   inline bool encounteredFatalError() { return FatalError; }
 
-  void VisitChildren(Stmt *S);
-  void VisitStmt(Stmt *S);
   void VisitMemberExpr(MemberExpr *E);
   void VisitUnaryAddrOf(UnaryOperator *E);
   void VisitUnaryDeref(UnaryOperator *E);

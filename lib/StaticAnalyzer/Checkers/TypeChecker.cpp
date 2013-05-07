@@ -14,15 +14,18 @@
 //===----------------------------------------------------------------===//
 
 #include "TypeChecker.h"
+
+#include "clang/AST/ASTContext.h"
+#include "clang/AST/Decl.h"
+#include "clang/AST/Expr.h"
+#include "clang/AST/Type.h"
+
 #include "ASaPUtil.h"
+#include "ASaPSymbolTable.h"
 #include "ASaPType.h"
 #include "Effect.h"
 #include "Rpl.h"
 #include "Substitution.h"
-#include "ASaPSymbolTable.h"
-
-#include "clang/AST/Decl.h"
-#include "clang/AST/Expr.h"
 
 namespace clang {
 namespace asap {
@@ -33,14 +36,8 @@ AssignmentCheckerVisitor::AssignmentCheckerVisitor(
   const FunctionDecl *Def,
   Stmt *S,
   bool VisitCXXInitializer
-  ) : VB(VB),
-  BR(VB.BR),
-  Ctx(VB.Ctx),
-  AC(VB.AC),
-  OS(VB.OS),
-  SymT(VB.SymT),
-  Def(Def),
-  FatalError(false), Type(0), SubV(0) {
+  ) : BaseClass(VB, Def),
+      Type(0), SubV(0) {
 
     OS << "DEBUG:: ******** INVOKING AssignmentCheckerVisitor...\n";
     OS << "DEBUG:: Stmt:";
@@ -69,20 +66,6 @@ ASaPType *AssignmentCheckerVisitor::stealType() {
   ASaPType *Result = Type;
   Type = 0;
   return Result;
-}
-
-void AssignmentCheckerVisitor::VisitChildren(Stmt *S) {
-  for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
-    I!=E; ++I)
-    if (Stmt *child = *I)
-      Visit(child);
-}
-
-void AssignmentCheckerVisitor::VisitStmt(Stmt *S) {
-  OS << "DEBUG:: GENERIC:: Visiting Stmt/Expr = \n";
-  S->printPretty(OS, 0, Ctx.getPrintingPolicy());
-  OS << "\n";
-  VisitChildren(S);
 }
 
 void AssignmentCheckerVisitor::
@@ -608,12 +591,7 @@ TypeBuilderVisitor::TypeBuilderVisitor (
   VisitorBundle &VB,
   const FunctionDecl *Def,
   Expr *E
-  ) : VB(VB),
-  Ctx(VB.Ctx),
-  OS(VB.OS),
-  SymT(VB.SymT),
-  Def(Def),
-  FatalError(false),
+  ) : BaseClass(VB, Def),
   IsBase(false),
   DerefNum(0),
   Type(0) {
@@ -635,22 +613,6 @@ ASaPType *TypeBuilderVisitor::stealType() {
   ASaPType *Result = Type;
   Type = 0;
   return Result;
-}
-
-void TypeBuilderVisitor::VisitChildren(Stmt *S) {
-  for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
-    I!=E; ++I)
-    if (Stmt *child = *I)
-      Visit(child);
-}
-
-void TypeBuilderVisitor::VisitStmt(Stmt *S) {
-  OS << "DEBUG:: GENERIC:: Visiting Stmt/Expr = \n";
-  //S->dump(OS, BR.getSourceManager());
-  S->printPretty(OS, 0, Ctx.getPrintingPolicy());
-  OS << "\n";
-
-  VisitChildren(S);
 }
 
 void TypeBuilderVisitor::VisitUnaryAddrOf(UnaryOperator *Exp)  {
@@ -949,12 +911,7 @@ BaseTypeBuilderVisitor::BaseTypeBuilderVisitor(
   VisitorBundle &VB,
   const FunctionDecl *Def,
   Expr *E
-  ) : VB(VB),
-  Ctx(VB.Ctx),
-  OS(VB.OS),
-  Def(Def),
-  FatalError(false),
-  Type(0) {
+  ) : BaseClass(VB, Def), Type(0) {
 
     OS << "DEBUG:: ******** INVOKING BaseTypeBuilderVisitor...\n";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -972,20 +929,6 @@ ASaPType *BaseTypeBuilderVisitor::stealType() {
   ASaPType *Result = Type;
   Type = 0;
   return Result;
-}
-
-void BaseTypeBuilderVisitor::VisitChildren(Stmt *S) {
-  for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
-    I!=E; ++I)
-    if (Stmt *child = *I)
-      Visit(child);
-}
-
-void BaseTypeBuilderVisitor::VisitStmt(Stmt *S) {
-  OS << "DEBUG:: GENERIC:: Visiting Stmt/Expr = \n";
-  S->printPretty(OS, 0, Ctx.getPrintingPolicy());
-  OS << "\n";
-  VisitChildren(S);
 }
 
 void BaseTypeBuilderVisitor::VisitMemberExpr(MemberExpr *Exp) {

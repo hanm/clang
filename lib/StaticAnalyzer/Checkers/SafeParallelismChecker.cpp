@@ -13,35 +13,24 @@
 //===--------------------------------------------------------------------===//
 
 #include "ClangSACheckers.h"
-#include "clang/AST/Attr.h"
-#include "clang/AST/StmtVisitor.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
-#include "clang/StaticAnalyzer/Core/CheckerManager.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
-#include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
-#include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/Support/Casting.h"
-#include "llvm/Support/raw_ostream.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
 
-#include "ASaPUtil.h"
-#include "Rpl.h"
-#include "Effect.h"
-#include "ASaPType.h"
 #include "ASaPSymbolTable.h"
+
 #include "SemanticChecker.h"
 #include "TypeChecker.h"
 #include "EffectChecker.h"
 
-#include <typeinfo>
+//#include <typeinfo>
 
 using namespace clang;
 using namespace ento;
 using namespace clang::asap;
 
 namespace {
-///////////////////////////////////////////////////////////////////////
-// GENERIC VISITORS
+
 using clang::asap::SymbolTable;
 
 /// 1. Wrapper pass that calls a Stmt visitor on each function definition.
@@ -80,66 +69,6 @@ public:
   }
 }; /// class StmtVisitorInvoker
 
-/// \brief Generic statement visitor that wraps different customized
-/// check pass.
-template<typename CustomCheckerTy>
-class ASaPStmtVisitor
-: public StmtVisitor<ASaPStmtVisitor<CustomCheckerTy> > {
-  typedef StmtVisitor<ASaPStmtVisitor<CustomCheckerTy> > BaseClass;
-
-protected:
-  /// Fields
-  ento::BugReporter &BR;
-  ASTContext &Ctx;
-  AnalysisManager &Mgr;
-  AnalysisDeclContext *AC;
-  raw_ostream &OS;
-
-  SymbolTable &SymT;
-
-  const FunctionDecl *Def;
-  bool FatalError;
-
-public:
-  /// Constructor
-  ASaPStmtVisitor(
-    ento::BugReporter &BR,
-    ASTContext &Ctx,
-    AnalysisManager &Mgr,
-    AnalysisDeclContext *AC,
-    raw_ostream &OS,
-    SymbolTable &SymT,
-    const FunctionDecl *Def,
-    Stmt *S
-    ) : BR(BR),
-        Ctx(Ctx),
-        Mgr(Mgr),
-        AC(AC),
-        OS(OS),
-        SymT(SymT),
-        Def(Def),
-        FatalError(false) {
-      //Visit(S);
-    }
-
-  /// Getters
-  inline bool encounteredFatalError() { return FatalError; }
-
-  /// Visitors
-  void VisitChildren(Stmt *S) {
-    for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
-         I!=E; ++I)
-      if (Stmt *child = *I)
-        BaseClass::Visit(child);
-  }
-
-  void VisitStmt(Stmt *S) {
-    VisitChildren(S);
-  }
-
-}; // End class StmtVisitor.
-// END GENERIC VISITORS
-///////////////////////////////////////////////////////////////////////
 
 class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
@@ -149,20 +78,16 @@ public:
                     AnalysisManager &Mgr,
                     BugReporter &BR) const {
     SymbolTable::Initialize();
-    os << "DEBUG:: starting ASaP Semantic Checker\n";
 
-    //BuiltinDefaulrRegionParam = ::new(D->getASTContext())
-      //RegionParamAttr(D->getSourceRange(), D->getASTContext(), "P");
-
-    /** initialize traverser */
+    // initialize traverser
     SymbolTable SymT;
     ASTContext &Ctx = D->getASTContext();
     AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(D);
     VisitorBundle VB = {BR, Ctx, Mgr, AC, os, SymT};
 
-    ASaPSemanticCheckerTraverser
-      SemanticChecker(VB);
-    /** run checker */
+    os << "DEBUG:: starting ASaP Semantic Checker\n";
+    ASaPSemanticCheckerTraverser SemanticChecker(VB);
+    // run checker
     SemanticChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     os << "##############################################\n";
     os << "DEBUG:: done running ASaP Semantic Checker\n\n";
@@ -170,8 +95,7 @@ public:
       os << "DEBUG:: SEMANTIC CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
     } else {
       // else continue with Typechecking
-      StmtVisitorInvoker<AssignmentCheckerVisitor>
-        TypeChecker(VB);
+      StmtVisitorInvoker<AssignmentCheckerVisitor> TypeChecker(VB);
       TypeChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
       os << "##############################################\n";
       os << "DEBUG:: done running ASaP Type Checker\n\n";
@@ -179,9 +103,7 @@ public:
         os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
       } else {
         // Check that Effect Summaries cover effects
-        StmtVisitorInvoker<EffectCollectorVisitor>
-          EffectChecker(VB);
-
+        StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker(VB);
         EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
         os << "##############################################\n";
         os << "DEBUG:: done running ASaP Effect Checker\n\n";
