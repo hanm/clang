@@ -127,7 +127,7 @@ SymbolTable::~SymbolTable() {
   }
 }
 
-SymbolTable::ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
+ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
   if (isNonPointerScalarType(QT)) {
     OSv2 << "DEBUG:: getRegionParamCount::isNonPointerScalarType\n";
     return ResultTriplet(RK_OK, 1, 0);

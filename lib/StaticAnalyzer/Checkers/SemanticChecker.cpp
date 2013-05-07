@@ -13,15 +13,119 @@
 //
 //===----------------------------------------------------------------===//
 
-#include "ASaPUtil.h"
-#include "SemanticChecker.h"
+#include "llvm/ADT/SmallVector.h"
+
 #include "ASaPType.h"
+#include "ASaPSymbolTable.h"
+#include "ASaPUtil.h"
+#include "Effect.h"
+#include "Rpl.h"
+#include "SemanticChecker.h"
 #include "Substitution.h"
 
 #include "clang/AST/Decl.h"
 
 namespace clang {
 namespace asap {
+
+template<typename AttrType>
+void ASaPSemanticCheckerTraverser::helperPrintAttributes(Decl *D) {
+  for (specific_attr_iterator<AttrType>
+       I = D->specific_attr_begin<AttrType>(),
+       E = D->specific_attr_end<AttrType>();
+       I != E; ++I) {
+    (*I)->printPretty(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+  }
+}
+
+template<typename AttrType>
+bool ASaPSemanticCheckerTraverser::checkRegionOrParamDecls(Decl *D) {
+  bool Result = true;
+  specific_attr_iterator<AttrType>
+      I = D->specific_attr_begin<AttrType>(),
+      E = D->specific_attr_end<AttrType>();
+  for ( ; I != E; ++I) {
+    assert(isa<RegionAttr>(*I) || isa<RegionParamAttr>(*I));
+    const llvm::StringRef ElmtNames = getRegionOrParamName(*I);
+
+    llvm::SmallVector<StringRef, 8> RplElmtVec;
+    ElmtNames.split(RplElmtVec, Rpl::RPL_LIST_SEPARATOR);
+    for (size_t Idx = 0 ; Idx != RplElmtVec.size(); ++Idx) {
+      llvm::StringRef Name = RplElmtVec[Idx].trim();
+      if (Rpl::isValidRegionName(Name)) {
+        /// Add it to the vector.
+        OS << "DEBUG:: creating RPL Element called " << Name << "\n";
+        if (isa<RegionAttr>(*I)) {
+         const Decl *ScopeDecl = D;
+          if (isa<EmptyDecl>(D)) {
+            // An empty declaration is typically at global scope
+            // E.g., [[asap::name("X")]];
+            ScopeDecl = getDeclFromContext(D->getDeclContext());
+            assert(ScopeDecl);
+          }
+          if (!SymT.addRegionName(ScopeDecl, Name)) {
+            // Region name already declared at this scope.
+            emitRedeclaredRegionName(D, Name);
+            Result = false;
+          }
+        } else if (isa<RegionParamAttr>(*I)) {
+          if (!SymT.addParameterName(D, Name)) {
+            // Region parameter already declared at this scope.
+            emitRedeclaredRegionParameter(D, Name);
+            Result = false;
+          }
+        }
+      } else {
+        /// Emit bug report: ill formed region or parameter name.
+        emitIllFormedRegionNameOrParameter(D, *I, Name);
+        Result = false;
+      }
+    } // End for each Element of Attribute.
+  } // End for each Attribute of type AttrType.
+  return Result;
+}
+
+template<typename AttrType>
+bool ASaPSemanticCheckerTraverser::checkRpls(Decl* D) {
+  bool Success = true;
+  const RplVector *RV = 0;
+  for (specific_attr_iterator<AttrType>
+       I = D->specific_attr_begin<AttrType>(),
+       E = D->specific_attr_end<AttrType>();
+       I != E; ++I) {
+    Success &= checkRpls(D, *I, (*I)->getRpl());
+  }
+  if (!Success) {
+    delete RV;
+    RV = 0;
+    FatalError = true;
+  }
+  return Success;
+}
+
+template<typename AttrType>
+void ASaPSemanticCheckerTraverser::
+buildPartialEffectSummary(FunctionDecl *D, EffectSummary &ES) {
+  for (specific_attr_iterator<AttrType>
+       I = D->specific_attr_begin<AttrType>(),
+       E = D->specific_attr_end<AttrType>();
+       I != E; ++I) {
+    Effect::EffectKind EK = getEffectKind(*I);
+    RplVector *Tmp = RplVecAttrMap[*I];
+
+    if (Tmp) { /// Tmp may be NULL if the RPL was ill formed (e.g., contained
+               /// undeclared RPL elements).
+      for (size_t Idx = 0; Idx < Tmp->size(); ++Idx) {
+        const Effect E(EK, Tmp->getRplAt(Idx), *I);
+        bool Success = ES.insert(&E);
+        assert(Success);
+      }
+    }
+  }
+}
+
+
 
 void ASaPSemanticCheckerTraverser::
 addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
@@ -302,7 +406,7 @@ checkBaseTypeRegionArgs(NamedDecl *D, const RegionBaseArgAttr *Att,
   BaseQT.print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
 
-  SymbolTable::ResultTriplet ResTriplet = SymT.getRegionParamCount(BaseQT);
+  ResultTriplet ResTriplet = SymT.getRegionParamCount(BaseQT);
 
   checkParamAndArgCounts(D, Att, BaseQT, ResTriplet, RplVec, DefaultInRpl);
 }
@@ -325,7 +429,7 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
   D->print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
 
-  SymbolTable::ResultTriplet ResTriplet = SymT.getRegionParamCount(QT);
+  ResultTriplet ResTriplet = SymT.getRegionParamCount(QT);
   ResultKind ResKin = ResTriplet.ResKin;
 
   if (ResKin == RK_NOT_VISITED) {
@@ -347,7 +451,7 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
 
 void ASaPSemanticCheckerTraverser::
 checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
-                       const SymbolTable::ResultTriplet &ResTriplet,
+                       const ResultTriplet &ResTriplet,
                        RplVector *RplVec, const Rpl *DefaultInRpl) {
 
   ResultKind ResKin = ResTriplet.ResKin;
@@ -617,7 +721,7 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
        I!=E; ++I) {
     //const CXXBaseSpecifier *BS = *I;
     //QualType QT = BS->getType();
-    SymbolTable::ResultTriplet ResTriplet =
+    ResultTriplet ResTriplet =
       SymT.getRegionParamCount((*I).getType());
     switch(ResTriplet.ResKin) {
     case RK_NOT_VISITED:

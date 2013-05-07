@@ -37,6 +37,18 @@ enum ResultKind {
 
 StringRef stringOf(ResultKind R);
 
+class ResultTriplet {
+public:
+  // Fields
+  ResultKind ResKin;
+  long NumArgs;
+  RecordDecl *DeclNotVis;
+  // Constructor
+  ResultTriplet(ResultKind ReKi, long NumA, RecordDecl *D) :
+    ResKin(ReKi), NumArgs(NumA), DeclNotVis(D) {}
+};
+
+
 class SymbolTable {
   class SymbolTableEntry;
   typedef llvm::DenseMap<const Decl*, SymbolTableEntry*>  SymbolTableMapT;
@@ -72,16 +84,6 @@ public:
   /// \brief Return true when the input string is a special RPL element
   /// (e.g., '*', '?', 'Root', 'Local', 'Globa', ...)
   static bool isSpecialRplElement(const llvm::StringRef& S);
-
-  // Types
-  class ResultTriplet {
-  public:
-    ResultKind ResKin;
-    long NumArgs;
-    RecordDecl *DeclNotVis;
-    ResultTriplet(ResultKind ReKi, long NumA, RecordDecl *D) :
-      ResKin(ReKi), NumArgs(NumA), DeclNotVis(D) {}
-  };
 
   // Functions
   /// \brief return the number of In/Arg annotations needed for type or -1

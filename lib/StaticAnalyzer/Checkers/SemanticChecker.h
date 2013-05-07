@@ -28,19 +28,13 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_SEMANTIC_CHECKER_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_SEMANTIC_CHECKER_H
 
-#include "ASaPFwdDecl.h"
-#include "clang/AST/ASTContext.h"
-#include "clang/AST/Type.h"
-#include "clang/AST/RecursiveASTVisitor.h"
-
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringRef.h"
 
-#include "ASaPSymbolTable.h"
-#include "Rpl.h"
-#include "Effect.h"
-#include "clang/AST/Attr.h"
+#include "clang/AST/ASTContext.h"
+#include "clang/AST/RecursiveASTVisitor.h"
+#include "clang/AST/Type.h"
+
+#include "ASaPFwdDecl.h"
 
 
 namespace clang {
@@ -106,16 +100,7 @@ class ASaPSemanticCheckerTraverser :
   void emitEmptyStringRplDisallowed(const Decl *D, Attr *A);
 
   /// \brief Print to the debug output stream (os) the attribute.
-  template<typename AttrType>
-  inline void helperPrintAttributes(Decl *D) {
-    for (specific_attr_iterator<AttrType>
-         I = D->specific_attr_begin<AttrType>(),
-         E = D->specific_attr_end<AttrType>();
-         I != E; ++I) {
-      (*I)->printPretty(OS, Ctx.getPrintingPolicy());
-      OS << "\n";
-    }
-  }
+  template<typename AttrType> void helperPrintAttributes(Decl *D);
 
   /// \brief Return the string name of the region or region parameter declaration
   /// based on the Kind of the Attribute (RegionAttr or RegionParamAttr).
@@ -123,53 +108,7 @@ class ASaPSemanticCheckerTraverser :
 
   /// \brief Check that the region name and region parameter declarations
   /// of D are well formed (don't contain illegal characters).
-  template<typename AttrType>
-  bool checkRegionOrParamDecls(Decl *D) {
-    bool Result = true;
-
-    specific_attr_iterator<AttrType>
-        I = D->specific_attr_begin<AttrType>(),
-        E = D->specific_attr_end<AttrType>();
-    for ( ; I != E; ++I) {
-      assert(isa<RegionAttr>(*I) || isa<RegionParamAttr>(*I));
-      const llvm::StringRef ElmtNames = getRegionOrParamName(*I);
-
-      llvm::SmallVector<StringRef, 8> RplElmtVec;
-      ElmtNames.split(RplElmtVec, Rpl::RPL_LIST_SEPARATOR);
-      for (size_t Idx = 0 ; Idx != RplElmtVec.size(); ++Idx) {
-        llvm::StringRef Name = RplElmtVec[Idx].trim();
-        if (Rpl::isValidRegionName(Name)) {
-          /// Add it to the vector.
-          OS << "DEBUG:: creating RPL Element called " << Name << "\n";
-          if (isa<RegionAttr>(*I)) {
-            const Decl *ScopeDecl = D;
-            if (isa<EmptyDecl>(D)) {
-              // An empty declaration is typically at global scope
-              // E.g., [[asap::name("X")]];
-              ScopeDecl = getDeclFromContext(D->getDeclContext());
-              assert(ScopeDecl);
-            }
-            if (!SymT.addRegionName(ScopeDecl, Name)) {
-              // Region name already declared at this scope.
-              emitRedeclaredRegionName(D, Name);
-              Result = false;
-            }
-          } else if (isa<RegionParamAttr>(*I)) {
-            if (!SymT.addParameterName(D, Name)) {
-              // Region parameter already declared at this scope.
-              emitRedeclaredRegionParameter(D, Name);
-              Result = false;
-            }
-          }
-        } else {
-          /// Emit bug report: ill formed region or parameter name.
-          emitIllFormedRegionNameOrParameter(D, *I, Name);
-          Result = false;
-        }
-      } // End for each Element of Attribute.
-    } // End for each Attribute of type AttrType.
-    return Result;
-  }
+  template<typename AttrType> bool checkRegionOrParamDecls(Decl *D);
 
   const RplElement *findRegionOrParamName(const Decl *D, llvm::StringRef Name);
   const Decl *getDeclFromContext(const DeclContext *DC);
@@ -180,7 +119,7 @@ class ASaPSemanticCheckerTraverser :
   void checkBaseTypeRegionArgs(NamedDecl *D, const RegionBaseArgAttr *Att,
                         QualType BaseQT, const Rpl *DefaultInRpl);
   void checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
-                              const SymbolTable::ResultTriplet &ResTriplet,
+                              const ResultTriplet &ResTriplet,
                               RplVector *RplVec, const Rpl *DefaultInRpl);
 
   /// \brief Check that the annotations of type AttrType of declaration
@@ -193,23 +132,7 @@ class ASaPSemanticCheckerTraverser :
   Rpl *checkRpl(Decl *D, Attr *A, llvm::StringRef RplStr);
   /// \brief Wrapper calling checkRpl.
   /// AttrType must implement getRpl (i.e., RegionArgAttr, & Effect Attributes).
-  template<typename AttrType>
-  bool checkRpls(Decl* D) {
-    bool Success = true;
-    const RplVector *RV = 0;
-    for (specific_attr_iterator<AttrType>
-         I = D->specific_attr_begin<AttrType>(),
-         E = D->specific_attr_end<AttrType>();
-         I != E; ++I) {
-      Success &= checkRpls(D, *I, (*I)->getRpl());
-    }
-    if (!Success) {
-      delete RV;
-      RV = 0;
-      FatalError = true;
-    }
-    return Success;
-  }
+  template<typename AttrType> bool checkRpls(Decl* D);
 
   /// Map AttrType to Effect Kind
   /// FIXME: we should move this elsewhere, probably in Effect.h
@@ -232,24 +155,7 @@ class ASaPSemanticCheckerTraverser :
   /// Called with AttrType being one of ReadsEffectAttr, WritesEffectAttr,
   /// ΑtomicReadsEffectAttr, or AtomicWritesEffectAttr.
   template<typename AttrType>
-  void buildPartialEffectSummary(FunctionDecl *D, EffectSummary &ES) {
-    for (specific_attr_iterator<AttrType>
-         I = D->specific_attr_begin<AttrType>(),
-         E = D->specific_attr_end<AttrType>();
-         I != E; ++I) {
-      Effect::EffectKind EK = getEffectKind(*I);
-      RplVector *Tmp = RplVecAttrMap[*I];
-
-      if (Tmp) { /// Tmp may be NULL if the RPL was ill formed (e.g., contained
-                 /// undeclared RPL elements).
-        for (size_t Idx = 0; Idx < Tmp->size(); ++Idx) {
-          const Effect E(EK, Tmp->getRplAt(Idx), *I);
-          bool Success = ES.insert(&E);
-          assert(Success);
-        }
-      }
-    }
-  }
+  void buildPartialEffectSummary(FunctionDecl *D, EffectSummary &ES);
 
   void buildEffectSummary(FunctionDecl* D, EffectSummary &ES);
 

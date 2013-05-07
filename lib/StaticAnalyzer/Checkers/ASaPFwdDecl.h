@@ -55,6 +55,7 @@ class NamedRplElement;
 class ParameterVector;
 class ParamRplElement;
 class RegionNameSet;
+class ResultTriplet;
 class Rpl;
 class RplElement;
 class RplVector;
