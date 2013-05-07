@@ -233,22 +233,17 @@ helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
 }
 
 EffectCollectorVisitor::EffectCollectorVisitor (
-  ento::BugReporter &BR,
-  ASTContext &Ctx,
-  AnalysisManager &Mgr,
-  AnalysisDeclContext *AC,
-  raw_ostream &OS,
-  SymbolTable &SymT,
+  VisitorBundle &VB,
   const FunctionDecl* Def,
   Stmt *S,
   bool VisitCXXInitializer,
   bool HasWriteSemantics
-  ) : BR(BR),
-  Ctx(Ctx),
-  Mgr(Mgr),
-  AC(AC),
-  OS(OS),
-  SymT(SymT),
+  ) : VB(VB),
+  BR(VB.BR),
+  Ctx(VB.Ctx),
+  AC(VB.AC),
+  OS(VB.OS),
+  SymT(VB.SymT),
   Def(Def),
   FatalError(false),
   HasWriteSemantics(HasWriteSemantics),
@@ -550,7 +545,7 @@ buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
   const RplVector *ParamArgV = ParamType->getArgV();
   if (!ParamArgV)
     return;
-  TypeBuilderVisitor TBV(BR, Ctx, Mgr, AC, OS, SymT, Def, Arg);
+  TypeBuilderVisitor TBV(VB, Def, Arg);
   const ASaPType *ArgType = TBV.getType();
   if (!ArgType)
     return;

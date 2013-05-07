@@ -23,6 +23,7 @@ class raw_ostream;
 
 }
 using llvm::StringRef;
+using llvm::raw_ostream;
 
 namespace clang {
 
@@ -62,6 +63,7 @@ class StarRplElement;
 class Substitution;
 class SubstitutionVector;
 class SymbolTable;
+struct VisitorBundle;
 
 } // End namespace asap.
 } // End namespace clang.

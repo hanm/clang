@@ -28,16 +28,18 @@ namespace asap {
 static StringRef BugCategory = "Safe Parallelism";
 
 #ifdef ASAP_DEBUG
-llvm::raw_ostream& os = llvm::errs();
+raw_ostream& os = llvm::errs();
 #else
-llvm::raw_ostream &os = llvm::nulls();
+raw_ostream &os = llvm::nulls();
 #endif
 
 #ifdef ASAP_DEBUG_VERBOSE2
-llvm::raw_ostream &OSv2 = llvm::errs();
+raw_ostream &OSv2 = llvm::errs();
 #else
-llvm::raw_ostream &OSv2 = llvm::nulls();
+raw_ostream &OSv2 = llvm::nulls();
 #endif
+
+using llvm::raw_string_ostream;
 
 void helperEmitDeclarationWarning(BugReporter &BR,
                                   const Decl *D,
@@ -45,7 +47,7 @@ void helperEmitDeclarationWarning(BugReporter &BR,
                                   const StringRef &BugName,
                                   bool AddQuotes) {
   std::string Description;
-  llvm::raw_string_ostream DescrOS(Description);
+  raw_string_ostream DescrOS(Description);
   DescrOS << (AddQuotes ? "'" : "") << Str
           << (AddQuotes ? "'" : "") << ": " << BugName;
 
@@ -62,7 +64,7 @@ void helperEmitAttributeWarning(BugReporter &BR,
                                 const StringRef &BugName,
                                 bool AddQuotes) {
   std::string Description;
-  llvm::raw_string_ostream DescrOS(Description);
+  raw_string_ostream DescrOS(Description);
   DescrOS << (AddQuotes ? "'" : "") << Str
           << (AddQuotes ? "'" : "") << ": " << BugName;
 
@@ -80,7 +82,7 @@ void helperEmitStatementWarning(BugReporter &BR,
                                 const StringRef &Str,
                                 const StringRef &BugName) {
   std::string Description;
-  llvm::raw_string_ostream DescrOS(Description);
+  raw_string_ostream DescrOS(Description);
   DescrOS << "'" << Str << "' " << BugName;
 
   StringRef BugStr = DescrOS.str();
@@ -100,7 +102,7 @@ void helperEmitInvalidAssignmentWarning(BugReporter &BR,
                                         const ASaPType *RHS,
                                         StringRef &BugName) {
   std::string Description;
-  llvm::raw_string_ostream DescrOS(Description);
+  raw_string_ostream DescrOS(Description);
 
   DescrOS << "The RHS type [" << (RHS ? RHS->toString(Ctx) : "")
           << "] is not assignable to the LHS type ["

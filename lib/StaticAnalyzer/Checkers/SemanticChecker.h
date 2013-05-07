@@ -50,11 +50,14 @@ class ASaPSemanticCheckerTraverser :
   public RecursiveASTVisitor<ASaPSemanticCheckerTraverser> {
 
   typedef llvm::DenseMap<const Attr*, RplVector*> RplVecAttrMapT;
-  ento::BugReporter &BR;
+
+  VisitorBundle &VB;
+
+  BugReporter &BR;
   ASTContext &Ctx;
-  AnalysisDeclContext *AC;
-  llvm::raw_ostream &OS;
+  raw_ostream &OS;
   SymbolTable &SymT;
+
   RplVecAttrMapT RplVecAttrMap;
   bool FatalError;
   bool NextFunctionIsATemplatePattern;
@@ -260,10 +263,7 @@ class ASaPSemanticCheckerTraverser :
 public:
   typedef RecursiveASTVisitor<ASaPSemanticCheckerTraverser> BaseClass;
 
-  explicit ASaPSemanticCheckerTraverser (
-    ento::BugReporter &BR, ASTContext &Ctx,
-    AnalysisDeclContext *AC, raw_ostream &OS,
-    SymbolTable &SymT);
+  explicit ASaPSemanticCheckerTraverser (VisitorBundle &VB);
   virtual ~ASaPSemanticCheckerTraverser ();
   inline bool encounteredFatalError() { return FatalError; }
 

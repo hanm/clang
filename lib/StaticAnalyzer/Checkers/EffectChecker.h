@@ -26,12 +26,15 @@ namespace asap {
 
 class EffectCollectorVisitor
     : public StmtVisitor<EffectCollectorVisitor> {
-  ento::BugReporter &BR;
+
+  VisitorBundle &VB;
+
+  BugReporter &BR;
   ASTContext &Ctx;
-  ento::AnalysisManager &Mgr;
   AnalysisDeclContext *AC;
   raw_ostream &OS;
   SymbolTable &SymT;
+
   const FunctionDecl *Def;
   bool FatalError;
 
@@ -80,12 +83,7 @@ class EffectCollectorVisitor
 public:
   /// Constructor
   EffectCollectorVisitor (
-    ento::BugReporter &BR,
-    ASTContext &Ctx,
-    ento::AnalysisManager &Mgr,
-    AnalysisDeclContext *AC,
-    raw_ostream &OS,
-    SymbolTable &SymT,
+    VisitorBundle &VB,
     const FunctionDecl* Def,
     Stmt *S,
     bool VisitCXXInitializer = false,

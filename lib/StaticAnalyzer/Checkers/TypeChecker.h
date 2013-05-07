@@ -36,12 +36,14 @@ namespace asap {
 class AssignmentCheckerVisitor
     : public StmtVisitor<AssignmentCheckerVisitor> {
 
-  ento::BugReporter &BR;
+  VisitorBundle &VB;
+
+  BugReporter &BR;
   ASTContext &Ctx;
-  ento::AnalysisManager &Mgr;
   AnalysisDeclContext *AC;
-  llvm::raw_ostream &OS;
+  raw_ostream &OS;
   SymbolTable &SymT;
+
   const FunctionDecl *Def;
   bool FatalError;
 
@@ -50,12 +52,7 @@ class AssignmentCheckerVisitor
 
 public:
   AssignmentCheckerVisitor (
-    ento::BugReporter &BR,
-    ASTContext &Ctx,
-    ento::AnalysisManager &Mgr,
-    AnalysisDeclContext *AC,
-    raw_ostream &OS,
-    SymbolTable &SymT,
+    VisitorBundle &VB,
     const FunctionDecl *Def,
     Stmt *S,
     bool VisitCXXInitializer = false  // true when called on the function,
@@ -129,12 +126,12 @@ private:
 // class TypeBuilder
 class TypeBuilderVisitor
     : public StmtVisitor<TypeBuilderVisitor, void> {
-  ento::BugReporter &BR;
+  VisitorBundle &VB;
+
   ASTContext &Ctx;
-  ento::AnalysisManager &Mgr;
-  AnalysisDeclContext *AC;
-  llvm::raw_ostream &OS;
+  raw_ostream &OS;
   SymbolTable &SymT;
+
   const FunctionDecl *Def;
   bool FatalError;
   /// true when visiting a base expression (e.g., B in B.f, or B->f)
@@ -153,12 +150,7 @@ class TypeBuilderVisitor
 
 public:
   TypeBuilderVisitor (
-    ento::BugReporter &BR,
-    ASTContext &Ctx,
-    ento::AnalysisManager &Mgr,
-    AnalysisDeclContext *AC,
-    llvm::raw_ostream &OS,
-    SymbolTable &SymT,
+    VisitorBundle &VB,
     const FunctionDecl *Def,
     Expr *E
     );
@@ -191,12 +183,9 @@ public:
 // class BaseTypeBuilderVisitor
 class BaseTypeBuilderVisitor
     : public StmtVisitor<BaseTypeBuilderVisitor, void> {
-  ento::BugReporter &BR;
+  VisitorBundle &VB;
   ASTContext &Ctx;
-  ento::AnalysisManager &Mgr;
-  AnalysisDeclContext *AC;
-  llvm::raw_ostream &OS;
-  SymbolTable &SymT;
+  raw_ostream &OS;
   const FunctionDecl *Def;
   bool FatalError;
   ASaPType *Type;
@@ -204,12 +193,7 @@ class BaseTypeBuilderVisitor
 
 public:
   BaseTypeBuilderVisitor (
-    ento::BugReporter &BR,
-    ASTContext &Ctx,
-    ento::AnalysisManager &Mgr,
-    AnalysisDeclContext *AC,
-    raw_ostream &OS,
-    SymbolTable &SymT,
+    VisitorBundle &VB,
     const FunctionDecl *Def,
     Expr *E
     );

@@ -51,30 +51,13 @@ class StmtVisitorInvoker :
 
 private:
   /// Private Fields
-  ento::BugReporter &BR;
-  ASTContext &Ctx;
-  AnalysisManager &Mgr;
-  AnalysisDeclContext *AC;
-  raw_ostream &OS;
-
-  SymbolTable &SymT;
+  VisitorBundle &VB;
 
   bool FatalError;
 
 public:
   /// Constructor
-  explicit StmtVisitorInvoker(
-    ento::BugReporter &BR, ASTContext &Ctx,
-    AnalysisManager &Mgr, AnalysisDeclContext *AC, raw_ostream &OS,
-    SymbolTable &SymT)
-      : BR(BR),
-        Ctx(Ctx),
-        Mgr(Mgr),
-        AC(AC),
-        OS(OS),
-        SymT(SymT),
-        FatalError(false)
-  {}
+  explicit StmtVisitorInvoker(VisitorBundle &VB) : VB(VB), FatalError(false) {}
 
   bool shouldVisitTemplateInstantiations() const { return true; }
   bool shouldVisitImplicitCode() const { return true; }
@@ -89,7 +72,7 @@ public:
       Stmt* S = Definition->getBody();
       assert(S);
 
-      StmtVisitorT StmtVisitor(BR, Ctx, Mgr, AC, OS, SymT, Definition, S, true);
+      StmtVisitorT StmtVisitor(VB, Definition, S, true);
 
       FatalError |= StmtVisitor.encounteredFatalError();
     }
@@ -175,10 +158,10 @@ public:
     SymbolTable SymT;
     ASTContext &Ctx = D->getASTContext();
     AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(D);
-
+    VisitorBundle VB = {BR, Ctx, Mgr, AC, os, SymT};
 
     ASaPSemanticCheckerTraverser
-      SemanticChecker(BR, Ctx, AC, os, SymT);
+      SemanticChecker(VB);
     /** run checker */
     SemanticChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     os << "##############################################\n";
@@ -188,18 +171,16 @@ public:
     } else {
       // else continue with Typechecking
       StmtVisitorInvoker<AssignmentCheckerVisitor>
-        TypeChecker(BR, Ctx, Mgr, AC, os, SymT);
+        TypeChecker(VB);
       TypeChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
       os << "##############################################\n";
       os << "DEBUG:: done running ASaP Type Checker\n\n";
       if (TypeChecker.encounteredFatalError()) {
         os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
       } else {
-        // TODO check for fatal errors during typechecking
-        // else continue with Effects Checking
         // Check that Effect Summaries cover effects
         StmtVisitorInvoker<EffectCollectorVisitor>
-          EffectChecker(BR, Ctx, Mgr, AC, os, SymT);
+          EffectChecker(VB);
 
         EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
         os << "##############################################\n";

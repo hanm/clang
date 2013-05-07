@@ -697,18 +697,15 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
   OS << "DEBUG:: checkBaseSpecifierArgs (DONE!)\n";
 }
 
-ASaPSemanticCheckerTraverser::ASaPSemanticCheckerTraverser(
-  ento::BugReporter &BR, ASTContext &Ctx,
-  AnalysisDeclContext *AC, raw_ostream &OS,
-  SymbolTable &SymT)
-  : BR(BR),
-  Ctx(Ctx),
-  AC(AC),
-  OS(OS),
-  SymT(SymT),
+ASaPSemanticCheckerTraverser::
+ASaPSemanticCheckerTraverser(VisitorBundle &_VB)
+  : VB(_VB),
+  BR(VB.BR),
+  Ctx(VB.Ctx),
+  OS(VB.OS),
+  SymT(VB.SymT),
   FatalError(false),
-  NextFunctionIsATemplatePattern(false)
-{}
+  NextFunctionIsATemplatePattern(false) {}
 
 ASaPSemanticCheckerTraverser::~ASaPSemanticCheckerTraverser() {
   for(RplVecAttrMapT::const_iterator
