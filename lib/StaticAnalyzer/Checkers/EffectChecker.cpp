@@ -181,7 +181,7 @@ checkEffectCoverage(const Expr *Exp, const Decl *D, int N) {
     return true;
   bool Result = true;
   for (int I=0; I<N; ++I){
-    Effect* E = EffectsTmp->pop_back_val();
+    auto_ptr<Effect> E = EffectsTmp->pop_back_val();
     OS << "### "; E->print(OS); OS << "\n";
     if (!E->isCoveredBy(*EffSummary)) {
       OS << "DEBUG:: effect not covered: Expr = ";

@@ -19,6 +19,9 @@
 
 #include "llvm/ADT/SmallVector.h"
 
+using llvm::SmallVector;
+using std::auto_ptr;
+
 // TODO: employ llvm::OwningPtr
 // i.e., derive from llvm::SmallVector<llvm::OwningPtr<ElmtTyp>, SIZE>
 // so that pop_back_val returns an OwningPtr and memory leaks are avoided.
@@ -63,11 +66,34 @@ public:
   }
 
   inline void push_back (const ElmtTyp &E) {
-      VectorT::push_back(new ElmtTyp(E));
+    VectorT::push_back(new ElmtTyp(E));
   }
 
-  /// ATTENTION: the clients of pop_back_value are responsible for deallocating
-  /// the memory of the object returned.
+  inline auto_ptr<ElmtTyp> pop_back_val() {
+    ElmtTyp *Back = VectorT::pop_back_val();
+    return auto_ptr<ElmtTyp>(Back);
+  }
+
+  inline void pop_back() {
+    ElmtTyp *Back = VectorT::pop_back_val();
+    delete Back;
+  }
+
+private:
+  template<typename in_iter>
+  void append(in_iter in_start, in_iter in_end); // NOT IMPLEMENTED
+
+  void append(size_t NumInputs, const ElmtTyp &Elt); // NOT IMPLEMENTED
+
+  typename VectorT::iterator erase (typename VectorT::iterator I);  // NOT IMPLEMENTED
+  typename VectorT::iterator erase (typename VectorT::iterator S, typename VectorT::iterator E);  // NOT IMPLEMENTED
+
+  typename VectorT::iterator insert (typename VectorT::iterator I, const ElmtTyp &Elt);  // NOT IMPLEMENTED
+  typename VectorT::iterator insert (typename VectorT::iterator I, size_t NumToInsert, const ElmtTyp &Elt);  // NOT IMPLEMENTED
+  template<typename ItTy >
+  typename VectorT::iterator insert (typename VectorT::iterator I, ItTy From, ItTy To);
+
+
 }; // end class OwningVector
 
 #endif

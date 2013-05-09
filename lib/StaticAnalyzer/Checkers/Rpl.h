@@ -391,13 +391,13 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
   /// \brief Add the argument RPL to the front of the RPL vector.
   inline void push_front (const Rpl *R) {
     assert(R);
-    insert(begin(), new Rpl(*R));
+    VectorT::insert(begin(), new Rpl(*R));
   }
   /// \brief Remove and return the first RPL in the vector.
   Rpl *pop_front() {
     assert(size() > 0);
     Rpl *Result = front();
-    erase(begin());
+    VectorT::erase(begin());
     return Result;
   }
   /// \brief Remove and return the first RPL in the vector.
@@ -412,7 +412,7 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
       if (Result)
         delete Result;
       Result = *I;
-      I = erase(I);
+      I = VectorT::erase(I);
     }
     return Result;
   }
@@ -536,7 +536,7 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
     VectorT::iterator RHSI = RHS->begin(), RHSE = RHS->end();
     while (RHSI != RHSE) {
       LHS->push_back(*RHSI);
-      RHSI = RHS->erase(RHSI);
+      RHSI = RHS->VectorT::erase(RHSI);
     }
     delete RHS;
     A = B = 0;
