@@ -13,10 +13,11 @@
 //
 //===----------------------------------------------------------------===//
 
-#include "Substitution.h"
-#include "Rpl.h"
 #include "ASaPSymbolTable.h"
+#include "ASaPType.h"
 #include "Effect.h"
+#include "Rpl.h"
+#include "Substitution.h"
 
 using namespace clang;
 using namespace clang::asap;
@@ -66,6 +67,12 @@ void Substitution::applyTo(Effect *E) const {
   }
 }
 
+void Substitution::applyTo(ASaPType *T) const {
+  if (T && FromEl && ToRpl) {
+    T->substitute(this);
+  }
+}
+
 void Substitution::print(llvm::raw_ostream &OS) const {
   OS << "[";
   if (FromEl) {
@@ -99,14 +106,14 @@ buildSubstitutionVector(const ParameterVector *ParV, RplVector *RplVec) {
     if (*ToRpl != *FromEl) {
       Substitution *Sub =
         new Substitution(FromEl, ToRpl);
-      this->push_back(Sub);
+      push_back(Sub);
     }
   }
 }
 
 void SubstitutionVector::applyTo(Rpl *R) const {
   if (R) {
-    for(SubstitutionVecT::const_iterator I = SubV.begin(), E = SubV.end();
+    for(VectorT::const_iterator I = begin(), E = end();
         I != E; ++I) {
       assert(*I);
       (*I)->applyTo(R);
@@ -116,7 +123,7 @@ void SubstitutionVector::applyTo(Rpl *R) const {
 
 void SubstitutionVector::applyTo(Effect *Eff) const {
   if (Eff) {
-    for(SubstitutionVecT::const_iterator I = SubV.begin(), E = SubV.end();
+    for(VectorT::const_iterator I = begin(), E = end();
         I != E; ++I) {
       assert(*I);
       (*I)->applyTo(Eff);
@@ -124,11 +131,19 @@ void SubstitutionVector::applyTo(Effect *Eff) const {
   }
 }
 
+void SubstitutionVector::applyTo(ASaPType *T) const {
+  if (T) {
+    for(VectorT::const_iterator I = begin(), E = end();
+        I != E; ++I) {
+      assert(*I);
+      (*I)->applyTo(T);
+    }
+  }
+}
+
 void SubstitutionVector::print(llvm::raw_ostream &OS) const {
-  SubstitutionVecT::const_iterator
-    I = SubV.begin(),
-    E = SubV.end();
-  for(; I != E; ++I) {
+  for(VectorT::const_iterator I = begin(), E = end();
+      I != E; ++I) {
     assert(*I);
     (*I)->print(OS);
   }
@@ -141,9 +156,9 @@ std::string SubstitutionVector::toString() const {
   return std::string(OS.str());
 }
 
-void SubstitutionVector::push_back(const SubstitutionVector *SubV) {
+void SubstitutionVector::push_back_vec(const SubstitutionVector *SubV) {
   if (SubV) {
-    for(SubstitutionVecT::const_iterator I = SubV->begin(), E = SubV->end();
+    for(VectorT::const_iterator I = SubV->begin(), E = SubV->end();
         I != E; ++I) {
       this->push_back(*I);
     }

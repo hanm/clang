@@ -18,6 +18,7 @@
 
 #include "llvm/ADT/SmallVector.h"
 #include "ASaPFwdDecl.h"
+#include "OwningVector.h"
 
 namespace clang {
 namespace asap {
@@ -48,6 +49,7 @@ public:
   /// \brief Apply substitution to RPL
   void applyTo(Rpl *R) const;
   void applyTo(Effect *E) const;
+  void applyTo(ASaPType *T) const;
 
   // print
   /// \brief Print Substitution: [From<-To]
@@ -57,56 +59,26 @@ public:
   std::string toString() const;
 }; // end class Substitution
 
+//////////////////////////////////////////////////////////////////////////
 // An ordered sequence of substitutions
-class SubstitutionVector {
-public:
-  // Type
 #ifndef SUBSTITUTION_VECTOR_SIZE
   #define SUBSTITUTION_VECTOR_SIZE 4
 #endif
-  typedef llvm::SmallVector<Substitution*, SUBSTITUTION_VECTOR_SIZE>
-    SubstitutionVecT;
-private:
-  SubstitutionVecT SubV;
+
+class SubstitutionVector :
+  public OwningVector<Substitution, SUBSTITUTION_VECTOR_SIZE> {
+
 public:
-  // Constructors & Destructor
-  SubstitutionVector() {}
-
-  SubstitutionVector(Substitution *S) {
-    if (S)
-      SubV.push_back(new Substitution(*S));
-  }
-
-  virtual ~SubstitutionVector() {
-    for (SubstitutionVecT::const_iterator I = SubV.begin(), E = SubV.end();
-         I != E; ++I) {
-      delete(*I);
-    }
-  }
   // Methods
   void buildSubstitutionVector(const ParameterVector *ParV,
                                               RplVector *RplVec);
-
-  /// \brief Return an iterator at the first RPL of the vector.
-  inline SubstitutionVecT::iterator begin () { return SubV.begin(); }
-  /// \brief Return an iterator past the last RPL of the vector.
-  inline SubstitutionVecT::iterator end () { return SubV.end(); }
-  /// \brief Return a const_iterator at the first RPL of the vector.
-  inline SubstitutionVecT::const_iterator begin () const { return SubV.begin();}
-  /// \brief Return a const_iterator past the last RPL of the vector.
-  inline SubstitutionVecT::const_iterator end () const { return SubV.end(); }
-  /// \brief Return the size of the RPL vector.
-  inline size_t size () const { return SubV.size(); }
-  /// \brief Append the argument Substitution to the Substitution vector.
-  inline void push_back(Substitution *Sub) {
-    if (Sub)
-      SubV.push_back(new Substitution(*Sub));
-  }
 
   // Apply
   void applyTo(Rpl *R) const;
 
   void applyTo(Effect *Eff) const;
+
+  void applyTo(ASaPType *T) const;
   // Print
   /// \brief Print Substitution vector.
   void print(llvm::raw_ostream &OS) const;
@@ -114,7 +86,7 @@ public:
   /// \brief Return a string for the Substitution vector.
   std::string toString() const;
 
-  void push_back(const SubstitutionVector *SubV);
+  void push_back_vec(const SubstitutionVector *SubV);
 
 }; // End class SubstituionVector.
 

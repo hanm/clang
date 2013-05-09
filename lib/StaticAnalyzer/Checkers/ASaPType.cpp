@@ -13,12 +13,13 @@
 //
 //===----------------------------------------------------------------===//
 
-#include "ASaPUtil.h"
-#include "Rpl.h"
-#include "Effect.h"
-#include "Substitution.h"
-#include "ASaPType.h"
 #include "clang/AST/ASTContext.h"
+
+#include "ASaPUtil.h"
+#include "ASaPType.h"
+#include "Effect.h"
+#include "Rpl.h"
+#include "Substitution.h"
 
 namespace clang {
 namespace asap {
@@ -269,18 +270,11 @@ void ASaPType::join(ASaPType *That) {
 }
 
 void ASaPType::substitute(const SubstitutionVector *SubV) {
-  if (!SubV)
-    return;
-  for(SubstitutionVector::SubstitutionVecT::const_iterator
-      I = SubV->begin(),
-      E = SubV->end();
-      I != E; ++I) {
-    Substitution *Sub = *I;
-    substitute(Sub);
-  }
+  if (SubV)
+    SubV->applyTo(this);
 }
 
-void ASaPType::substitute(Substitution *Sub) {
+void ASaPType::substitute(const Substitution *Sub) {
   if (!Sub)
     return;
 

@@ -88,7 +88,7 @@ public:
   /// \brief Substitution (ASaPType).
   void substitute(const SubstitutionVector *SubV);
   /// \brief Performs substitution on type: this[FromEl <- ToRpl].
-  void substitute(Substitution *S);
+  void substitute(const Substitution *S);
 }; // end class ASaPType
 
 } // End namespace asap.

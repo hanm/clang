@@ -16,13 +16,14 @@
 /// Maps AST Decl* nodes to ASaP info that appertains to the node
 /// such information includes ASaPType*, ParamVector, RegionNameSet,
 /// and EffectSummary
-#include "ASaPUtil.h"
-#include "ASaPType.h"
-#include "ASaPSymbolTable.h"
-#include "Rpl.h"
-#include "Effect.h"
-#include "Substitution.h"
 #include "clang/AST/Decl.h"
+
+#include "ASaPUtil.h"
+#include "ASaPSymbolTable.h"
+#include "ASaPType.h"
+#include "Effect.h"
+#include "Rpl.h"
+#include "Substitution.h"
 
 namespace clang {
 namespace asap {
@@ -113,8 +114,10 @@ isSpecialRplElement(const llvm::StringRef& Str) {
 
 /// Non-Static Functions
 SymbolTable::SymbolTable() {
-  BuiltinDefaultRegionParameterVec =
-    new ParameterVector(new ParamRplElement("P"));
+  // FIXME: make this static like the other default Regions etc
+  ParamRplElement Param("P");
+  BuiltinDefaultRegionParameterVec = new ParameterVector(Param);
+  //BuiltinDefaultRegionParameterVec->push_back(Param);
 }
 
 SymbolTable::~SymbolTable() {
@@ -494,9 +497,9 @@ computeInheritanceSubVec() {
           I = InheritanceMap->begin(), E = InheritanceMap->end();
         I != E; ++I) {
       SymbolTableEntry *STE = (*I).first;
-      InheritanceSubVec->push_back(STE->getInheritanceSubVec());
+      InheritanceSubVec->push_back_vec(STE->getInheritanceSubVec());
       const SubstitutionVector *SubV = (*I).second;
-      InheritanceSubVec->push_back(SubV);
+      InheritanceSubVec->push_back_vec(SubV);
       // Note: this order is important (i.e., first push_back the
       // base class inheritance substitutions (recursively) then
       // the substitution from for this base class to the next.
