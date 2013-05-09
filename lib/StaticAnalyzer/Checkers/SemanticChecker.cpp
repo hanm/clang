@@ -13,6 +13,8 @@
 //
 //===----------------------------------------------------------------===//
 
+#include "clang/AST/ASTContext.h"
+#include "clang/AST/Decl.h"
 #include "llvm/ADT/SmallVector.h"
 
 #include "ASaPType.h"
@@ -22,8 +24,6 @@
 #include "Rpl.h"
 #include "SemanticChecker.h"
 #include "Substitution.h"
-
-#include "clang/AST/Decl.h"
 
 namespace clang {
 namespace asap {

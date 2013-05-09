@@ -30,11 +30,11 @@
 
 #include "llvm/ADT/DenseMap.h"
 
-#include "clang/AST/ASTContext.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/AST/Type.h"
 
 #include "ASaPFwdDecl.h"
+#include "Effect.h"
 
 
 namespace clang {
