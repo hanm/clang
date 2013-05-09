@@ -7,7 +7,7 @@
 //
 //===--------------------------------------------------------------------===//
 //
-// This files defines the Safe Parallelism checker, which tries to prove the
+// This file defines the Safe Parallelism checker, which tries to prove the
 // safety of parallelism given region and effect annotations.
 //
 //===--------------------------------------------------------------------===//

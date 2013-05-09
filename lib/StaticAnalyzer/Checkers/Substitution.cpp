@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This files defines the Substitution and SubstitutionVector classes used
+// This file defines the Substitution and SubstitutionVector classes used
 // by the Safe Parallelism checker, which tries to prove the safety of
 // parallelism given region and effect annotations.
 //

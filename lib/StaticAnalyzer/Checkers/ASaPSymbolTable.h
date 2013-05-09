@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This files defines the SymbolTable and SymbolTableEntry classes used by
+// This file defines the SymbolTable and SymbolTableEntry classes used by
 // the Safe Parallelism checker, which tries to prove the safety of
 // parallelism given region and effect annotations.
 //

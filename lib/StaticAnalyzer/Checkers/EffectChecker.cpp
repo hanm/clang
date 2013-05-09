@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This files defines the Effect Checker pass of the Safe Parallelism
+// This file defines the Effect Checker pass of the Safe Parallelism
 // checker, which tries to prove the safety of parallelism given region
 // and effect annotations.
 //

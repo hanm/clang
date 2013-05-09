@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This files defines the Effect and EffectSummary classes used by the Safe
+// This file defines the Effect and EffectSummary classes used by the Safe
 // Parallelism checker, which tries to prove the safety of parallelism
 // given region and effect annotations.
 //

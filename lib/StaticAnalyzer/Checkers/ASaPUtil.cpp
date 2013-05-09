@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This files defines various utility methods used by the Safe Parallelism
+// This file defines various utility methods used by the Safe Parallelism
 // checker, which tries to prove the safety of parallelism given region
 // and effect annotations.
 //
