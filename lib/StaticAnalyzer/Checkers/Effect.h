@@ -21,6 +21,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "clang/AST/Attr.h"
 #include "ASaPFwdDecl.h"
+#include "OwningVector.h"
 
 namespace clang {
 namespace asap {
@@ -114,60 +115,19 @@ public:
 }; // end class Effect
 
 /////////////////////////////////////////////////////////////////////////////
-class EffectVector {
-public:
-  // Types
+
 #ifndef EFFECT_VECTOR_SIZE
-  #define EFFECT_VECTOR_SIZE 16
+#define EFFECT_VECTOR_SIZE 8
 #endif
-  typedef llvm::SmallVector<Effect*, EFFECT_VECTOR_SIZE> EffectVectorT;
-
-private:
-  // Fields
-  EffectVectorT EffV;
+class EffectVector : public OwningVector<Effect, EFFECT_VECTOR_SIZE> {
 
 public:
-  /// Constructor
-  EffectVector() {}
-  EffectVector(const Effect &E) {
-    EffV.push_back(new Effect(E));
-  }
-
-  /// Destructor
-  ~EffectVector() {
-    for (EffectVectorT::const_iterator
-            I = EffV.begin(),
-            E = EffV.end();
-         I != E; ++I) {
-      delete (*I);
-    }
-  }
-
-  // Methods
-  /// \brief Return an iterator at the first Effect of the vector.
-  inline EffectVectorT::iterator begin() { return EffV.begin(); }
-  /// \brief Return an iterator past the last Effect of the vector.
-  inline EffectVectorT::iterator end() { return EffV.end(); }
-  /// \brief Return a const_iterator at the first Effect of the vector.
-  inline EffectVectorT::const_iterator begin () const { return EffV.begin(); }
-  /// \brief Return a const_iterator past the last Effect of the vector.
-  inline EffectVectorT::const_iterator end () const { return EffV.end(); }
-  /// \brief Return the size of the Effect vector.
-  inline size_t size () const { return EffV.size(); }
-  /// \brief Append the argument Effect to the Effect vector.
-  inline void push_back (const Effect *E) {
-    assert(E);
-    EffV.push_back(new Effect(*E));
-  }
-  /// \brief Return the last Effect in the vector after removing it.
-  inline Effect *pop_back_val() { return EffV.pop_back_val(); }
-
   void substitute(const Substitution *S) {
     if (!S)
       return; // Nothing to do.
-    for (EffectVectorT::const_iterator
-            I = EffV.begin(),
-            E = EffV.end();
+    for (VectorT::const_iterator
+            I = begin(),
+            E = end();
          I != E; ++I) {
       Effect *Eff = *I;
       Eff->substitute(S);
@@ -177,16 +137,18 @@ public:
   void substitute(const SubstitutionVector *SubV) {
     if (!SubV)
       return; // Nothing to do.
-    for (EffectVectorT::const_iterator
-            I = EffV.begin(),
-            E = EffV.end();
+    for (VectorT::const_iterator
+            I = begin(),
+            E = end();
          I != E; ++I) {
       Effect *Eff = *I;
       Eff->substitute(SubV);
     }
   }
 
-}; // end class EffectVector
+};
+
+
 
 /////////////////////////////////////////////////////////////////////////////
 /// \brief Implements a Set of Effects
