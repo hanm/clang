@@ -919,15 +919,14 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
       } else { // The effect summary of the canonical decl covers this.
 
         // Set the Effect summary of this declaration to be the same
-        // as that of the canonical declaration. Both SymTable entries
-        // will point to the same EffectSummary object...
-        // oops. How do we free it only once?
+        // as that of the canonical declaration.
+        // (Makes a copy of the effect summary).
         bool Success = SymT.setEffectSummary(D, CanFD);
         assert(Success);
       }
     } else { // Case 2: Visiting the canonical Decl.
-      // This declaration does not get effects copied from other decls...
-      // (hopefully).
+      // This declaration does not get effects copied from other decls.
+      // (...hopefully).
 
       /// C.2. Check Effect Summary is minimal
       EffectSummary::EffectCoverageVector ECV;

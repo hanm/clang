@@ -163,6 +163,9 @@ private:
   EffectSummarySetT EffectSum;
 public:
   // Constructor
+  EffectSummary();
+  EffectSummary(const EffectSummary &From);
+
   // Destructor
   ~EffectSummary() {
     EffectSummarySetT::const_iterator

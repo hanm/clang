@@ -309,7 +309,8 @@ bool SymbolTable::setEffectSummary(const Decl *D, const Decl *Dfrom) {
   if (SymTable[D]->hasEffectSummary())
     return false;
   else {
-    SymTable[D]->setEffectSummary(SymTable[Dfrom]->getNonConstEffectSummary());
+    const EffectSummary *From = SymTable[Dfrom]->getEffectSummary();
+    SymTable[D]->setEffectSummary(new EffectSummary(*From));
     return true;
   }
 }
@@ -425,10 +426,10 @@ SymbolTable::SymbolTableEntry::SymbolTableEntry() :
 
 SymbolTable::SymbolTableEntry::~SymbolTableEntry() {
   // FIXME uncommenting these lines causes some tests to fail
-  //delete Typ;
-  //delete ParamVec;
-  //delete RegnNameSet;
-  //delete EffSum;
+  delete Typ;
+  delete ParamVec;
+  delete RegnNameSet;
+  delete EffSum;
   if (InheritanceMap && InheritanceMap->size() > 0) {
     for(InheritanceMapT::iterator
           I = InheritanceMap->begin(), E = InheritanceMap->end();

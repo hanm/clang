@@ -110,6 +110,16 @@ std::string Effect::toString() const {
 
 //////////////////////////////////////////////////////////////////////////
 // EffectSummary
+EffectSummary::EffectSummary() { }
+
+EffectSummary::EffectSummary(const EffectSummary &From) {
+  EffectSummarySetT::const_iterator
+    I = From.begin(),
+    E = From.end();
+  for(; I != E; ++I) {
+    insert(*I);
+  }
+}
 
 const Effect *EffectSummary::covers(const Effect *Eff) const {
   assert(Eff);
