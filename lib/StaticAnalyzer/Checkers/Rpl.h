@@ -16,13 +16,11 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_RPL_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_RPL_H
 
-#include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
-
 #include "llvm/Support/raw_ostream.h"
 
 #include "ASaPUtil.h"  // Included for the 2 uses of OSv2
+#include "OwningPtrSet.h"
 #include "OwningVector.h"
 
 namespace clang {
@@ -375,16 +373,10 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
           I = ParamVec.begin(),
           E = ParamVec.end();
         I != E; ++I) {
-      push_back(new Rpl(*(*I)));
-    }
-  }
-
-  RplVector(const RplVector &RV) {
-    for (VectorT::const_iterator
-            I = RV.begin(),
-            E = RV.end();
-         I != E; ++I) {
-      push_back(new Rpl(*(*I))); // copy Rpls
+      if (*I) {
+        Rpl Param(**I);
+        push_back(Param);
+      }
     }
   }
 
@@ -544,36 +536,17 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
   }
 }; // End class RplVector.
 
-class RegionNameSet {
-private:
-  // Fields
+//////////////////////////////////////////////////////////////////////////
 #ifndef REGION_NAME_SET_SIZE
   #define REGION_NAME_SET_SIZE 8
 #endif
-  typedef llvm::SmallPtrSet<const NamedRplElement*, REGION_NAME_SET_SIZE>
-    RegnNameSetTy;
-  RegnNameSetTy RegnNameSet;
-public:
-  // Destructor
-  ~RegionNameSet() {
-    for (RegnNameSetTy::iterator
-           I = RegnNameSet.begin(),
-           E = RegnNameSet.end();
-         I != E; ++I) {
-      delete (*I);
-    }
-  }
-  // Methods
-  /// \brief Inserts an element to the set and returns true upon success.
-  inline bool insert(NamedRplElement *E) { return RegnNameSet.insert(E); }
-  /// \brief Returns the number of elements in the set.
-  inline size_t size() const { return RegnNameSet.size(); }
+class RegionNameSet
+: public OwningPtrSet<NamedRplElement, REGION_NAME_SET_SIZE> {
 
+public:
   /// \brief Returns the NamedRplElement with name=Name or null.
   const NamedRplElement *lookup (StringRef Name) {
-    for (RegnNameSetTy::iterator
-           I = RegnNameSet.begin(),
-           E = RegnNameSet.end();
+    for (SetT::iterator I = begin(), E = end();
          I != E; ++I) {
       const NamedRplElement *El = *I;
       if (El->getName().compare(Name) == 0)
@@ -582,8 +555,8 @@ public:
     return 0;
   }
 }; // End class RegionNameSet.
-} // End namespace asap.
 
+} // End namespace asap.
 } // End namespace clang.
 
 #endif

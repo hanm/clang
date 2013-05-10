@@ -110,16 +110,6 @@ std::string Effect::toString() const {
 
 //////////////////////////////////////////////////////////////////////////
 // EffectSummary
-EffectSummary::EffectSummary() { }
-
-EffectSummary::EffectSummary(const EffectSummary &From) {
-  EffectSummarySetT::const_iterator
-    I = From.begin(),
-    E = From.end();
-  for(; I != E; ++I) {
-    insert(*I);
-  }
-}
 
 const Effect *EffectSummary::covers(const Effect *Eff) const {
   assert(Eff);
@@ -127,13 +117,11 @@ const Effect *EffectSummary::covers(const Effect *Eff) const {
     return Eff;
 
   // if the Eff pointer is included in the set, return it
-  if (EffectSum.count(Eff)) {
+  if (count(Eff)) {
     return Eff;
   }
 
-  EffectSummarySetT::const_iterator
-    I = EffectSum.begin(),
-    E = EffectSum.end();
+  SetT::const_iterator I = begin(), E = end();
   for(; I != E; ++I) {
     if (Eff->isSubEffectOf(*(*I)))
       return *I;
@@ -145,9 +133,7 @@ bool EffectSummary::covers(const EffectSummary *Sum) const {
   if (!Sum)
     return true;
 
-  EffectSummarySetT::const_iterator
-    I = Sum->begin(),
-    E = Sum->end();
+  SetT::const_iterator I = Sum->begin(), E = Sum->end();
   for(; I != E; ++I) {
     if (!this->covers(*I))
       return false;
@@ -156,11 +142,10 @@ bool EffectSummary::covers(const EffectSummary *Sum) const {
 }
 
 void EffectSummary::makeMinimal(EffectCoverageVector &ECV) {
-  EffectSummarySetT::iterator I = EffectSum.begin(); // not a const iterator
-  while (I != EffectSum.end()) { // EffectSum.end() is not loop invariant
+  SetT::iterator I = begin(); // not a const iterator
+  while (I != end()) { // EffectSum.end() is not loop invariant
     bool found = false;
-    for (EffectSummarySetT::iterator
-         J = EffectSum.begin(); J != EffectSum.end(); ++J) {
+    for (SetT::iterator J = begin(); J != end(); ++J) {
       if (I != J && (*I)->isSubEffectOf(*(*J))) {
         //emitEffectCovered(D, *I, *J);
         ECV.push_back(new std::pair<const Effect*, const Effect*>(*I, *J));
@@ -170,9 +155,9 @@ void EffectSummary::makeMinimal(EffectCoverageVector &ECV) {
     } // end inner for loop
     /// optimization: remove e from effect Summary
     if (found) {
-      bool Success = EffectSum.erase(*I);
+      bool Success = take(*I);
       assert(Success);
-      I = EffectSum.begin();
+      I = begin();
     } else {
       ++I;
     }
@@ -180,10 +165,7 @@ void EffectSummary::makeMinimal(EffectCoverageVector &ECV) {
 }
 
 void EffectSummary::print(raw_ostream &OS, char Separator) const {
-  EffectSummarySetT::const_iterator
-  I = EffectSum.begin(),
-  E = EffectSum.end();
-  for(; I != E; ++I) {
+  for(SetT::const_iterator I = begin(), E = end(); I != E; ++I) {
     (*I)->print(OS);
     OS << Separator;
   }

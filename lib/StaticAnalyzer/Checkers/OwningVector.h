@@ -10,7 +10,8 @@
 //  This file defines a generic derived class of llvm::SmallVector that owns its
 //  elements and calls delete on them when destroyed. It also call the copy
 //  constructor each time an element is pushed into the vector. The client code
-//  that removes an element is responsible for deallocating it when done.
+//  that removes an element gets it wrapped in an auto_ptr so that ownership is
+//  transferred.
 //
 //===----------------------------------------------------------------------===//
 
@@ -18,33 +19,37 @@
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_OWNING_VECTOR_H
 
 #include "llvm/ADT/SmallVector.h"
-
 using llvm::SmallVector;
-using std::auto_ptr;
 
-// TODO: employ llvm::OwningPtr
-// i.e., derive from llvm::SmallVector<llvm::OwningPtr<ElmtTyp>, SIZE>
-// so that pop_back_val returns an OwningPtr and memory leaks are avoided.
+
 template<typename ElmtTyp, int SIZE>
 class OwningVector : public llvm::SmallVector<ElmtTyp*, SIZE> {
 public:
   // Types
   typedef llvm::SmallVector<ElmtTyp*, SIZE> VectorT;
 
-public:
-  /// Constructors
+  // Constructors
   OwningVector() {}
 
   OwningVector(const ElmtTyp &E) {
     push_back(new ElmtTyp(E));
   }
 
-  OwningVector(const ElmtTyp *S) {
-    if (S)
-      push_back(new ElmtTyp(*S));
+  OwningVector(const ElmtTyp *E) {
+    if (E)
+      push_back(new ElmtTyp(*E));
   }
 
-  /// Destructor
+  OwningVector(const OwningVector &From) {
+    for (typename VectorT::const_iterator
+            I = From.VectorT::begin(),
+            E = From.VectorT::end();
+         I != E; ++I) {
+      push_back(*I);
+    }
+  }
+
+  // Destructor
   ~OwningVector() {
     for (typename VectorT::const_iterator
             I = VectorT::begin(),
@@ -69,9 +74,9 @@ public:
     VectorT::push_back(new ElmtTyp(E));
   }
 
-  inline auto_ptr<ElmtTyp> pop_back_val() {
+  inline std::auto_ptr<ElmtTyp> pop_back_val() {
     ElmtTyp *Back = VectorT::pop_back_val();
-    return auto_ptr<ElmtTyp>(Back);
+    return std::auto_ptr<ElmtTyp>(Back);
   }
 
   inline void pop_back() {

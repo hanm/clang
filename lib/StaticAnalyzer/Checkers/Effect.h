@@ -16,11 +16,11 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_EFFECT_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_EFFECT_H
 
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Support/raw_ostream.h"
 #include "clang/AST/Attr.h"
+
 #include "ASaPFwdDecl.h"
+#include "OwningPtrSet.h"
 #include "OwningVector.h"
 
 namespace clang {
@@ -146,58 +146,20 @@ public:
     }
   }
 
-};
-
-
+}; // end class EffectVector
 
 /////////////////////////////////////////////////////////////////////////////
 /// \brief Implements a Set of Effects
-class EffectSummary {
-private:
-  // Fields
 #ifndef EFFECT_SUMMARY_SIZE
-#define EFFECT_SUMMARY_SIZE 8
+  #define EFFECT_SUMMARY_SIZE 8
 #endif
-  typedef llvm::SmallPtrSet<const Effect*, EFFECT_SUMMARY_SIZE>
-    EffectSummarySetT;
-  EffectSummarySetT EffectSum;
+class EffectSummary : public OwningPtrSet<const Effect, EFFECT_SUMMARY_SIZE> {
+private:
 public:
-  // Constructor
-  EffectSummary();
-  EffectSummary(const EffectSummary &From);
-
-  // Destructor
-  ~EffectSummary() {
-    EffectSummarySetT::const_iterator
-      I = EffectSum.begin(),
-      E = EffectSum.end();
-    for(; I != E; ++I) {
-      delete *I;
-    }
-  }
-
-  // Types
-  typedef EffectSummarySetT::const_iterator const_iterator;
-
-  // Methods
-  /// \brief Returns the size of the EffectSummary
-  inline size_t size() const { return EffectSum.size(); }
-  /// \brief Returns a const_iterator at the first element of the summary.
-  inline const_iterator begin() const { return EffectSum.begin(); }
-  /// \brief Returns a const_iterator past the last element of the summary.
-  inline const_iterator end() const { return EffectSum.end(); }
 
   /// \brief Returns the effect that covers Eff or null otherwise.
   const Effect *covers(const Effect *Eff) const;
   bool covers(const EffectSummary *Sum) const;
-
-  /// \brief Returns true iff insertion was successful.
-  inline bool insert(const Effect *Eff) {
-    if (Eff)
-      return EffectSum.insert(new Effect(*Eff));
-    else
-      return false;
-  }
 
   // contains effect pairs (E1, E2) such that E1 is covered by E2.
   typedef llvm::SmallVector<std::pair<const Effect*, const Effect*> *, 8>
@@ -213,6 +175,7 @@ public:
   /// \brief Returns a string with the effect summary.
   std::string toString() const;
 }; // end class EffectSummary
+
 
 } // end namespace asap
 } // end namespace clang
