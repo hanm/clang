@@ -263,7 +263,8 @@ typedef llvm::SmallVector<const RplElement*,
 
   // Substitution (Rpl)
   /// \brief this[FromEl <- ToRpl]
-  void substitute(const RplElement& FromEl, const Rpl& ToRpl);
+  //void substitute(const RplElement& FromEl, const Rpl& ToRpl);
+  void substitute(const Substitution *S);
 
   /// \brief Append to this RPL the argument Rpl but without its head element.
   void appendRplTail(Rpl* That);
@@ -353,6 +354,17 @@ public:
     }
     return false;
   }
+
+  void take(ParameterVector *&PV) {
+    if (!PV)
+      return;
+
+    BaseClass::take(PV);
+    assert(PV->size()==0);
+    delete PV;
+    PV = 0;
+  }
+
 }; // end class ParameterVector
 
 //////////////////////////////////////////////////////////////////////////
@@ -386,24 +398,15 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
     VectorT::insert(begin(), new Rpl(*R));
   }
   /// \brief Remove and return the first RPL in the vector.
-  Rpl *pop_front() {
-    assert(size() > 0);
-    Rpl *Result = front();
-    VectorT::erase(begin());
-    return Result;
-  }
-  /// \brief Remove and return the first RPL in the vector.
-  inline Rpl *deref() { return pop_front(); }
+  inline std::auto_ptr<Rpl> deref() { return pop_front(); }
+
   /// \brief Same as performing deref() DerefNum times.
-  Rpl *deref(size_t DerefNum) {
-    Rpl *Result = 0;
-    //assert(DerefNum >=0);
+  std::auto_ptr<Rpl> deref(size_t DerefNum) {
+    std::auto_ptr<Rpl> Result;
     assert(DerefNum < size());
-    for (VectorT::iterator I = begin(), E = end();
-         DerefNum > 0 && I != E; ++I, --DerefNum) {
-      if (Result)
-        delete Result;
-      Result = *I;
+    for (VectorT::iterator I = begin();
+         DerefNum > 0 && I != end(); ++I, --DerefNum) {
+      Result.reset(*I);
       I = VectorT::erase(I);
     }
     return Result;
@@ -466,11 +469,11 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
   }
 
   /// \brief Substitution this[FromEl <- ToRpl] (over RPL vector)
-  void substitute(const RplElement &FromEl, const Rpl &ToRpl) {
+  void substitute(const Substitution *S) {
     for(VectorT::const_iterator I = begin(), E = end();
          I != E; ++I) {
       if (*I)
-        (*I)->substitute(FromEl, ToRpl);
+        (*I)->substitute(S);
     }
   }
   /// \brief Print RPL vector
@@ -525,9 +528,10 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
     (A->size() >= B->size()) ? ( LHS = A, RHS = B)
                              : ( LHS = B, RHS = A);
     // fold RHS into LHS
-    VectorT::iterator RHSI = RHS->begin(), RHSE = RHS->end();
-    while (RHSI != RHSE) {
-      LHS->push_back(*RHSI);
+    VectorT::iterator RHSI = RHS->begin();
+    while (RHSI != RHS->end()) {
+      Rpl *R = *RHSI;
+      LHS->VectorT::push_back(R);
       RHSI = RHS->VectorT::erase(RHSI);
     }
     delete RHS;

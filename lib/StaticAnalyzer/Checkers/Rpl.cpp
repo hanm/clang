@@ -13,11 +13,12 @@
 //
 //===----------------------------------------------------------------===//
 
-#include "Rpl.h"
-#include "ASaPUtil.h"
-
-#include "ASaPSymbolTable.h"
 #include "llvm/Support/Casting.h"
+
+#include "Rpl.h"
+#include "ASaPSymbolTable.h"
+#include "ASaPUtil.h"
+#include "Substitution.h"
 
 using namespace llvm;
 using namespace clang::asap;
@@ -164,7 +165,11 @@ bool Rpl::isIncludedIn(const Rpl& That) const {
   return Result;
 }
 
-void Rpl::substitute(const RplElement& FromEl, const Rpl& ToRpl) {
+void Rpl::substitute(const Substitution *S) {
+  if (!S || !S->getFrom() || !S->getTo())
+    return; // Nothing to do.
+  const RplElement &FromEl = *S->getFrom();
+  const Rpl &ToRpl = *S->getTo();
   os << "DEBUG:: before substitution(" << FromEl.getName() << "<-";
   ToRpl.print(os);
   os <<"): ";

@@ -40,13 +40,18 @@ class AnalysisDeclContext;
 class ASTContext;
 class Attr;
 class CXXConstructorDecl;
+class CXXRecordDecl;
 class Decl;
 class Expr;
 class FunctionDecl;
+class ParmVarDecl;
 class Stmt;
+class ValueDecl;
+class VarDecl;
 
 namespace asap {
 
+class AnnotationScheme;
 class ASaPType;
 class Effect;
 class EffectVector;
@@ -64,6 +69,7 @@ class StarRplElement;
 class Substitution;
 class SubstitutionVector;
 class SymbolTable;
+class SymbolTableEntry;
 struct VisitorBundle;
 
 } // End namespace asap.

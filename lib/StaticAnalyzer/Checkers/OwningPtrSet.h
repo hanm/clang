@@ -66,7 +66,7 @@ public:
   }
 
   inline bool insert(const T &E) {
-    return SetT::insert(new T(*E));
+    return SetT::insert(new T(E));
   }
 
   bool erase(T *E) {

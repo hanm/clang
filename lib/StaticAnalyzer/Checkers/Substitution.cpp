@@ -55,24 +55,6 @@ void Substitution::set(const RplElement *FromEl, const Rpl *ToRpl) {
     this->ToRpl = 0;
 }
 
-void Substitution::applyTo(Rpl *R) const {
-  if (R && FromEl && ToRpl) {
-    R->substitute(*FromEl, *ToRpl);
-  }
-}
-
-void Substitution::applyTo(Effect *E) const {
-  if (E && FromEl && ToRpl) {
-    E->substitute(this);
-  }
-}
-
-void Substitution::applyTo(ASaPType *T) const {
-  if (T && FromEl && ToRpl) {
-    T->substitute(this);
-  }
-}
-
 void Substitution::print(llvm::raw_ostream &OS) const {
   OS << "[";
   if (FromEl) {
@@ -107,36 +89,6 @@ buildSubstitutionVector(const ParameterVector *ParV, RplVector *RplVec) {
       Substitution *Sub =
         new Substitution(FromEl, ToRpl);
       push_back(Sub);
-    }
-  }
-}
-
-void SubstitutionVector::applyTo(Rpl *R) const {
-  if (R) {
-    for(VectorT::const_iterator I = begin(), E = end();
-        I != E; ++I) {
-      assert(*I);
-      (*I)->applyTo(R);
-    }
-  }
-}
-
-void SubstitutionVector::applyTo(Effect *Eff) const {
-  if (Eff) {
-    for(VectorT::const_iterator I = begin(), E = end();
-        I != E; ++I) {
-      assert(*I);
-      (*I)->applyTo(Eff);
-    }
-  }
-}
-
-void SubstitutionVector::applyTo(ASaPType *T) const {
-  if (T) {
-    for(VectorT::const_iterator I = begin(), E = end();
-        I != E; ++I) {
-      assert(*I);
-      (*I)->applyTo(T);
     }
   }
 }

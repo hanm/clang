@@ -16,8 +16,11 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_TYPE_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_TYPE_H
 
-#include "ASaPFwdDecl.h"
 #include "clang/AST/Type.h"
+
+#include "ASaPFwdDecl.h"
+#include "ASaPInheritanceMap.h"
+#include "ASaPSymbolTable.h"
 
 namespace clang {
 namespace asap {
@@ -27,6 +30,9 @@ class ASaPType {
 
   /// \brief C++ Qualified Type of ASaPType
   QualType QT;
+  /// \brief this map is owned by the SymbolTableEntry and should be immutable.
+  const InheritanceMapT *InheritanceMap;
+
   /// \brief Region Argument Vector
   RplVector *ArgV;
   /// \brief In RPL (can be null)
@@ -36,13 +42,23 @@ class ASaPType {
   /// \brief Depending on QT, removes the head of ArgV to set InRpl
   void adjust();
   //
-  inline static bool areQTsEqual(const QualType QT1, const QualType QT2) {
+  inline static bool areUnqualQTsEqual(const QualType QT1, const QualType QT2){
     return QT1.getUnqualifiedType().getCanonicalType()
               == QT2.getUnqualifiedType().getCanonicalType();
   }
 
+  inline static bool areQTsEqual(const QualType QT1, const QualType QT2) {
+    return QT1.getCanonicalType() == QT2.getCanonicalType();
+  }
+
+  /// \brief Determine whether the type \p Derived is a C++ class that is
+  /// derived from the type \p Base. (adapted from SemaDeclCXX.cpp)
+  static bool isDerivedFrom(QualType Derived, QualType Base);
+
+
 public:
-  ASaPType(QualType QT, RplVector *ArgV, Rpl *InRpl = 0, bool Simple = false);
+  ASaPType(QualType QT, const InheritanceMapT *InheritanceMap,
+           RplVector *ArgV, Rpl *InRpl = 0, bool Simple = false);
   ASaPType(const ASaPType &T);
   ~ASaPType();
 
@@ -77,11 +93,11 @@ public:
   std::string toString() const;
   /// \brief Returns true when 'this' can be assigned to That
   // Note: That=LHS and this=RHS
-  bool isAssignableTo(const ASaPType &That, bool IsInit = false) const;
+  bool isAssignableTo(const ASaPType &That, SymbolTable &SymT,
+                      ASTContext &Ctx, bool IsInit = false) const;
+  bool implicitCastToBase(QualType BaseQT, SymbolTable &SymT);
   /// \brief  true when 'this' is a subtype (derived type) of 'that'.
-  bool isSubtypeOf(const ASaPType &That) const;
-  /// \brief true when 'this' is a subtype (derived type) of 'that'.
-  bool operator <= (const ASaPType &That) const;
+  bool isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const;
   /// \brief Joins this to That (by modifying this).
   /// Join returns the smallest common supertype (Base Type).
   void join(ASaPType *That);

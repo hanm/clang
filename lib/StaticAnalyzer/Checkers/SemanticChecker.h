@@ -56,8 +56,17 @@ class ASaPSemanticCheckerTraverser :
   bool FatalError;
   bool NextFunctionIsATemplatePattern;
 
+  void addToMap(Decl *D, RplVector *RplVec, QualType QT);
   void addASaPTypeToMap(ValueDecl *D, RplVector *RV, Rpl *InRpl);
   void addASaPBaseTypeToMap(CXXRecordDecl *CXXRD, QualType QT, RplVector *RplVec);
+
+  inline void addASaPTypeToMap(ValueDecl *ValD, ASaPType *T) {
+  assert(!SymT.hasType(ValD));
+  if (T) {
+    bool Result = SymT.setType(ValD, T);
+    assert(Result);
+  }
+}
 
   /// \brief Emit error for redeclared region name within scope.
   void emitRedeclaredRegionName(const Decl *D, const llvm::StringRef &Str);

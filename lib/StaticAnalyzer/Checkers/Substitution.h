@@ -47,9 +47,12 @@ public:
 
   // Apply
   /// \brief Apply substitution to RPL
-  void applyTo(Rpl *R) const;
-  void applyTo(Effect *E) const;
-  void applyTo(ASaPType *T) const;
+  template<typename T>
+  void applyTo(T *X) const {
+    if (X && FromEl && ToRpl) {
+      X->substitute(this);
+    }
+  }
 
   // print
   /// \brief Print Substitution: [From<-To]
@@ -74,11 +77,28 @@ public:
                                               RplVector *RplVec);
 
   // Apply
-  void applyTo(Rpl *R) const;
+  template<typename T>
+  void applyTo(T *X) const {
+    if (X) {
+      for(VectorT::const_iterator I = begin(), E = end();
+          I != E; ++I) {
+        assert(*I);
+        (*I)->applyTo(X);
+      }
+    }
+  }
 
-  void applyTo(Effect *Eff) const;
+  template<typename T>
+  void reverseApplyTo(T *X) const {
+    if (X) {
+      for(VectorT::const_reverse_iterator I = rbegin(), E = rend();
+          I != E; ++I) {
+        assert(*I);
+        (*I)->applyTo(X);
+      }
+    }
+  }
 
-  void applyTo(ASaPType *T) const;
   // Print
   /// \brief Print Substitution vector.
   void print(llvm::raw_ostream &OS) const;

@@ -17,10 +17,12 @@
 /// such information includes ASaPType*, ParamVector, RegionNameSet,
 /// and EffectSummary
 #include "clang/AST/Decl.h"
+#include "clang/AST/DeclCXX.h"
 
-#include "ASaPUtil.h"
+#include "ASaPAnnotationScheme.h"
 #include "ASaPSymbolTable.h"
 #include "ASaPType.h"
+#include "ASaPUtil.h"
 #include "Effect.h"
 #include "Rpl.h"
 #include "Substitution.h"
@@ -111,17 +113,18 @@ isSpecialRplElement(const llvm::StringRef& Str) {
     return false;
 }
 
-
 /// Non-Static Functions
 SymbolTable::SymbolTable() {
   // FIXME: make this static like the other default Regions etc
   ParamRplElement Param("P");
   BuiltinDefaultRegionParameterVec = new ParameterVector(Param);
+  AnnotScheme = new DefaultAnnotationScheme(*this);
   //BuiltinDefaultRegionParameterVec->push_back(Param);
 }
 
 SymbolTable::~SymbolTable() {
   delete BuiltinDefaultRegionParameterVec;
+  delete AnnotScheme;
 
   for(SymbolTableMapT::iterator I = SymTable.begin(), E = SymTable.end();
     I != E; ++I) {
@@ -203,6 +206,12 @@ bool SymbolTable::hasEffectSummary(const Decl* D) const {
   return SymTable.lookup(D)->hasEffectSummary();
 }
 
+bool SymbolTable::hasInheritanceMap(const Decl* D) const {
+  if (!SymTable.lookup(D))
+    return false;
+  return SymTable.lookup(D)->hasInheritanceMap();
+}
+
 const ASaPType *SymbolTable::getType(const Decl* D) const {
   if (!SymTable.lookup(D))
     return 0;
@@ -215,6 +224,29 @@ const ParameterVector *SymbolTable::getParameterVector(const Decl *D) const {
     return 0;
   else
     return SymTable.lookup(D)->getParameterVector();
+}
+
+const InheritanceMapT *SymbolTable::
+getInheritanceMap(const ValueDecl *D) const {
+  const InheritanceMapT *Result = 0;
+  QualType QT = D->getType();
+  // QT might be a pointer or reference, so follow it
+  while (QT->isPointerType() || QT->isReferenceType()) {
+    QT = QT->getPointeeType();
+  }
+  if (const CXXRecordDecl *RecD = QT->getAsCXXRecordDecl()) {
+      assert(hasDecl(RecD) && "Internal error: type missing declaration");
+      Result = getInheritanceMap(RecD);
+  }
+  return Result;
+}
+
+const InheritanceMapT *SymbolTable::
+getInheritanceMap(const CXXRecordDecl *D) const {
+  if (!SymTable.lookup(D))
+    return 0;
+  else
+    return SymTable.lookup(D)->getInheritanceMap();
 }
 
 const SubstitutionVector *SymbolTable::
@@ -273,6 +305,14 @@ bool SymbolTable::setParameterVector(const Decl *D, ParameterVector *PV) {
     SymTable[D]->setParameterVector(PV);
     return true;
   }
+}
+
+bool SymbolTable::addToParameterVector(const Decl *D, ParameterVector *&PV) {
+  if (!SymTable[D])
+    SymTable[D] = new SymbolTableEntry();
+  // invariant: SymTable[D] not null
+  SymTable[D]->addToParameterVector(PV);
+  return true;
 }
 
 bool SymbolTable::setRegionNameSet(const Decl *D, RegionNameSet *RNS) {
@@ -344,11 +384,10 @@ hasRegionOrParameterName(const Decl *D, StringRef Name) const {
   return hasRegionName(D, Name) || hasParameterName(D, Name);
 }
 
-bool SymbolTable::hasBase(const Decl *D, const Decl *Base) const {
+bool SymbolTable::hasBase(const Decl *D, const RecordDecl *Base) const {
   if (!SymTable.lookup(D) || !SymTable.lookup(Base))
     return false;
-  return (SymTable.lookup(D)->
-            getSubVec(SymTable.lookup(Base)) == 0)? false : true;
+  return (SymTable.lookup(D)->getSubVec(Base) == 0)? false : true;
 }
 
 bool SymbolTable::addRegionName(const Decl *D, StringRef Name) {
@@ -369,7 +408,7 @@ bool SymbolTable::addParameterName(const Decl *D, StringRef Name) {
   return true;
 }
 
-bool SymbolTable::addBaseTypeAndSub(const Decl *D, const Decl *Base,
+bool SymbolTable::addBaseTypeAndSub(const Decl *D, const RecordDecl *Base,
                                     SubstitutionVector *&SubV) {
   if (!SubV)
     return true; // Nothing to do here
@@ -382,7 +421,7 @@ bool SymbolTable::addBaseTypeAndSub(const Decl *D, const Decl *Base,
   if (!SymTable.lookup(Base))
     SymTable[Base] = new SymbolTableEntry();
 
-  SymTable[D]->addBaseTypeAndSub(SymTable.lookup(Base), SubV);
+  SymTable[D]->addBaseTypeAndSub(Base, SymTable.lookup(Base), SubV);
   return true;
 }
 
@@ -417,15 +456,45 @@ getInheritanceSubVec(QualType QT) {
   return SubV;
 }
 
+AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
+  if (FieldDecl *FieldD = dyn_cast<FieldDecl>(ValD)) {
+    return AnnotScheme->makeFieldType(FieldD, ParamCount);
+  } else if (ParmVarDecl *ParamD = dyn_cast<ParmVarDecl>(ValD)) {
+    AnnotationSet AnSe = AnnotScheme->makeParamType(ParamD, ParamCount);
+    if (AnSe.ParamVec) {
+      DeclContext *DC = ParamD->getDeclContext();
+      assert(DC->isFunctionOrMethod() && "Internal error: ParmVarDecl found "
+             "outside FunctionDecl Context.");
+      FunctionDecl *FunD = dyn_cast<FunctionDecl>(DC);
+      assert(FunD);
+      addToParameterVector(FunD, AnSe.ParamVec);
+      assert(AnSe.ParamVec == 0);
+    }
+    return AnSe;
+  } else if (ImplicitParamDecl *ImplParamD = dyn_cast<ImplicitParamDecl>(ValD)) {
+    assert(false && "Implement ME! :)");
+  } else if (VarDecl *VarD = dyn_cast<VarDecl>(ValD)) {
+      if (VarD->isStaticLocal() || VarD->isStaticDataMember()
+          || VarD->getDeclContext()->isFileContext()) {
+        // Global
+        return AnnotScheme->makeGlobalType(VarD, ParamCount);
+      } else {
+        // Local
+        return AnnotScheme->makeStackType(VarD, ParamCount);
+      }
+  } else {
+    assert(false && "Internal error: unknown kind of ValueDecl in "
+           "SymbolTable::makeDefaultType");
+  }
+}
 //////////////////////////////////////////////////////////////////////////
 // SymbolTableEntry
 
-SymbolTable::SymbolTableEntry::SymbolTableEntry() :
+SymbolTableEntry::SymbolTableEntry() :
     Typ(0), ParamVec(0), RegnNameSet(0), EffSum(0), InheritanceMap(0),
     ComputedInheritanceSubVec(false), InheritanceSubVec(0) {}
 
-SymbolTable::SymbolTableEntry::~SymbolTableEntry() {
-  // FIXME uncommenting these lines causes some tests to fail
+SymbolTableEntry::~SymbolTableEntry() {
   delete Typ;
   delete ParamVec;
   delete RegnNameSet;
@@ -434,39 +503,55 @@ SymbolTable::SymbolTableEntry::~SymbolTableEntry() {
     for(InheritanceMapT::iterator
           I = InheritanceMap->begin(), E = InheritanceMap->end();
         I != E; ++I) {
-      delete (*I).second;
+      delete (*I).second.second; // Delete the SubstitutionVector
     }
     delete InheritanceMap;
   }
   delete InheritanceSubVec;
 }
 
-const NamedRplElement *SymbolTable::SymbolTableEntry::lookupRegionName(StringRef Name) {
+void SymbolTableEntry::
+addToParameterVector(ParameterVector *&PV) {
+  if (!ParamVec) {
+    ParamVec = PV;
+    PV = 0;
+  } else {
+    ParamVec->take(PV);
+    assert(PV==0);
+  }
+}
+
+const NamedRplElement *SymbolTableEntry::
+lookupRegionName(StringRef Name) {
   if (!RegnNameSet)
     return 0;
   return RegnNameSet->lookup(Name);
 }
 
-const ParamRplElement *SymbolTable::SymbolTableEntry::lookupParameterName(StringRef Name) {
+const ParamRplElement *SymbolTableEntry::
+lookupParameterName(StringRef Name) {
   if (!ParamVec)
     return 0;
   return ParamVec->lookup(Name);
 }
 
-void SymbolTable::SymbolTableEntry::addRegionName(StringRef Name) {
+void SymbolTableEntry::
+addRegionName(StringRef Name) {
   if (!RegnNameSet)
     RegnNameSet = new RegionNameSet();
-  RegnNameSet->insert(new NamedRplElement(Name));
+  RegnNameSet->insert(NamedRplElement(Name));
 }
 
-void SymbolTable::SymbolTableEntry::addParameterName(StringRef Name) {
+void SymbolTableEntry::
+addParameterName(StringRef Name) {
   if (!ParamVec)
     ParamVec = new ParameterVector();
-  ParamVec->push_back(new ParamRplElement(Name));
+  ParamVec->push_back(ParamRplElement(Name));
 }
 
-bool SymbolTable::SymbolTableEntry::
-addBaseTypeAndSub(SymbolTableEntry *Base, SubstitutionVector *&SubV) {
+bool SymbolTableEntry::
+addBaseTypeAndSub(const RecordDecl *BaseRD, SymbolTableEntry *BaseTE,
+                  SubstitutionVector *&SubV) {
   // If we're not adding a substitution then skip it altogether.
   if (!SubV)
     return true;
@@ -474,19 +559,20 @@ addBaseTypeAndSub(SymbolTableEntry *Base, SubstitutionVector *&SubV) {
   if (!InheritanceMap)
     InheritanceMap = new InheritanceMapT();
   // Add to map.
-  (*InheritanceMap)[Base] = SubV;
+  std::pair<SymbolTableEntry *, SubstitutionVector *> p(BaseTE, SubV);
+  (*InheritanceMap)[BaseRD] = p;
   SubV = 0;
   return true;
 }
 
-const SubstitutionVector *SymbolTable::SymbolTableEntry::
-getSubVec(SymbolTableEntry *Base) const {
+const SubstitutionVector * SymbolTableEntry::
+getSubVec(const RecordDecl *Base) const {
   if (!InheritanceMap)
     return 0;
-  return (*InheritanceMap)[Base];
+  return (*InheritanceMap)[Base].second;
 }
 
-void SymbolTable::SymbolTableEntry::
+void SymbolTableEntry::
 computeInheritanceSubVec() {
 
   if (!ComputedInheritanceSubVec
@@ -497,9 +583,9 @@ computeInheritanceSubVec() {
     for(InheritanceMapT::iterator
           I = InheritanceMap->begin(), E = InheritanceMap->end();
         I != E; ++I) {
-      SymbolTableEntry *STE = (*I).first;
+      SymbolTableEntry *STE = (*I).second.first;
       InheritanceSubVec->push_back_vec(STE->getInheritanceSubVec());
-      const SubstitutionVector *SubV = (*I).second;
+      const SubstitutionVector *SubV = (*I).second.second;
       InheritanceSubVec->push_back_vec(SubV);
       // Note: this order is important (i.e., first push_back the
       // base class inheritance substitutions (recursively) then
@@ -512,7 +598,7 @@ computeInheritanceSubVec() {
   ComputedInheritanceSubVec = true;
 }
 
-const SubstitutionVector *SymbolTable::SymbolTableEntry::
+const SubstitutionVector *SymbolTableEntry::
 getInheritanceSubVec() {
   if (!InheritanceMap)
     return 0;

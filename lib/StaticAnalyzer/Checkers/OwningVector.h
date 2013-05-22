@@ -84,6 +84,28 @@ public:
     delete Back;
   }
 
+  /// \brief Remove and return the first RPL in the vector.
+  std::auto_ptr<ElmtTyp> pop_front() {
+    if (VectorT::size() > 0) {
+      ElmtTyp *Result = VectorT::front();
+      VectorT::erase(VectorT::begin());
+      return std::auto_ptr<ElmtTyp>(Result);
+    } else {
+      return std::auto_ptr<ElmtTyp>(0);
+    }
+  }
+
+  void take(OwningVector<ElmtTyp, SIZE> *OwV) {
+    if (!OwV)
+      return; // nothing to take, all done
+
+    while(OwV->VectorT::size() > 0) {
+      std::auto_ptr<ElmtTyp> front = OwV->pop_front();
+      VectorT::push_back(front.get()); // non-cloning push back
+      front.release(); // release without destroying
+    }
+  }
+
 private:
   template<typename in_iter>
   void append(in_iter in_start, in_iter in_end); // NOT IMPLEMENTED

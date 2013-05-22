@@ -154,7 +154,7 @@ typecheck(const ASaPType *LHSType, const ASaPType *RHSType, bool IsInit) {
     return true; // RHS has no region info && Clang has done typechecking
   else { // RHSType != null
     if (LHSType)
-      return RHSType->isAssignableTo(*LHSType, IsInit);
+      return RHSType->isAssignableTo(*LHSType, SymT, Ctx, IsInit);
     else
       return false;
   }
@@ -698,7 +698,7 @@ void TypeBuilderVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
     OS << "\n";
     // simple==true because 'this' is an rvalue (can't have its address taken)
     // so we want to keep InRpl=0
-    Type = new ASaPType(ThisQT, &RV, 0, true);
+    Type = new ASaPType(ThisQT, SymT.getInheritanceMap(RecDecl), &RV, 0, true);
     if (DerefNum == -1)
       Type->addrOf(RefQT);
     else {
@@ -801,12 +801,10 @@ void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
     OS << "DEBUG:: QT = ";
     QT.print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
-    Type = new ASaPType(QT, 0, &LOCALRpl);
+    Type = new ASaPType(QT, 0, 0, &LOCALRpl);
     OS << "DEBUG:: (VisitComparisonOrLogicalOp) Type = " << Type->toString() << "\n";
-    AssignmentCheckerVisitor
-      ACVR(VB, Def, Exp->getRHS());
-    AssignmentCheckerVisitor
-      ACVL(VB, Def, Exp->getLHS());
+    AssignmentCheckerVisitor ACVR(VB, Def, Exp->getRHS());
+    AssignmentCheckerVisitor ACVL(VB, Def, Exp->getLHS());
     OS << "DEBUG:: (VisitComparisonOrLogicalOp) Type = " << Type->toString() << "\n";
   } else if (Exp->isAssignmentOp()) {
     OS << "DEBUG:: >>>>>>>>>>VisitBinOpAssign<<<<<<<<<<<<<<<<<\n";

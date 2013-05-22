@@ -20,10 +20,14 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_SYMBOL_TABLE_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_SYMBOL_TABLE_H
 
-#include "llvm/ADT/DenseMap.h"
+//#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
+
 #include "clang/AST/Type.h"
+
+#include "ASaPAnnotationScheme.h"
 #include "ASaPFwdDecl.h"
+#include "ASaPInheritanceMap.h"
 
 namespace clang {
 namespace asap {
@@ -48,13 +52,11 @@ public:
     ResKin(ReKi), NumArgs(NumA), DeclNotVis(D) {}
 };
 
-
 class SymbolTable {
-  class SymbolTableEntry;
   typedef llvm::DenseMap<const Decl*, SymbolTableEntry*>  SymbolTableMapT;
   // Symbol Table Map
   SymbolTableMapT SymTable;
-
+  AnnotationScheme *AnnotScheme;
   static int Initialized;
 
   /// \brief The implicit region parameter "P" of implicitly boxed types
@@ -95,24 +97,29 @@ public:
   bool hasParameterVector(const Decl *D) const;
   bool hasRegionNameSet(const Decl *D) const;
   bool hasEffectSummary(const Decl *D) const;
+  bool hasInheritanceMap(const Decl *D) const;
 
   /// \brief Returns the ASaP Type for D or null.
   const ASaPType *getType(const Decl *D) const;
   /// \brief Retuns the parameter vector for D or null.
   const ParameterVector *getParameterVector(const Decl *D) const;
 
-  const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;
-
   /// \brief Returns the region names declarations for D or null.
   const RegionNameSet *getRegionNameSet(const Decl *D) const;
   /// \brief Returns the effect summmary for D or null.
   const EffectSummary *getEffectSummary(const Decl *D) const;
+  const InheritanceMapT *getInheritanceMap(const ValueDecl *D) const;
+  const InheritanceMapT *getInheritanceMap(const CXXRecordDecl *D) const;
+  const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;
+
   /// \brief Returns true iff the type for D was not already set.
   bool setType(const Decl* D, ASaPType *T);
 
   bool initParameterVector(const Decl *D);
   /// \brief Returns true iff the parameter vector for D was not already set.
   bool setParameterVector(const Decl *D, ParameterVector *PV);
+  /// \brief Destructively adds parameters to the parameters of the declaration
+  bool addToParameterVector(const Decl *D, ParameterVector *&PV);
   /// \brief Returns true iff the region names for D were not already set.
   bool setRegionNameSet(const Decl *D, RegionNameSet *RNS);
   /// \brief Returns true iff the effect summary for D was not already set.
@@ -134,13 +141,13 @@ public:
   /// \brief Returns true iff D has a declared region-name or parameter Name.
   bool hasRegionOrParameterName(const Decl *D, llvm::StringRef Name) const;
 
-  bool hasBase(const Decl *D, const Decl *Base) const;
+  bool hasBase(const Decl *D, const RecordDecl *Base) const;
   /// \brief Adds a region name to declaration D. Return false if name exists.
   bool addRegionName(const Decl *D, llvm::StringRef Name);
   /// \brief Adds a region parameter to D. Return false if name exists.
   bool addParameterName(const Decl *D, llvm::StringRef Name);
 
-  bool addBaseTypeAndSub(const Decl *D, const Decl *Base,
+  bool addBaseTypeAndSub(const Decl *D, const RecordDecl *Base,
                          SubstitutionVector *&SubV);
 
 
@@ -150,73 +157,71 @@ public:
 
   const SubstitutionVector *getInheritanceSubVec(QualType QT);
 
-private:
-  class SymbolTableEntry {
-    friend class SymbolTable;
-    // Fields
-    ASaPType *Typ;
-    ParameterVector *ParamVec;
-    RegionNameSet *RegnNameSet;
-    EffectSummary *EffSum;
+  AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
 
-    // Instead of Map(Decl -> SubVec) we use the SymbolTableEntry that
-    // corresponds to the Decl so we won't have to store a pointer to
-    // the SymbolTable from the SymbolTableEntries, in order to resolve
-    // the Decls
-    typedef llvm::DenseMap<SymbolTableEntry *, const SubstitutionVector *>
-        InheritanceMapT;
-    InheritanceMapT *InheritanceMap;
-    bool ComputedInheritanceSubVec;
-    SubstitutionVector *InheritanceSubVec;
-
-    // Private Methods
-    void computeInheritanceSubVec();
-
-  public:
-    SymbolTableEntry();
-    ~SymbolTableEntry();
-
-    // Predicates.
-    inline bool hasType() const { return (Typ) ? true : false; }
-    inline bool hasParameterVector() const { return (ParamVec) ? true : false; }
-    inline bool hasRegionNameSet() const { return (RegnNameSet) ? true :false; }
-    inline bool hasEffectSummary() const { return (EffSum) ? true : false; }
-    inline bool hasInheritanceMap() const { return (InheritanceMap) ? true : false; }
-
-    // Getters.
-    inline const ASaPType *getType() const { return Typ; }
-    inline const ParameterVector *getParameterVector() const { return ParamVec; }
-    inline const RegionNameSet *getRegionNameSet() const { return RegnNameSet; }
-    inline const EffectSummary *getEffectSummary() const { return EffSum; }
-    inline const InheritanceMapT *getInheritanceMap() const { return InheritanceMap; }
-
-    // Setters.
-    inline void setType(ASaPType *T) { Typ = T; }
-    inline void setParameterVector(ParameterVector *PV) { ParamVec = PV; }
-    inline void setRegionNameSet(RegionNameSet *RNS) { RegnNameSet = RNS; }
-    inline void setEffectSummary(EffectSummary *ES) { EffSum = ES; }
-    inline void setInheritanceMap(InheritanceMapT *Map) { InheritanceMap = Map; }
-
-    // Lookup.
-    const NamedRplElement *lookupRegionName(llvm::StringRef Name);
-    const ParamRplElement *lookupParameterName(llvm::StringRef Name);
-
-    // Adders.
-    void addRegionName(llvm::StringRef Name);
-    void addParameterName(llvm::StringRef Name);
-    bool addBaseTypeAndSub(SymbolTableEntry *Base,
-                           SubstitutionVector *&SubV);
-
-    const SubstitutionVector *getSubVec(SymbolTableEntry *Base) const;
-
-    const SubstitutionVector *getInheritanceSubVec();
-
-
-  protected:
-    inline EffectSummary *getNonConstEffectSummary() const { return EffSum; }
-
-  }; // End class SymbolTableEntry.
 }; // End class SymbolTable.
+
+class SymbolTableEntry {
+  friend class SymbolTable;
+  // Fields
+  ASaPType *Typ;
+  ParameterVector *ParamVec;
+  RegionNameSet *RegnNameSet;
+  EffectSummary *EffSum;
+
+  InheritanceMapT *InheritanceMap;
+  bool ComputedInheritanceSubVec;
+  SubstitutionVector *InheritanceSubVec;
+
+  // Private Methods
+  void computeInheritanceSubVec();
+
+public:
+  SymbolTableEntry();
+  ~SymbolTableEntry();
+
+  // Predicates.
+  inline bool hasType() const { return (Typ) ? true : false; }
+  inline bool hasParameterVector() const { return (ParamVec) ? true : false; }
+  inline bool hasRegionNameSet() const { return (RegnNameSet) ? true :false; }
+  inline bool hasEffectSummary() const { return (EffSum) ? true : false; }
+  inline bool hasInheritanceMap() const { return (InheritanceMap) ? true : false; }
+
+  // Getters.
+  inline const ASaPType *getType() const { return Typ; }
+  inline const ParameterVector *getParameterVector() const { return ParamVec; }
+  inline const RegionNameSet *getRegionNameSet() const { return RegnNameSet; }
+  inline const EffectSummary *getEffectSummary() const { return EffSum; }
+  inline const InheritanceMapT *getInheritanceMap() const { return InheritanceMap; }
+
+  // Setters.
+  inline void setType(ASaPType *T) { Typ = T; }
+  inline void setParameterVector(ParameterVector *PV) { ParamVec = PV; }
+  void addToParameterVector(ParameterVector *&PV);
+  inline void setRegionNameSet(RegionNameSet *RNS) { RegnNameSet = RNS; }
+  inline void setEffectSummary(EffectSummary *ES) { EffSum = ES; }
+  inline void setInheritanceMap(InheritanceMapT *Map) { InheritanceMap = Map; }
+
+  // Lookup.
+  const NamedRplElement *lookupRegionName(llvm::StringRef Name);
+  const ParamRplElement *lookupParameterName(llvm::StringRef Name);
+
+  // Adders.
+  void addRegionName(llvm::StringRef Name);
+  void addParameterName(llvm::StringRef Name);
+  bool addBaseTypeAndSub(const RecordDecl *BaseRD,
+                         SymbolTableEntry *Base,
+                         SubstitutionVector *&SubV);
+
+  const SubstitutionVector *getSubVec(const RecordDecl *Base) const;
+
+  const SubstitutionVector *getInheritanceSubVec();
+
+
+protected:
+  inline EffectSummary *getNonConstEffectSummary() const { return EffSum; }
+
+}; // End class SymbolTableEntry.
 } // End namespace asap.
 } // End namespace clang.
 

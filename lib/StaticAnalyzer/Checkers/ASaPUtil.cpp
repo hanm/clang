@@ -12,15 +12,15 @@
 // and effect annotations.
 //
 //===----------------------------------------------------------------===//
-#include "ASaPUtil.h"
-#include "ASaPType.h"
+
+#include "llvm/Support/raw_ostream.h"
 
 #include "clang/AST/Attr.h"
-
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 
-#include "llvm/Support/raw_ostream.h"
+#include "ASaPType.h"
+#include "ASaPUtil.h"
 
 namespace clang {
 namespace asap {
@@ -109,7 +109,6 @@ void helperEmitInvalidAssignmentWarning(BugReporter &BR,
           << (LHS ? LHS->toString(Ctx) : "")
           << "] " << BugName << ": ";
   S->printPretty(DescrOS, 0, Ctx.getPrintingPolicy());
-  DescrOS << "]";
 
   StringRef BugStr = DescrOS.str();
 

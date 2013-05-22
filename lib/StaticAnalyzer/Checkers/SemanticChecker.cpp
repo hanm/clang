@@ -17,6 +17,7 @@
 #include "clang/AST/Decl.h"
 #include "llvm/ADT/SmallVector.h"
 
+#include "ASaPAnnotationScheme.h"
 #include "ASaPType.h"
 #include "ASaPSymbolTable.h"
 #include "ASaPUtil.h"
@@ -118,7 +119,7 @@ buildPartialEffectSummary(FunctionDecl *D, EffectSummary &ES) {
                /// undeclared RPL elements).
       for (size_t Idx = 0; Idx < Tmp->size(); ++Idx) {
         const Effect E(EK, Tmp->getRplAt(Idx), *I);
-        bool Success = ES.insert(&E);
+        bool Success = ES.insert(E);
         assert(Success);
       }
     }
@@ -130,7 +131,8 @@ buildPartialEffectSummary(FunctionDecl *D, EffectSummary &ES) {
 void ASaPSemanticCheckerTraverser::
 addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
   assert(!SymT.hasType(ValD));
-  ASaPType *T = new ASaPType(ValD->getType(), RplV, InRpl);
+  const InheritanceMapT *IMap = SymT.getInheritanceMap(ValD);
+  ASaPType *T = new ASaPType(ValD->getType(), IMap, RplV, InRpl);
   OS << "DEBUG:: D->getType() = ";
   ValD->getType().print(OS, Ctx.getPrintingPolicy());
   OS << ", isFunction = " << ValD->getType()->isFunctionType() << "\n";
@@ -140,6 +142,9 @@ addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
   OS << "Debug :: adding type: " << T->toString(Ctx) << " to Decl: ";
   ValD->print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
+  if (IMap) {
+    OS << "DEBUG:: Type has an inheritance map!\n";
+  }
   bool Result = SymT.setType(ValD, T);
   assert(Result);
 }
@@ -450,6 +455,18 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
 }
 
 void ASaPSemanticCheckerTraverser::
+addToMap(Decl *D, RplVector *RplVec, QualType QT) {
+  if (ValueDecl *VD = dyn_cast<ValueDecl>(D)) {
+    addASaPTypeToMap(VD, RplVec, 0);
+  } else if (CXXRecordDecl *CXXRD = dyn_cast<CXXRecordDecl>(D)) {
+    addASaPBaseTypeToMap(CXXRD, QT, RplVec);
+  } else {
+    assert(false && "Called 'checkParamAndArgCounts' with invalid Decl type.");
+  }
+}
+
+
+void ASaPSemanticCheckerTraverser::
 checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
                        const ResultTriplet &ResTriplet,
                        RplVector *RplVec, const Rpl *DefaultInRpl) {
@@ -470,14 +487,20 @@ checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
     // Type is TemplateTypeParam -- Any number of region args
     // could be ok. At least ParamCount are needed though.
     if (ParamCount > ArgCount &&
-      ParamCount > ArgCount + (DefaultInRpl?1:0)) {
+      ParamCount > ArgCount + (DefaultInRpl ? 1 : 0)) {
         emitMissingRegionArgs(D, Att, ParamCount);
     }
     break;
   case RK_OK:
     if (ParamCount > ArgCount &&
       ParamCount > ArgCount + (DefaultInRpl?1:0)) {
-        emitMissingRegionArgs(D, Att, ParamCount);
+        ValueDecl *ValD = dyn_cast<ValueDecl>(D);
+        if (!RplVec && ValD) {
+          AnnotationSet AnSe = SymT.makeDefaultType(ValD, ParamCount);
+          addASaPTypeToMap(ValD, AnSe.T);
+        } else {
+          emitMissingRegionArgs(D, Att, ParamCount);
+        }
     } else if (ParamCount < ArgCount &&
       ParamCount < ArgCount + (DefaultInRpl?1:0)) {
         // Superfluous region args
@@ -653,7 +676,7 @@ void ASaPSemanticCheckerTraverser::buildEffectSummary(FunctionDecl *D,
       emitNoEffectInNonEmptyEffectSummary(D, Attr);
     } else {
       Effect E(Effect::EK_NoEffect, 0, Attr);
-      bool Success = ES.insert(&E);
+      bool Success = ES.insert(E);
       assert(Success);
     }
   }
@@ -719,8 +742,6 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
   for (CXXRecordDecl::base_class_const_iterator
           I = D->bases_begin(), E = D->bases_end();
        I!=E; ++I) {
-    //const CXXBaseSpecifier *BS = *I;
-    //QualType QT = BS->getType();
     ResultTriplet ResTriplet =
       SymT.getRegionParamCount((*I).getType());
     switch(ResTriplet.ResKin) {
@@ -758,6 +779,7 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
     const RegionBaseArgAttr *Att = findBaseArg(D, BaseClassStr);
     if (!Att) {
       emitMissingBaseArgAttribute(D, BaseClassStr);
+      // TODO: add default instead of giving error
     }
   }
 
@@ -1046,14 +1068,12 @@ bool ASaPSemanticCheckerTraverser::VisitVarDecl(VarDecl *D) {
   /// C. Check validity of annotations
   if (Success) {
     // Get context to select default annotation
-    if (D->isStaticLocal() || D->isStaticDataMember()
-        || D->getDeclContext()->isFileContext()) {
-      Rpl Global(*SymbolTable::GLOBAL_RplElmt);
-      checkTypeRegionArgs(D, &Global);
-    } else {
-      Rpl Local(*SymbolTable::LOCAL_RplElmt);
-      checkTypeRegionArgs(D, &Local);
-    }
+    const SpecialRplElement *DefaultEl =
+      (D->isStaticLocal() || D->isStaticDataMember()
+        || D->getDeclContext()->isFileContext()) ? SymbolTable::GLOBAL_RplElmt
+                                                 : SymbolTable::LOCAL_RplElmt;
+    Rpl Default(*DefaultEl);
+    checkTypeRegionArgs(D, &Default);
   }
 
   return true;
