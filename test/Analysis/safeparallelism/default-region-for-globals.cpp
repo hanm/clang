@@ -16,6 +16,20 @@ public:
     ++count; // expected-warning{{effect not covered}}
     global = 100.0;  // expected-warning{{effect not covered}}
     }
+  
+  static int &getCount [[asap::arg("Global")]] () { return count; }
+
 }; 
 
 int C::count = 0;
+
+
+void funk [[asap::writes("Global")]] () 
+  {
+    static int x = 0;
+    ++x; 
+    int &c [[asap::arg("Global")]] = C::getCount();
+    c++; 
+    global = 100.0; 
+  }
+

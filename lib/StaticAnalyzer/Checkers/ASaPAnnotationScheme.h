@@ -42,12 +42,14 @@ public:
   virtual ~AnnotationScheme() {}
 
   // API Methods
+  virtual AnnotationSet makeClassParams(const RecordDecl *D) = 0;
+
   virtual AnnotationSet makeGlobalType(const VarDecl *D, long ArgNum) = 0;
   virtual AnnotationSet makeStackType(const VarDecl *D, long ArgNum) = 0;
-
-  virtual AnnotationSet makeClassParams(const RecordDecl *D) = 0;
   virtual AnnotationSet makeFieldType(const FieldDecl *D, long ArgNum) = 0;
   virtual AnnotationSet makeParamType(const ParmVarDecl *D, long ArgNum) = 0;
+  virtual AnnotationSet makeReturnType(const FunctionDecl *D, long ArgNum) = 0;
+
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D) = 0;
 
 protected:
@@ -64,12 +66,14 @@ public:
   virtual ~DefaultAnnotationScheme() {}
 
   // Methods
+  virtual AnnotationSet makeClassParams(const RecordDecl *D);
+
   virtual AnnotationSet makeGlobalType(const VarDecl *D, long ArgNum);
   virtual AnnotationSet makeStackType(const VarDecl *D, long ArgNum);
-
-  virtual AnnotationSet makeClassParams(const RecordDecl *D);
   virtual AnnotationSet makeFieldType(const FieldDecl *D, long ArgNum);
   virtual AnnotationSet makeParamType(const ParmVarDecl *D, long ArgNum);
+  virtual AnnotationSet makeReturnType(const FunctionDecl *D, long ArgNum);
+
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
 
 }; // end class DefaultAnnotationScheme
@@ -82,12 +86,14 @@ public:
   virtual ~CheckGlobalsAnnotationScheme() {}
 
   // Methods
+  virtual AnnotationSet makeClassParams(const RecordDecl *D);
+
   virtual AnnotationSet makeGlobalType(const VarDecl *D, long ArgNum);
   virtual AnnotationSet makeStackType(const VarDecl *D, long ArgNum);
-
-  virtual AnnotationSet makeClassParams(const RecordDecl *D);
   virtual AnnotationSet makeFieldType(const FieldDecl *D, long ArgNum);
   virtual AnnotationSet makeParamType(const ParmVarDecl *D, long ArgNum);
+  virtual AnnotationSet makeReturnType(const FunctionDecl *D, long ArgNum);
+
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
 
 }; // end class CheckGlobalsAnnotationScheme

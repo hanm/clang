@@ -55,6 +55,14 @@ helperMakeLocalType(const ValueDecl *D, long ArgNum) {
 
 ///////////////////////////////////////////////////////////////////////////////
 AnnotationSet DefaultAnnotationScheme::
+makeClassParams(const RecordDecl *D) {
+  AnnotationSet Result;
+  ParamRplElement Param("P");
+  Result.ParamVec = new ParameterVector(Param);
+  return Result;
+}
+
+AnnotationSet DefaultAnnotationScheme::
 makeGlobalType(const VarDecl *D, long ArgNum) {
   return helperMakeGlobalType(D, ArgNum);
 }
@@ -62,14 +70,6 @@ makeGlobalType(const VarDecl *D, long ArgNum) {
 AnnotationSet DefaultAnnotationScheme::
 makeStackType(const VarDecl *D, long ArgNum) {
   return helperMakeLocalType(D, ArgNum);
-}
-
-AnnotationSet DefaultAnnotationScheme::
-makeClassParams(const RecordDecl *D) {
-  AnnotationSet Result;
-  ParamRplElement Param("P");
-  Result.ParamVec = new ParameterVector(Param);
-  return Result;
 }
 
 AnnotationSet DefaultAnnotationScheme::
@@ -110,6 +110,12 @@ makeParamType(const ParmVarDecl *D, long ArgNum) {
 }
 
 AnnotationSet DefaultAnnotationScheme::
+makeReturnType(const FunctionDecl *D, long ArgNum) {
+  assert(false && "Implement Me!");
+  return helperMakeLocalType(D, ArgNum);
+}
+
+AnnotationSet DefaultAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
   AnnotationSet Result;
   assert(false && "Implement Me!");
@@ -117,6 +123,13 @@ makeEffectSummary(const FunctionDecl *D) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+
+AnnotationSet CheckGlobalsAnnotationScheme::
+makeClassParams(const RecordDecl *D) {
+  AnnotationSet Result;
+  Result.ParamVec = 0;
+  return Result;
+}
 
 AnnotationSet CheckGlobalsAnnotationScheme::
 makeGlobalType(const VarDecl *D, long ArgNum) {
@@ -129,19 +142,17 @@ makeStackType(const VarDecl *D, long ArgNum) {
 }
 
 AnnotationSet CheckGlobalsAnnotationScheme::
-makeClassParams(const RecordDecl *D) {
-  AnnotationSet Result;
-  Result.ParamVec = 0;
-  return Result;
-}
-
-AnnotationSet CheckGlobalsAnnotationScheme::
 makeFieldType(const FieldDecl *D, long ArgNum) {
   return helperMakeLocalType(D, ArgNum);
 }
 
 AnnotationSet CheckGlobalsAnnotationScheme::
 makeParamType(const ParmVarDecl *D, long ArgNum) {
+  return helperMakeLocalType(D, ArgNum);
+}
+
+AnnotationSet CheckGlobalsAnnotationScheme::
+makeReturnType(const FunctionDecl *D, long ArgNum) {
   return helperMakeLocalType(D, ArgNum);
 }
 

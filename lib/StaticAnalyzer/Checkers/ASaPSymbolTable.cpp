@@ -459,6 +459,17 @@ getInheritanceSubVec(QualType QT) {
 AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
   if (FieldDecl *FieldD = dyn_cast<FieldDecl>(ValD)) {
     return AnnotScheme->makeFieldType(FieldD, ParamCount);
+  } else if (ImplicitParamDecl *ImplParamD = dyn_cast<ImplicitParamDecl>(ValD)) {
+    assert(false && "Implement ME! :)");
+  } else if (VarDecl *VarD = dyn_cast<VarDecl>(ValD)) {
+      if (VarD->isStaticLocal() || VarD->isStaticDataMember()
+          || VarD->getDeclContext()->isFileContext()) {
+        // Global
+        return AnnotScheme->makeGlobalType(VarD, ParamCount);
+      } else {
+        // Local
+        return AnnotScheme->makeStackType(VarD, ParamCount);
+      }
   } else if (ParmVarDecl *ParamD = dyn_cast<ParmVarDecl>(ValD)) {
     AnnotationSet AnSe = AnnotScheme->makeParamType(ParamD, ParamCount);
     if (AnSe.ParamVec) {
@@ -471,18 +482,20 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
       assert(AnSe.ParamVec == 0);
     }
     return AnSe;
-  } else if (ImplicitParamDecl *ImplParamD = dyn_cast<ImplicitParamDecl>(ValD)) {
-    assert(false && "Implement ME! :)");
-  } else if (VarDecl *VarD = dyn_cast<VarDecl>(ValD)) {
-      if (VarD->isStaticLocal() || VarD->isStaticDataMember()
-          || VarD->getDeclContext()->isFileContext()) {
-        // Global
-        return AnnotScheme->makeGlobalType(VarD, ParamCount);
-      } else {
-        // Local
-        return AnnotScheme->makeStackType(VarD, ParamCount);
-      }
+  } else if (FunctionDecl *FunD = dyn_cast<FunctionDecl>(ValD)) {
+    // FIXME: Merge this branch with if ParamVarDecl
+    AnnotationSet AnSe = AnnotScheme->makeReturnType(FunD, ParamCount);
+    if (AnSe.ParamVec) {
+      addToParameterVector(FunD, AnSe.ParamVec);
+      assert(AnSe.ParamVec == 0);
+    }
+    return AnSe;
+
   } else {
+    OSv2 << "DEBUG:: ";
+    //ValD->print(OSv2);
+    ValD->dump(OSv2);
+    OSv2 << "\n";
     assert(false && "Internal error: unknown kind of ValueDecl in "
            "SymbolTable::makeDefaultType");
   }
