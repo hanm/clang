@@ -154,8 +154,10 @@ public:
   #define EFFECT_SUMMARY_SIZE 8
 #endif
 class EffectSummary : public OwningPtrSet<const Effect, EFFECT_SUMMARY_SIZE> {
-private:
 public:
+  typedef OwningPtrSet<const Effect, EFFECT_SUMMARY_SIZE> BaseClass;
+  EffectSummary() : BaseClass() {}
+  EffectSummary(Effect &E) : BaseClass(E) {}
 
   /// \brief Returns the effect that covers Eff or null otherwise.
   const Effect *covers(const Effect *Eff) const;

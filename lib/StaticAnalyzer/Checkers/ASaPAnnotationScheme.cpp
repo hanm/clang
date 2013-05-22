@@ -19,17 +19,17 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 
-#include "ASaPType.h"
-#include "Rpl.h"
-
 #include "ASaPAnnotationScheme.h"
 #include "ASaPSymbolTable.h"
+#include "ASaPType.h"
+#include "Effect.h"
+#include "Rpl.h"
 
 namespace clang {
 namespace asap {
 
-AnnotationSet DefaultAnnotationScheme::
-makeGlobalType(const VarDecl *D, long ArgNum) {
+inline AnnotationSet AnnotationScheme::
+helperMakeGlobalType(const VarDecl *D, long ArgNum) {
   AnnotationSet Result;
 
   RplVector RplV;
@@ -40,8 +40,8 @@ makeGlobalType(const VarDecl *D, long ArgNum) {
   return Result;
 }
 
-AnnotationSet DefaultAnnotationScheme::
-makeStackType(const VarDecl *D, long ArgNum) {
+inline AnnotationSet AnnotationScheme::
+helperMakeLocalType(const ValueDecl *D, long ArgNum) {
   AnnotationSet Result;
 
   RplVector RplV;
@@ -50,6 +50,18 @@ makeStackType(const VarDecl *D, long ArgNum) {
   }
   Result.T = new ASaPType(D->getType(), SymT.getInheritanceMap(D), &RplV);
   return Result;
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
+AnnotationSet DefaultAnnotationScheme::
+makeGlobalType(const VarDecl *D, long ArgNum) {
+  return helperMakeGlobalType(D, ArgNum);
+}
+
+AnnotationSet DefaultAnnotationScheme::
+makeStackType(const VarDecl *D, long ArgNum) {
+  return helperMakeLocalType(D, ArgNum);
 }
 
 AnnotationSet DefaultAnnotationScheme::
@@ -101,6 +113,45 @@ AnnotationSet DefaultAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
   AnnotationSet Result;
   assert(false && "Implement Me!");
+  return Result;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+AnnotationSet CheckGlobalsAnnotationScheme::
+makeGlobalType(const VarDecl *D, long ArgNum) {
+  return helperMakeGlobalType(D, ArgNum);
+}
+
+AnnotationSet CheckGlobalsAnnotationScheme::
+makeStackType(const VarDecl *D, long ArgNum) {
+  return helperMakeLocalType(D, ArgNum);
+}
+
+AnnotationSet CheckGlobalsAnnotationScheme::
+makeClassParams(const RecordDecl *D) {
+  AnnotationSet Result;
+  Result.ParamVec = 0;
+  return Result;
+}
+
+AnnotationSet CheckGlobalsAnnotationScheme::
+makeFieldType(const FieldDecl *D, long ArgNum) {
+  return helperMakeLocalType(D, ArgNum);
+}
+
+AnnotationSet CheckGlobalsAnnotationScheme::
+makeParamType(const ParmVarDecl *D, long ArgNum) {
+  return helperMakeLocalType(D, ArgNum);
+}
+
+AnnotationSet CheckGlobalsAnnotationScheme::
+makeEffectSummary(const FunctionDecl *D) {
+  AnnotationSet Result;
+  // Writes Local
+  Rpl LocalRpl(*SymbolTable::GLOBAL_RplElmt);
+  Effect WritesLocal(Effect::EK_WritesEffect, &LocalRpl);
+  Result.EffSum = new EffectSummary(WritesLocal);
   return Result;
 }
 

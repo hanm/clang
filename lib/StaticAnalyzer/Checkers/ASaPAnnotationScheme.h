@@ -24,10 +24,11 @@ namespace asap {
 
 struct AnnotationSet {
   ASaPType *T;
-  //RplVector *RplVec;
   RegionNameSet *RegNameSet;
   ParameterVector *ParamVec;
   EffectSummary *EffSum;
+
+  AnnotationSet() : T(0), RegNameSet(0), ParamVec(0), EffSum(0) {}
 };
 
 // Abstract Base class
@@ -49,6 +50,10 @@ public:
   virtual AnnotationSet makeParamType(const ParmVarDecl *D, long ArgNum) = 0;
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D) = 0;
 
+protected:
+  AnnotationSet helperMakeGlobalType(const VarDecl *D, long ArgNum);
+  AnnotationSet helperMakeLocalType(const ValueDecl *D, long ArgNum);
+
 };
 
 class DefaultAnnotationScheme : public AnnotationScheme {
@@ -68,6 +73,24 @@ public:
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
 
 }; // end class DefaultAnnotationScheme
+
+class CheckGlobalsAnnotationScheme : public AnnotationScheme {
+public:
+  // Constructor
+  CheckGlobalsAnnotationScheme(SymbolTable &SymT) :AnnotationScheme(SymT) {}
+  // Destructor
+  virtual ~CheckGlobalsAnnotationScheme() {}
+
+  // Methods
+  virtual AnnotationSet makeGlobalType(const VarDecl *D, long ArgNum);
+  virtual AnnotationSet makeStackType(const VarDecl *D, long ArgNum);
+
+  virtual AnnotationSet makeClassParams(const RecordDecl *D);
+  virtual AnnotationSet makeFieldType(const FieldDecl *D, long ArgNum);
+  virtual AnnotationSet makeParamType(const ParmVarDecl *D, long ArgNum);
+  virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
+
+}; // end class CheckGlobalsAnnotationScheme
 
 } // end namespace asap
 } // end namespace clang

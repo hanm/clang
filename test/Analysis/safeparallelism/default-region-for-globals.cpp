@@ -6,8 +6,8 @@ int global = 0;
 
 class [[asap::param("class")]] C  {
   double x [[asap::arg("class")]];
-public:
   static int count;
+public:
  
   void func () const
     {

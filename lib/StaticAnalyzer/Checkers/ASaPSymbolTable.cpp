@@ -118,8 +118,8 @@ SymbolTable::SymbolTable() {
   // FIXME: make this static like the other default Regions etc
   ParamRplElement Param("P");
   BuiltinDefaultRegionParameterVec = new ParameterVector(Param);
-  AnnotScheme = new DefaultAnnotationScheme(*this);
-  //BuiltinDefaultRegionParameterVec->push_back(Param);
+  //AnnotScheme = new DefaultAnnotationScheme(*this);
+  AnnotScheme = new CheckGlobalsAnnotationScheme(*this);
 }
 
 SymbolTable::~SymbolTable() {

@@ -64,7 +64,7 @@ public:
     }
     void set_v2 [[asap::writes("ClassC:*")]] (int _a1, int _a2, int _b, int _c) {
       B::A1::setA(_a1);
-      B::A2::setA( _a2);
+      B::A2::setA(_a2);
       B::setB(_b);
       setC(_c);
     }
