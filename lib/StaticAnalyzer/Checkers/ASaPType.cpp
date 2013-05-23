@@ -106,8 +106,6 @@ ASaPType::~ASaPType() {
   delete ArgV;
 }
 
-bool ASaPType::isFunctionType() const { return QT->isFunctionType(); }
-
 int ASaPType::getArgVSize() const {
   if (ArgV)
     return ArgV->size();

@@ -63,7 +63,10 @@ public:
   ~ASaPType();
 
   /// \brief Returns true iff this is of FunctionType.
-  bool isFunctionType() const;
+  inline bool isFunctionType() const { return QT->isFunctionType(); }
+  /// \brief Returns true iff this is a Reference.
+  inline bool isReferenceType() const { return QT->isReferenceType(); }
+
   /// \brief Return the size of the ArgsVector.
   int getArgVSize() const;
   /// \brief Return the In RPL which can be null.

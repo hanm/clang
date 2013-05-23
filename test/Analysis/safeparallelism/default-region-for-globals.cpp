@@ -18,18 +18,29 @@ public:
     }
   
   static int &getCount [[asap::arg("Global")]] () { return count; }
+  static int *getCountPtr [[asap::arg("Global")]] () { return &count; }
 
 }; 
 
 int C::count = 0;
 
 
-void funk [[asap::writes("Global")]] () 
+void funk () 
   {
-    static int x = 0;
-    ++x; 
-    int &c [[asap::arg("Global")]] = C::getCount();
-    c++; 
-    global = 100.0; 
+    static int x = 0; // not expecting a warning here (initialization)
+
+    ++x; // expected-warning{{effect not covered}}
+
+    int &cR [[asap::arg("Global")]] = C::getCount(); // expected-warning{{effect not covered}}
+
+    cR++; // expected-warning{{effect not covered}}
+    cR += 1; // expected-warning{{effect not covered}}
+    cR = cR + 1; // expected-warning{{effect not covered}} expected-warning{{effect not covered}}
+
+    int *cp [[asap::arg("Global")]] = C::getCountPtr();
+
+    (*cp)++; // expected-warning{{effect not covered}}
+    global = 100.0; // expected-warning{{effect not covered}}
+    ++x; // expected-warning{{effect not covered}}
   }
 

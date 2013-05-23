@@ -78,13 +78,14 @@ int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
   assert(D);
   const ASaPType *T0 = SymT.getType(D);
   if (!T0) // e.g., method returning void
-    return 0;
+    return 0; // Nothing to do here.
   ASaPType *T1 = new ASaPType(*T0);
   if (T1->isFunctionType())
     T1 = T1->getReturnType();
   if (!T1)
     return 0;
-
+  if (T1->isReferenceType())
+    T1->deref();
   int EffectNr = 0;
 
   OS << "DEBUG:: Type used for collecting effects = "

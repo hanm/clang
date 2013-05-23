@@ -490,7 +490,6 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
       assert(AnSe.ParamVec == 0);
     }
     return AnSe;
-
   } else {
     OSv2 << "DEBUG:: ";
     //ValD->print(OSv2);
