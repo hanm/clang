@@ -25,8 +25,8 @@
 namespace clang {
 namespace asap {
 
-#define ASAP_DEBUG
-#define ASAP_DEBUG_VERBOSE2
+//#define ASAP_DEBUG
+//#define ASAP_DEBUG_VERBOSE2
 #ifdef ASAP_DEBUG
   static raw_ostream& os = llvm::errs();
 #else
