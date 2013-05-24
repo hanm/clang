@@ -7,14 +7,18 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This files defines the Rpl and RplVector classes used by the Safe
+// This file defines the Rpl and RplVector classes used by the Safe
 // Parallelism checker, which tries to prove the safety of parallelism
 // given region and effect annotations.
 //
 //===----------------------------------------------------------------===//
 
-#include "Rpl.h"
 #include "llvm/Support/Casting.h"
+
+#include "Rpl.h"
+#include "ASaPSymbolTable.h"
+#include "ASaPUtil.h"
+#include "Substitution.h"
 
 using namespace llvm;
 using namespace clang::asap;
@@ -40,44 +44,26 @@ std::pair<StringRef, StringRef> clang::asap::Rpl::splitRpl(StringRef &String) {
 
 namespace clang {
 namespace asap {
+/// Static
+const StringRef Rpl::RPL_LIST_SEPARATOR = ",";
+const StringRef Rpl::RPL_NAME_SPEC = "::";
 
-const StarRplElement *STARRplElmt = new StarRplElement();
-const SpecialRplElement *ROOTRplElmt = new SpecialRplElement("Root");
-const SpecialRplElement *LOCALRplElmt = new SpecialRplElement("Local");
-Effect *WritesLocal = 0;
 
-const RplElement* getSpecialRplElement(const llvm::StringRef& s) {
-  if (!s.compare(STARRplElmt->getName()))
-    return STARRplElmt;
-  else if (!s.compare(ROOTRplElmt->getName()))
-    return ROOTRplElmt;
-  else if (!s.compare(LOCALRplElmt->getName()))
-    return LOCALRplElmt;
-  else
-    return 0;
-}
-
-bool isSpecialRplElement(const llvm::StringRef& s) {
-  if (!s.compare("*"))
-    return true;
-  else
-    return false;
-}
-
-bool isValidRegionName(const llvm::StringRef& s) {
+bool Rpl::isValidRegionName(const llvm::StringRef& Str) {
   // false if it is one of the Special Rpl Elements
   // => it is not allowed to redeclare them
-  if (isSpecialRplElement(s)) return false;
+  if (SymbolTable::isSpecialRplElement(Str))
+    return false;
 
   // must start with [_a-zA-Z]
-  const char c = s.front();
+  const char c = Str.front();
   if (c != '_' &&
     !( c >= 'a' && c <= 'z') &&
     !( c >= 'A' && c <= 'Z'))
     return false;
   // all remaining characters must be in [_a-zA-Z0-9]
-  for (size_t i=0; i < s.size(); i++) {
-    const char c = s[i];
+  for (size_t i=0; i < Str.size(); i++) {
+    const char c = Str[i];
     if (c != '_' &&
       !( c >= 'a' && c <= 'z') &&
       !( c >= 'A' && c <= 'Z') &&
@@ -88,6 +74,49 @@ bool isValidRegionName(const llvm::StringRef& s) {
 }
 } // End namespace asap.
 } // End namespace clang.
+
+    bool Rpl::RplRef::isUnder(RplRef& RHS) {
+      OSv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
+          << this->toString() << ", " << RHS.toString() << ")\n";
+      /// R <= Root
+      if (RHS.isEmpty())
+        return true;
+      if (isEmpty()) /// and RHS is not Empty
+        return false;
+      /// R <= R' <== R c= R'
+      if (isIncludedIn(RHS)) return true;
+      /// R:* <= R' <== R <= R'
+      if (getLastElement() == SymbolTable::STAR_RplElmt)
+        return stripLast().isUnder(RHS);
+      /// R:r <= R' <==  R <= R'
+      /// R:[i] <= R' <==  R <= R'
+      return stripLast().isUnder(RHS);
+      // TODO z-regions
+    }
+
+    bool Rpl::RplRef::isIncludedIn(RplRef& RHS) {
+      OSv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef]("
+          << this->toString() << ", " << RHS.toString() << ")\n";
+      if (RHS.isEmpty()) {
+        /// Root c= Root
+        if (isEmpty()) return true;
+        /// RPL c=? Root and RPL!=Root ==> not included
+        else /*!isEmpty()*/ return false;
+      } else { /// RHS is not empty
+        /// R c= R':* <==  R <= R'
+        if (RHS.getLastElement() == SymbolTable::STAR_RplElmt) {
+          OSv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
+          return isUnder(RHS.stripLast());
+        }
+        ///   R:r c= R':r    <==  R <= R'
+        /// R:[i] c= R':[i]  <==  R <= R'
+        if (!isEmpty()) {
+          if ( *getLastElement() == *RHS.getLastElement() )
+            return stripLast().isIncludedIn(RHS.stripLast());
+        }
+        return false;
+      }
+    }
 
 void Rpl::print(raw_ostream &OS) const {
   RplElementVectorTy::const_iterator I = RplElements.begin();
@@ -136,7 +165,11 @@ bool Rpl::isIncludedIn(const Rpl& That) const {
   return Result;
 }
 
-void Rpl::substitute(const RplElement& FromEl, const Rpl& ToRpl) {
+void Rpl::substitute(const Substitution *S) {
+  if (!S || !S->getFrom() || !S->getTo())
+    return; // Nothing to do.
+  const RplElement &FromEl = *S->getFrom();
+  const Rpl &ToRpl = *S->getTo();
   os << "DEBUG:: before substitution(" << FromEl.getName() << "<-";
   ToRpl.print(os);
   os <<"): ";
@@ -196,7 +229,7 @@ void Rpl::join(Rpl* That) {
   if (ThisI != ThisE) {
     // put a star in the middle and join from the right
     assert(ThatI != ThatE);
-    Result.appendElement(STARRplElmt);
+    Result.appendElement(SymbolTable::STAR_RplElmt);
     Result.FullySpecified = false;
     // count how many elements from the right we will need to append
     RplElementVectorTy::const_reverse_iterator

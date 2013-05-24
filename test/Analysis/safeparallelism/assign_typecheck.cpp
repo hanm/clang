@@ -59,7 +59,7 @@ public:
     next = c;
   }
 
-  void assignments () {
+  void assignments [[asap::writes("Links")]] () {
     float local_1 = 3,
           *local_p0 [[asap::arg("Local")]] = p,  // expected-warning{{invalid initialization}}
           local_2,
@@ -74,7 +74,7 @@ public:
 
 }; // end class C
 
-int main() {
+int main [[asap::writes("C::Links")]] () {
   Point p;
   C c0, c1 [[asap::arg("Local:C::Next")]];
   c0.setNext(&c1);

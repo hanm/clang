@@ -2744,6 +2744,10 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
     return true;
 
   QualType ExprTy = E->getType();
+  while (const TypeOfExprType *TET = dyn_cast<TypeOfExprType>(ExprTy)) {
+    ExprTy = TET->getUnderlyingExpr()->getType();
+  }
+
   if (AT.matchesType(S.Context, ExprTy))
     return true;
 
@@ -2803,7 +2807,9 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
   // casts to primitive types that are known to be large enough.
   bool ShouldNotPrintDirectly = false;
   if (S.Context.getTargetInfo().getTriple().isOSDarwin()) {
-    if (const TypedefType *UserTy = IntendedTy->getAs<TypedefType>()) {
+    // Use a 'while' to peel off layers of typedefs.
+    QualType TyTy = IntendedTy;
+    while (const TypedefType *UserTy = TyTy->getAs<TypedefType>()) {
       StringRef Name = UserTy->getDecl()->getName();
       QualType CastTy = llvm::StringSwitch<QualType>(Name)
         .Case("NSInteger", S.Context.LongTy)
@@ -2815,7 +2821,9 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
       if (!CastTy.isNull()) {
         ShouldNotPrintDirectly = true;
         IntendedTy = CastTy;
+        break;
       }
+      TyTy = UserTy->desugar();
     }
   }
 
@@ -4495,9 +4503,22 @@ static void DiagnoseOutOfRangeComparison(Sema &S, BinaryOperator *E,
     else // op == BO_GT || op == BO_GE
       IsTrue = PositiveConstant;
   }
-  SmallString<16> PrettySourceValue(Value.toString(10));
+
+  // If this is a comparison to an enum constant, include that
+  // constant in the diagnostic.
+  const EnumConstantDecl *ED = 0;
+  if (const DeclRefExpr *DR = dyn_cast<DeclRefExpr>(Constant))
+    ED = dyn_cast<EnumConstantDecl>(DR->getDecl());
+
+  SmallString<64> PrettySourceValue;
+  llvm::raw_svector_ostream OS(PrettySourceValue);
+  if (ED)
+    OS << '\'' << *ED << "' (" << Value << ")";
+  else
+    OS << Value;
+
   S.Diag(E->getOperatorLoc(), diag::warn_out_of_range_compare)
-      << PrettySourceValue << OtherT << IsTrue
+      << OS.str() << OtherT << IsTrue
       << E->getLHS()->getSourceRange() << E->getRHS()->getSourceRange();
 }
 
@@ -5186,18 +5207,7 @@ void Sema::CheckImplicitConversions(Expr *E, SourceLocation CC) {
 /// Diagnose when expression is an integer constant expression and its evaluation
 /// results in integer overflow
 void Sema::CheckForIntOverflow (Expr *E) {
-  if (const BinaryOperator *BExpr = dyn_cast<BinaryOperator>(E->IgnoreParens())) {
-    unsigned Opc = BExpr->getOpcode();
-    switch (Opc) {
-      case BO_Add:
-      case BO_Sub:
-      case BO_Mul:
-      case BO_Div:
-      case BO_Rem:
-        break;
-      default:
-        return;
-    }
+  if (isa<BinaryOperator>(E->IgnoreParens())) {
     llvm::SmallVector<PartialDiagnosticAt, 4> Diags;
     E->EvaluateForOverflow(Context, &Diags);
   }

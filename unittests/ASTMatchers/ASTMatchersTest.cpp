@@ -337,14 +337,22 @@ TEST(DeclarationMatcher, hasDeclContext) {
       "    class D {};"
       "  }"
       "}",
-      recordDecl(hasDeclContext(namedDecl(hasName("M"))))));
+      recordDecl(hasDeclContext(namespaceDecl(hasName("M"))))));
   EXPECT_TRUE(notMatches(
       "namespace N {"
       "  namespace M {"
       "    class D {};"
       "  }"
       "}",
-      recordDecl(hasDeclContext(namedDecl(hasName("N"))))));
+      recordDecl(hasDeclContext(namespaceDecl(hasName("N"))))));
+
+  EXPECT_TRUE(matches("namespace {"
+                      "  namespace M {"
+                      "    class D {};"
+                      "  }"
+                      "}",
+                      recordDecl(hasDeclContext(namespaceDecl(
+                          hasName("M"), hasDeclContext(namespaceDecl()))))));
 }
 
 TEST(ClassTemplate, DoesNotMatchClass) {
@@ -1356,6 +1364,17 @@ TEST(QualType, hasCanonicalType) {
               varDecl(hasType(qualType(hasCanonicalType(referenceType()))))));
 }
 
+TEST(QualType, hasLocalQualifiers) {
+  EXPECT_TRUE(notMatches("typedef const int const_int; const_int i = 1;",
+                         varDecl(hasType(hasLocalQualifiers()))));
+  EXPECT_TRUE(matches("int *const j = nullptr;",
+                      varDecl(hasType(hasLocalQualifiers()))));
+  EXPECT_TRUE(matches("int *volatile k;",
+                      varDecl(hasType(hasLocalQualifiers()))));
+  EXPECT_TRUE(notMatches("int m;",
+                         varDecl(hasType(hasLocalQualifiers()))));
+}
+
 TEST(HasParameter, CallsInnerMatcher) {
   EXPECT_TRUE(matches("class X { void x(int) {} };",
       methodDecl(hasParameter(0, varDecl()))));
@@ -1479,6 +1498,27 @@ TEST(Matcher, MatchesAccessSpecDecls) {
       notMatches("class C { public: int i; };", accessSpecDecl(isPrivate())));
 
   EXPECT_TRUE(notMatches("class C { int i; };", accessSpecDecl()));
+}
+
+TEST(Matcher, MatchesVirtualMethod) {
+  EXPECT_TRUE(matches("class X { virtual int f(); };",
+      methodDecl(isVirtual(), hasName("::X::f"))));
+  EXPECT_TRUE(notMatches("class X { int f(); };",
+      methodDecl(isVirtual())));
+}
+
+TEST(Matcher, MatchesOverridingMethod) {
+  EXPECT_TRUE(matches("class X { virtual int f(); }; "
+                      "class Y : public X { int f(); };",
+       methodDecl(isOverride(), hasName("::Y::f"))));
+  EXPECT_TRUE(notMatches("class X { virtual int f(); }; "
+                        "class Y : public X { int f(); };",
+       methodDecl(isOverride(), hasName("::X::f"))));
+  EXPECT_TRUE(notMatches("class X { int f(); }; "
+                         "class Y : public X { int f(); };",
+       methodDecl(isOverride())));
+  EXPECT_TRUE(notMatches("class X { int f(); int f(int); }; ",
+       methodDecl(isOverride())));
 }
 
 TEST(Matcher, ConstructorCall) {
@@ -3385,6 +3425,19 @@ TEST(TypeMatching, MatchesAutoTypes) {
 TEST(TypeMatching, MatchesFunctionTypes) {
   EXPECT_TRUE(matches("int (*f)(int);", functionType()));
   EXPECT_TRUE(matches("void f(int i) {}", functionType()));
+}
+
+TEST(TypeMatching, MatchesParenType) {
+  EXPECT_TRUE(
+      matches("int (*array)[4];", varDecl(hasType(pointsTo(parenType())))));
+  EXPECT_TRUE(notMatches("int *array[4];", varDecl(hasType(parenType()))));
+
+  EXPECT_TRUE(matches(
+      "int (*ptr_to_func)(int);",
+      varDecl(hasType(pointsTo(parenType(innerType(functionType())))))));
+  EXPECT_TRUE(notMatches(
+      "int (*ptr_to_array)[4];",
+      varDecl(hasType(pointsTo(parenType(innerType(functionType())))))));
 }
 
 TEST(TypeMatching, PointerTypes) {

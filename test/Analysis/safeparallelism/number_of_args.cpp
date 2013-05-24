@@ -57,14 +57,13 @@ class
   [[asap::region("R, L, Links")]]
     C2 {
 
-  int data; // expected-warning{{missing region argument(s)}}
   C2 *left [[asap::arg("P:L")]]; // expected-warning{{missing region argument(s)}}
   C2 *right [[asap::arg("P:R")]]; // expected-warning{{missing region argument(s)}}
   C2 **last_visited_link [[asap::arg("P:*")]]; // expected-warning{{missing region argument(s)}}
   int *last_visited_data [[asap::arg("P:*")]]; // expected-warning{{missing region argument(s)}}
 
-  void memberFoo(C0 *p) { // expected-warning{{missing region arg}}
-    int *local_p1;        // expected-warning{{missing region arg}}
+  void memberFoo(C0 *p) { // default-arg inserted
+    int *local_p1;        // default-arg inserted
   }
 
 };
@@ -114,7 +113,6 @@ class
   __attribute__((region("R, L, Links")))
     C2 {
 
-  int data; // expected-warning{{missing region argument(s)}}
   C2 __attribute__((arg("P:L"))) * left; // expected-warning{{missing region argument(s)}}
   C2 __attribute__((arg("P:R"))) * right; // expected-warning{{missing region argument(s)}}
   C2 __attribute__((arg("P:*"))) ** last_visited_link; // expected-warning{{missing region argument(s)}}

@@ -288,6 +288,7 @@ namespace OperatorNew {
     IntWrapper *obj = new IntWrapper(42);
     // should be TRUE
     clang_analyzer_eval(obj->value == 42); // expected-warning{{UNKNOWN}}
+    delete obj;
   }
 
   void testPlacement() {
@@ -350,9 +351,7 @@ namespace VirtualWithSisterCasts {
 
   void testCastViaNew(B *b) {
     Grandchild *g = new (b) Grandchild();
-    // FIXME: We actually now have perfect type info because of 'new'.
-    // This should be TRUE.
-    clang_analyzer_eval(g->foo() == 42); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(g->foo() == 42); // expected-warning{{TRUE}}
 
     g->x = 42;
     clang_analyzer_eval(g->x == 42); // expected-warning{{TRUE}}

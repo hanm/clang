@@ -7,77 +7,21 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This files defines the Effect and EffectSummary classes used by the Safe
+// This file defines the Effect and EffectSummary classes used by the Safe
 // Parallelism checker, which tries to prove the safety of parallelism
 // given region and effect annotations.
 //
 //===----------------------------------------------------------------===//
 
 #include "Effect.h"
+#include "ASaPUtil.h"
+
 #include "Rpl.h"
+#include "ASaPSymbolTable.h"
+#include "Substitution.h"
 
-using namespace clang;
-using namespace clang::asap;
-
-Substitution::Substitution(const RplElement *FromEl, const Rpl *ToRpl) :
-  FromEl(FromEl) {
-  assert(FromEl);
-  if (ToRpl)
-    this->ToRpl = new Rpl(*ToRpl);
-  else
-    this->ToRpl = 0;
-}
-
-Substitution::Substitution(const Substitution &Sub) :
-  FromEl(Sub.FromEl) {
-  assert(FromEl);
-  if (Sub.ToRpl)
-    this->ToRpl = new Rpl(*Sub.ToRpl);
-  else
-    this->ToRpl = 0;
-}
-
-Substitution::~Substitution() {
-  delete ToRpl;
-}
-
-void Substitution::set(const RplElement *FromEl, const Rpl *ToRpl) {
-  this->FromEl = FromEl;
-  if (ToRpl)
-    this->ToRpl = new Rpl(*ToRpl);
-  else
-    this->ToRpl = 0;
-}
-
-void Substitution::applyTo(Rpl *R) const {
-  if (FromEl && ToRpl) {
-    assert(R);
-    R->substitute(*FromEl, *ToRpl);
-  }
-}
-
-void Substitution::print(llvm::raw_ostream &OS) const {
-  OS << "[";
-  if (FromEl) {
-    OS << FromEl->getName();
-  } else {
-    OS << "<MISSING>";
-  }
-  OS << "<-";
-  if (ToRpl) {
-    OS << ToRpl->toString();
-  } else {
-    OS << "<MISSING";
-  }
-  OS << "]";
-}
-
-std::string Substitution::toString() const {
-  std::string SBuf;
-  llvm::raw_string_ostream OS(SBuf);
-  print(OS);
-  return std::string(OS.str());
-}
+namespace clang {
+namespace asap {
 
 Effect::Effect(EffectKind EK, const Rpl* R, const Attr* A)
   : Kind(EK), Attribute(A) {
@@ -90,6 +34,16 @@ Effect::Effect(const Effect &E): Kind(E.Kind), Attribute(E.Attribute) {
 
 Effect::~Effect() {
   delete R;
+}
+
+void Effect::substitute(const Substitution *S) {
+  if (S && R)
+    S->applyTo(R);
+}
+
+void Effect::substitute(const SubstitutionVector *S) {
+  if (S && R)
+    S->applyTo(R);
 }
 
 bool Effect::isSubEffectOf(const Effect &That) const {
@@ -154,13 +108,20 @@ std::string Effect::toString() const {
   return std::string(OS.str());
 }
 
+//////////////////////////////////////////////////////////////////////////
+// EffectSummary
+
 const Effect *EffectSummary::covers(const Effect *Eff) const {
-  if (EffectSum.count(Eff))
+  assert(Eff);
+  if (Eff->isNoEffect())
     return Eff;
 
-  EffectSummarySetT::const_iterator
-    I = EffectSum.begin(),
-    E = EffectSum.end();
+  // if the Eff pointer is included in the set, return it
+  if (count(Eff)) {
+    return Eff;
+  }
+
+  SetT::const_iterator I = begin(), E = end();
   for(; I != E; ++I) {
     if (Eff->isSubEffectOf(*(*I)))
       return *I;
@@ -168,12 +129,23 @@ const Effect *EffectSummary::covers(const Effect *Eff) const {
   return 0;
 }
 
+bool EffectSummary::covers(const EffectSummary *Sum) const {
+  if (!Sum)
+    return true;
+
+  SetT::const_iterator I = Sum->begin(), E = Sum->end();
+  for(; I != E; ++I) {
+    if (!this->covers(*I))
+      return false;
+  }
+  return true;
+}
+
 void EffectSummary::makeMinimal(EffectCoverageVector &ECV) {
-  EffectSummarySetT::iterator I = EffectSum.begin(); // not a const iterator
-  while (I != EffectSum.end()) { // EffectSum.end() is not loop invariant
+  SetT::iterator I = begin(); // not a const iterator
+  while (I != end()) { // EffectSum.end() is not loop invariant
     bool found = false;
-    for (EffectSummarySetT::iterator
-         J = EffectSum.begin(); J != EffectSum.end(); ++J) {
+    for (SetT::iterator J = begin(); J != end(); ++J) {
       if (I != J && (*I)->isSubEffectOf(*(*J))) {
         //emitEffectCovered(D, *I, *J);
         ECV.push_back(new std::pair<const Effect*, const Effect*>(*I, *J));
@@ -183,20 +155,17 @@ void EffectSummary::makeMinimal(EffectCoverageVector &ECV) {
     } // end inner for loop
     /// optimization: remove e from effect Summary
     if (found) {
-      bool Success = EffectSum.erase(*I);
+      bool Success = take(*I);
       assert(Success);
-      I = EffectSum.begin();
-    }
-    else
+      I = begin();
+    } else {
       ++I;
+    }
   } // end while loop
 }
 
 void EffectSummary::print(raw_ostream &OS, char Separator) const {
-  EffectSummarySetT::const_iterator
-  I = EffectSum.begin(),
-  E = EffectSum.end();
-  for(; I != E; ++I) {
+  for(SetT::const_iterator I = begin(), E = end(); I != E; ++I) {
     (*I)->print(OS);
     OS << Separator;
   }
@@ -209,18 +178,12 @@ std::string EffectSummary::toString() const {
   return std::string(OS.str());
 }
 
-const Effect *Effect::isCoveredBy(const EffectSummary &ES,
-                                  const RplElement *LocalRplElement) {
-  if (!WritesLocal)
-    WritesLocal = new Effect(Effect::EK_WritesEffect,
-                             new Rpl(*LocalRplElement));
-  bool Result = this->isSubEffectOf(*WritesLocal);
-  if (Result)
-    return WritesLocal;
+const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
+  if (this->isSubEffectOf(*SymbolTable::WritesLocal))
+    return SymbolTable::WritesLocal;
   else
     return ES.covers(this);
 }
 
-
-
-
+} // end namespace clang
+} // end namespace asap

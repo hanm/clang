@@ -82,6 +82,7 @@ namespace {
     void VisitUnresolvedUsingValueDecl(UnresolvedUsingValueDecl *D);
     void VisitUsingDecl(UsingDecl *D);
     void VisitUsingShadowDecl(UsingShadowDecl *D);
+    void VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D);
 
     void PrintTemplateParameters(const TemplateParameterList *Params,
                                  const TemplateArgumentList *Args = 0);
@@ -291,8 +292,10 @@ void DeclPrinter::VisitDeclContext(DeclContext *DC, bool Indent) {
 
     // FIXME: Need to be able to tell the DeclPrinter when
     const char *Terminator = 0;
-    if (isa<FunctionDecl>(*D) &&
-        cast<FunctionDecl>(*D)->isThisDeclarationADefinition())
+    if (isa<OMPThreadPrivateDecl>(*D))
+      Terminator = 0;
+    else if (isa<FunctionDecl>(*D) &&
+             cast<FunctionDecl>(*D)->isThisDeclarationADefinition())
       Terminator = 0;
     else if (isa<ObjCMethodDecl>(*D) && cast<ObjCMethodDecl>(*D)->getBody())
       Terminator = 0;
@@ -390,7 +393,7 @@ void DeclPrinter::VisitEnumConstantDecl(EnumConstantDecl *D) {
 void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
   CXXConstructorDecl *CDecl = dyn_cast<CXXConstructorDecl>(D);
   if (!Policy.SuppressSpecifiers) {
-    switch (D->getStorageClassAsWritten()) {
+    switch (D->getStorageClass()) {
     case SC_None: break;
     case SC_Extern: Out << "extern "; break;
     case SC_Static: Out << "static "; break;
@@ -484,7 +487,7 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
       for (CXXConstructorDecl::init_const_iterator B = CDecl->init_begin(),
            E = CDecl->init_end();
            B != E; ++B) {
-        CXXCtorInitializer * BMInitializer = (*B);
+        CXXCtorInitializer *BMInitializer = (*B);
         if (BMInitializer->isInClassMemberInitializer())
           continue;
 
@@ -638,14 +641,25 @@ void DeclPrinter::VisitLabelDecl(LabelDecl *D) {
 
 
 void DeclPrinter::VisitVarDecl(VarDecl *D) {
-  StorageClass SCAsWritten = D->getStorageClassAsWritten();
-  if (!Policy.SuppressSpecifiers && SCAsWritten != SC_None)
-    Out << VarDecl::getStorageClassSpecifierString(SCAsWritten) << " ";
+  if (!Policy.SuppressSpecifiers) {
+    StorageClass SC = D->getStorageClass();
+    if (SC != SC_None)
+      Out << VarDecl::getStorageClassSpecifierString(SC) << " ";
 
-  if (!Policy.SuppressSpecifiers && D->isThreadSpecified())
-    Out << "__thread ";
-  if (!Policy.SuppressSpecifiers && D->isModulePrivate())
-    Out << "__module_private__ ";
+    switch (D->getTLSKind()) {
+    case VarDecl::TLS_None:
+      break;
+    case VarDecl::TLS_Static:
+      Out << "_Thread_local ";
+      break;
+    case VarDecl::TLS_Dynamic:
+      Out << "thread_local ";
+      break;
+    }
+
+    if (D->isModulePrivate())
+      Out << "__module_private__ ";
+  }
 
   QualType T = D->getType();
   if (ParmVarDecl *Parm = dyn_cast<ParmVarDecl>(D))
@@ -1150,3 +1164,17 @@ void DeclPrinter::VisitUnresolvedUsingValueDecl(UnresolvedUsingValueDecl *D) {
 void DeclPrinter::VisitUsingShadowDecl(UsingShadowDecl *D) {
   // ignore
 }
+
+void DeclPrinter::VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D) {
+  Out << "#pragma omp threadprivate";
+  if (!D->varlist_empty()) {
+    for (OMPThreadPrivateDecl::varlist_iterator I = D->varlist_begin(),
+                                                E = D->varlist_end();
+         I != E; ++I) {
+      Out << (I == D->varlist_begin() ? '(' : ',')
+          << *cast<NamedDecl>((*I)->getDecl());
+    }
+    Out << ")";
+  }
+}
+

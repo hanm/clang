@@ -4,14 +4,16 @@ clang_tablegen(Checkers.inc -gen-clang-sa-checkers
   TARGET ClangSACheckers)
 
 add_clang_library(clangStaticAnalyzerCheckers
+  ASaPAnnotationScheme.cpp
   ASaPSymbolTable.cpp
   ASaPType.cpp
+  ASaPUtil.cpp
   Effect.cpp
   EffectChecker.cpp
   Rpl.cpp
   TypeChecker.cpp
   SemanticChecker.cpp
-  AnalyzerStatsChecker.cpp
+  AllocationDiagnostics.cpp
   ArrayBoundChecker.cpp
   ArrayBoundCheckerV2.cpp
   BasicObjCFoundationChecks.cpp
@@ -49,8 +51,8 @@ add_clang_library(clangStaticAnalyzerCheckers
   MallocSizeofChecker.cpp
   NSAutoreleasePoolChecker.cpp
   NSErrorChecker.cpp
-  NonNullParamChecker.cpp
   NoReturnFunctionChecker.cpp
+  NonNullParamChecker.cpp
   ObjCAtSyncChecker.cpp
   ObjCContainersASTChecker.cpp
   ObjCContainersChecker.cpp
@@ -68,6 +70,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   StackAddrEscapeChecker.cpp
   StaticVariableAccessChecker.cpp
   StreamChecker.cpp
+  Substitution.cpp
   TaintTesterChecker.cpp
   TraversalChecker.cpp
   UndefBranchChecker.cpp

@@ -7,55 +7,64 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This files defines the Effect Checker pass of the Safe Parallelism
+// This file defines the Effect Checker pass of the Safe Parallelism
 // checker, which tries to prove the safety of parallelism given region
 // and effect annotations.
 //
 //===----------------------------------------------------------------===//
 
 #include "EffectChecker.h"
+#include "ASaPUtil.h"
+#include "TypeChecker.h"
 #include "ASaPType.h"
+#include "ASaPSymbolTable.h"
 #include "Rpl.h"
+#include "Effect.h"
+#include "Substitution.h"
+
+#include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/Stmt.h"
-// FIXME: try clear these headers up.
-#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
-#include "clang/StaticAnalyzer/Core/BugReporter/PathDiagnostic.h"
 
-using namespace clang;
-using namespace clang::ento;
-using namespace clang::asap;
-using namespace llvm;
+namespace clang {
+namespace asap {
 
 void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
-  assert(D);
-  const ASaPType *T = SymT.getType(D);
-  assert(T);
-  OS << "DEBUG:: Type used for substitution = " << T->toString(Ctx) << "\n";
+  assert(D && "D can't be null");
+  const ASaPType *T0 = SymT.getType(D);
+  if (!T0)
+    return; // Nothing to do here
+  ASaPType *T1 = new ASaPType(*T0);
+  if (T1->isFunctionType())
+    T1 = T1->getReturnType();
+  if (!T1)
+    return;
+ OS << "DEBUG:: Type used for substitution = " << T1->toString(Ctx) << "\n";
 
-  QualType QT = T->getQT(DerefNum);
+  QualType QT = T1->getQT(DerefNum);
 
   const ParameterVector *ParamVec = SymT.getParameterVectorFromQualType(QT);
-  if (!ParamVec)
-    return;
+  if (!ParamVec || ParamVec->size() == 0)
+    return; // Nothing to do here
 
-  // TODO support multiple Parameters
-  const ParamRplElement *FromEl = ParamVec->getParamAt(0);
-  assert(FromEl);
+  // First, compute inheritance induced substitutions
+  const SubstitutionVector *InheritanceSubV =
+      SymT.getInheritanceSubVec(QT);
+  EffectsTmp->substitute(InheritanceSubV);
 
-  const Rpl *ToRpl = T->getSubstArg(DerefNum);
-  assert(ToRpl);
-  OS << "DEBUG:: gonna substitute... " << FromEl->getName()
-    << "->" << ToRpl->toString() << "\n";
-
-  if (*ToRpl != *FromEl) {
-    // if (from != to) then substitute
-    Substitution S(FromEl, ToRpl);
-    /// 2.1.1 Substitution of effects
-    EffectsTmp.substitute(S);
+  // Next, build&apply SubstitutionVector
+  RplVector RplVec;
+  for (size_t I = 0; I < ParamVec->size(); ++I) {
+    const Rpl *ToRpl = T1->getSubstArg(DerefNum+I);
+    assert(ToRpl);
+    RplVec.push_back(ToRpl);
   }
+  SubstitutionVector SubV;
+  SubV.buildSubstitutionVector(ParamVec, &RplVec);
+  EffectsTmp->substitute(&SubV);
+
   OS << "   DONE\n";
+  delete T1;
 }
 
 int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
@@ -67,118 +76,127 @@ int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
   OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
 
   assert(D);
-  const ASaPType *T = SymT.getType(D);
-  if (!T) // e.g., method returning null
+  const ASaPType *T0 = SymT.getType(D);
+  if (!T0) // e.g., method returning void
+    return 0; // Nothing to do here.
+  ASaPType *T1 = new ASaPType(*T0);
+  if (T1->isFunctionType())
+    T1 = T1->getReturnType();
+  if (!T1)
     return 0;
-
+  if (T1->isReferenceType())
+    T1->deref();
   int EffectNr = 0;
-  ASaPType *Type = 0;
-  Type = new ASaPType(*T); // Make a copy of T.
 
   OS << "DEBUG:: Type used for collecting effects = "
-    << Type->toString(Ctx) << "\n";
+    << T1->toString(Ctx) << "\n";
 
 
   // Dereferences have read effects
   // TODO is this atomic or not? just ignore atomic for now
   for (int I = DerefNum; I > 0; --I) {
-    const Rpl *InRpl = Type->getInRpl();
+    const Rpl *InRpl = T1->getInRpl();
     assert(InRpl);
     if (InRpl) {
       // References do not have an InRpl
       Effect E(Effect::EK_ReadsEffect, InRpl);
-      EffectsTmp.push_back(&E);
+      EffectsTmp->push_back(&E);
       EffectNr++;
     }
-    Type->deref();
+    T1->deref();
   }
   if (!IsBase) {
     // TODO is this atomic or not? just ignore atomic for now
     Effect::EffectKind EK = (HasWriteSemantics) ?
       Effect::EK_WritesEffect : Effect::EK_ReadsEffect;
-    const Rpl *InRpl = Type->getInRpl();
+    const Rpl *InRpl = T1->getInRpl();
     if (InRpl) {
       Effect E(EK, InRpl);
-      EffectsTmp.push_back(&E);
+      EffectsTmp->push_back(&E);
       EffectNr++;
     }
   }
-  delete Type;
+  delete T1;
   return EffectNr;
 }
 
-void EffectCollectorVisitor::helperEmitDeclarationWarning(const Decl *D,
-                                                          const StringRef &Str,
-                                                          std::string BugName,
-                                                          bool AddQuotes) {
-  std::string Description = "";
-  if (AddQuotes)
-    Description.append("'");
-  Description.append(Str);
-  if (AddQuotes)
-    Description.append("' ");
-  else
-    Description.append(" ");
-  Description.append(BugName);
-  StringRef BugCategory = "Safe Parallelism";
-  StringRef BugStr = Description;
-
-  PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
-  BR.EmitBasicReport(D, BugName, BugCategory,
-  BugStr, VDLoc, D->getSourceRange());
+void EffectCollectorVisitor::
+emitOverridenVirtualFunctionMustCoverEffectsOfChildren(
+    const CXXMethodDecl *Parent, const CXXMethodDecl *Child) {
+  StringRef BugName = "overridden virtual function does not cover the effects "\
+      "of the overridding methods";
+  std::string Str;
+  llvm::raw_string_ostream StrOS(Str);
+  StrOS << "[in derived class '" << Child->getParent()->getName() << "']";
+  helperEmitDeclarationWarning(BR, Parent, StrOS.str(), BugName, false);
 }
 
 void EffectCollectorVisitor::
-helperEmitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
-                                  const StringRef &Str) {
-  StringRef BugName = "effect not covered by effect summary";
-  OS << "DEBUG::" << BugName << "\n";
-  OS << "DEBUG:: Stmt:";
-  S->printPretty(OS, 0, Ctx.getPrintingPolicy());
-  OS << "\nDEBUG:: Decl:";
-  D->print(OS, Ctx.getPrintingPolicy());
-  OS << "\n";
-  std::string description_std = "'";
-  description_std.append(Str);
-  description_std.append("' ");
-  description_std.append(BugName);
-
-  StringRef BugCategory = "Safe Parallelism";
-  StringRef BugStr = description_std;
-  PathDiagnosticLocation VDLoc =
-    PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
-
-  BR.EmitBasicReport(D, BugName, BugCategory,
-                     BugStr, VDLoc, S->getSourceRange());
+emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef &Str) {
+  FatalError = true;
+  StringRef BugName = "effect summary of canonical declaration does not cover"\
+    " the summary of this declaration";
+  helperEmitDeclarationWarning(BR, D, Str, BugName);
 }
 
-int EffectCollectorVisitor::copyAndPushFunctionEffects(FunctionDecl *FunD) {
-  const EffectSummary *FunEffects = SymT.getEffectSummary(FunD);
+void EffectCollectorVisitor::
+emitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
+  FatalError = true;
+    StringRef BugName = "unsupported constructor initializer."
+      " Please file feature support request.";
+    helperEmitDeclarationWarning(BR, D, "", BugName, false);
+}
+
+void EffectCollectorVisitor::
+emitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
+                                  const StringRef &Str) {
+  FatalError = true;
+  StringRef BugName = "effect not covered by effect summary";
+  helperEmitStatementWarning(BR, AC, S, D, Str, BugName);
+}
+
+int EffectCollectorVisitor::
+copyAndPushFunctionEffects(const FunctionDecl *FunD,
+                           const SubstitutionVector &SubV) {
+  if (!FunD)
+    return 0;
+  const EffectSummary *FunEffects =
+    SymT.getEffectSummary(FunD->getCanonicalDecl());
   assert(FunEffects);
   // Must make copies because we will substitute, cannot use append:
-  //EffectsTmp.append(EV->size(), (*EV->begin()));
+  //EffectsTmp->append(EV->size(), (*EV->begin()));
   for(EffectSummary::const_iterator
     I = FunEffects->begin(),
     E = FunEffects->end();
   I != E; ++I) {
     Effect Eff(*(*I));
-    EffectsTmp.push_back(&Eff);
+    SubV.applyTo(&Eff);
+    EffectsTmp->push_back(&Eff);
   }
   return FunEffects->size();
 }
 
-bool EffectCollectorVisitor::checkEffectCoverage(const Expr *Exp, const Decl *D,
-                                                 int N) {
+bool EffectCollectorVisitor::
+checkEffectCoverage(const Expr *Exp, const Decl *D, int N) {
+  if (N<=0)
+    return true;
   bool Result = true;
   for (int I=0; I<N; ++I){
-    Effect* E = EffectsTmp.pop_back_val();
+    std::auto_ptr<Effect> E = EffectsTmp->pop_back_val();
     OS << "### "; E->print(OS); OS << "\n";
-    if (!E->isCoveredBy(*EffSummary, LOCALRplElmt)) {
+    if (!E->isCoveredBy(*EffSummary)) {
+      OS << "DEBUG:: effect not covered: Expr = ";
+      Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+      OS << "\n";
+      OS << "\tDecl = ";
+      D->print(OS, Ctx.getPrintingPolicy());
+      OS << "\n";
       std::string Str = E->toString();
-      helperEmitEffectNotCoveredWarning(Exp, D, Str);
+      emitEffectNotCoveredWarning(Exp, D, Str);
       Result = false;
     }
   }
+  OS << "DEBUG:: effect covered (OK)\n";
   IsCoveredBySummary &= Result;
   return Result;
 }
@@ -200,72 +218,68 @@ void EffectCollectorVisitor::helperVisitAssignment(BinaryOperator *E) {
   }
 
 void EffectCollectorVisitor::
-helperEmitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
-    StringRef BugName = "unsupported constructor initializer."
-      " Please file feature support request.";
-    helperEmitDeclarationWarning(D, "", BugName, false);
-  }
-
-void EffectCollectorVisitor::
 helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
   CXXConstructorDecl::init_const_iterator
     I = D->init_begin(),
     E = D->init_end();
   for(; I != E; ++I) {
     CXXCtorInitializer *Init = *I;
-    if (Init->isMemberInitializer()) {
-      //helperTypecheckDeclWithInit(Init->getMember(), Init->getInit());
+    if (Init->isMemberInitializer() || Init->isBaseInitializer()) {
       Visit(Init->getInit());
     } else {
-      helperEmitUnsupportedConstructorInitializer(D);
+      OS << "DEBUG:: unsupported initializer:\n";
+      Init->getInit()->printPretty(OS, 0, Ctx.getPrintingPolicy());
+      emitUnsupportedConstructorInitializer(D);
     }
   }
 }
 
 EffectCollectorVisitor::EffectCollectorVisitor (
-  ento::BugReporter &BR,
-  ASTContext &Ctx,
-  AnalysisManager &Mgr,
-  AnalysisDeclContext *AC,
-  raw_ostream &OS,
-  SymbolTable &SymT,
+  VisitorBundle &VB,
   const FunctionDecl* Def,
-  Stmt *S
-  ) : BR(BR),
-  Ctx(Ctx),
-  AC(AC),
-  OS(OS),
-  SymT(SymT),
-  Def(Def),
-  FatalError(false),
-  HasWriteSemantics(false),
-  IsBase(false),
-  DerefNum(0),
-  IsCoveredBySummary(true) {
+  Stmt *S,
+  bool VisitCXXInitializer,
+  bool HasWriteSemantics
+  ) : BaseClass(VB, Def),
+      HasWriteSemantics(HasWriteSemantics),
+      IsBase(false),
+      DerefNum(0),
+      IsCoveredBySummary(true) {
+  EffectsTmp = new EffectVector();
+  OS << "DEBUG:: ******** INVOKING EffectCheckerVisitor...\n";
+  Def->print(OS, Ctx.getPrintingPolicy());
+  //S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  // Check that the effect summary on the canonical decl covers this one.
 
-    OS << "DEBUG:: ******** INVOKING EffectCheckerVisitor...\n";
-    S->printPretty(OS, 0, Ctx.getPrintingPolicy());
-    OS << "\n";
-    EffSummary = SymT.getEffectSummary(this->Def);
-    assert(EffSummary);
+  EffSummary = SymT.getEffectSummary(this->Def);
+  assert(EffSummary);
 
+  if (VisitCXXInitializer) {
     if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
       helperVisitCXXConstructorDecl(D);
     }
-
-    Visit(S);
-    OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
-}
-
-void EffectCollectorVisitor::VisitChildren(Stmt *S) {
-  for (Stmt::child_iterator I = S->child_begin(), E = S->child_end();
-    I!=E; ++I)
-    if (Stmt *child = *I)
-      Visit(child);
-}
-
-void EffectCollectorVisitor::VisitStmt(Stmt *S) {
-  VisitChildren(S);
+  }
+  Visit(S);
+  OS << "DEBUG:: done running Visit\n";
+  if (const CXXMethodDecl *CXXD = dyn_cast<CXXMethodDecl>(Def)) {
+    // check overidden methods have an effect summary that covers this one
+    const EffectSummary *MySum = SymT.getEffectSummary(CXXD);
+    assert(MySum);
+    for(CXXMethodDecl::method_iterator
+        I = CXXD->begin_overridden_methods(),
+        E = CXXD->end_overridden_methods();
+        I != E; ++I) {
+      // aloha
+      const EffectSummary *OverriddenSum = SymT.getEffectSummary(*I);
+      assert(OverriddenSum);
+      if ( ! OverriddenSum->covers(MySum) ) {
+        emitOverridenVirtualFunctionMustCoverEffectsOfChildren(*I, CXXD);
+      }
+    }
+  }
+  OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
+  delete EffectsTmp;
 }
 
 void EffectCollectorVisitor::VisitMemberExpr(MemberExpr *Exp) {
@@ -292,7 +306,8 @@ void EffectCollectorVisitor::VisitMemberExpr(MemberExpr *Exp) {
 
   /// 2.3. Visit Base with read semantics, then restore write semantics
   bool SavedHWS = HasWriteSemantics;
-  bool SavedIsBase = IsBase; // probably not needed to save
+  bool SavedIsBase = IsBase;
+  int SavedDerefNum = DerefNum;
 
   DerefNum = Exp->isArrow() ? 1 : 0;
   HasWriteSemantics = false;
@@ -302,6 +317,7 @@ void EffectCollectorVisitor::VisitMemberExpr(MemberExpr *Exp) {
   /// Post visitation checking
   HasWriteSemantics = SavedHWS;
   IsBase = SavedIsBase;
+  DerefNum = SavedDerefNum;
   /// Post-Visit Actions: check that effects (after substitutions)
   /// are covered by effect summary
   checkEffectCoverage(Exp, VD, EffectNr);
@@ -312,12 +328,14 @@ void EffectCollectorVisitor::VisitUnaryAddrOf(UnaryOperator *E)  {
   DerefNum--;
   OS << "DEBUG:: Visit Unary: AddrOf (DerefNum=" << DerefNum << ")\n";
   Visit(E->getSubExpr());
+  DerefNum++;
 }
 
 void EffectCollectorVisitor::VisitUnaryDeref(UnaryOperator *E) {
   DerefNum++;
   OS << "DEBUG:: Visit Unary: Deref (DerefNum=" << DerefNum << ")\n";
   Visit(E->getSubExpr());
+  DerefNum--;
 }
 
 void EffectCollectorVisitor::VisitPrePostIncDec(UnaryOperator *E) {
@@ -345,13 +363,21 @@ void EffectCollectorVisitor::VisitUnaryPreDec(UnaryOperator *E) {
 
 void EffectCollectorVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   // This next lookup actually returns the function type.
-  const ASaPType *ReturnType = SymT.getType(Def);
-  assert(ReturnType);
+  const ASaPType *FunType = SymT.getType(Def);
+  assert(FunType);
 
-  if (ReturnType->getQT()->isReferenceType()) {
-    DerefNum--; // FIXME: we prob need a stack of DerefNum for complex exprs.
+  ASaPType *RetTyp = new ASaPType(*FunType);
+  RetTyp = RetTyp->getReturnType();
+  assert(RetTyp);
+
+  if (RetTyp->getQT()->isReferenceType()) {
+    DerefNum--;
+    Visit(Ret->getRetValue());
+    DerefNum++;
+  } else {
+    Visit(Ret->getRetValue());
   }
-  Visit(Ret->getRetValue());
+  delete RetTyp;
 }
 
 void EffectCollectorVisitor::VisitDeclRefExpr(DeclRefExpr *Exp) {
@@ -380,12 +406,22 @@ void EffectCollectorVisitor::VisitDeclRefExpr(DeclRefExpr *Exp) {
   ValueDecl* vd = E->getDecl();
   vd->print(OS, Ctx.getPrintingPolicy());
   OS << "\n";*/
-  DerefNum = 0;
+  //DerefNum = 0;
 }
 
 void EffectCollectorVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
   //OS << "DEBUG:: visiting 'this' expression\n";
-  DerefNum = 0;
+  //DerefNum = 0;
+  OS << "DEBUG:: VisitCXXThisExpr!! :)\n";
+  OS << "DEBUG:: Type of 'this' = " << E->getType().getAsString() << "\n";
+  const SubstitutionVector *InheritanceSubV =
+      SymT.getInheritanceSubVec(E->getType()->getPointeeType());
+  if(InheritanceSubV) {
+    OS << "DEBUG:: InheritanceSubV.size = " << InheritanceSubV->size() << "\n";
+
+    EffectsTmp->substitute(InheritanceSubV);
+  }
+
 }
 
 void EffectCollectorVisitor::
@@ -403,48 +439,124 @@ void EffectCollectorVisitor::VisitBinAssign(BinaryOperator *E) {
   helperVisitAssignment(E);
 }
 
-void EffectCollectorVisitor::VisitCallExpr(CallExpr *E) {
+void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
   OS << "DEBUG:: VisitCallExpr\n";
-}
-
-void EffectCollectorVisitor::VisitCXXMemberCallExpr(CXXMemberCallExpr *Exp) {
-  OS << "DEBUG:: VisitCXXMemberCallExpr\n";
-  CXXMethodDecl *D = Exp->getMethodDecl();
+  Decl *D = Exp->getCalleeDecl();
   assert(D);
 
+  /// 1. Visit Arguments w. Read semantics
+  bool SavedHasWriteSemantics = HasWriteSemantics;
+  HasWriteSemantics = false;
+  for(ExprIterator I = Exp->arg_begin(), E = Exp->arg_end();
+      I != E; ++I) {
+    Visit(*I);
+  }
+  HasWriteSemantics = SavedHasWriteSemantics;
+
+  const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
+  // TODO we shouldn't give up like this below, but doing this for now
+  // to see how to fix this here problem...
+  // FD could be null in the case of a dependent type in a template
+  // uninstantiated (i.e., parametric) code.
+  //assert(FD);
+  if (!FD)
+    return;
+  SubstitutionVector SubV;
+  // Set up Substitution Vector
+  const ParameterVector *FD_ParamV = SymT.getParameterVector(FD);
+  if (FD_ParamV && FD_ParamV->size() > 0) {
+    buildParamSubstitutions(FD, Exp->arg_begin(),
+                            Exp->arg_end(), *FD_ParamV, SubV);
+  }
+
   /// 2. Add effects to tmp effects
-  int EffectCount = copyAndPushFunctionEffects(D);
+  int EffectCount = copyAndPushFunctionEffects(FD, SubV);
   /// 3. Visit base if it exists
-  //TODO we have to visit call arguments with read semantics
-  VisitChildren(Exp);
+  Visit(Exp->getCallee());
   /// 4. Check coverage
   checkEffectCoverage(Exp, D, EffectCount);
 }
 
 void EffectCollectorVisitor::
-VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Exp) {
-  OS << "DEBUG:: VisitCXXOperatorCall: ";
-  //Exp->dump(OS, BR.getSourceManager());
-  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
-  OS << "\n";
-
-  Decl *D = Exp->getCalleeDecl();
-  assert(D);
-  FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
-  assert(FD);
-  OS << "DEBUG:: FunctionDecl = ";
-  FD->print(OS, Ctx.getPrintingPolicy());
-  OS << "DEBUG:: isOverloadedOperator = "
-    << FD->isOverloadedOperator() << "\n";
-
-  /// 2. Add effects to tmp effects
-  int EffectCount = copyAndPushFunctionEffects(FD);
-
-  /// 3. Visit base if it exists
-  //TODO we have to visit call arguments with read semantics
-  VisitChildren(Exp);
-
-  /// 4. Check coverage
-  checkEffectCoverage(Exp, D, EffectCount);
+VisitArraySubscriptExpr(ArraySubscriptExpr *Exp) {
+  // 1. Visit index with read semantics
+  bool SavedHasWriteSemantics = HasWriteSemantics;
+  HasWriteSemantics = false;
+  Visit(Exp->getIdx());
+  // 2. Restore semantics and visit base
+  HasWriteSemantics = SavedHasWriteSemantics;
+  DerefNum++;
+  Visit(Exp->getBase());
+  DerefNum--;
 }
 
+void EffectCollectorVisitor::
+VisitCXXDeleteExpr(CXXDeleteExpr *Exp) {
+  OS << "DEBUG:: VisitCXXDeleteExpr: ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  bool SavedHasWriteSemantics = HasWriteSemantics;
+  HasWriteSemantics = true;
+  Visit(Exp->getArgument());
+  HasWriteSemantics = SavedHasWriteSemantics;
+}
+
+// End Visitors
+//////////////////////////////////////////////////////////////////////////
+void EffectCollectorVisitor::
+buildParamSubstitutions(const FunctionDecl *CalleeDecl,
+                        ExprIterator ArgI, ExprIterator ArgE,
+                        const ParameterVector &ParamV,
+                        SubstitutionVector &SubV) {
+  assert(CalleeDecl);
+  FunctionDecl::param_const_iterator ParamI, ParamE;
+  for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
+      ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
+    Expr *ArgExpr = *ArgI;
+    ParmVarDecl *ParamDecl = *ParamI;
+    buildSingleParamSubstitution(ParamDecl, ArgExpr, ParamV, SubV);
+  }
+}
+
+void EffectCollectorVisitor::
+buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
+                             const ParameterVector &ParamV,
+                             SubstitutionVector &SubV) {
+  // if param has argument that is a parameter, create a substitution
+  // based on the argument
+  const ASaPType *ParamType = SymT.getType(Param);
+  if (!ParamType)
+    return;
+  const RplVector *ParamArgV = ParamType->getArgV();
+  if (!ParamArgV)
+    return;
+  TypeBuilderVisitor TBV(VB, Def, Arg);
+  const ASaPType *ArgType = TBV.getType();
+  if (!ArgType)
+    return;
+  const RplVector *ArgArgV = ArgType->getArgV();
+  if (!ArgArgV)
+    return;
+  // For each element of ArgV if it's a simple arg, check if it's
+  // a function region param
+  for(RplVector::const_iterator
+        ParamI = ParamArgV->begin(), ParamE = ParamArgV->end(),
+        ArgI = ArgArgV->begin(), ArgE = ArgArgV->end();
+      ParamI != ParamE && ArgI != ArgE; ++ParamI, ++ArgI) {
+    const Rpl *ParamR = *ParamI;
+    assert(ParamR && "RplVector should not contain null Rpl pointer");
+    if (ParamR->length() != 1)
+      continue;
+    const RplElement *Elmt = ParamR->getFirstElement();
+    assert(Elmt && "Rpl should not contain null RplElement pointer");
+    if (ParamV.hasElement(Elmt)) {
+      // Ok find the argument
+      Substitution Sub(Elmt, *ArgI);
+      SubV.push_back(&Sub);
+      OS << "DEBUG:: added function param sub: " << Sub.toString() << "\n";
+    }
+  }
+}
+
+} // end namespace asap
+} // end namespace clang

@@ -38,7 +38,7 @@ class CallsBarFunctor {
 public:
   // function bar writes to region R.
   void operator () [[asap::writes("ASaP::R")]] () const {
-    BarFunctor bar [[asap::arg("Local")]];
+    BarFunctor bar;
     bar();
   }
 }; // end class CallsBarFunctor
@@ -74,9 +74,9 @@ int main [[asap::writes("ASaP::R, R")]] () {
     ASaP::Globals::GlobalVar = 0;
     // No warning if they are invoked sequentially
     FooFunctor foo;
-    BarFunctor bar [[asap::arg("Local")]];
-    CallsBarFunctor callsBar [[asap::arg("Local")]];
-    ZooFunctor zoo1 [[asap::arg("Local")]], zoo2 [[asap::arg("Local")]];
+    BarFunctor bar;
+    CallsBarFunctor callsBar;
+    ZooFunctor zoo1, zoo2;
     callsBar();
     foo();
     bar();

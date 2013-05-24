@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This files defines the Rpl and RplVector classes used by the Safe
+// This file defines the Rpl and RplVector classes used by the Safe
 // Parallelism checker, which tries to prove the safety of parallelism
 // given region and effect annotations.
 //
@@ -16,11 +16,12 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_RPL_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_RPL_H
 
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Support/raw_ostream.h"
-#include "clang/AST/Attr.h"
+
+#include "ASaPUtil.h"  // Included for the 2 uses of OSv2
+#include "OwningPtrSet.h"
+#include "OwningVector.h"
 
 namespace clang {
 namespace asap {
@@ -59,7 +60,7 @@ public:
 
   virtual bool isFullySpecified() const { return true; }
 
-  virtual llvm::StringRef getName() const = 0;
+  virtual StringRef getName() const = 0;
   virtual bool operator == (const RplElement &That) const {
     return (this == &That) ? true : false;
   }
@@ -68,15 +69,15 @@ public:
 
 class SpecialRplElement : public RplElement {
   /// Fields
-  const llvm::StringRef name;
+  const StringRef name;
 
 public:
   /// Constructor
-  SpecialRplElement(llvm::StringRef name) : RplElement(RK_Special), name(name) {}
+  SpecialRplElement(StringRef name) : RplElement(RK_Special), name(name) {}
   virtual ~SpecialRplElement() {}
 
   /// Methods
-  virtual llvm::StringRef getName() const { return name; }
+  virtual StringRef getName() const { return name; }
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Special;
@@ -91,7 +92,7 @@ public:
 
   /// Methods
   virtual bool isFullySpecified() const { return false; }
-  virtual llvm::StringRef getName() const { return "*"; }
+  virtual StringRef getName() const { return "*"; }
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Star;
@@ -101,14 +102,14 @@ public:
 ///-////////////////////////////////////////
 class NamedRplElement : public RplElement {
   /// Fields
-  const llvm::StringRef name;
+  const StringRef name;
 
 public:
   /// Constructor
-  NamedRplElement(llvm::StringRef name) : RplElement(RK_Named), name(name) {}
+  NamedRplElement(StringRef name) : RplElement(RK_Named), name(name) {}
   virtual ~NamedRplElement() {}
   /// Methods
-  virtual llvm::StringRef getName() const { return name; }
+  virtual StringRef getName() const { return name; }
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Named;
@@ -119,15 +120,15 @@ public:
 ///-////////////////////////////////////////
 class ParamRplElement : public RplElement {
   ///Fields
-  llvm::StringRef name;
+  StringRef name;
 
 public:
   /// Constructor
-  ParamRplElement(llvm::StringRef name) : RplElement(RK_Parameter), name(name) {}
+  ParamRplElement(StringRef name) : RplElement(RK_Parameter), name(name) {}
   virtual ~ParamRplElement() {}
 
   /// Methods
-  virtual llvm::StringRef getName() const { return name; }
+  virtual StringRef getName() const { return name; }
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Parameter;
@@ -136,38 +137,19 @@ public:
 
 class Effect;
 
-extern const StarRplElement *STARRplElmt;
-extern const SpecialRplElement *ROOTRplElmt;
-extern const SpecialRplElement *LOCALRplElmt;
-extern Effect *WritesLocal;
-
-/// \brief a special RPL element (Root, Local, *, ...) or NULL
-const RplElement* getSpecialRplElement(const llvm::StringRef& s);
-
-/// Return true when the input string is a special RPL element
-/// (e.g., '*', '?', 'Root'.
-// TODO (?): '?', 'Root'
-bool isSpecialRplElement(const llvm::StringRef& s);
-
-/**
-*  Return true when the input string is a valid region
-*  name or region parameter declaration
-*/
-bool isValidRegionName(const llvm::StringRef& s);
 
 class Rpl {
   friend class Rpl;
 public:
   /// Static Constants
   static const char RPL_SPLIT_CHARACTER = ':';
-  // TODO static const char *RPL_LIST_SEPARATE_STRING = ",";
-  // TODO static const char *RPL_NAME_SPEC_STRING = "::";
+  static const StringRef RPL_LIST_SEPARATOR;
+  static const StringRef RPL_NAME_SPEC;
 
-  /// Types
-#ifndef RPL_VECTOR_SIZE
-  #define RPL_VECTOR_SIZE 4
-#endif
-  typedef llvm::SmallVector<Rpl*, RPL_VECTOR_SIZE> RplVectorT;
+  /// Static Functions
+  /// \brief Return true when input is a valid region name or param declaration
+  static bool isValidRegionName(const StringRef& s);
+
 
 private:
 #ifndef RPL_ELEMENT_VECTOR_SIZE
@@ -231,49 +213,12 @@ typedef llvm::SmallVector<const RplElement*,
       return (lastIdx<firstIdx) ? true : false;
     }
 
-    bool isUnder(RplRef& rhs) {
-      OSv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
-          << this->toString() << ", " << rhs.toString() << ")\n";
-      /// R <= Root
-      if (rhs.isEmpty())
-        return true;
-      if (isEmpty()) /// and rhs is not Empty
-        return false;
-      /// R <= R' <== R c= R'
-      if (isIncludedIn(rhs)) return true;
-      /// R:* <= R' <== R <= R'
-      if (getLastElement() == STARRplElmt)
-        return stripLast().isUnder(rhs);
-      /// R:r <= R' <==  R <= R'
-      /// R:[i] <= R' <==  R <= R'
-      return stripLast().isUnder(rhs);
-      // TODO z-regions
-    }
+    /// \brief Under: true  iff this <= RHS
+    bool isUnder(RplRef& RHS);
 
-    /// Inclusion: this c= rhs
-    bool isIncludedIn(RplRef& rhs) {
-      OSv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef]("
-          << this->toString() << ", " << rhs.toString() << ")\n";
-      if (rhs.isEmpty()) {
-        /// Root c= Root
-        if (isEmpty()) return true;
-        /// RPL c=? Root and RPL!=Root ==> not included
-        else /*!isEmpty()*/ return false;
-      } else { /// rhs is not empty
-        /// R c= R':* <==  R <= R'
-        if (*rhs.getLastElement() == *STARRplElmt) {
-          OSv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
-          return isUnder(rhs.stripLast());
-        }
-        ///   R:r c= R':r    <==  R <= R'
-        /// R:[i] c= R':[i]  <==  R <= R'
-        if (!isEmpty()) {
-          if ( *getLastElement() == *rhs.getLastElement() )
-            return stripLast().isIncludedIn(rhs.stripLast());
-        }
-        return false;
-      }
-    }
+    /// \brief Inclusion: true  iff  this c= rhs
+    bool isIncludedIn(RplRef& RHS);
+
   }; /// end class RplRef
   ///////////////////////////////////////////////////////////////////////////
   public:
@@ -291,7 +236,7 @@ typedef llvm::SmallVector<const RplElement*,
       FullySpecified(That.FullySpecified)
   {}
 
-  static std::pair<llvm::StringRef, llvm::StringRef> splitRpl(llvm::StringRef &String);
+  static std::pair<StringRef, StringRef> splitRpl(StringRef &String);
   void print(llvm::raw_ostream &OS) const;
   std::string toString() const;
 
@@ -312,9 +257,11 @@ typedef llvm::SmallVector<const RplElement*,
   // Setters
   /// \brief Appends an RPL element to this RPL.
   inline void appendElement(const RplElement* RplElm) {
-    RplElements.push_back(RplElm);
-    if (RplElm->isFullySpecified() == false)
-      FullySpecified = false;
+    if (RplElm) {
+      RplElements.push_back(RplElm);
+      if (RplElm->isFullySpecified() == false)
+        FullySpecified = false;
+    }
   }
   // Predicates
   inline bool isFullySpecified() { return FullySpecified; }
@@ -330,7 +277,8 @@ typedef llvm::SmallVector<const RplElement*,
 
   // Substitution (Rpl)
   /// \brief this[FromEl <- ToRpl]
-  void substitute(const RplElement& FromEl, const Rpl& ToRpl);
+  //void substitute(const RplElement& FromEl, const Rpl& ToRpl);
+  void substitute(const Substitution *S);
 
   /// \brief Append to this RPL the argument Rpl but without its head element.
   void appendRplTail(Rpl* That);
@@ -357,6 +305,8 @@ typedef llvm::SmallVector<const RplElement*,
   Rpl* capture();
 }; // end class Rpl
 
+//////////////////////////////////////////////////////////////////////////
+
 class CaptureRplElement : public RplElement {
   /// Fields
   Rpl& includedIn;
@@ -368,7 +318,7 @@ public:
   { /*assert(includedIn.isFullySpecified() == false);*/ }
   virtual ~CaptureRplElement() {}
   /// Methods
-  virtual llvm::StringRef getName() const { return "rho"; }
+  virtual StringRef getName() const { return "rho"; }
 
   virtual bool isFullySpecified() const { return false; }
 
@@ -379,54 +329,29 @@ public:
   }
 }; // end class CaptureRplElement
 
-class ParameterVector {
-private:
-  // Fields
+
+//////////////////////////////////////////////////////////////////////////
 #ifndef PARAM_VECTOR_SIZE
   #define PARAM_VECTOR_SIZE 8
 #endif
-  typedef llvm::SmallVector<const ParamRplElement*, PARAM_VECTOR_SIZE> ParamVecT;
-  ParamVecT ParamVec;
+
+class ParameterVector :
+  public OwningVector<ParamRplElement, PARAM_VECTOR_SIZE> {
 public:
+  typedef OwningVector<ParamRplElement, PARAM_VECTOR_SIZE> BaseClass;
   // Constructor
-  ParameterVector() {}
+  ParameterVector() : BaseClass() {}
 
-  ParameterVector(const ParamRplElement *ParamEl) {
-    ParamVec.push_back(ParamEl);
-  }
-
-  // Destructor
-  ~ParameterVector() {
-    for(ParamVecT::iterator
-          I = ParamVec.begin(),
-          E = ParamVec.end();
-        I != E; ++I) {
-      delete (*I);
-    }
-  }
-
-  // Types
-  typedef ParamVecT::const_iterator const_iterator;
-  // Methods
-  /// \brief Appends a ParamRplElement to the tail of the vector.
-  inline void push_back(ParamRplElement *Elm) { ParamVec.push_back(Elm); }
-  /// \brief Returns the size of the vector.
-  inline size_t size() const { return ParamVec.size(); }
-  /// \brief Returns a const_iterator to the begining of the vector.
-  inline const_iterator begin() const { return ParamVec.begin(); }
-  /// \brief Returns a const_iterator to the end of the vector.
-  inline const_iterator end() const { return ParamVec.end(); }
+  ParameterVector(ParamRplElement &P) : BaseClass(P) {}
 
   /// \brief Returns the Parameter at position Idx
   const ParamRplElement *getParamAt(size_t Idx) const {
-    assert(Idx < ParamVec.size());
-    return ParamVec[Idx];
+    assert(Idx < size());
+    return (*this)[Idx];
   }
   /// \brief Returns the ParamRplElement with name=Name or null.
-  const ParamRplElement *lookup(llvm::StringRef Name) const {
-    for(ParamVecT::const_iterator
-          I = ParamVec.begin(),
-          E = ParamVec.end();
+  const ParamRplElement *lookup(StringRef Name) const {
+    for(VectorT::const_iterator I = begin(), E = end();
         I != E; ++I) {
       const ParamRplElement *El = *I;
       if (El->getName().compare(Name) == 0)
@@ -436,117 +361,75 @@ public:
   }
   /// \brief Returns true if the argument RplElement is contained.
   bool hasElement(const RplElement *Elmt) const {
-    for(ParamVecT::const_iterator
-          I = ParamVec.begin(),
-          E = ParamVec.end();
+    for(VectorT::const_iterator I = begin(), E = end();
         I != E; ++I) {
       if (Elmt == *I)
         return true;
     }
     return false;
   }
+
+  void take(ParameterVector *&PV) {
+    if (!PV)
+      return;
+
+    BaseClass::take(PV);
+    assert(PV->size()==0);
+    delete PV;
+    PV = 0;
+  }
+
 }; // end class ParameterVector
 
-class RplVector {
-  friend class RplVector;
-  private:
-  /// Fields
-  Rpl::RplVectorT RplV;
+//////////////////////////////////////////////////////////////////////////
+#ifndef RPL_VECTOR_SIZE
+  #define RPL_VECTOR_SIZE 4
+#endif
 
+class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
+  //friend class RplVector;
+  typedef OwningVector<Rpl, RPL_VECTOR_SIZE> BaseClass;
   public:
   /// Constructor
-  RplVector() {}
-  RplVector(const Rpl &R) {
-    RplV.push_back(new Rpl(R));
-  }
+  RplVector() : BaseClass() {}
+  RplVector(const Rpl &R) : BaseClass(R) {}
 
   RplVector(const ParameterVector &ParamVec) {
     for(ParameterVector::const_iterator
           I = ParamVec.begin(),
           E = ParamVec.end();
         I != E; ++I) {
-      RplV.push_back(new Rpl(*(*I)));
+      if (*I) {
+        Rpl Param(**I);
+        push_back(Param);
+      }
     }
   }
 
-  RplVector(const RplVector &RV) {
-    for (Rpl::RplVectorT::const_iterator
-            I = RV.RplV.begin(),
-            E = RV.RplV.end();
-         I != E; ++I) {
-      RplV.push_back(new Rpl(*(*I))); // copy Rpls
-    }
-  }
-
-  /// Destructor
-  ~RplVector() {
-    for (Rpl::RplVectorT::const_iterator
-            I = RplV.begin(),
-            E = RplV.end();
-         I != E; ++I) {
-      delete (*I);
-    }
-  }
-  // Types
-  typedef Rpl::RplVectorT::iterator iterator;
-  typedef Rpl::RplVectorT::const_iterator const_iterator;
-
-  // Methods
-  /// \brief Return an iterator at the first RPL of the vector.
-  inline Rpl::RplVectorT::iterator begin () { return RplV.begin(); }
-  /// \brief Return an iterator past the last RPL of the vector.
-  inline Rpl::RplVectorT::iterator end () { return RplV.end(); }
-  /// \brief Return a const_iterator at the first RPL of the vector.
-  inline Rpl::RplVectorT::const_iterator begin () const { return RplV.begin(); }
-  /// \brief Return a const_iterator past the last RPL of the vector.
-  inline Rpl::RplVectorT::const_iterator end () const { return RplV.end(); }
-  /// \brief Return the size of the RPL vector.
-  inline size_t size () const { return RplV.size(); }
-  /// \brief Append the argument RPL to the RPL vector.
-  inline void push_back (const Rpl *R) {
-    assert(R);
-    RplV.push_back(new Rpl(*R));
-  }
   /// \brief Add the argument RPL to the front of the RPL vector.
   inline void push_front (const Rpl *R) {
     assert(R);
-    RplV.insert(RplV.begin(), new Rpl(*R));
+    VectorT::insert(begin(), new Rpl(*R));
   }
   /// \brief Remove and return the first RPL in the vector.
-  Rpl *pop_front() {
-    assert(RplV.size() > 0);
-    Rpl *Result = RplV.front();
-    RplV.erase(RplV.begin());
-    return Result;
-  }
-  /// \brief Remove and return the first RPL in the vector.
-  inline Rpl *deref() { return pop_front(); }
+  inline std::auto_ptr<Rpl> deref() { return pop_front(); }
+
   /// \brief Same as performing deref() DerefNum times.
-  Rpl *deref(size_t DerefNum) {
-    Rpl *Result = 0;
-    //assert(DerefNum >=0);
-    assert(DerefNum < RplV.size());
-    for (Rpl::RplVectorT::iterator
-            I = RplV.begin(),
-            E = RplV.end();
-         DerefNum > 0 && I != E; ++I, --DerefNum) {
-      if (Result)
-        delete Result;
-      Result = *I;
-      I = RplV.erase(I);
+  std::auto_ptr<Rpl> deref(size_t DerefNum) {
+    std::auto_ptr<Rpl> Result;
+    assert(DerefNum < size());
+    for (VectorT::iterator I = begin();
+         DerefNum > 0 && I != end(); ++I, --DerefNum) {
+      Result.reset(*I);
+      I = VectorT::erase(I);
     }
     return Result;
   }
 
   /// \brief Return a pointer to the RPL at position Idx in the vector.
   inline const Rpl *getRplAt(size_t Idx) const {
-    //assert(Idx>=0);
-    if (Idx >= RplV.size()) {
-      OSv2 << "DEBUG:: getRplAt(" << Idx << "), but size = " << RplV.size()
-           << "\n";
-    }
-    assert(Idx < RplV.size());
-    return RplV[Idx];
+    assert(Idx < size() && "attempted to access beyond last RPL element");
+    return (*this)[Idx];
   }
 
   /// \brief Joins this to That.
@@ -555,7 +438,7 @@ class RplVector {
       return;
     assert(That->size() == this->size());
 
-    Rpl::RplVectorT::iterator
+    VectorT::iterator
             ThatI = That->begin(),
             ThisI = this->begin(),
             ThatE = That->end(),
@@ -577,9 +460,9 @@ class RplVector {
   /// \brief Return true when this is included in That, false otherwise.
   bool isIncludedIn (const RplVector &That) const {
     bool Result = true;
-    assert(That.RplV.size() == this->RplV.size());
+    assert(That.size() == this->size());
 
-    Rpl::RplVectorT::const_iterator
+    VectorT::const_iterator
             ThatI = That.begin(),
             ThisI = this->begin(),
             ThatE = That.end(),
@@ -600,20 +483,16 @@ class RplVector {
   }
 
   /// \brief Substitution this[FromEl <- ToRpl] (over RPL vector)
-  void substitute(const RplElement &FromEl, const Rpl &ToRpl) {
-    for(Rpl::RplVectorT::const_iterator
-            I = RplV.begin(),
-            E = RplV.end();
+  void substitute(const Substitution *S) {
+    for(VectorT::const_iterator I = begin(), E = end();
          I != E; ++I) {
       if (*I)
-        (*I)->substitute(FromEl, ToRpl);
+        (*I)->substitute(S);
     }
   }
   /// \brief Print RPL vector
   void print(llvm::raw_ostream &OS) const {
-    Rpl::RplVectorT::const_iterator
-      I = RplV.begin(),
-      E = RplV.end();
+    VectorT::const_iterator I = begin(), E = end();
     for(; I < E-1; ++I) {
       (*I)->print(OS);
       OS << ", ";
@@ -641,11 +520,10 @@ class RplVector {
     // invariant henceforth A!=null && B!=null
     RplVector *LHS;
     const RplVector *RHS;
-    OSv2 << "DEBUG:: RplVector::merge : both Vectors are non-null!\n";
     (A->size() >= B->size()) ? ( LHS = new RplVector(*A), RHS = B)
                              : ( LHS = new RplVector(*B), RHS = A);
     // fold RHS into LHS
-    Rpl::RplVectorT::const_iterator RHSI = RHS->begin(), RHSE = RHS->end();
+    VectorT::const_iterator RHSI = RHS->begin(), RHSE = RHS->end();
     while (RHSI != RHSE) {
       LHS->push_back(*RHSI);
       ++RHSI;
@@ -664,10 +542,11 @@ class RplVector {
     (A->size() >= B->size()) ? ( LHS = A, RHS = B)
                              : ( LHS = B, RHS = A);
     // fold RHS into LHS
-    Rpl::RplVectorT::iterator RHSI = RHS->begin(), RHSE = RHS->end();
-    while (RHSI != RHSE) {
-      LHS->RplV.push_back(*RHSI);
-      RHSI = RHS->RplV.erase(RHSI);
+    VectorT::iterator RHSI = RHS->begin();
+    while (RHSI != RHS->end()) {
+      Rpl *R = *RHSI;
+      LHS->VectorT::push_back(R);
+      RHSI = RHS->VectorT::erase(RHSI);
     }
     delete RHS;
     A = B = 0;
@@ -675,36 +554,17 @@ class RplVector {
   }
 }; // End class RplVector.
 
-class RegionNameSet {
-private:
-  // Fields
+//////////////////////////////////////////////////////////////////////////
 #ifndef REGION_NAME_SET_SIZE
   #define REGION_NAME_SET_SIZE 8
 #endif
-  typedef llvm::SmallPtrSet<const NamedRplElement*, REGION_NAME_SET_SIZE>
-    RegnNameSetTy;
-  RegnNameSetTy RegnNameSet;
-public:
-  // Destructor
-  ~RegionNameSet() {
-    for (RegnNameSetTy::iterator
-           I = RegnNameSet.begin(),
-           E = RegnNameSet.end();
-         I != E; ++I) {
-      delete (*I);
-    }
-  }
-  // Methods
-  /// \brief Inserts an element to the set and returns true upon success.
-  inline bool insert(NamedRplElement *E) { return RegnNameSet.insert(E); }
-  /// \brief Returns the number of elements in the set.
-  inline size_t size() const { return RegnNameSet.size(); }
+class RegionNameSet
+: public OwningPtrSet<NamedRplElement, REGION_NAME_SET_SIZE> {
 
+public:
   /// \brief Returns the NamedRplElement with name=Name or null.
-  const NamedRplElement *lookup (llvm::StringRef Name) {
-    for (RegnNameSetTy::iterator
-           I = RegnNameSet.begin(),
-           E = RegnNameSet.end();
+  const NamedRplElement *lookup (StringRef Name) {
+    for (SetT::iterator I = begin(), E = end();
          I != E; ++I) {
       const NamedRplElement *El = *I;
       if (El->getName().compare(Name) == 0)
@@ -713,8 +573,8 @@ public:
     return 0;
   }
 }; // End class RegionNameSet.
-} // End namespace asap.
 
+} // End namespace asap.
 } // End namespace clang.
 
 #endif

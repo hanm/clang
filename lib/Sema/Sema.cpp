@@ -634,11 +634,12 @@ void Sema::ActOnEndOfTranslationUnit() {
         Module *Mod = Stack.back();
         Stack.pop_back();
 
-        // Resolve the exported declarations.
+        // Resolve the exported declarations and conflicts.
         // FIXME: Actually complain, once we figure out how to teach the
-        // diagnostic client to deal with complains in the module map at this
+        // diagnostic client to deal with complaints in the module map at this
         // point.
         ModMap.resolveExports(Mod, /*Complain=*/false);
+        ModMap.resolveConflicts(Mod, /*Complain=*/false);
 
         // Queue the submodules, so their exports will also be resolved.
         for (Module::submodule_iterator Sub = Mod->submodule_begin(),
@@ -727,7 +728,7 @@ void Sema::ActOnEndOfTranslationUnit() {
             Diag(DiagD->getLocation(), diag::warn_unneeded_member_function)
                   << DiagD->getDeclName();
           else {
-            if (FD->getStorageClassAsWritten() == SC_Static &&
+            if (FD->getStorageClass() == SC_Static &&
                 !FD->isInlineSpecified() &&
                 !SourceMgr.isFromMainFile(
                    SourceMgr.getExpansionLoc(FD->getLocation())))
@@ -750,9 +751,13 @@ void Sema::ActOnEndOfTranslationUnit() {
         if (DiagD->isReferenced()) {
           Diag(DiagD->getLocation(), diag::warn_unneeded_internal_decl)
                 << /*variable*/1 << DiagD->getDeclName();
-        } else {
+        } else if (getSourceManager().isFromMainFile(DiagD->getLocation())) {
+          // If the declaration is in a header which is included into multiple
+          // TUs, it will declare one variable per TU, and one of the other
+          // variables may be used. So, only warn if the declaration is in the
+          // main file.
           Diag(DiagD->getLocation(), diag::warn_unused_variable)
-                << DiagD->getDeclName();
+              << DiagD->getDeclName();
         }
       }
     }
@@ -797,7 +802,7 @@ DeclContext *Sema::getFunctionLevelDeclContext() {
   DeclContext *DC = CurContext;
 
   while (true) {
-    if (isa<BlockDecl>(DC) || isa<EnumDecl>(DC)) {
+    if (isa<BlockDecl>(DC) || isa<EnumDecl>(DC) || isa<CapturedDecl>(DC)) {
       DC = DC->getParent();
     } else if (isa<CXXMethodDecl>(DC) &&
                cast<CXXMethodDecl>(DC)->getOverloadedOperator() == OO_Call &&
@@ -1072,7 +1077,8 @@ void Sema::ActOnComment(SourceRange Comment) {
   if (!LangOpts.RetainCommentsFromSystemHeaders &&
       SourceMgr.isInSystemHeader(Comment.getBegin()))
     return;
-  RawComment RC(SourceMgr, Comment);
+  RawComment RC(SourceMgr, Comment, false,
+                LangOpts.CommentOpts.ParseAllComments);
   if (RC.isAlmostTrailingComment()) {
     SourceRange MagicMarkerRange(Comment.getBegin(),
                                  Comment.getBegin().getLocWithOffset(3));
@@ -1307,4 +1313,19 @@ IdentifierInfo *Sema::getSuperIdentifier() const {
   if (!Ident_super)
     Ident_super = &Context.Idents.get("super");
   return Ident_super;
+}
+
+void Sema::PushCapturedRegionScope(Scope *S, CapturedDecl *CD, RecordDecl *RD,
+                                   CapturedRegionKind K) {
+  CapturingScopeInfo *CSI = new CapturedRegionScopeInfo(getDiagnostics(),
+                                                        S, CD, RD, K);
+  CSI->ReturnType = Context.VoidTy;
+  FunctionScopes.push_back(CSI);
+}
+
+CapturedRegionScopeInfo *Sema::getCurCapturedRegion() {
+  if (FunctionScopes.empty())
+    return 0;
+
+  return dyn_cast<CapturedRegionScopeInfo>(FunctionScopes.back());
 }

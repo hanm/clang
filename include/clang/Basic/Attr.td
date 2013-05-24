@@ -336,7 +336,6 @@ def OpenCLKernel : Attr {
 def OpenCLImageAccess : Attr {
   let Spellings = [GNU<"opencl_image_access">];
   let Args = [IntArgument<"Access">];
-  let ASTNode = 0;
 }
 
 def Deprecated : InheritableAttr {
@@ -586,7 +585,7 @@ def Overloadable : Attr {
   let Spellings = [GNU<"overloadable">];
 }
 
-def Override : InheritableAttr { 
+def Override : InheritableAttr {
   let Spellings = [];
   let SemaHandler = 0;
 }
@@ -642,7 +641,7 @@ def Endian : InheritableAttr {
 
 def WorkGroupSizeHint :  InheritableAttr {
   let Spellings = [GNU<"work_group_size_hint">];
-  let Args = [UnsignedArgument<"XDim">, 
+  let Args = [UnsignedArgument<"XDim">,
               UnsignedArgument<"YDim">,
               UnsignedArgument<"ZDim">];
 }
@@ -932,6 +931,10 @@ def TypeTagForDatatype : InheritableAttr {
 
 // Microsoft-related attributes
 
+def MsProperty : Attr {
+  let Spellings = [Declspec<"property">];
+}
+
 def MsStruct : InheritableAttr {
   let Spellings = [Declspec<"ms_struct">];
 }
@@ -960,16 +963,24 @@ def Ptr64 : InheritableAttr {
   let Spellings = [Keyword<"__ptr64">];
 }
 
-def SingleInheritance : InheritableAttr {
+class MSInheritanceAttr : InheritableAttr;
+
+def SingleInheritance : MSInheritanceAttr {
   let Spellings = [Keyword<"__single_inheritance">];
 }
 
-def MultipleInheritance : InheritableAttr {
+def MultipleInheritance : MSInheritanceAttr {
   let Spellings = [Keyword<"__multiple_inheritance">];
 }
 
-def VirtualInheritance : InheritableAttr {
+def VirtualInheritance : MSInheritanceAttr {
   let Spellings = [Keyword<"__virtual_inheritance">];
+}
+
+// This attribute doesn't have any spellings, but we can apply it implicitly to
+// incomplete types that lack any of the other attributes.
+def UnspecifiedInheritance : MSInheritanceAttr {
+  let Spellings = [];
 }
 
 def Unaligned : IgnoredAttr {
@@ -997,6 +1008,12 @@ def RegionArg : InheritableAttr {
   let Spellings = [GNU<"arg">, CXX11<"asap", "arg">];
   let Subjects = [Var, ParmVar];
   let Args = [StringArgument<"rpl">];
+}
+
+def RegionBaseArg : InheritableAttr {
+  let Spellings = [GNU<"base_arg">, CXX11<"asap", "base_arg">];
+  let Subjects = [Record];
+  let Args = [StringArgument<"baseType">, StringArgument<"rpl">];
 }
 
 

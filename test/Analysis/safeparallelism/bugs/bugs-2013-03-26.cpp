@@ -7,6 +7,6 @@ public:
   void do_something();
 };
 
-void func [[asap::writes("R")]] ( C *c [[asap::arg("Local,R")]] ) {
+void func [[asap::writes("R")]] ( C *c [[asap::arg("Local")]] ) {
   c->do_something();
 }

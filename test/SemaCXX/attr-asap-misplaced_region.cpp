@@ -6,24 +6,29 @@ class
 __attribute__((region("Money")))
 __attribute__ ((param("P"))) 
 __attribute__((arg("P:Money"))) // expected-warning {{attribute only applies to fields}}
+__attribute__((base_arg("P", "P")))
 Coo {
 
   int money __attribute__((arg("P:Money")))
+            __attribute__((base_arg("P", "P"))) // expected-warning{{attribute only applies to classes and structs}}
             __attribute__ ((param("P")))      // expected-warning {{attribute only applies to classes and structs and functions}}
             __attribute__((region("Honey"))); // expected-warning {{attribute only applies to classes and structs and functions and empty declarations}}
 
 public:
   Coo () __attribute__((no_effect)) 
+         __attribute__((base_arg("P", "P"))) // expected-warning{{attribute only applies to classes and structs}}
          __attribute__((region("Money"))) 
          __attribute__((arg("P:Money"))) 
          __attribute__ ((param("P"))) 
         : money(0) {}
 
   Coo (int cash __attribute__((arg("P:Money"))) 
+                __attribute__((base_arg("P", "P"))) // expected-warning{{attribute only applies to classes and structs}}
                 __attribute__((region("Money"))) )  // expected-warning {{attribute only applies to classes and structs and functions and empty declarations}}
+       __attribute__((base_arg("P", "P"))) // expected-warning{{attribute only applies to classes and structs}}
        __attribute__((no_effect)) : money(cash) {}
 
-  int get_some() __attribute__((reads("P:Money"))){ 
+  int get_some() __attribute__((reads("P:Money"))) {
     return money;
   }
 
@@ -55,9 +60,11 @@ class
 [[asap::region("Money")]]
 [[asap::param("P")]]
 [[asap::arg("P:Money")]] // expected-warning {{attribute only applies to fields}}
+[[asap::base_arg("P", "P")]]
 Coo {
 
   int money [[asap::arg("P:Money")]]
+            [[asap::base_arg("P", "P")]] // expected-warning{{attribute only applies to classes and structs}}
             [[asap::param("P")]]        // expected-warning {{attribute only applies to classes and structs and functions}}
             [[asap::region("Honey")]] ; // expected-warning {{attribute only applies to classes and structs and functions and empty declarations}}
 
@@ -66,19 +73,22 @@ public:
   [[asap::region("Money")]]   
   [[asap::arg("P:Money")]] 
   [[asap::param("P")]] 
+  [[asap::base_arg("P", "P")]] // expected-warning{{attribute only applies to classes and structs}}
   Coo()
         : money(0) {}
 
   [[asap::no_effect]]
-  Coo (int cash [[asap::arg("P:Money")]] 
+  [[asap::base_arg("P", "P")]] // expected-warning{{attribute only applies to classes and structs}}
+  Coo (int cash [[asap::arg("P:Money")]]
+                [[asap::base_arg("P", "P")]] // expected-warning{{attribute only applies to classes and structs}}
                 [[asap::region("Money")]] )  // expected-warning {{attribute only applies to classes and structs and functions and empty declarations}}
        : money(cash) {}
 
-  int get_some [[asap::reads("P:Money")]] () { 
+  int get_some [[asap::reads("P:Money")]] () {
     return money;
   }
 
-  void set_money [[asap::writes("P:Money")]] (int cash [[asap::param("P")]] )  // expected-warning {{attribute only applies to classes and structs and functions}} 
+  void set_money [[asap::writes("P:Money")]] (int cash [[asap::param("P")]] )  // expected-warning {{attribute only applies to classes and structs and functions}}
   {
     money = cash ;
   }
@@ -90,7 +100,7 @@ public:
 
 
 
-[[asap::region("Roo")]] 
+[[asap::region("Roo")]]
 int main (void) {
   Coo c [[asap::arg("Roo")]];
   // Coo *d [[asap::arg("Rah")]] = new Coo [[asap::arg("Root:Rah")]] (77);
@@ -100,4 +110,4 @@ int main (void) {
 }
 
 #endif
-  
+

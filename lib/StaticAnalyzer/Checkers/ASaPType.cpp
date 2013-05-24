@@ -7,22 +7,68 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This files defines the ASaPType class used by the Safe Parallelism
+// This file defines the ASaPType class used by the Safe Parallelism
 // checker, which tries to prove the safety of parallelism given region
 // and effect annotations.
 //
 //===----------------------------------------------------------------===//
 
-#include "Rpl.h"
-#include "Effect.h"
-#include "ASaPType.h"
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/CXXInheritance.h"
 
-using namespace clang;
-using namespace clang::asap;
+#include "ASaPUtil.h"
+#include "ASaPType.h"
+#include "Effect.h"
+#include "Rpl.h"
+#include "Substitution.h"
 
-ASaPType::ASaPType(QualType QT, RplVector *ArgV, Rpl *InRpl,
-                   bool Simple): QT(QT) {
+namespace clang {
+namespace asap {
+
+// Static function
+bool ASaPType::
+isDerivedFrom(QualType Derived, QualType Base) {
+
+  //OSv2 << "DEBUG:: isDerived: let's start...\n";
+  CXXRecordDecl *DerivedRD = Derived->getAsCXXRecordDecl();
+  if (!DerivedRD)
+    return false;
+
+  CXXRecordDecl *BaseRD = Base->getAsCXXRecordDecl();
+  if (!BaseRD)
+    return false;
+
+  //OSv2 << "DEBUG:: isDerived: both non null...\n";
+  // If either the base or the derived type is invalid, don't try to
+  // check whether one is derived from the other.
+  if (BaseRD->isInvalidDecl() || DerivedRD->isInvalidDecl())
+    return false;
+
+  //OSv2 << "DEBUG:: isDerived: about to compare...";
+  // FIXME: instantiate DerivedRD if necessary.  We need a PoI for this.
+  bool Result = DerivedRD->hasDefinition() &&
+                DerivedRD->isDerivedFrom(BaseRD);
+  //OSv2 << "Result:" << Result << "\n";
+  return Result;
+}
+
+// Non-Static Functions
+void ASaPType::adjust() {
+  // Check if we might need to set InRpl.
+  if (!this->InRpl) {
+    // Figure out based on QT if we need an InRpl.
+    if (this->QT->isScalarType() && !this->QT->isReferenceType()) {
+      // Get it from the head of ArgV.
+      assert(this->ArgV && this->ArgV->size() > 0);
+      this->InRpl = this->ArgV->pop_front().release();
+    }
+  }
+}
+
+// Constructor
+ASaPType::ASaPType(QualType QT, const InheritanceMapT *InheritanceMap,
+                   RplVector *ArgV, Rpl *InRpl, bool Simple)
+                   : QT(QT), InheritanceMap(InheritanceMap) {
   // 1. Set InRpl & ArgV.
   if (InRpl)
     this->InRpl = new Rpl(*InRpl);
@@ -32,46 +78,40 @@ ASaPType::ASaPType(QualType QT, RplVector *ArgV, Rpl *InRpl,
     this->ArgV = new RplVector(*ArgV);
   else
     this->ArgV = new RplVector();
-
   if (!Simple) {
-    // 2. If QT is a function type, we're really interested in the
-    // return type.
-    if (QT->isFunctionType()) {
-      const FunctionType *FT = dyn_cast<FunctionType>(QT.getTypePtr());
-      this->QT = FT->getResultType();
-    }
-    // 3. Check if we might need to set InRpl.
-    if (!this->InRpl) {
-      // Figure out based on QT if we need an InRpl.
-      if (this->QT->isScalarType() && !this->QT->isReferenceType()) {
-        // Get it from the head of ArgV.
-        assert(this->ArgV && this->ArgV->size() > 0);
-        this->InRpl = this->ArgV->pop_front();
-      }
-    }
+    adjust();
   } // End if (!Simple).
 }
 
-ASaPType::ASaPType(const ASaPType &T) : QT(T.QT) {
+// Copy Constructor
+ASaPType::ASaPType(const ASaPType &T)
+  : QT(T.QT), InheritanceMap(T.InheritanceMap) {
+  // 1. Copy QT
   this->QT = T.QT;
+  // 2. Copy InRpl
   if (T.InRpl)
     this->InRpl = new Rpl(*T.InRpl);
   else
     this->InRpl = 0;
+  // 3. Copy ArgV
   if (T.ArgV)
     this->ArgV = new RplVector(*T.ArgV);
   else
-    this->ArgV = 0;
+    this->ArgV = new RplVector();
 }
 
+// Destructor
 ASaPType::~ASaPType() {
   delete InRpl;
   delete ArgV;
 }
 
-bool ASaPType::isFunctionType() const { return QT->isFunctionType(); }
-
-int ASaPType::getArgVSize() const { return ArgV->size(); }
+int ASaPType::getArgVSize() const {
+  if (ArgV)
+    return ArgV->size();
+  else
+    return 0;
+}
 
 const RplVector *ASaPType::getArgV() const { return ArgV; }
 
@@ -107,14 +147,16 @@ QualType ASaPType::getQT(int DerefNum) const {
   return Result;
 }
 
-/*ASaPType *ASaPType::getReturnType() const {
+ASaPType *ASaPType::getReturnType() {
   if (QT->isFunctionType()) {
-    const FunctionType *FT = dyn_cast<FunctionType>(QT.getTypePtr());
-    QualType ResultQT = FT->getResultType();
-    return new ASaPType(ResultQT, ArgV, InRpl);
-  } else
+    const FunctionType *FT = QT->getAs<FunctionType>();
+    QT = FT->getResultType();
+    adjust();
+    return this;
+  } else {
     return 0;
-}*/
+  }
+}
 
 void ASaPType::deref(int DerefNum) {
   assert(DerefNum >= 0);
@@ -131,7 +173,7 @@ void ASaPType::deref(int DerefNum) {
     // args vector in the InRpl field; otherwise InRpl stays empty
     // as in the case of C++ object types.
     if (QT->isScalarType())
-      InRpl = ArgV->deref();
+      InRpl = ArgV->deref().release();
     else
       InRpl = 0;
     DerefNum--;
@@ -140,7 +182,7 @@ void ASaPType::deref(int DerefNum) {
 
 void ASaPType::addrOf(QualType RefQT) {
   assert(RefQT->isPointerType() || RefQT->isReferenceType());
-  assert(areQTsEqual(this->QT, RefQT->getPointeeType()));
+  assert(areUnqualQTsEqual(this->QT, RefQT->getPointeeType()));
   this->QT = RefQT;
 
   if (InRpl) {
@@ -180,7 +222,9 @@ std::string ASaPType::toString() const {
   return std::string(OS.str());
 }
 
-bool ASaPType::isAssignableTo(const ASaPType &That, bool IsInit) const {
+bool ASaPType::
+isAssignableTo(const ASaPType &That, SymbolTable &SymT,
+               ASTContext &Ctx, bool IsInit) const {
   OSv2 << "DEBUG:: isAssignable [IsInit=" << IsInit
   << "]\n";
   OSv2 << "RHS:" << this->toString() << "\n";
@@ -188,50 +232,122 @@ bool ASaPType::isAssignableTo(const ASaPType &That, bool IsInit) const {
 
   ASaPType ThisCopy(*this);
   if (ThisCopy.QT->isReferenceType()) {
-    ASaPType ThisDeref(*this);
     ThisCopy.deref();
   }
-  // If IsInit==false, get rid of references.
-  if (!IsInit) {
-    ASaPType ThatCopy(That);
-    if (ThatCopy.QT->isReferenceType()) {
-      ThatCopy.deref();
-    }
-    return ThisCopy.isSubtypeOf(ThatCopy);
-  } else { // IsInit == true
+
+  ASaPType ThatCopy(That);
+  if (ThatCopy.QT->isReferenceType()) {
+    ThatCopy.deref();
+  }
+
+  if (IsInit) {
     if (That.QT->isReferenceType()) {
-      // TODO: support this->QT isSubtypeOf QT->getPointeeType.
-      if (areQTsEqual(That.QT->getPointeeType(), ThisCopy.QT)) {
-        OSv2 << "DEBUG:: here 1\n";
-        ThisCopy.addrOf(That.QT);
-      } else {
-        OSv2 << "DEBUG:: failed\n";
-        return false; // good enough until we support inheritance
-      }
+      ThatCopy.addrOf(Ctx.getPointerType(ThatCopy.QT));
+      QualType ThisRef = Ctx.getPointerType(ThisCopy.QT);
+      OSv2 << "DEBUG:: ThisRef:" << ThisRef.getAsString() << "\n";
+      ThisCopy.addrOf(ThisRef);
     }
-    return ThisCopy.isSubtypeOf(That);
   } // end IsInit == true
+  return ThisCopy.isSubtypeOf(ThatCopy, SymT);
 }
 
-bool ASaPType::isSubtypeOf(const ASaPType &That) const { return *this <= That; }
-
-bool ASaPType::operator <= (const ASaPType &That) const {
-  if (! areQTsEqual(QT, That.QT)) {
+bool ASaPType::
+isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const {
+  if (! areUnqualQTsEqual(QT, That.QT) ) {
     /// Typechecking has passed so we assume that this->QT <= that->QT
     /// but we have to find follow the mapping and substitute Rpls....
-    /// TODO :)
-    OSv2 << "DEBUG:: Failing ASaP::subtype because QT != QT'\n";
-    return false; // until we support inheritance this is good enough.
+    if (QT->isPointerType() && That.QT->isPointerType()) {
+      // Recursively check
+      ASaPType ThisCopy(*this), ThatCopy(That);
+      ThisCopy.deref(); ThatCopy.deref();
+      // both null or both non-null
+      assert((ThisCopy.InRpl && ThatCopy.InRpl) ||
+             (ThisCopy.InRpl==0 && ThatCopy.InRpl==0));
+
+      return (ThisCopy.isSubtypeOf(ThatCopy, SymT)) &&
+             ((ThisCopy.InRpl == 0 && ThatCopy.InRpl == 0) ||
+              (ThisCopy.InRpl && ThatCopy.InRpl &&
+               ThisCopy.InRpl->isIncludedIn(*ThatCopy.InRpl)));
+    } else {
+      assert(isDerivedFrom(QT, That.QT));
+      ASaPType ThisCopy(*this);
+      if (!ThisCopy.implicitCastToBase(That.QT, SymT))
+        return false;
+      else
+        return ThisCopy.ArgV->isIncludedIn(*That.ArgV);
+    }
   }
   /// Note that we're ignoring InRpl on purpose.
   assert(That.ArgV);
   return this->ArgV->isIncludedIn(*That.ArgV);
 }
 
+bool ASaPType::implicitCastToBase(QualType BaseQT, SymbolTable &SymT) {
+  OSv2 << "DEBUG:: implicitCastToBase [" << this->toString() << "]\n";
+  CXXRecordDecl *DerivedRD = QT->getAsCXXRecordDecl();
+  CXXRecordDecl *BaseRD = BaseQT->getAsCXXRecordDecl();
+
+  if (!BaseRD || !DerivedRD || !DerivedRD->hasDefinition() ||
+      BaseRD->isInvalidDecl() || DerivedRD->isInvalidDecl())
+    return false;
+
+  CXXBasePaths *Paths = new CXXBasePaths();
+  bool Result = DerivedRD->isDerivedFrom(BaseRD, *Paths);
+  /// Count number of paths
+  int c = 0;
+  for (CXXBasePaths::paths_iterator I = Paths->begin(), E = Paths->end();
+        I != E; ++I) {
+    c++;
+  }
+  OSv2 << "DEBUG:: implicitCastToBase: #Paths = " << c << "\n";
+  ///
+  CXXBasePath &Path = Paths->front();
+  OSv2 << "DEBUG:: implicitCastToBase: Paths.front.size()== "
+       << Paths->front().size() << "\n";
+
+  const ParameterVector *ParV = SymT.getParameterVector(DerivedRD);
+  SubstitutionVector SubVec;
+  SubVec.buildSubstitutionVector(ParV, ArgV);
+
+  const InheritanceMapT *CurrMap = InheritanceMap;
+  for (CXXBasePath::iterator I = Path.begin(), E = Path.end();
+       I != E; ++I) {
+    assert(CurrMap);
+    //get Sub
+    QualType DirectBaseQT = I->Base->getType();
+
+    const RecordType *BaseRT = DirectBaseQT->getAs<RecordType>();
+    assert(BaseRT);
+    RecordDecl *BaseRD = BaseRT->getDecl();
+    assert(BaseRD);
+    IMapPair Pair = CurrMap->lookup(BaseRD);
+    const SubstitutionVector *SV = Pair.second;
+
+    SubVec.push_back_vec(SV);
+    // prepare for next iter
+    SymbolTableEntry *STE = Pair.first;
+    assert(STE);
+    CurrMap = STE->getInheritanceMap();
+  }
+  delete Paths;
+  delete ArgV;
+  // Apply substitutions in reverse order starting from the parameters
+  // of the base class all the way to the substitution for the actual
+  // variable of the derived type, then set ArgV
+  const ParameterVector *PV = SymT.getParameterVector(BaseRD);
+  assert(PV);
+  RplVector *NewArgV = new RplVector(*PV);
+  SubVec.reverseApplyTo(NewArgV);
+  ArgV = NewArgV;
+  QT = BaseQT;
+
+  return Result;
+}
+
 void ASaPType::join(ASaPType *That) {
   if (!That)
     return;
-  if (this->QT.getUnqualifiedType() != That->QT.getUnqualifiedType()) {
+  if (! areUnqualQTsEqual(this->QT, That->QT) ) {
     /// Typechecking has passed so we assume that this->QT <= that->QT
     /// but we have to find follow the mapping and substitute Rpls....
     /// TODO :)
@@ -252,30 +368,19 @@ void ASaPType::join(ASaPType *That) {
 }
 
 void ASaPType::substitute(const SubstitutionVector *SubV) {
-  if (!SubV)
-    return;
-  for(SubstitutionVector::SubstitutionVecT::const_iterator
-      I = SubV->begin(),
-      E = SubV->end();
-      I != E; ++I) {
-    Substitution *Sub = *I;
-    substitute(Sub);
-  }
+  if (SubV)
+    SubV->applyTo(this);
 }
 
-void ASaPType::substitute(Substitution *Sub) {
+void ASaPType::substitute(const Substitution *Sub) {
   if (!Sub)
     return;
 
-  const RplElement *FromEl = Sub->getFrom();
-  const Rpl *ToRpl = Sub->getTo();
-  assert(FromEl);
-  assert(ToRpl);
   if (InRpl)
-    InRpl->substitute(*FromEl, *ToRpl);
+    InRpl->substitute(Sub);
   if (ArgV)
-    ArgV->substitute(*FromEl, *ToRpl);
+    ArgV->substitute(Sub);
 }
 
-
-
+} // end namespace clang
+} // end namespace asap

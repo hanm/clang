@@ -6,6 +6,7 @@
 class 
 __attribute__ ((param)) // expected-error {{attribute takes one argument}}
 __attribute__((region)) // expected-error {{attribute takes one argument}}
+__attribute__((base_arg))// expected-error {{attribute requires exactly 2 arguments}}
 Coo {
   int money __attribute__((arg)); // expected-error {{attribute takes one argument}}
 
@@ -24,6 +25,8 @@ public:
 class 
 __attribute__ ((param("P", "P2")))  // expected-error {{attribute takes one argument}}
 __attribute__((region("Links", "Butter"))) // expected-error {{attribute takes one argument}}
+__attribute__((base_arg("P")))// expected-error {{attribute requires exactly 2 arguments}}
+__attribute__((base_arg("P","P","P")))// expected-error {{attribute requires exactly 2 arguments}}
 Gar {
   int money __attribute__((arg("P:Links", "Links:Butter"))); // expected-error {{attribute takes one argument}}
 
@@ -41,13 +44,13 @@ public:
 
 
 
-__attribute__((region("Roo")))  
+__attribute__((region("Roo")))
 __attribute__((region("Raa")))
 int main (void) {
   Coo c __attribute__((arg)); // expected-error {{attribute takes one argument}}
   Gar g __attribute__((arg("Roo", "Raa"))); // expected-error {{attribute takes one argument}}
   g.set_money(17);
-  return 0; 
+  return 0;
 }
 
 #endif
@@ -57,6 +60,7 @@ int main (void) {
 class 
 [[asap::param]] // expected-error {{attribute takes one argument}}
 [[asap::region]] // expected-error {{attribute takes one argument}}
+[[asap::base_arg]] // expected-error {{attribute requires exactly 2 arguments}}
 Coo {
   int money [[asap::arg]]; // expected-error {{attribute takes one argument}}
 
@@ -75,6 +79,8 @@ public:
 class 
 [[asap::param("P", "P2")]]  // expected-error {{attribute takes one argument}}
 [[asap::region("Links", "Butter")]] // expected-error {{attribute takes one argument}}
+[[asap::base_arg("P")]] // expected-error {{attribute requires exactly 2 arguments}}
+[[asap::base_arg("P","P","P")]] // expected-error {{attribute requires exactly 2 arguments}}
 Gar {
   int money [[asap::arg("P:Links", "Links:Butter")]]; // expected-error {{attribute takes one argument}}
 
