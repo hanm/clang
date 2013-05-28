@@ -66,6 +66,9 @@ public:
   inline bool isFunctionType() const { return QT->isFunctionType(); }
   /// \brief Returns true iff this is a Reference.
   inline bool isReferenceType() const { return QT->isReferenceType(); }
+  inline bool hasInheritanceMap() const {
+    return InheritanceMap ? true : false;
+  }
 
   /// \brief Return the size of the ArgsVector.
   int getArgVSize() const;
