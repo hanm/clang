@@ -126,7 +126,20 @@ buildPartialEffectSummary(FunctionDecl *D, EffectSummary &ES) {
   }
 }
 
-
+inline void ASaPSemanticCheckerTraverser::
+addASaPTypeToMap(ValueDecl *ValD, ASaPType *T) {
+  assert(!SymT.hasType(ValD));
+  if (T) {
+    OS << "Debug :: adding type: " << T->toString(Ctx) << " to Decl: ";
+    ValD->print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+    if (T->hasInheritanceMap()) {
+      OS << "DEBUG:: Type has an inheritance map!\n";
+    }
+    bool Result = SymT.setType(ValD, T);
+    assert(Result);
+  }
+}
 
 void ASaPSemanticCheckerTraverser::
 addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
@@ -139,14 +152,7 @@ addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
   OS << "Debug:: RV.size=" << (RplV ? RplV->size() : 0)
 
     << ", T.RV.size=" << T->getArgVSize() << "\n";
-  OS << "Debug :: adding type: " << T->toString(Ctx) << " to Decl: ";
-  ValD->print(OS, Ctx.getPrintingPolicy());
-  OS << "\n";
-  if (IMap) {
-    OS << "DEBUG:: Type has an inheritance map!\n";
-  }
-  bool Result = SymT.setType(ValD, T);
-  assert(Result);
+  addASaPTypeToMap(ValD, T);
 }
 
 void ASaPSemanticCheckerTraverser::
@@ -478,7 +484,8 @@ checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
      << ", " << ParamCount << ") DONE!\n";
   long ArgCount = (RplVec) ? RplVec->size() : 0;
   OS << "ArgCount = " << ArgCount << "\n";
-
+  OS << "DefaultInRpl ="  <<  ((DefaultInRpl) ? DefaultInRpl->toString() : "")
+     << "\n";
   switch(ResKin) {
   case RK_ERROR:
     emitUnknownNumberOfRegionParamsForType(D);
@@ -492,48 +499,57 @@ checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
     }
     break;
   case RK_OK:
+    OS << "DEBUG:: here01\n";
     if (ParamCount > ArgCount &&
-      ParamCount > ArgCount + (DefaultInRpl?1:0)) {
-        ValueDecl *ValD = dyn_cast<ValueDecl>(D);
-        if (!RplVec && ValD) {
-          AnnotationSet AnSe = SymT.makeDefaultType(ValD, ParamCount);
-          addASaPTypeToMap(ValD, AnSe.T);
-        } else {
-          emitMissingRegionArgs(D, Att, ParamCount);
-        }
+        ParamCount > ArgCount + (DefaultInRpl?1:0)) {
+      ValueDecl *ValD = dyn_cast<ValueDecl>(D);
+      OS << "DEBUG:: here02\n";
+      if (!RplVec && ValD) {
+        OS << "DEBUG:: here03\n";
+        AnnotationSet AnSe = SymT.makeDefaultType(ValD, ParamCount);
+        OS << "DEBUG:: Default type created:" << AnSe.T->toString() << "\n";
+        addASaPTypeToMap(ValD, AnSe.T);
+      } else {
+        emitMissingRegionArgs(D, Att, ParamCount);
+      }
     } else if (ParamCount < ArgCount &&
-      ParamCount < ArgCount + (DefaultInRpl?1:0)) {
-        // Superfluous region args
-        std::string SBuf;
-        llvm::raw_string_ostream BufStream(SBuf);
-        int I = ParamCount;
-        for (; I < ArgCount-1; ++I) {
-          RplVec->getRplAt(I)->print(BufStream);
-          BufStream << ", ";
-        }
-        if (I < ArgCount) {
-          RplVec->getRplAt(I)->print(BufStream);
-        }
-        emitSuperfluousRegionArg(D, Att, ParamCount, BufStream.str());
+               ParamCount < ArgCount + (DefaultInRpl?1:0)) {
+      // Superfluous region args
+      std::string SBuf;
+      llvm::raw_string_ostream BufStream(SBuf);
+      int I = ParamCount;
+      for (; I < ArgCount-1; ++I) {
+        RplVec->getRplAt(I)->print(BufStream);
+        BufStream << ", ";
+      }
+      if (I < ArgCount) {
+        RplVec->getRplAt(I)->print(BufStream);
+      }
+      emitSuperfluousRegionArg(D, Att, ParamCount, BufStream.str());
     } else {
       assert(ParamCount>=0);
+      OS << "DEBUG:: here1\n";
       if (ParamCount > ArgCount) {
         assert(DefaultInRpl);
         if (RplVec) {
           RplVec->push_front(DefaultInRpl);
         } else {
           RplVec = new RplVector(*DefaultInRpl);
+          OS << "DEBUG:: here2\n";
         }
       }
       assert(ParamCount == 0 ||
         (size_t)ParamCount == RplVec->size());
+      OS << "DEBUG:: here3\n";
       if (ValueDecl *VD = dyn_cast<ValueDecl>(D)) {
+        OS << "DEBUG:: here4\n";
         addASaPTypeToMap(VD, RplVec, 0);
       } else if (CXXRecordDecl *CXXRD = dyn_cast<CXXRecordDecl>(D)) {
         addASaPBaseTypeToMap(CXXRD, QT, RplVec);
       } else {
         assert(false && "Called 'checkParamAndArgCounts' with invalid Decl type.");
       }
+      OS << "DEBUG:: here5\n";
     }
     break;
     default:
@@ -846,6 +862,8 @@ bool ASaPSemanticCheckerTraverser::VisitValueDecl(ValueDecl *D) {
   OS << "DEBUG:: VisitValueDecl : ";
   D->print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
+  D->dump(OS);
+  OS << "\n";
   OS << "DEBUG:: it is " << (D->isTemplateDecl() ? "" : "NOT ")
     << "a template\n";
   OS << "DEBUG:: it is " << (D->isTemplateParameter() ? "" : "NOT ")
@@ -864,7 +882,37 @@ bool ASaPSemanticCheckerTraverser::VisitParmVarDecl(ParmVarDecl *D) {
   return true;
 }
 
+
+/*bool ASaPSemanticCheckerTraverser::TraverseFunctionDecl(FunctionDecl *D) {
+  TRY_TO(WalkUpFromFunctionDecl(D));
+  { CODE; }
+  TRY_TO(TraverseDeclContextHelper(dyn_cast<DeclContext>(D)));
+  return true;
+}*/
+/*
+#define TRY_TO(CALL_EXPR) \
+  do { if (!getDerived().CALL_EXPR) return false; } while (0)
+
+#define DEF_TRAVERSE_TYPELOC(TYPE, CODE)
+bool ASaPSemanticCheckerTraverser::
+TraverseFunctionNoProtoTypeLoc(FunctionNoProtoTypeLoc TL) {
+    if (getDerived().shouldWalkTypesOfTypeLocs())
+      TRY_TO(WalkUpFromFunctionNoProtoType(const_cast<FunctionNoProtoType*>(TL.getTypePtr())));
+    TRY_TO(WalkUpFromFunctionNoProtoTypeLoc(TL));                                  \
+    { CODE; }                                                           \
+    return true;                                                        \
+  }
+DEF_TRAVERSE_TYPELOC(FunctionNoProtoType, {
+    TRY_TO(TraverseTypeLoc(TL.getResultLoc()));
+  }
+*/
+
 bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
+  OS << "DEBUG:: VisitFunctionDecl\n";
+  OS << "D->isThisDeclarationADefinition() = "
+     << D->isThisDeclarationADefinition() << "\n";
+  OS << "D->getTypeSourceInfo() = " << D->getTypeSourceInfo() << "\n";
+
   if (NextFunctionIsATemplatePattern) {
     NextFunctionIsATemplatePattern = false;
     //return true; // skip this function
@@ -919,6 +967,12 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
     /// C.2. Check Effects covered by canonical Declaration
     const FunctionDecl *CanFD = D->getCanonicalDecl();
     if (CanFD != D) { // Case 1: We are not visiting the canonical Decl
+      OS << "DEBUG:: CanFD != D\n";
+      OS << "DEBUG:: D="; D->print(OS); OS << "\n";
+      OS << "DEBUG:: CanFD="; CanFD->print(OS); OS << "\n";
+      OS << "DEBUG:: D="; D->dump(OS); OS << "\n";
+      OS << "DEBUG:: CanFD="; CanFD->dump(OS); OS << "\n";
+
       const EffectSummary *DeclEffSummary = SymT.getEffectSummary(CanFD);
       assert(DeclEffSummary); // Assume the canonical Decl has been visited.
       if (!DeclEffSummary->covers(ES)) {

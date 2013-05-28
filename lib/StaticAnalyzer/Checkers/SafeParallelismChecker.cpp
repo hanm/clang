@@ -50,6 +50,7 @@ public:
 
   bool shouldVisitTemplateInstantiations() const { return true; }
   bool shouldVisitImplicitCode() const { return true; }
+  bool shouldWalkTypesOfTypeLocs() const { return true; }
 
   /// Getters & Setters
   inline bool encounteredFatalError() { return FatalError; }
