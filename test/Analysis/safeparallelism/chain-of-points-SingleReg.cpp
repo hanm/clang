@@ -9,14 +9,12 @@ public:
     point() {}
     point(double x, double y) : m_x(x), m_y(y) {}
  
-
     [[asap::param("Q"), asap::reads("Q")]] point(
         const point &p [[asap::arg("Q")]]
         )
         : m_x(p.m_x), m_y(p.m_y)
         {}
 
- 
     point &operator= [[asap::arg("class"), asap::param("P"), asap::reads("P"), asap::writes("class")]] (
         const point &p [[asap::arg("P")]]
         )
@@ -48,7 +46,8 @@ struct [[asap::param("P")]] link {
         next(nullptr) {}
     };
 
-void delete_all[[asap::param("Q"), asap::writes("Q")]](link *lnk[[asap::arg("Q")]])
+void delete_all[[asap::param("Q"), asap::writes("Q")]]
+    (link *lnk[[asap::arg("Q")]])
     {
     if(lnk)
         {
@@ -71,7 +70,7 @@ public:
         new_start->next = start;
         start = new_start;
         }
-    
+    // count and return the number of nodes in the list
     int n_points [[asap::reads("P")]]() const
         {
         link *lp[[asap::arg("Local, P")]] = start;
@@ -87,7 +86,7 @@ public:
         }
  
     // Split the chain at link n (>= 1) and move the later links into 'rest'.
-    // If there are few than n link in the chain return false, and do
+    // If there are fewer than n links in the chain return false, and do
     // not change either chain.
     bool split [[asap::writes("P")]] (int n, chain &rest[[asap::arg("P")]]) {
         link *lp[[asap::arg("Local, P")]] = start;
