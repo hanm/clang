@@ -586,12 +586,11 @@ bool Sema::CheckFunctionCall(FunctionDecl *FDecl, CallExpr *TheCall,
 }
 
 bool Sema::CheckObjCMethodCall(ObjCMethodDecl *Method, SourceLocation lbrac, 
-                               Expr **Args, unsigned NumArgs) {
+                               ArrayRef<const Expr *> Args) {
   VariadicCallType CallType =
       Method->isVariadic() ? VariadicMethod : VariadicDoesNotApply;
 
-  checkCall(Method, llvm::makeArrayRef<const Expr *>(Args, NumArgs),
-            Method->param_size(),
+  checkCall(Method, Args, Method->param_size(),
             /*IsMemberFunction=*/false,
             lbrac, Method->getSourceRange(), CallType);
 
@@ -909,10 +908,18 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
     SubExprs.push_back(TheCall->getArg(3)); // Weak
     break;
   }
+  
+  AtomicExpr *AE = new (Context) AtomicExpr(TheCall->getCallee()->getLocStart(),
+                                            SubExprs, ResultType, Op,
+                                            TheCall->getRParenLoc());
+  
+  if ((Op == AtomicExpr::AO__c11_atomic_load ||
+       (Op == AtomicExpr::AO__c11_atomic_store)) &&
+      Context.AtomicUsesUnsupportedLibcall(AE))
+    Diag(AE->getLocStart(), diag::err_atomic_load_store_uses_lib) <<
+    ((Op == AtomicExpr::AO__c11_atomic_load) ? 0 : 1);
 
-  return Owned(new (Context) AtomicExpr(TheCall->getCallee()->getLocStart(),
-                                        SubExprs, ResultType, Op,
-                                        TheCall->getRParenLoc()));
+  return Owned(AE);
 }
 
 
@@ -1356,6 +1363,11 @@ bool Sema::SemaBuiltinVAStart(CallExpr *TheCall) {
   bool SecondArgIsLastNamedArgument = false;
   const Expr *Arg = TheCall->getArg(1)->IgnoreParenCasts();
 
+  // These are valid if SecondArgIsLastNamedArgument is false after the next
+  // block.
+  QualType Type;
+  SourceLocation ParamLoc;
+
   if (const DeclRefExpr *DR = dyn_cast<DeclRefExpr>(Arg)) {
     if (const ParmVarDecl *PV = dyn_cast<ParmVarDecl>(DR->getDecl())) {
       // FIXME: This isn't correct for methods (results in bogus warning).
@@ -1368,12 +1380,21 @@ bool Sema::SemaBuiltinVAStart(CallExpr *TheCall) {
       else
         LastArg = *(getCurMethodDecl()->param_end()-1);
       SecondArgIsLastNamedArgument = PV == LastArg;
+
+      Type = PV->getType();
+      ParamLoc = PV->getLocation();
     }
   }
 
   if (!SecondArgIsLastNamedArgument)
     Diag(TheCall->getArg(1)->getLocStart(),
          diag::warn_second_parameter_of_va_start_not_last_named_argument);
+  else if (Type->isReferenceType()) {
+    Diag(Arg->getLocStart(),
+         diag::warn_va_start_of_reference_type_is_undefined);
+    Diag(ParamLoc, diag::note_parameter_type) << Type;
+  }
+
   return false;
 }
 
@@ -2009,7 +2030,7 @@ public:
                                    PartialDiagnostic PDiag,
                                    SourceLocation StringLoc,
                                    bool IsStringLocation, Range StringRange,
-                            ArrayRef<FixItHint> Fixit = ArrayRef<FixItHint>());
+                                   ArrayRef<FixItHint> Fixit = None);
 
 protected:
   bool HandleInvalidConversionSpecifier(unsigned argIndex, SourceLocation Loc,
@@ -2036,7 +2057,7 @@ protected:
   template <typename Range>
   void EmitFormatDiagnostic(PartialDiagnostic PDiag, SourceLocation StringLoc,
                             bool IsStringLocation, Range StringRange,
-                            ArrayRef<FixItHint> Fixit = ArrayRef<FixItHint>());
+                            ArrayRef<FixItHint> Fixit = None);
 
   void CheckPositionalAndNonpositionalArgs(
       const analyze_format_string::FormatSpecifier *FS);
@@ -3999,20 +4020,23 @@ struct IntRange {
     if (const ComplexType *CT = dyn_cast<ComplexType>(T))
       T = CT->getElementType().getTypePtr();
 
-    // For enum types, use the known bit width of the enumerators.
     if (const EnumType *ET = dyn_cast<EnumType>(T)) {
-      EnumDecl *Enum = ET->getDecl();
-      if (!Enum->isCompleteDefinition())
-        return IntRange(C.getIntWidth(QualType(T, 0)), false);
+      if (C.getLangOpts().CPlusPlus) {
+        // For enum types, use the known bit width of the enumerators.
+        EnumDecl *Enum = ET->getDecl();
+        if (!Enum->isCompleteDefinition())
+          return IntRange(C.getIntWidth(QualType(T, 0)), false);
 
-      unsigned NumPositive = Enum->getNumPositiveBits();
-      unsigned NumNegative = Enum->getNumNegativeBits();
+        unsigned NumPositive = Enum->getNumPositiveBits();
+        unsigned NumNegative = Enum->getNumNegativeBits();
 
-      if (NumNegative == 0)
-        return IntRange(NumPositive, true/*NonNegative*/);
-      else
-        return IntRange(std::max(NumPositive + 1, NumNegative),
-                        false/*NonNegative*/);
+        if (NumNegative == 0)
+          return IntRange(NumPositive, true/*NonNegative*/);
+        else
+          return IntRange(std::max(NumPositive + 1, NumNegative),
+              false/*NonNegative*/);
+      } else
+        T = C.getCanonicalType(ET->getDecl()->getIntegerType().getTypePtr());
     }
 
     const BuiltinType *BT = cast<BuiltinType>(T);
@@ -4312,7 +4336,7 @@ static IntRange GetExprRange(ASTContext &C, Expr *E, unsigned MaxWidth) {
     IntRange::forValueOfType(C, E->getType());
   }
 
-  if (FieldDecl *BitField = E->getBitField())
+  if (FieldDecl *BitField = E->getSourceBitField())
     return IntRange(BitField->getBitWidthValue(C),
                     BitField->getType()->isUnsignedIntegerOrEnumerationType());
 
@@ -4689,7 +4713,7 @@ static void AnalyzeAssignment(Sema &S, BinaryOperator *E) {
 
   // We want to recurse on the RHS as normal unless we're assigning to
   // a bitfield.
-  if (FieldDecl *Bitfield = E->getLHS()->getBitField()) {
+  if (FieldDecl *Bitfield = E->getLHS()->getSourceBitField()) {
     if (AnalyzeBitFieldAssignment(S, Bitfield, E->getRHS(),
                                   E->getOperatorLoc())) {
       // Recurse, ignoring any implicit conversions on the RHS.
@@ -5134,7 +5158,15 @@ void AnalyzeImplicitConversions(Sema &S, Expr *OrigE, SourceLocation CC) {
     CheckImplicitConversion(S, E, T, CC);
 
   // Now continue drilling into this expression.
-
+  
+  if (PseudoObjectExpr * POE = dyn_cast<PseudoObjectExpr>(E)) {
+    if (POE->getResultExpr())
+      E = POE->getResultExpr();
+  }
+  
+  if (const OpaqueValueExpr *OVE = dyn_cast<OpaqueValueExpr>(E))
+    return AnalyzeImplicitConversions(S, OVE->getSourceExpr(), CC);
+  
   // Skip past explicit casts.
   if (isa<ExplicitCastExpr>(E)) {
     E = cast<ExplicitCastExpr>(E)->getSubExpr()->IgnoreParenImpCasts();
@@ -5703,12 +5735,14 @@ bool Sema::CheckParmsForFunctionDef(ParmVarDecl **P, ParmVarDecl **PEnd,
     //   notation in their sequences of declarator specifiers to specify
     //   variable length array types.
     QualType PType = Param->getOriginalType();
-    if (const ArrayType *AT = Context.getAsArrayType(PType)) {
+    while (const ArrayType *AT = Context.getAsArrayType(PType)) {
       if (AT->getSizeModifier() == ArrayType::Star) {
         // FIXME: This diagnostic should point the '[*]' if source-location
         // information is added for it.
         Diag(Param->getLocation(), diag::err_array_star_in_function_definition);
+        break;
       }
+      PType= AT->getElementType();
     }
   }
 

@@ -248,6 +248,14 @@ void ArgList::AddLastArg(ArgStringList &Output, OptSpecifier Id) const {
   }
 }
 
+void ArgList::AddLastArg(ArgStringList &Output, OptSpecifier Id0,
+                         OptSpecifier Id1) const {
+  if (Arg *A = getLastArg(Id0, Id1)) {
+    A->claim();
+    A->render(*this, Output);
+  }
+}
+
 void ArgList::AddAllArgs(ArgStringList &Output, OptSpecifier Id0,
                          OptSpecifier Id1, OptSpecifier Id2) const {
   for (arg_iterator it = filtered_begin(Id0, Id1, Id2),
@@ -313,11 +321,10 @@ const char *ArgList::GetOrMakeJoinedArgString(unsigned Index,
   return MakeArgString(LHS + RHS);
 }
 
-void ArgList::dump() {
+void ArgList::dump() const {
   llvm::errs() << "ArgList:";
-  for (iterator it = begin(), ie = end(); it != ie; ++it) {
+  for (const_iterator it = begin(), ie = end(); it != ie; ++it)
     llvm::errs() << " " << (*it)->getSpelling();
-  }
   llvm::errs() << "\n";
 }
 

@@ -764,6 +764,9 @@ public:
   ///
   /// By default, builds a new AutoType with the given deduced type.
   QualType RebuildAutoType(QualType Deduced, bool IsDecltypeAuto) {
+    // Note, IsDependent is always false here: we implicitly convert an 'auto'
+    // which has been deduced to a dependent type into an undeduced 'auto', so
+    // that we'll retry deduction after the transformation.
     return SemaRef.Context.getAutoType(Deduced, IsDecltypeAuto);
   }
 
@@ -1187,8 +1190,16 @@ public:
   /// By default, performs semantic analysis to build the new statement.
   /// Subclasses may override this routine to provide different behavior.
   StmtResult RebuildMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
-                              ArrayRef<Token> AsmToks, SourceLocation EndLoc) {
-    return getSema().ActOnMSAsmStmt(AsmLoc, LBraceLoc, AsmToks, EndLoc);
+                              ArrayRef<Token> AsmToks,
+                              StringRef AsmString,
+                              unsigned NumOutputs, unsigned NumInputs,
+                              ArrayRef<StringRef> Constraints,
+                              ArrayRef<StringRef> Clobbers,
+                              ArrayRef<Expr*> Exprs,
+                              SourceLocation EndLoc) {
+    return getSema().ActOnMSAsmStmt(AsmLoc, LBraceLoc, AsmToks, AsmString,
+                                    NumOutputs, NumInputs,
+                                    Constraints, Clobbers, Exprs, EndLoc);
   }
 
   /// \brief Build a new Objective-C \@try statement.
@@ -1343,6 +1354,9 @@ public:
     if (DeclStmt *RangeStmt = dyn_cast<DeclStmt>(Range)) {
       if (RangeStmt->isSingleDecl()) {
         if (VarDecl *RangeVar = dyn_cast<VarDecl>(RangeStmt->getSingleDecl())) {
+          if (RangeVar->isInvalidDecl())
+            return StmtError();
+
           Expr *RangeExpr = RangeVar->getInit();
           if (!RangeExpr->isTypeDependent() &&
               RangeExpr->getType()->isObjCObjectPointerType())
@@ -1753,12 +1767,10 @@ public:
                                          SourceLocation DefaultLoc,
                                          SourceLocation RParenLoc,
                                          Expr *ControllingExpr,
-                                         TypeSourceInfo **Types,
-                                         Expr **Exprs,
-                                         unsigned NumAssocs) {
+                                         ArrayRef<TypeSourceInfo *> Types,
+                                         ArrayRef<Expr *> Exprs) {
     return getSema().CreateGenericSelectionExpr(KeyLoc, DefaultLoc, RParenLoc,
-                                                ControllingExpr, Types, Exprs,
-                                                NumAssocs);
+                                                ControllingExpr, Types, Exprs);
   }
 
   /// \brief Build a new overloaded operator call expression.
@@ -1999,7 +2011,7 @@ public:
                                            SourceLocation LParenLoc,
                                            SourceLocation RParenLoc) {
     return getSema().BuildCXXTypeConstructExpr(TSInfo, LParenLoc,
-                                               MultiExprArg(), RParenLoc);
+                                               None, RParenLoc);
   }
 
   /// \brief Build a new C++ "new" expression.
@@ -2618,6 +2630,9 @@ ExprResult TreeTransform<Derived>::TransformInitializer(Expr *Init,
   if (ExprWithCleanups *ExprTemp = dyn_cast<ExprWithCleanups>(Init))
     Init = ExprTemp->getSubExpr();
 
+  if (MaterializeTemporaryExpr *MTE = dyn_cast<MaterializeTemporaryExpr>(Init))
+    Init = MTE->GetTemporaryExpr();
+
   while (CXXBindTemporaryExpr *Binder = dyn_cast<CXXBindTemporaryExpr>(Init))
     Init = Binder->getSubExpr();
 
@@ -2634,13 +2649,13 @@ ExprResult TreeTransform<Derived>::TransformInitializer(Expr *Init,
   // Revert value-initialization back to empty parens.
   if (CXXScalarValueInitExpr *VIE = dyn_cast<CXXScalarValueInitExpr>(Init)) {
     SourceRange Parens = VIE->getSourceRange();
-    return getDerived().RebuildParenListExpr(Parens.getBegin(), MultiExprArg(),
+    return getDerived().RebuildParenListExpr(Parens.getBegin(), None,
                                              Parens.getEnd());
   }
 
   // FIXME: We shouldn't build ImplicitValueInitExprs for direct-initialization.
   if (isa<ImplicitValueInitExpr>(Init))
-    return getDerived().RebuildParenListExpr(SourceLocation(), MultiExprArg(),
+    return getDerived().RebuildParenListExpr(SourceLocation(), None,
                                              SourceLocation());
 
   // Revert initialization by constructor back to a parenthesized or braced list
@@ -4500,7 +4515,8 @@ QualType TreeTransform<Derived>::TransformAutoType(TypeLocBuilder &TLB,
   }
 
   QualType Result = TL.getType();
-  if (getDerived().AlwaysRebuild() || NewDeduced != OldDeduced) {
+  if (getDerived().AlwaysRebuild() || NewDeduced != OldDeduced ||
+      T->isDependentType()) {
     Result = getDerived().RebuildAutoType(NewDeduced, T->isDecltypeAuto());
     if (Result.isNull())
       return QualType();
@@ -5642,8 +5658,30 @@ TreeTransform<Derived>::TransformMSAsmStmt(MSAsmStmt *S) {
   ArrayRef<Token> AsmToks =
     llvm::makeArrayRef(S->getAsmToks(), S->getNumAsmToks());
 
+  bool HadError = false, HadChange = false;
+
+  ArrayRef<Expr*> SrcExprs = S->getAllExprs();
+  SmallVector<Expr*, 8> TransformedExprs;
+  TransformedExprs.reserve(SrcExprs.size());
+  for (unsigned i = 0, e = SrcExprs.size(); i != e; ++i) {
+    ExprResult Result = getDerived().TransformExpr(SrcExprs[i]);
+    if (!Result.isUsable()) {
+      HadError = true;
+    } else {
+      HadChange |= (Result.get() != SrcExprs[i]);
+      TransformedExprs.push_back(Result.take());
+    }
+  }
+
+  if (HadError) return StmtError();
+  if (!HadChange && !getDerived().AlwaysRebuild())
+    return Owned(S);
+
   return getDerived().RebuildMSAsmStmt(S->getAsmLoc(), S->getLBraceLoc(),
-                                       AsmToks, S->getEndLoc());
+                                       AsmToks, S->getAsmString(),
+                                       S->getNumOutputs(), S->getNumInputs(),
+                                       S->getAllConstraints(), S->getClobbers(),
+                                       TransformedExprs, S->getEndLoc());
 }
 
 template<typename Derived>
@@ -5944,12 +5982,15 @@ TreeTransform<Derived>::TransformCXXForRangeStmt(CXXForRangeStmt *S) {
       BeginEnd.get() != S->getBeginEndStmt() ||
       Cond.get() != S->getCond() ||
       Inc.get() != S->getInc() ||
-      LoopVar.get() != S->getLoopVarStmt())
+      LoopVar.get() != S->getLoopVarStmt()) {
     NewStmt = getDerived().RebuildCXXForRangeStmt(S->getForLoc(),
                                                   S->getColonLoc(), Range.get(),
                                                   BeginEnd.get(), Cond.get(),
                                                   Inc.get(), LoopVar.get(),
                                                   S->getRParenLoc());
+    if (NewStmt.isInvalid())
+      return StmtError();
+  }
 
   StmtResult Body = getDerived().TransformStmt(S->getBody());
   if (Body.isInvalid())
@@ -5957,12 +5998,15 @@ TreeTransform<Derived>::TransformCXXForRangeStmt(CXXForRangeStmt *S) {
 
   // Body has changed but we didn't rebuild the for-range statement. Rebuild
   // it now so we have a new statement to attach the body to.
-  if (Body.get() != S->getBody() && NewStmt.get() == S)
+  if (Body.get() != S->getBody() && NewStmt.get() == S) {
     NewStmt = getDerived().RebuildCXXForRangeStmt(S->getForLoc(),
                                                   S->getColonLoc(), Range.get(),
                                                   BeginEnd.get(), Cond.get(),
                                                   Inc.get(), LoopVar.get(),
                                                   S->getRParenLoc());
+    if (NewStmt.isInvalid())
+      return StmtError();
+  }
 
   if (NewStmt.get() == S)
     return SemaRef.Owned(S);
@@ -6246,9 +6290,8 @@ TreeTransform<Derived>::TransformGenericSelectionExpr(GenericSelectionExpr *E) {
                                                   E->getDefaultLoc(),
                                                   E->getRParenLoc(),
                                                   ControllingExpr.release(),
-                                                  AssocTypes.data(),
-                                                  AssocExprs.data(),
-                                                  E->getNumAssocs());
+                                                  AssocTypes,
+                                                  AssocExprs);
 }
 
 template<typename Derived>
@@ -6280,7 +6323,11 @@ TreeTransform<Derived>::TransformAddressOfOperand(Expr *E) {
 template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformUnaryOperator(UnaryOperator *E) {
-  ExprResult SubExpr = TransformAddressOfOperand(E->getSubExpr());
+  ExprResult SubExpr;
+  if (E->getOpcode() == UO_AddrOf)
+    SubExpr = TransformAddressOfOperand(E->getSubExpr());
+  else
+    SubExpr = TransformExpr(E->getSubExpr());
   if (SubExpr.isInvalid())
     return ExprError();
 
@@ -8034,6 +8081,22 @@ template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformLambdaScope(LambdaExpr *E,
                                              CXXMethodDecl *CallOperator) {
+  bool Invalid = false;
+
+  // Transform any init-capture expressions before entering the scope of the
+  // lambda.
+  llvm::SmallVector<ExprResult, 8> InitCaptureExprs;
+  InitCaptureExprs.resize(E->explicit_capture_end() -
+                          E->explicit_capture_begin());
+  for (LambdaExpr::capture_iterator C = E->capture_begin(),
+                                 CEnd = E->capture_end();
+       C != CEnd; ++C) {
+    if (!C->isInitCapture())
+      continue;
+    InitCaptureExprs[C - E->capture_begin()] =
+        getDerived().TransformExpr(E->getInitCaptureInit(C));
+  }
+
   // Introduce the context of the call operator.
   Sema::ContextRAII SavedContext(getSema(), CallOperator);
 
@@ -8046,7 +8109,6 @@ TreeTransform<Derived>::TransformLambdaScope(LambdaExpr *E,
                                  E->isMutable());
 
   // Transform captures.
-  bool Invalid = false;
   bool FinishedExplicitCaptures = false;
   for (LambdaExpr::capture_iterator C = E->capture_begin(),
                                  CEnd = E->capture_end();
@@ -8064,6 +8126,26 @@ TreeTransform<Derived>::TransformLambdaScope(LambdaExpr *E,
       continue;
     }
 
+    // Rebuild init-captures, including the implied field declaration.
+    if (C->isInitCapture()) {
+      ExprResult Init = InitCaptureExprs[C - E->capture_begin()];
+      if (Init.isInvalid()) {
+        Invalid = true;
+        continue;
+      }
+      FieldDecl *OldFD = C->getInitCaptureField();
+      FieldDecl *NewFD = getSema().checkInitCapture(
+          C->getLocation(), OldFD->getType()->isReferenceType(),
+          OldFD->getIdentifier(), Init.take());
+      if (!NewFD)
+        Invalid = true;
+      else
+        getDerived().transformedLocalDecl(OldFD, NewFD);
+      continue;
+    }
+
+    assert(C->capturesVariable() && "unexpected kind of lambda capture");
+
     // Determine the capture kind for Sema.
     Sema::TryCaptureKind Kind
       = C->isImplicit()? Sema::TryCapture_Implicit
@@ -8080,8 +8162,10 @@ TreeTransform<Derived>::TransformLambdaScope(LambdaExpr *E,
                                                C->getLocation(),
                                                Unexpanded,
                                                ShouldExpand, RetainExpansion,
-                                               NumExpansions))
-        return ExprError();
+                                               NumExpansions)) {
+        Invalid = true;
+        continue;
+      }
 
       if (ShouldExpand) {
         // The transform has determined that we should perform an expansion;
@@ -9406,7 +9490,18 @@ TreeTransform<Derived>::RebuildCXXPseudoDestructorExpr(Expr *Base,
 template<typename Derived>
 StmtResult
 TreeTransform<Derived>::TransformCapturedStmt(CapturedStmt *S) {
-  llvm_unreachable("not implement yet");
+  SourceLocation Loc = S->getLocStart();
+  unsigned NumParams = S->getCapturedDecl()->getNumParams();
+  getSema().ActOnCapturedRegionStart(Loc, /*CurScope*/0,
+                                     S->getCapturedRegionKind(), NumParams);
+  StmtResult Body = getDerived().TransformStmt(S->getCapturedStmt());
+
+  if (Body.isInvalid()) {
+    getSema().ActOnCapturedRegionError();
+    return StmtError();
+  }
+
+  return getSema().ActOnCapturedRegionEnd(Body.take());
 }
 
 } // end namespace clang

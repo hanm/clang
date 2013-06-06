@@ -332,6 +332,7 @@ getTypeInfoLinkage(CodeGenModule &CGM, QualType Ty) {
   
   switch (Ty->getLinkage()) {
   case NoLinkage:
+  case VisibleNoLinkage:
   case InternalLinkage:
   case UniqueExternalLinkage:
     return llvm::GlobalValue::InternalLinkage;
@@ -411,6 +412,9 @@ void RTTIBuilder::BuildVTablePointer(const Type *Ty) {
   case Type::LValueReference:
   case Type::RValueReference:
     llvm_unreachable("References shouldn't get here");
+
+  case Type::Auto:
+    llvm_unreachable("Undeduced auto type shouldn't get here");
 
   case Type::Builtin:
   // GCC treats vector and complex types as fundamental types.
@@ -618,6 +622,9 @@ llvm::Constant *RTTIBuilder::BuildTypeInfo(QualType Ty, bool Force) {
   case Type::LValueReference:
   case Type::RValueReference:
     llvm_unreachable("References shouldn't get here");
+
+  case Type::Auto:
+    llvm_unreachable("Undeduced auto type shouldn't get here");
 
   case Type::ConstantArray:
   case Type::IncompleteArray:

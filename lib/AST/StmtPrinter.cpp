@@ -445,7 +445,7 @@ void StmtPrinter::VisitMSAsmStmt(MSAsmStmt *Node) {
   Indent() << "__asm ";
   if (Node->hasBraces())
     OS << "{\n";
-  OS << *(Node->getAsmString()) << "\n";
+  OS << Node->getAsmString() << "\n";
   if (Node->hasBraces())
     Indent() << "}\n";
 }
@@ -1113,24 +1113,25 @@ void StmtPrinter::VisitAtomicExpr(AtomicExpr *Node) {
 
   // AtomicExpr stores its subexpressions in a permuted order.
   PrintExpr(Node->getPtr());
-  OS << ", ";
   if (Node->getOp() != AtomicExpr::AO__c11_atomic_load &&
       Node->getOp() != AtomicExpr::AO__atomic_load_n) {
-    PrintExpr(Node->getVal1());
     OS << ", ";
+    PrintExpr(Node->getVal1());
   }
   if (Node->getOp() == AtomicExpr::AO__atomic_exchange ||
       Node->isCmpXChg()) {
-    PrintExpr(Node->getVal2());
     OS << ", ";
+    PrintExpr(Node->getVal2());
   }
   if (Node->getOp() == AtomicExpr::AO__atomic_compare_exchange ||
       Node->getOp() == AtomicExpr::AO__atomic_compare_exchange_n) {
-    PrintExpr(Node->getWeak());
     OS << ", ";
+    PrintExpr(Node->getWeak());
   }
-  if (Node->getOp() != AtomicExpr::AO__c11_atomic_init)
+  if (Node->getOp() != AtomicExpr::AO__c11_atomic_init) {
+    OS << ", ";
     PrintExpr(Node->getOrder());
+  }
   if (Node->isCmpXChg()) {
     OS << ", ";
     PrintExpr(Node->getOrderFail());
@@ -1338,6 +1339,8 @@ void StmtPrinter::VisitCXXTemporaryObjectExpr(CXXTemporaryObjectExpr *Node) {
   for (CXXTemporaryObjectExpr::arg_iterator Arg = Node->arg_begin(),
                                          ArgEnd = Node->arg_end();
        Arg != ArgEnd; ++Arg) {
+    if (Arg->isDefaultArgument())
+      break;
     if (Arg != Node->arg_begin())
       OS << ", ";
     PrintExpr(*Arg);
@@ -1385,6 +1388,13 @@ void StmtPrinter::VisitLambdaExpr(LambdaExpr *Node) {
       if (Node->getCaptureDefault() != LCD_ByCopy)
         OS << '=';
       OS << C->getCapturedVar()->getName();
+      break;
+
+    case LCK_Init:
+      if (C->getInitCaptureField()->getType()->isReferenceType())
+        OS << '&';
+      OS << C->getInitCaptureField()->getName();
+      PrintExpr(Node->getInitCaptureInit(C));
       break;
     }
   }

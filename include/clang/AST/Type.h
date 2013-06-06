@@ -441,7 +441,7 @@ public:
   bool operator==(Qualifiers Other) const { return Mask == Other.Mask; }
   bool operator!=(Qualifiers Other) const { return Mask != Other.Mask; }
 
-  operator bool() const { return hasQualifiers(); }
+  LLVM_EXPLICIT operator bool() const { return hasQualifiers(); }
 
   Qualifiers &operator+=(Qualifiers R) {
     addQualifiers(R);
@@ -1194,7 +1194,7 @@ private:
     mutable unsigned CacheValid : 1;
 
     /// \brief Linkage of this type.
-    mutable unsigned CachedLinkage : 2;
+    mutable unsigned CachedLinkage : 3;
 
     /// \brief Whether this type involves and local or unnamed types.
     mutable unsigned CachedLocalOrUnnamed : 1;
@@ -1618,6 +1618,10 @@ public:
   bool isInstantiationDependentType() const {
     return TypeBits.InstantiationDependent;
   }
+
+  /// \brief Determine whether this type is an undeduced type, meaning that
+  /// it somehow involves a C++11 'auto' type which has not yet been deduced.
+  bool isUndeducedType() const;
 
   /// \brief Whether this type is a variably-modified type (C99 6.7.5).
   bool isVariablyModifiedType() const { return TypeBits.VariablyModified; }
@@ -3331,7 +3335,11 @@ public:
     attr_thiscall,
     attr_pascal,
     attr_pnaclcall,
-    attr_inteloclbicc
+    attr_inteloclbicc,
+    attr_ptr32,
+    attr_ptr64,
+    attr_sptr,
+    attr_uptr
   };
 
 private:
@@ -3360,6 +3368,17 @@ public:
 
   bool isSugared() const { return true; }
   QualType desugar() const { return getEquivalentType(); }
+
+  bool isMSTypeSpec() const {
+    switch (getAttrKind()) {
+    default:  return false;
+    case attr_ptr32:
+    case attr_ptr64:
+    case attr_sptr:
+    case attr_uptr:
+      return true;
+    }
+  }
 
   void Profile(llvm::FoldingSetNodeID &ID) {
     Profile(ID, getAttrKind(), ModifiedType, EquivalentType);
@@ -3554,17 +3573,17 @@ public:
 
 /// \brief Represents a C++11 auto or C++1y decltype(auto) type.
 ///
-/// These types are usually a placeholder for a deduced type. However, within
-/// templates and before the initializer is attached, there is no deduced type
-/// and an auto type is type-dependent and canonical.
+/// These types are usually a placeholder for a deduced type. However, before
+/// the initializer is attached, or if the initializer is type-dependent, there
+/// is no deduced type and an auto type is canonical. In the latter case, it is
+/// also a dependent type.
 class AutoType : public Type, public llvm::FoldingSetNode {
-  AutoType(QualType DeducedType, bool IsDecltypeAuto)
+  AutoType(QualType DeducedType, bool IsDecltypeAuto, bool IsDependent)
     : Type(Auto, DeducedType.isNull() ? QualType(this, 0) : DeducedType,
-           /*Dependent=*/DeducedType.isNull(),
-           /*InstantiationDependent=*/DeducedType.isNull(),
+           /*Dependent=*/IsDependent, /*InstantiationDependent=*/IsDependent,
            /*VariablyModified=*/false, /*ContainsParameterPack=*/false) {
-    assert((DeducedType.isNull() || !DeducedType->isDependentType()) &&
-           "deduced a dependent type for auto");
+    assert((DeducedType.isNull() || !IsDependent) &&
+           "auto deduced to dependent type");
     AutoTypeBits.IsDecltypeAuto = IsDecltypeAuto;
   }
 
@@ -3573,24 +3592,27 @@ class AutoType : public Type, public llvm::FoldingSetNode {
 public:
   bool isDecltypeAuto() const { return AutoTypeBits.IsDecltypeAuto; }
 
-  bool isSugared() const { return isDeduced(); }
+  bool isSugared() const { return !isCanonicalUnqualified(); }
   QualType desugar() const { return getCanonicalTypeInternal(); }
 
+  /// \brief Get the type deduced for this auto type, or null if it's either
+  /// not been deduced or was deduced to a dependent type.
   QualType getDeducedType() const {
-    return isDeduced() ? getCanonicalTypeInternal() : QualType();
+    return !isCanonicalUnqualified() ? getCanonicalTypeInternal() : QualType();
   }
   bool isDeduced() const {
-    return !isDependentType();
+    return !isCanonicalUnqualified() || isDependentType();
   }
 
   void Profile(llvm::FoldingSetNodeID &ID) {
-    Profile(ID, getDeducedType(), isDecltypeAuto());
+    Profile(ID, getDeducedType(), isDecltypeAuto(), isDependentType());
   }
 
-  static void Profile(llvm::FoldingSetNodeID &ID,
-                      QualType Deduced, bool IsDecltypeAuto) {
+  static void Profile(llvm::FoldingSetNodeID &ID, QualType Deduced,
+                      bool IsDecltypeAuto, bool IsDependent) {
     ID.AddPointer(Deduced.getAsOpaquePtr());
     ID.AddBoolean(IsDecltypeAuto);
+    ID.AddBoolean(IsDependent);
   }
 
   static bool classof(const Type *T) {
@@ -4640,7 +4662,7 @@ inline QualType QualType::getUnqualifiedType() const {
 
   return QualType(getSplitUnqualifiedTypeImpl(*this).Ty, 0);
 }
-
+  
 inline SplitQualType QualType::getSplitUnqualifiedType() const {
   if (!getTypePtr()->getCanonicalTypeInternal().hasLocalQualifiers())
     return split();
@@ -4672,7 +4694,7 @@ inline void QualType::removeLocalCVRQualifiers(unsigned Mask) {
 inline unsigned QualType::getAddressSpace() const {
   return getQualifiers().getAddressSpace();
 }
-
+  
 /// getObjCGCAttr - Return the gc attribute of this type.
 inline Qualifiers::GC QualType::getObjCGCAttr() const {
   return getQualifiers().getObjCGCAttr();
@@ -5031,6 +5053,11 @@ inline bool Type::isBooleanType() const {
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
     return BT->getKind() == BuiltinType::Bool;
   return false;
+}
+
+inline bool Type::isUndeducedType() const {
+  const AutoType *AT = getContainedAutoType();
+  return AT && !AT->isDeduced();
 }
 
 /// \brief Determines whether this is a type for which one can define

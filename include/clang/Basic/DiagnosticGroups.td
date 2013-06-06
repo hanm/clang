@@ -27,7 +27,9 @@ def ArrayBoundsPointerArithmetic : DiagGroup<"array-bounds-pointer-arithmetic">;
 def Availability : DiagGroup<"availability">;
 def Section : DiagGroup<"section">;
 def AutoImport : DiagGroup<"auto-import">;
-def ConstantConversion : DiagGroup<"constant-conversion">;
+def BitFieldConstantConversion : DiagGroup<"bitfield-constant-conversion">;
+def ConstantConversion :
+  DiagGroup<"constant-conversion", [ BitFieldConstantConversion ] >;
 def LiteralConversion : DiagGroup<"literal-conversion">;
 def StringConversion : DiagGroup<"string-conversion">;
 def SignConversion : DiagGroup<"sign-conversion">;
@@ -66,7 +68,9 @@ def : DiagGroup<"discard-qual">;
 def : DiagGroup<"div-by-zero">;
 
 def DocumentationHTML : DiagGroup<"documentation-html">;
-def DocumentationPedantic : DiagGroup<"documentation-pedantic">;
+def DocumentationUnknownCommand : DiagGroup<"documentation-unknown-command">;
+def DocumentationPedantic : DiagGroup<"documentation-pedantic",
+                                      [DocumentationUnknownCommand]>;
 def DocumentationDeprecatedSync : DiagGroup<"documentation-deprecated-sync">;
 def Documentation : DiagGroup<"documentation",
                               [DocumentationHTML,
@@ -81,8 +85,8 @@ def FormatExtraArgs : DiagGroup<"format-extra-args">;
 def FormatZeroLength : DiagGroup<"format-zero-length">;
 
 // Warnings for C++1y code which is not compatible with prior C++ standards.
-def CXXPre1yCompat : DiagGroup<"cxx98-cxx11-compat">;
-def CXXPre1yCompatPedantic : DiagGroup<"cxx98-cxx11-compat-pedantic",
+def CXXPre1yCompat : DiagGroup<"c++98-c++11-compat">;
+def CXXPre1yCompatPedantic : DiagGroup<"c++98-c++11-compat-pedantic",
                                        [CXXPre1yCompat]>;
 
 def CXX98CompatBindToTemporaryCopy :
@@ -145,6 +149,7 @@ def IncompatiblePointerTypes
   : DiagGroup<"incompatible-pointer-types",
     [IncompatiblePointerTypesDiscardsQualifiers]>;
 def IncompleteUmbrella : DiagGroup<"incomplete-umbrella">;
+def IncompleteModule : DiagGroup<"incomplete-module", [IncompleteUmbrella]>;
 def InvalidNoreturn : DiagGroup<"invalid-noreturn">;
 def InvalidSourceEncoding : DiagGroup<"invalid-source-encoding">;
 def KNRPromotedParameter : DiagGroup<"knr-promoted-parameter">;
@@ -241,6 +246,7 @@ def TautologicalCompare : DiagGroup<"tautological-compare",
 def HeaderHygiene : DiagGroup<"header-hygiene">;
 def DuplicateDeclSpecifier : DiagGroup<"duplicate-decl-specifier">;
 def CompareDistinctPointerType : DiagGroup<"compare-distinct-pointer-types">;
+def Varargs : DiagGroup<"varargs">;
 
 def Unsequenced : DiagGroup<"unsequenced">;
 // GCC name for -Wunsequenced
@@ -332,7 +338,8 @@ def AutomaticReferenceCounting : DiagGroup<"arc",
 def ARCRepeatedUseOfWeakMaybe : DiagGroup<"arc-maybe-repeated-use-of-weak">;
 def ARCRepeatedUseOfWeak : DiagGroup<"arc-repeated-use-of-weak",
                                      [ARCRepeatedUseOfWeakMaybe]>;
-def Selector : DiagGroup<"selector">;
+def SelectorTypeMismatch : DiagGroup<"selector-type-mismatch">;
+def Selector : DiagGroup<"selector", [SelectorTypeMismatch]>;
 def Protocol : DiagGroup<"protocol">;
 def SuperSubClassMismatch : DiagGroup<"super-class-method-mismatch">;
 def OverridingMethodMismatch : DiagGroup<"overriding-method-mismatch">;
@@ -410,7 +417,9 @@ def Format2 : DiagGroup<"format=2",
 
 def TypeSafety : DiagGroup<"type-safety">;
 
-def IntToPointerCast : DiagGroup<"int-to-pointer-cast">;
+def IntToVoidPointerCast : DiagGroup<"int-to-void-pointer-cast">;
+def IntToPointerCast : DiagGroup<"int-to-pointer-cast",
+                                 [IntToVoidPointerCast]>;
 
 def Extra : DiagGroup<"extra", [
     MissingFieldInitializers,
