@@ -741,21 +741,22 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
       const CXXDefaultArgExpr *DefaultE = cast<CXXDefaultArgExpr>(S);
       const Expr *ArgE = DefaultE->getExpr();
 
-      // Avoid creating and destroying a lot of APSInts.
-      SVal V;
-      llvm::APSInt Result;
+      bool IsTemporary = false;
+      if (const MaterializeTemporaryExpr *MTE =
+            dyn_cast<MaterializeTemporaryExpr>(ArgE)) {
+        ArgE = MTE->GetTemporaryExpr();
+        IsTemporary = true;
+      }
+
+      Optional<SVal> ConstantVal = svalBuilder.getConstantVal(ArgE);
+      if (!ConstantVal)
+        ConstantVal = UnknownVal();
 
       for (ExplodedNodeSet::iterator I = PreVisit.begin(), E = PreVisit.end();
            I != E; ++I) {
         ProgramStateRef State = (*I)->getState();
-
-        if (ArgE->EvaluateAsInt(Result, getContext()))
-          V = svalBuilder.makeIntVal(Result);
-        else
-          V = State->getSVal(ArgE, LCtx);
-
-        State = State->BindExpr(DefaultE, LCtx, V);
-        if (DefaultE->isGLValue())
+        State = State->BindExpr(DefaultE, LCtx, *ConstantVal);
+        if (IsTemporary)
           State = createTemporaryRegionIfNeeded(State, LCtx, DefaultE,
                                                 DefaultE);
         Bldr2.generateNode(S, *I, State);
@@ -1612,7 +1613,9 @@ void ExprEngine::VisitCommonDeclRefExpr(const Expr *Ex, const NamedDecl *D,
   const LocationContext *LCtx = Pred->getLocationContext();
 
   if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
-    assert(Ex->isGLValue());
+    // C permits "extern void v", and if you cast the address to a valid type,
+    // you can even do things with it. We simply pretend 
+    assert(Ex->isGLValue() || VD->getType()->isVoidType());
     SVal V = state->getLValue(VD, Pred->getLocationContext());
 
     // For references, the 'lvalue' is the pointer address stored in the
@@ -1721,7 +1724,24 @@ void ExprEngine::VisitMemberExpr(const MemberExpr *M, ExplodedNode *Pred,
 
   FieldDecl *field = cast<FieldDecl>(Member);
   SVal L = state->getLValue(field, baseExprVal);
-  if (M->isGLValue()) {
+
+  if (M->isGLValue() || M->getType()->isArrayType()) {
+
+    // We special case rvalue of array type because the analyzer cannot reason
+    // about it, since we expect all regions to be wrapped in Locs. So we will
+    // treat these as lvalues assuming that they will decay to pointers as soon
+    // as they are used. Below
+    if (!M->isGLValue()) {
+      assert(M->getType()->isArrayType());
+      const ImplicitCastExpr *PE =
+        dyn_cast<ImplicitCastExpr>(Pred->getParentMap().getParent(M));
+      if (!PE || PE->getCastKind() != CK_ArrayToPointerDecay) {
+        assert(false &&
+               "We assume that array is always wrapped in ArrayToPointerDecay");
+        L = UnknownVal();
+      }
+    }
+
     if (field->getType()->isReferenceType()) {
       if (const MemRegion *R = L.getAsRegion())
         L = state->getSVal(R);

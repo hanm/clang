@@ -731,7 +731,7 @@ static bool LookupDirect(Sema &S, LookupResult &R, const DeclContext *DC) {
     EPI.NumExceptions = 0;
     QualType ExpectedType
       = R.getSema().Context.getFunctionType(R.getLookupName().getCXXNameType(),
-                                            ArrayRef<QualType>(), EPI);
+                                            None, EPI);
 
     // Perform template argument deduction against the type that we would
     // expect the function to have.
@@ -2085,6 +2085,10 @@ addAssociatedClassesAndNamespaces(AssociatedLookup &Result, QualType Ty) {
     case Type::Vector:
     case Type::ExtVector:
     case Type::Complex:
+      break;
+
+    // Non-deduced auto types only get here for error cases.
+    case Type::Auto:
       break;
 
     // If T is an Objective-C object or interface type, or a pointer to an 
@@ -3788,13 +3792,6 @@ TypoCorrection Sema::CorrectTypo(const DeclarationNameInfo &TypoName,
   if (S && S->isInObjcMethodScope() && Typo == getSuperIdentifier())
     return TypoCorrection();
 
-  // This is for testing.
-  if (Diags.getWarnOnSpellCheck()) {
-    unsigned DiagID = Diags.getCustomDiagID(DiagnosticsEngine::Warning,
-                                            "spell-checking initiated for %0");
-    Diag(TypoName.getLoc(), DiagID) << TypoName.getName();
-  }
-
   NamespaceSpecifierSet Namespaces(Context, CurContext, SS);
 
   TypoCorrectionConsumer Consumer(*this, Typo);
@@ -4169,7 +4166,7 @@ std::string TypoCorrection::getAsString(const LangOptions &LO) const {
     std::string tmpBuffer;
     llvm::raw_string_ostream PrefixOStream(tmpBuffer);
     CorrectionNameSpec->print(PrefixOStream, PrintingPolicy(LO));
-    CorrectionName.printName(PrefixOStream);
+    PrefixOStream << CorrectionName;
     return PrefixOStream.str();
   }
 
