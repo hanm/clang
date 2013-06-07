@@ -61,9 +61,12 @@ MacroInfo *Preprocessor::AllocateDeserializedMacroInfo(SourceLocation L,
                                                        unsigned SubModuleID) {
   LLVM_STATIC_ASSERT(llvm::AlignOf<MacroInfo>::Alignment >= sizeof(SubModuleID),
                      "alignment for MacroInfo is less than the ID");
-  MacroInfo *MI =
-      (MacroInfo*)BP.Allocate(sizeof(MacroInfo) + sizeof(SubModuleID),
-                              llvm::AlignOf<MacroInfo>::Alignment);
+  DeserializedMacroInfoChain *MIChain =
+      BP.Allocate<DeserializedMacroInfoChain>();
+  MIChain->Next = DeserialMIChainHead;
+  DeserialMIChainHead = MIChain;
+
+  MacroInfo *MI = &MIChain->MI;
   new (MI) MacroInfo(L);
   MI->FromASTFile = true;
   MI->setOwningModuleID(SubModuleID);
@@ -238,7 +241,7 @@ void Preprocessor::SkipExcludedConditionalBlock(SourceLocation IfTokenLoc,
                                                 bool FoundElse,
                                                 SourceLocation ElseLoc) {
   ++NumSkipped;
-  assert(CurTokenLexer == 0 && CurPPLexer && "Lexing a macro, not a file?");
+  assert(!CurTokenLexer && CurPPLexer && "Lexing a macro, not a file?");
 
   CurPPLexer->pushConditionalLevel(IfTokenLoc, /*isSkipping*/false,
                                  FoundNonSkipPortion, FoundElse);
@@ -1509,6 +1512,20 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
                                    /*IsIncludeDirective=*/true);
     assert((Imported == 0 || Imported == SuggestedModule) &&
            "the imported module is different than the suggested one");
+
+    if (!Imported && hadModuleLoaderFatalFailure()) {
+      // With a fatal failure in the module loader, we abort parsing.
+      Token &Result = IncludeTok;
+      if (CurLexer) {
+        Result.startToken();
+        CurLexer->FormTokenWithChars(Result, CurLexer->BufferEnd, tok::eof);
+        CurLexer->cutOffLexing();
+      } else {
+        assert(CurPTHLexer && "#include but no current lexer set!");
+        CurPTHLexer->getEOF(Result);
+      }
+      return;
+    }
     
     // If this header isn't part of the module we're building, we're done.
     if (!BuildingImportedModule && Imported) {

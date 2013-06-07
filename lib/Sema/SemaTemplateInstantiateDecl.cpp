@@ -339,7 +339,7 @@ Decl *TemplateDeclInstantiator::VisitVarDecl(VarDecl *D) {
                                  D->getLocation(), D->getIdentifier(),
                                  DI->getType(), DI,
                                  D->getStorageClass());
-  Var->setTLSKind(D->getTLSKind());
+  Var->setTSCSpec(D->getTSCSpec());
   Var->setInitStyle(D->getInitStyle());
   Var->setCXXForRangeDecl(D->isCXXForRangeDecl());
   Var->setConstexpr(D->isConstexpr());
@@ -1152,12 +1152,11 @@ Decl *TemplateDeclInstantiator::VisitFunctionDecl(FunctionDecl *D,
   // this declaration.
   FunctionTemplateDecl *FunctionTemplate = D->getDescribedFunctionTemplate();
   if (FunctionTemplate && !TemplateParams) {
-    std::pair<const TemplateArgument *, unsigned> Innermost
-      = TemplateArgs.getInnermost();
+    ArrayRef<TemplateArgument> Innermost = TemplateArgs.getInnermost();
 
     void *InsertPos = 0;
     FunctionDecl *SpecFunc
-      = FunctionTemplate->findSpecialization(Innermost.first, Innermost.second,
+      = FunctionTemplate->findSpecialization(Innermost.begin(), Innermost.size(),
                                              InsertPos);
 
     // If we already have a function template specialization, return it.
@@ -1282,12 +1281,11 @@ Decl *TemplateDeclInstantiator::VisitFunctionDecl(FunctionDecl *D,
     }
   } else if (FunctionTemplate) {
     // Record this function template specialization.
-    std::pair<const TemplateArgument *, unsigned> Innermost
-      = TemplateArgs.getInnermost();
+    ArrayRef<TemplateArgument> Innermost = TemplateArgs.getInnermost();
     Function->setFunctionTemplateSpecialization(FunctionTemplate,
                             TemplateArgumentList::CreateCopy(SemaRef.Context,
-                                                             Innermost.first,
-                                                             Innermost.second),
+                                                             Innermost.begin(),
+                                                             Innermost.size()),
                                                 /*InsertPos=*/0);
   } else if (isFriend) {
     // Note, we need this connection even if the friend doesn't have a body.
@@ -1460,12 +1458,12 @@ TemplateDeclInstantiator::VisitCXXMethodDecl(CXXMethodDecl *D,
     // We are creating a function template specialization from a function
     // template. Check whether there is already a function template
     // specialization for this particular set of template arguments.
-    std::pair<const TemplateArgument *, unsigned> Innermost
-      = TemplateArgs.getInnermost();
+    ArrayRef<TemplateArgument> Innermost = TemplateArgs.getInnermost();
 
     void *InsertPos = 0;
     FunctionDecl *SpecFunc
-      = FunctionTemplate->findSpecialization(Innermost.first, Innermost.second,
+      = FunctionTemplate->findSpecialization(Innermost.begin(), 
+                                             Innermost.size(),
                                              InsertPos);
 
     // If we already have a function template specialization, return it.
@@ -1560,10 +1558,36 @@ TemplateDeclInstantiator::VisitCXXMethodDecl(CXXMethodDecl *D,
                                         Constructor->isExplicit(),
                                         Constructor->isInlineSpecified(),
                                         false, Constructor->isConstexpr());
+
     // Claim that the instantiation of a constructor or constructor template
     // inherits the same constructor that the template does.
-    if (const CXXConstructorDecl *Inh = Constructor->getInheritedConstructor())
+    if (CXXConstructorDecl *Inh = const_cast<CXXConstructorDecl *>(
+            Constructor->getInheritedConstructor())) {
+      // If we're instantiating a specialization of a function template, our
+      // "inherited constructor" will actually itself be a function template.
+      // Instantiate a declaration of it, too.
+      if (FunctionTemplate) {
+        assert(!TemplateParams && Inh->getDescribedFunctionTemplate() &&
+               !Inh->getParent()->isDependentContext() &&
+               "inheriting constructor template in dependent context?");
+        Sema::InstantiatingTemplate Inst(SemaRef, Constructor->getLocation(),
+                                         Inh);
+        if (Inst)
+          return 0;
+        Sema::ContextRAII SavedContext(SemaRef, Inh->getDeclContext());
+        LocalInstantiationScope LocalScope(SemaRef);
+
+        // Use the same template arguments that we deduced for the inheriting
+        // constructor. There's no way they could be deduced differently.
+        MultiLevelTemplateArgumentList InheritedArgs;
+        InheritedArgs.addOuterTemplateArguments(TemplateArgs.getInnermost());
+        Inh = cast_or_null<CXXConstructorDecl>(
+            SemaRef.SubstDecl(Inh, Inh->getDeclContext(), InheritedArgs));
+        if (!Inh)
+          return 0;
+      }
       cast<CXXConstructorDecl>(Method)->setInheritedConstructor(Inh);
+    }
   } else if (CXXDestructorDecl *Destructor = dyn_cast<CXXDestructorDecl>(D)) {
     Method = CXXDestructorDecl::Create(SemaRef.Context, Record,
                                        StartLoc, NameInfo, T, TInfo,
@@ -1616,12 +1640,11 @@ TemplateDeclInstantiator::VisitCXXMethodDecl(CXXMethodDecl *D,
     Method->setDescribedFunctionTemplate(FunctionTemplate);
   } else if (FunctionTemplate) {
     // Record this function template specialization.
-    std::pair<const TemplateArgument *, unsigned> Innermost
-      = TemplateArgs.getInnermost();
+    ArrayRef<TemplateArgument> Innermost = TemplateArgs.getInnermost();
     Method->setFunctionTemplateSpecialization(FunctionTemplate,
                          TemplateArgumentList::CreateCopy(SemaRef.Context,
-                                                          Innermost.first,
-                                                          Innermost.second),
+                                                          Innermost.begin(),
+                                                          Innermost.size()),
                                               /*InsertPos=*/0);
   } else if (!isFriend) {
     // Record that this is an instantiation of a member function.
@@ -2234,13 +2257,13 @@ Decl *TemplateDeclInstantiator::VisitClassScopeFunctionSpecializationDecl(
 
 Decl *TemplateDeclInstantiator::VisitOMPThreadPrivateDecl(
                                      OMPThreadPrivateDecl *D) {
-  SmallVector<DeclRefExpr *, 5> Vars;
-  for (ArrayRef<DeclRefExpr *>::iterator I = D->varlist_begin(),
-                                         E = D->varlist_end();
+  SmallVector<Expr *, 5> Vars;
+  for (ArrayRef<Expr *>::iterator I = D->varlist_begin(),
+                                  E = D->varlist_end();
        I != E; ++I) {
     Expr *Var = SemaRef.SubstExpr(*I, TemplateArgs).take();
     assert(isa<DeclRefExpr>(Var) && "threadprivate arg is not a DeclRefExpr");
-    Vars.push_back(cast<DeclRefExpr>(Var));
+    Vars.push_back(Var);
   }
 
   OMPThreadPrivateDecl *TD =
@@ -2871,13 +2894,15 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
     return;
   }
 
-  // C++0x [temp.explicit]p9:
-  //   Except for inline functions, other explicit instantiation declarations
-  //   have the effect of suppressing the implicit instantiation of the entity
-  //   to which they refer.
+  // C++1y [temp.explicit]p10:
+  //   Except for inline functions, declarations with types deduced from their
+  //   initializer or return value, and class template specializations, other
+  //   explicit instantiation declarations have the effect of suppressing the
+  //   implicit instantiation of the entity to which they refer.
   if (Function->getTemplateSpecializationKind()
         == TSK_ExplicitInstantiationDeclaration &&
-      !PatternDecl->isInlined())
+      !PatternDecl->isInlined() &&
+      !PatternDecl->getResultType()->isUndeducedType())
     return;
 
   if (PatternDecl->isInlined())

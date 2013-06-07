@@ -1029,7 +1029,7 @@ bool ASaPSemanticCheckerTraverser::VisitRecordDecl (RecordDecl *D) {
   if (SymT.hasDecl(D)) // in case we have already visited this don't re-visit.
     return true;
   OS << "DEBUG:: printing ASaP attributes for class or struct '";
-  D->getDeclName().printName(OS);
+  OS << D->getDeclName();
   OS << "':\n";
   /// A. Detect Region & Param Annotations
   helperPrintAttributes<RegionAttr>(D);
@@ -1075,7 +1075,7 @@ bool ASaPSemanticCheckerTraverser::VisitEmptyDecl(EmptyDecl *D) {
 
 bool ASaPSemanticCheckerTraverser::VisitNamespaceDecl (NamespaceDecl *D) {
   OS << "DEBUG:: printing ASaP attributes for namespace '";
-  D->getDeclName().printName(OS);
+  OS << D->getDeclName();
   OS << "':\n";
   /// A. Detect Region & Param Annotations
   helperPrintAttributes<RegionAttr>(D);
