@@ -67,7 +67,7 @@ public:
         Def(Def),
         FatalError(false) {
     OS << "DEBUG:: ******** INVOKING Generic STMT Visitor...\n";
-    Def->print(OS, Ctx.getPrintingPolicy());
+    //Def->print(OS, Ctx.getPrintingPolicy());
     //S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
   }
