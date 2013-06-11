@@ -8788,7 +8788,16 @@ CXXMethodDecl *Sema::DeclareImplicitCopyAssignment(CXXRecordDecl *ClassDecl) {
   FunctionProtoType::ExtProtoInfo EPI;
   EPI.ExceptionSpecType = EST_Unevaluated;
   EPI.ExceptionSpecDecl = CopyAssignment;
-  CopyAssignment->setType(Context.getFunctionType(RetType, ArgType, EPI));
+  QualType T = Context.getFunctionType(RetType, ArgType, EPI);
+  CopyAssignment->setType(T);
+
+  // PR16182. Build type source info for copy assignment operator. RAV relies on
+  // type source info to traverse parameter declaration of implicit
+  // declared copy assignment operator.
+  TypeSourceInfo *TSInfo = Context.getTrivialTypeSourceInfo(T, ClassLoc);
+  CopyAssignment->setTypeSourceInfo(TSInfo);
+  UnqualTypeLoc UnQualTL = TSInfo->getTypeLoc().getUnqualifiedLoc();
+  FunctionTypeLoc FTL = UnQualTL.getAs<FunctionTypeLoc>();
 
   // Add the parameter to the operator.
   ParmVarDecl *FromParam = ParmVarDecl::Create(Context, CopyAssignment,
@@ -8796,6 +8805,7 @@ CXXMethodDecl *Sema::DeclareImplicitCopyAssignment(CXXRecordDecl *ClassDecl) {
                                                ArgType, /*TInfo=*/0,
                                                SC_None, 0);
   CopyAssignment->setParams(FromParam);
+  FTL.setArg(0, FromParam);
 
   AddOverriddenMethods(ClassDecl, CopyAssignment);
 
