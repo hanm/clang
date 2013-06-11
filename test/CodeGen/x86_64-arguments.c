@@ -392,3 +392,22 @@ void test50(double d, double e) {
 // CHECK:      [[T0:%.*]] = load double*
 // CHECK-NEXT: [[T1:%.*]] = load double*
 // CHECK-NEXT: call void (double, double, ...)* bitcast (void (...)* @test50_helper to void (double, double, ...)*)(double [[T0]], double [[T1]])
+
+struct test51_s { __uint128_t intval; };
+void test51(struct test51_s *s, __builtin_va_list argList) {
+    *s = __builtin_va_arg(argList, struct test51_s);
+}
+
+// CHECK: define void @test51
+// CHECK: [[TMP_ADDR:%.*]] = alloca [[STRUCT_TEST51:%.*]], align 16
+// CHECK: br i1
+// CHECK: [[REG_SAVE_AREA_PTR:%.*]] = getelementptr inbounds {{.*}}, i32 0, i32 3
+// CHECK-NEXT: [[REG_SAVE_AREA:%.*]] = load i8** [[REG_SAVE_AREA_PTR]]
+// CHECK-NEXT: [[VALUE_ADDR:%.*]] = getelementptr i8* [[REG_SAVE_AREA]], i32 {{.*}}
+// CHECK-NEXT: [[CASTED_VALUE_ADDR:%.*]] = bitcast i8* [[VALUE_ADDR]] to [[STRUCT_TEST51]]
+// CHECK-NEXT: [[CASTED_TMP_ADDR:%.*]] = bitcast [[STRUCT_TEST51]]* [[TMP_ADDR]] to i8*
+// CHECK-NEXT: [[RECASTED_VALUE_ADDR:%.*]] = bitcast [[STRUCT_TEST51]]* [[CASTED_VALUE_ADDR]] to i8*
+// CHECK-NEXT: call void @llvm.memcpy.p0i8.p0i8.i64(i8* [[CASTED_TMP_ADDR]], i8* [[RECASTED_VALUE_ADDR]], i64 16, i32 8, i1 false)
+// CHECK-NEXT: add i32 {{.*}}, 16
+// CHECK-NEXT: store i32 {{.*}}, i32* {{.*}}
+// CHECK-NEXT: br label

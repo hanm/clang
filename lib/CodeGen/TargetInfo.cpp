@@ -503,8 +503,16 @@ bool IsX86_MMXType(llvm::Type *IRType) {
 static llvm::Type* X86AdjustInlineAsmType(CodeGen::CodeGenFunction &CGF,
                                           StringRef Constraint,
                                           llvm::Type* Ty) {
-  if ((Constraint == "y" || Constraint == "&y") && Ty->isVectorTy())
+  if ((Constraint == "y" || Constraint == "&y") && Ty->isVectorTy()) {
+    if (cast<llvm::VectorType>(Ty)->getBitWidth() != 64) {
+      // Invalid MMX constraint
+      return 0;
+    }
+
     return llvm::Type::getX86_MMXTy(CGF.getLLVMContext());
+  }
+
+  // No operation needed
   return Ty;
 }
 
@@ -2476,7 +2484,8 @@ llvm::Value *X86_64ABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
     // FIXME: Cleanup.
     assert(AI.isDirect() && "Unexpected ABI info for mixed regs");
     llvm::StructType *ST = cast<llvm::StructType>(AI.getCoerceToType());
-    llvm::Value *Tmp = CGF.CreateTempAlloca(ST);
+    llvm::Value *Tmp = CGF.CreateMemTemp(Ty);
+    Tmp = CGF.Builder.CreateBitCast(Tmp, ST->getPointerTo());
     assert(ST->getNumElements() == 2 && "Unexpected ABI info for mixed regs");
     llvm::Type *TyLo = ST->getElementType(0);
     llvm::Type *TyHi = ST->getElementType(1);
@@ -2500,6 +2509,17 @@ llvm::Value *X86_64ABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
     RegAddr = CGF.Builder.CreateGEP(RegAddr, gp_offset);
     RegAddr = CGF.Builder.CreateBitCast(RegAddr,
                                         llvm::PointerType::getUnqual(LTy));
+
+    // Copy to a temporary if necessary to ensure the appropriate alignment.
+    std::pair<CharUnits, CharUnits> SizeAlign =
+        CGF.getContext().getTypeInfoInChars(Ty);
+    uint64_t TySize = SizeAlign.first.getQuantity();
+    unsigned TyAlign = SizeAlign.second.getQuantity();
+    if (TyAlign > 8) {
+      llvm::Value *Tmp = CGF.CreateMemTemp(Ty);
+      CGF.Builder.CreateMemCpy(Tmp, RegAddr, TySize, 8, false);
+      RegAddr = Tmp;
+    }
   } else if (neededSSE == 1) {
     RegAddr = CGF.Builder.CreateGEP(RegAddr, fp_offset);
     RegAddr = CGF.Builder.CreateBitCast(RegAddr,
@@ -2513,9 +2533,9 @@ llvm::Value *X86_64ABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
     llvm::Type *DoubleTy = CGF.DoubleTy;
     llvm::Type *DblPtrTy =
       llvm::PointerType::getUnqual(DoubleTy);
-    llvm::StructType *ST = llvm::StructType::get(DoubleTy,
-                                                       DoubleTy, NULL);
-    llvm::Value *V, *Tmp = CGF.CreateTempAlloca(ST);
+    llvm::StructType *ST = llvm::StructType::get(DoubleTy, DoubleTy, NULL);
+    llvm::Value *V, *Tmp = CGF.CreateMemTemp(Ty);
+    Tmp = CGF.Builder.CreateBitCast(Tmp, ST->getPointerTo());
     V = CGF.Builder.CreateLoad(CGF.Builder.CreateBitCast(RegAddrLo,
                                                          DblPtrTy));
     CGF.Builder.CreateStore(V, CGF.Builder.CreateStructGEP(Tmp, 0));
