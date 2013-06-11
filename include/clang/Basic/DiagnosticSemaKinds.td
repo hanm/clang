@@ -1010,8 +1010,8 @@ def err_access_dtor_base :
     Error<"base class %0 has %select{private|protected}1 destructor">,
     AccessControl;
 def err_access_dtor_vbase :
-    Error<"inherited virtual base class %0 has "
-    "%select{private|protected}1 destructor">,
+    Error<"inherited virtual base class %1 has "
+    "%select{private|protected}2 destructor">,
     AccessControl;
 def err_access_dtor_temp :
     Error<"temporary of type %0 has %select{private|protected}1 destructor">,
@@ -1878,6 +1878,8 @@ def warn_objc_literal_comparison : Warning<
   "direct comparison of %select{an array literal|a dictionary literal|"
   "a numeric literal|a boxed expression|}0 has undefined behavior">,
   InGroup<ObjCLiteralComparison>;
+def warn_missing_atsign_prefix : Warning<
+  "string literal must be prefixed by '@' ">, InGroup<ObjCLiteralMissingAtSign>;
 def warn_objc_string_literal_comparison : Warning<
   "direct comparison of a string literal has undefined behavior">,
   InGroup<ObjCStringComparison>;
@@ -4250,6 +4252,8 @@ def note_enum_specialized_here : Note<
   "enum %0 was explicitly specialized here">;
 
 def err_member_redeclared : Error<"class member cannot be redeclared">;
+def ext_member_redeclared : ExtWarn<"class member cannot be redeclared">,
+  InGroup<GNU>;
 def err_member_redeclared_in_instantiation : Error<
   "multiple overloads of %0 instantiate to the same signature %1">;
 def err_member_name_of_class : Error<"member %0 has the same name as its class">;
@@ -4445,6 +4449,14 @@ def warn_null_in_comparison_operation : Warning<
   "comparison between NULL and non-pointer "
   "%select{(%1 and NULL)|(NULL and %1)}0">,
   InGroup<NullArithmetic>;
+
+def warn_logical_not_on_lhs_of_comparison : Warning<
+  "logical not is only applied to the left hand side of this comparison">,
+  InGroup<LogicalNotParentheses>;
+def note_logical_not_fix : Note<
+  "add parentheses after the '!' to evaluate the comparison first">;
+def note_logical_not_silence_with_parens : Note<
+  "add parentheses around left hand side expression to silence this warning">;
 
 def err_invalid_this_use : Error<
   "invalid use of 'this' outside of a non-static member function">;
@@ -5475,6 +5487,15 @@ def err_expected_ident_or_lparen : Error<"expected identifier or '('">;
 
 def err_typecheck_cond_incompatible_operands_null : Error<
   "non-pointer operand type %0 incompatible with %select{NULL|nullptr}1">;
+def ext_empty_struct_union : Extension<
+  "empty %select{struct|union}0 is a GNU extension">, InGroup<GNU>;
+def ext_no_named_members_in_struct_union : Extension<
+  "%select{struct|union}0 without named members is a GNU extension">, InGroup<GNU>;
+def warn_empty_struct_union_compat : Warning<"empty %select{struct|union}0 "
+  "has size 0 in C, size 1 in C++">, InGroup<CXXCompat>, DefaultIgnore;
+def warn_zero_size_struct_union_compat : Warning<"%select{struct|union}0 "
+  "with only bit-fields of width 0 has size 0 in C, size 1 in C++">,
+  InGroup<CXXCompat>, DefaultIgnore;
 } // End of general sema category.
 
 // inline asm.
