@@ -42,6 +42,8 @@ AssignmentCheckerVisitor::AssignmentCheckerVisitor(
     OS << "DEBUG:: ******** INVOKING AssignmentCheckerVisitor...\n";
     OS << "DEBUG:: Stmt:";
     S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    S->dump();
     OS << "\nDEBUG:: Def:\n";
     Def->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
@@ -55,7 +57,8 @@ AssignmentCheckerVisitor::AssignmentCheckerVisitor(
       }
     }
     Visit(S);
-    OS << "DEBUG:: ******** DONE INVOKING AssignmentCheckerVisitor ***\n";
+    OS << "DEBUG:: ******** DONE INVOKING AssignmentCheckerVisitor (Type="
+       << (Type ? Type->toString() : "<null>") << ")***\n";
 }
 
 AssignmentCheckerVisitor::~AssignmentCheckerVisitor() {
@@ -320,6 +323,12 @@ typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
   if (! typecheck(LHSType, RHSType, true)) {
     OS << "DEBUG:: invalid argument to parameter assignment: "
       << "gonna emit an error\n";
+    OS << "DEBUG:: Param:";
+    Param->print(OS);
+    OS << " with type " << (LHSType ? LHSType->toString() : "[]") << "\n";
+    OS << "DEBUG:: Arg:";
+    Arg->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << " with Type " << (RHSType ? RHSType->toString() : "[]") << "\n";
     //  Fixme pass VS as arg instead of Init
     helperEmitInvalidArgToFunctionWarning(Arg, LHSType, RHSType);
     FatalError = true;
@@ -601,7 +610,8 @@ TypeBuilderVisitor::TypeBuilderVisitor (
     OS << "\n";
 
     Visit(E);
-    OS << "DEBUG:: ******** DONE WITH TypeBuilderVisitor...\n";
+    OS << "DEBUG:: ******** DONE WITH TypeBuilderVisitor (Type="
+       << (Type ? Type->toString() : "<null>") << ")***\n";
 }
 
 TypeBuilderVisitor::~TypeBuilderVisitor() {
@@ -855,9 +865,6 @@ VisitBinaryConditionalOperator(BinaryConditionalOperator *Exp) {
   // TODO?
 }
 
-//void TypeBuilderVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
-//}
-
 void TypeBuilderVisitor::VisitCXXConstructExpr(CXXConstructExpr *Exp) {
   OS << "DEBUG:: VisitCXXConstructExpr:";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -869,7 +876,6 @@ void TypeBuilderVisitor::VisitCXXConstructExpr(CXXConstructExpr *Exp) {
   // parametric region that gets unified based on the region args
   // of the variable that gets initialized. It's like saying that
   // a constructor returns T<P>.
-
 }
 
 void TypeBuilderVisitor::VisitCallExpr(CallExpr *Exp) {
@@ -916,7 +922,8 @@ BaseTypeBuilderVisitor::BaseTypeBuilderVisitor(
     OS << "\n";
 
     Visit(E);
-    OS << "DEBUG:: ******** DONE WITH BaseTypeBuilderVisitor...\n";
+    OS << "DEBUG:: ******** DONE WITH BaseTypeBuilderVisitor (Type="
+       << (Type ? Type->toString() : "<null>") << ")***\n";
 }
 
 BaseTypeBuilderVisitor::~BaseTypeBuilderVisitor() {

@@ -13,18 +13,18 @@
 //
 //===----------------------------------------------------------------===//
 
-#include "EffectChecker.h"
-#include "ASaPUtil.h"
-#include "TypeChecker.h"
-#include "ASaPType.h"
-#include "ASaPSymbolTable.h"
-#include "Rpl.h"
-#include "Effect.h"
-#include "Substitution.h"
-
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/Stmt.h"
+
+#include "ASaPSymbolTable.h"
+#include "ASaPType.h"
+#include "ASaPUtil.h"
+#include "Effect.h"
+#include "EffectChecker.h"
+#include "Rpl.h"
+#include "Substitution.h"
+#include "TypeChecker.h"
 
 namespace clang {
 namespace asap {
@@ -79,11 +79,14 @@ int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
   const ASaPType *T0 = SymT.getType(D);
   if (!T0) // e.g., method returning void
     return 0; // Nothing to do here.
+  // If it's a function type, we're interested in the return type
   ASaPType *T1 = new ASaPType(*T0);
   if (T1->isFunctionType())
     T1 = T1->getReturnType();
+  // If the return type is null, nothing to do
   if (!T1)
     return 0;
+
   if (T1->isReferenceType())
     T1->deref();
   int EffectNr = 0;
@@ -188,9 +191,13 @@ checkEffectCoverage(const Expr *Exp, const Decl *D, int N) {
       OS << "DEBUG:: effect not covered: Expr = ";
       Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
       OS << "\n";
-      OS << "\tDecl = ";
-      D->print(OS, Ctx.getPrintingPolicy());
-      OS << "\n";
+      if (D) {
+        OS << "\tDecl = ";
+        D->print(OS, Ctx.getPrintingPolicy());
+        OS << "\n";
+      } else {
+        OS << "\tDecl = NULL\n";
+      }
       std::string Str = E->toString();
       emitEffectNotCoveredWarning(Exp, D, Str);
       Result = false;
@@ -495,10 +502,41 @@ VisitCXXDeleteExpr(CXXDeleteExpr *Exp) {
   OS << "DEBUG:: VisitCXXDeleteExpr: ";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-  bool SavedHasWriteSemantics = HasWriteSemantics;
-  HasWriteSemantics = true;
+
+  // 1. Visit expression
+  //bool SavedHasWriteSemantics = HasWriteSemantics;
+  //HasWriteSemantics = false;
   Visit(Exp->getArgument());
-  HasWriteSemantics = SavedHasWriteSemantics;
+  // HasWriteSemantics = SavedHasWriteSemantics;
+
+  // Since we assume memory safety, we can ignore the effects of
+  // freeing memory: the code should never access freed memory!
+  // Not ignoring the effects of freeing memory (e.g., assuming write
+  // effects to the freed region(s)) may result in too conservative
+  // effect summaries.
+
+  // The code below is kept temporarily as this decision should be discussed!
+  // 2. Include the effects of the implicitly called destructor
+  /*
+  TypeBuilderVisitor TBV(VB, Def, Exp->getArgument());
+  ASaPType *T = TBV.getType();
+  OS << "DEBUG:: The Type of deleted expression is: " << T->toString() << "\n";
+  assert(T->getQT()->isPointerType());
+  T->deref();
+
+  if (T->getQT()->isScalarType()) {
+    // 2.A Look at the type of the expression and if it is a pointer to a
+    // builtin type the effect writes to the region pointed to (deallocating
+    // part of a region is like writing to that region)
+    Effect Eff(Effect::EK_WritesEffect, T->getInRpl());
+    EffectsTmp->push_back(&Eff);
+    Decl *D = 0; //Exp->getArgument()->getDecl()
+    checkEffectCoverage(Exp->getArgument(), D, 1);
+  } else {
+    // 2.B otherwise, use the declared effects of the destructor for the type
+    // TODO
+  } // FIXME what about delete [] Expr (arrays) ?
+  */
 }
 
 // End Visitors
