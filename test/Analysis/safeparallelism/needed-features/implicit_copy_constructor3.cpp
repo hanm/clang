@@ -11,9 +11,13 @@ public:
     this->x = D.x;
     this->y = D.y;
     return *this;
-  }*/
+  }
+  inline Data(const Data &D) noexcept : x(D.x), y(D.y) {}
+*/
 };
 
 void copy(Data in, Data out) {
+  Data tmp(in);
+  Data *tmp2 = new Data(in);
   out = in;
 }
