@@ -148,7 +148,9 @@ void EffectSummary::makeMinimal(EffectCoverageVector &ECV) {
     for (SetT::iterator J = begin(); J != end(); ++J) {
       if (I != J && (*I)->isSubEffectOf(*(*J))) {
         //emitEffectCovered(D, *I, *J);
-        ECV.push_back(new std::pair<const Effect*, const Effect*>(*I, *J));
+        ECV.push_back(new std::pair<const Effect*,
+                                    const Effect*>(new Effect(*(*I)),
+                                                   new Effect(*(*J))));
         found = true;
         break;
       } // end if

@@ -46,7 +46,7 @@ public:
 class ZooFunctor {
 public:
   // funciton zoo reads region R.
-  void operator () () const {
+  void operator () [[asap::reads("Global")]] () const {
     int x = ASaP::Globals::GlobalVar; 
   }
 }; // end class ZooFunctor
@@ -54,7 +54,7 @@ public:
 class BadFunctor {
 public:
   // funciton bad reads region ASaP::R.
-  void operator () () const {
+  void operator () [[asap::reads("Global")]] () const {
     int x = ASaP::Globals::GlobalVar; 
   }
 }; // end class BadFunctor

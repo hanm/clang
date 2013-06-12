@@ -1020,6 +1020,7 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
           OS << "DEBUG:: effect " << E1->toString()
             << " covered by " << E2->toString() << "\n";
           delete E1;
+          delete E2;
           delete PairPtr;
         }
         OS << "Minimal Effect Summary:\n";
