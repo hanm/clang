@@ -158,6 +158,9 @@ public:
   const SubstitutionVector *getInheritanceSubVec(QualType QT);
 
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
+  inline AnnotationSet makeDefaultEffectSummary(const FunctionDecl *F) {
+    return AnnotScheme->makeEffectSummary(F);
+  }
 
 }; // End class SymbolTable.
 

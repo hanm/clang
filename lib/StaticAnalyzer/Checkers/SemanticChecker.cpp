@@ -1003,21 +1003,28 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
     } else { // Case 2: Visiting the canonical Decl.
       // This declaration does not get effects copied from other decls.
       // (...hopefully).
-
-      /// C.2. Check Effect Summary is minimal
-      EffectSummary::EffectCoverageVector ECV;
-      ES->makeMinimal(ECV);
-      while(ECV.size() > 0) {
-        std::pair<const Effect*, const Effect*> *PairPtr = ECV.pop_back_val();
-        const Effect *E1 = PairPtr->first, *E2 = PairPtr->second;
-        emitEffectCovered(D, E1, E2);
-        OS << "DEBUG:: effect " << E1->toString()
-          << " covered by " << E2->toString() << "\n";
-        delete E1;
-        delete PairPtr;
+      if (ES->size()==0) {
+        AnnotationSet AnSe = SymT.makeDefaultEffectSummary(CanFD);
+        delete ES;
+        ES = AnSe.EffSum;
+        OS << "Implicit Effect Summary:\n";
+        ES->print(OS);
+      } else {
+        /// C.2. Check Effect Summary is minimal
+        EffectSummary::EffectCoverageVector ECV;
+        ES->makeMinimal(ECV);
+        while(ECV.size() > 0) {
+          std::pair<const Effect*, const Effect*> *PairPtr = ECV.pop_back_val();
+          const Effect *E1 = PairPtr->first, *E2 = PairPtr->second;
+          emitEffectCovered(D, E1, E2);
+          OS << "DEBUG:: effect " << E1->toString()
+            << " covered by " << E2->toString() << "\n";
+          delete E1;
+          delete PairPtr;
+        }
+        OS << "Minimal Effect Summary:\n";
+        ES->print(OS);
       }
-      OS << "Minimal Effect Summary:\n";
-      ES->print(OS);
       bool Success = SymT.setEffectSummary(D, ES);
       assert(Success);
     }

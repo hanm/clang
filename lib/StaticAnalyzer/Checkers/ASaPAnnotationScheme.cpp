@@ -160,9 +160,15 @@ AnnotationSet CheckGlobalsAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
   AnnotationSet Result;
   // Writes Local
-  Rpl LocalRpl(*SymbolTable::GLOBAL_RplElmt);
+  Rpl LocalRpl(*SymbolTable::LOCAL_RplElmt);
   Effect WritesLocal(Effect::EK_WritesEffect, &LocalRpl);
   Result.EffSum = new EffectSummary(WritesLocal);
+
+  // Reads Global
+  Rpl GlobalRpl(*SymbolTable::GLOBAL_RplElmt);
+  Effect ReadsGlobal(Effect::EK_ReadsEffect, &GlobalRpl);
+
+  Result.EffSum->insert(ReadsGlobal);
   return Result;
 }
 
