@@ -7,17 +7,24 @@ public:
   int x;
   int y;
 
-/*inline Data &operator=(const Data &D) noexcept {
-    this->x = D.x;
-    this->y = D.y;
-    return *this;
-  }
-  inline Data(const Data &D) noexcept : x(D.x), y(D.y) {}
-*/
+// Implicit copy assignment
+//inline Data &operator=(const Data &D) noexcept {
+//  this->x = D.x;
+//  this->y = D.y;
+//  return *this;
+//}
+
+// Implcitit copy constructor 
+//inline Data(const Data &D) noexcept : x(D.x), y(D.y) {}
+//
 };
 
-void copy(Data in, Data out) {
-  Data tmp(in);
-  Data *tmp2 = new Data(in);
-  out = in;
+Data id (Data x) { return x; }
+
+Data copy(Data in, Data out) {
+  Data tmp(in);              // implicit copy constructor
+  Data *tmp2 = new Data(in); // implicit copy constructor
+  out = in;                  // implicit copy assignment
+  out = id(in);              // implicit move assignment
+  return tmp;                // implicit move constructor
 }
