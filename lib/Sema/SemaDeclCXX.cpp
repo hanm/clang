@@ -9610,8 +9610,16 @@ CXXConstructorDecl *Sema::DeclareImplicitCopyConstructor(
   FunctionProtoType::ExtProtoInfo EPI;
   EPI.ExceptionSpecType = EST_Unevaluated;
   EPI.ExceptionSpecDecl = CopyConstructor;
-  CopyConstructor->setType(
-      Context.getFunctionType(Context.VoidTy, ArgType, EPI));
+  QualType T = Context.getFunctionType(Context.VoidTy, ArgType, EPI);
+  CopyConstructor->setType(T);
+
+  // PR16182. Build type source info for copy assignment operator. RAV relies on
+  // type source info to traverse parameter declaration of implicit
+  // declared copy assignment operator.
+  TypeSourceInfo *TSInfo = Context.getTrivialTypeSourceInfo(T, ClassLoc);
+  CopyConstructor->setTypeSourceInfo(TSInfo);
+  UnqualTypeLoc UnQualTL = TSInfo->getTypeLoc().getUnqualifiedLoc();
+  FunctionTypeLoc FTL = UnQualTL.getAs<FunctionTypeLoc>();
 
   // Add the parameter to the constructor.
   ParmVarDecl *FromParam = ParmVarDecl::Create(Context, CopyConstructor,
@@ -9620,6 +9628,7 @@ CXXConstructorDecl *Sema::DeclareImplicitCopyConstructor(
                                                ArgType, /*TInfo=*/0,
                                                SC_None, 0);
   CopyConstructor->setParams(FromParam);
+  FTL.setArg(0, FromParam);
 
   CopyConstructor->setTrivial(
     ClassDecl->needsOverloadResolutionForCopyConstructor()
