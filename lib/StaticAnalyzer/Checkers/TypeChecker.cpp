@@ -43,7 +43,7 @@ AssignmentCheckerVisitor::AssignmentCheckerVisitor(
     OS << "DEBUG:: Stmt:";
     S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
-    S->dump();
+    // S->dump();
     OS << "\nDEBUG:: Def:\n";
     Def->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
