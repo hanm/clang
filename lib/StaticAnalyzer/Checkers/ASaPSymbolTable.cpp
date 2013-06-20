@@ -137,6 +137,10 @@ ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
   if (isNonPointerScalarType(QT)) {
     OSv2 << "DEBUG:: getRegionParamCount::isNonPointerScalarType\n";
     return ResultTriplet(RK_OK, 1, 0);
+  } else if (QT->isArrayType()) { 
+    OSv2 << "DEBUG:: getRegionParamCount::isArrayType\n";
+    QualType QTBase(QT->getArrayElementTypeNoTypeQual(), 0);
+    return getRegionParamCount(QTBase);
   } else if (QT->isPointerType()) {
     OSv2 << "DEBUG:: getRegionParamCount::isPointerType\n";
     ResultTriplet Result = getRegionParamCount(QT->getPointeeType());
