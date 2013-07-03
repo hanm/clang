@@ -165,9 +165,9 @@ makeEffectSummary(const FunctionDecl *D) {
   Result.EffSum = new EffectSummary(WritesLocal);
 
   // Reads Global
-  //Rpl GlobalRpl(*SymbolTable::GLOBAL_RplElmt);
-  //Effect ReadsGlobal(Effect::EK_ReadsEffect, &GlobalRpl);
-  //Result.EffSum->insert(ReadsGlobal);
+  Rpl GlobalRpl(*SymbolTable::GLOBAL_RplElmt);
+  Effect ReadsGlobal(Effect::EK_ReadsEffect, &GlobalRpl);
+  Result.EffSum->insert(ReadsGlobal);
 
   return Result;
 }
