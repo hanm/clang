@@ -64,6 +64,7 @@ class SymbolTable {
   const ParameterVector *BuiltinDefaultRegionParameterVec;
 
 public:
+  // Constructors & Destructors
   SymbolTable();
   virtual ~SymbolTable();
 
@@ -88,6 +89,11 @@ public:
   static bool isSpecialRplElement(const llvm::StringRef& S);
 
   // Functions
+  /// \brief set the pointer to the annotation scheme.
+  void setAnnotationScheme(AnnotationScheme *AnS) {
+    AnnotScheme = AnS;
+  }
+
   /// \brief return the number of In/Arg annotations needed for type or -1
   /// if unknown.
   ResultTriplet getRegionParamCount(QualType QT);

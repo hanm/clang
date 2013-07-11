@@ -118,13 +118,11 @@ SymbolTable::SymbolTable() {
   // FIXME: make this static like the other default Regions etc
   ParamRplElement Param("P");
   BuiltinDefaultRegionParameterVec = new ParameterVector(Param);
-  //AnnotScheme = new DefaultAnnotationScheme(*this);
-  AnnotScheme = new CheckGlobalsAnnotationScheme(*this);
+  AnnotScheme = 0; // must be set via SetAnnotationScheme();
 }
 
 SymbolTable::~SymbolTable() {
   delete BuiltinDefaultRegionParameterVec;
-  delete AnnotScheme;
 
   for(SymbolTableMapT::iterator I = SymTable.begin(), E = SymTable.end();
     I != E; ++I) {
@@ -137,7 +135,7 @@ ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
   if (isNonPointerScalarType(QT)) {
     OSv2 << "DEBUG:: getRegionParamCount::isNonPointerScalarType\n";
     return ResultTriplet(RK_OK, 1, 0);
-  } else if (QT->isArrayType()) { 
+  } else if (QT->isArrayType()) {
     OSv2 << "DEBUG:: getRegionParamCount::isArrayType\n";
     QualType QTBase(QT->getArrayElementTypeNoTypeQual(), 0);
     return getRegionParamCount(QTBase);

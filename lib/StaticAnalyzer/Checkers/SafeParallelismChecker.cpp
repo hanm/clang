@@ -71,6 +71,10 @@ public:
 }; /// class StmtVisitorInvoker
 
 
+// The template parameter is the type of the default annotation scheme
+// used. This is a temporary solution since it is not easy to pass
+// command line arguments to checkers.
+template<typename AnnotationSchemeT>
 class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
 
@@ -82,6 +86,9 @@ public:
 
     // initialize traverser
     SymbolTable SymT;
+    AnnotationSchemeT AnnotScheme(SymT);
+    SymT.setAnnotationScheme(&AnnotScheme);
+
     ASTContext &Ctx = D->getASTContext();
     AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(D);
     VisitorBundle VB = {BR, Ctx, Mgr, AC, os, SymT};
@@ -119,5 +126,9 @@ public:
 } // end unnamed namespace
 
 void ento::registerSafeParallelismChecker(CheckerManager &mgr) {
-  mgr.registerChecker<SafeParallelismChecker>();
+  mgr.registerChecker<SafeParallelismChecker<SimpleAnnotationScheme> >();
+}
+
+void ento::registerGlobalAccessChecker(CheckerManager &mgr) {
+  mgr.registerChecker<SafeParallelismChecker<CheckGlobalsAnnotationScheme> >();
 }

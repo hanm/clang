@@ -54,7 +54,7 @@ helperMakeLocalType(const ValueDecl *D, long ArgNum) {
 
 
 ///////////////////////////////////////////////////////////////////////////////
-AnnotationSet DefaultAnnotationScheme::
+AnnotationSet ParametricAnnotationScheme::
 makeClassParams(const RecordDecl *D) {
   AnnotationSet Result;
   ParamRplElement Param("P");
@@ -62,17 +62,17 @@ makeClassParams(const RecordDecl *D) {
   return Result;
 }
 
-AnnotationSet DefaultAnnotationScheme::
+AnnotationSet ParametricAnnotationScheme::
 makeGlobalType(const VarDecl *D, long ArgNum) {
   return helperMakeGlobalType(D, ArgNum);
 }
 
-AnnotationSet DefaultAnnotationScheme::
+AnnotationSet ParametricAnnotationScheme::
 makeStackType(const VarDecl *D, long ArgNum) {
   return helperMakeLocalType(D, ArgNum);
 }
 
-AnnotationSet DefaultAnnotationScheme::
+AnnotationSet ParametricAnnotationScheme::
 makeFieldType(const FieldDecl *D, long ArgNum) {
   const RecordDecl *ReD = D->getParent();
   const ParameterVector *ParamV = SymT.getParameterVector(ReD);
@@ -90,7 +90,7 @@ makeFieldType(const FieldDecl *D, long ArgNum) {
   return Result;
 }
 
-AnnotationSet DefaultAnnotationScheme::
+AnnotationSet ParametricAnnotationScheme::
 makeParamType(const ParmVarDecl *D, long ArgNum) {
   AnnotationSet Result;
   // 1st Arg = Local, then create a new parameter for each subsequent one
@@ -109,19 +109,63 @@ makeParamType(const ParmVarDecl *D, long ArgNum) {
   return Result;
 }
 
-AnnotationSet DefaultAnnotationScheme::
+AnnotationSet ParametricAnnotationScheme::
 makeReturnType(const FunctionDecl *D, long ArgNum) {
   assert(false && "Implement Me!");
   return helperMakeLocalType(D, ArgNum);
 }
 
-AnnotationSet DefaultAnnotationScheme::
+AnnotationSet ParametricAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
   AnnotationSet Result;
   assert(false && "Implement Me!");
   return Result;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
+AnnotationSet SimpleAnnotationScheme::
+makeClassParams(const RecordDecl *D) {
+  AnnotationSet Result;
+  Result.ParamVec = 0;
+  return Result;
+}
+
+AnnotationSet SimpleAnnotationScheme::
+makeGlobalType(const VarDecl *D, long ArgNum) {
+  return helperMakeGlobalType(D, ArgNum);
+}
+
+AnnotationSet SimpleAnnotationScheme::
+makeStackType(const VarDecl *D, long ArgNum) {
+  return helperMakeLocalType(D, ArgNum);
+}
+
+AnnotationSet SimpleAnnotationScheme::
+makeFieldType(const FieldDecl *D, long ArgNum) {
+  return helperMakeLocalType(D, ArgNum);
+}
+
+AnnotationSet SimpleAnnotationScheme::
+makeParamType(const ParmVarDecl *D, long ArgNum) {
+  return helperMakeLocalType(D, ArgNum);
+}
+
+AnnotationSet SimpleAnnotationScheme::
+makeReturnType(const FunctionDecl *D, long ArgNum) {
+  return helperMakeLocalType(D, ArgNum);
+}
+
+AnnotationSet SimpleAnnotationScheme::
+makeEffectSummary(const FunctionDecl *D) {
+  AnnotationSet Result;
+  // Writes Local
+  Rpl LocalRpl(*SymbolTable::LOCAL_RplElmt);
+  Effect WritesLocal(Effect::EK_WritesEffect, &LocalRpl);
+  Result.EffSum = new EffectSummary(WritesLocal);
+
+  return Result;
+}
 ///////////////////////////////////////////////////////////////////////////////
 
 AnnotationSet CheckGlobalsAnnotationScheme::

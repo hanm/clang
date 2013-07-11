@@ -58,12 +58,32 @@ protected:
 
 };
 
-class DefaultAnnotationScheme : public AnnotationScheme {
+class ParametricAnnotationScheme : public AnnotationScheme {
 public:
   // Constructor
-  DefaultAnnotationScheme(SymbolTable &SymT) :AnnotationScheme(SymT) {}
+  ParametricAnnotationScheme(SymbolTable &SymT) :AnnotationScheme(SymT) {}
   // Destructor
-  virtual ~DefaultAnnotationScheme() {}
+  virtual ~ParametricAnnotationScheme() {}
+
+  // Methods
+  virtual AnnotationSet makeClassParams(const RecordDecl *D);
+
+  virtual AnnotationSet makeGlobalType(const VarDecl *D, long ArgNum);
+  virtual AnnotationSet makeStackType(const VarDecl *D, long ArgNum);
+  virtual AnnotationSet makeFieldType(const FieldDecl *D, long ArgNum);
+  virtual AnnotationSet makeParamType(const ParmVarDecl *D, long ArgNum);
+  virtual AnnotationSet makeReturnType(const FunctionDecl *D, long ArgNum);
+
+  virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
+
+}; // end class DefaultAnnotationScheme
+
+class SimpleAnnotationScheme : public AnnotationScheme {
+public:
+  // Constructor
+  SimpleAnnotationScheme(SymbolTable &SymT) :AnnotationScheme(SymT) {}
+  // Destructor
+  virtual ~SimpleAnnotationScheme() {}
 
   // Methods
   virtual AnnotationSet makeClassParams(const RecordDecl *D);
