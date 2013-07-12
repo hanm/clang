@@ -158,22 +158,22 @@ addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
 void ASaPSemanticCheckerTraverser::
 addASaPBaseTypeToMap(CXXRecordDecl *CXXRD,
                      QualType BaseQT, RplVector *RplVec) {
-  if (!RplVec)
-    return; // Nothing to do
-  const ParameterVector *ParV = SymT.getParameterVectorFromQualType(BaseQT);
-
-  // These next two assertions should have been checked before calling this
-  assert(ParV && "Base class takes no region parameter");
-  assert(ParV->size() == RplVec->size()
-         && "Base class and RPL vector must have the same # of region args");
-  // Build Substitution Vector
-  SubstitutionVector *SubV = new SubstitutionVector();
-  SubV->buildSubstitutionVector(ParV, RplVec);
-
+  OS << "DEBUG:: Adding Base class to inheritance Map!\n";
   const RecordType *RT = BaseQT->getAs<RecordType>();
   assert(RT);
   RecordDecl *BaseD = RT->getDecl();
   assert(BaseD);
+
+  const ParameterVector *ParV = SymT.getParameterVectorFromQualType(BaseQT);
+  assert(ParV && "Base class has an uninitialized ParamVec");
+
+  SubstitutionVector *SubV = new SubstitutionVector();
+  if (RplVec) {
+    assert(ParV->size() == RplVec->size()
+          && "Base class and RPL vector must have the same # of region args");
+    // Build Substitution Vector
+    SubV->buildSubstitutionVector(ParV, RplVec);
+  } // else the Substitution Vector stays empty.
 
   SymT.addBaseTypeAndSub(CXXRD, BaseD, SubV);
 }
@@ -499,13 +499,10 @@ checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
     }
     break;
   case RK_OK:
-    OS << "DEBUG:: here01\n";
     if (ParamCount > ArgCount &&
         ParamCount > ArgCount + (DefaultInRpl?1:0)) {
       ValueDecl *ValD = dyn_cast<ValueDecl>(D);
-      OS << "DEBUG:: here02\n";
       if (!RplVec && ValD) {
-        OS << "DEBUG:: here03\n";
         AnnotationSet AnSe = SymT.makeDefaultType(ValD, ParamCount);
         OS << "DEBUG:: Default type created:" << AnSe.T->toString() << "\n";
         addASaPTypeToMap(ValD, AnSe.T);
@@ -528,28 +525,17 @@ checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
       emitSuperfluousRegionArg(D, Att, ParamCount, BufStream.str());
     } else {
       assert(ParamCount>=0);
-      OS << "DEBUG:: here1\n";
       if (ParamCount > ArgCount) {
         assert(DefaultInRpl);
         if (RplVec) {
           RplVec->push_front(DefaultInRpl);
         } else {
           RplVec = new RplVector(*DefaultInRpl);
-          OS << "DEBUG:: here2\n";
         }
       }
       assert(ParamCount == 0 ||
         (size_t)ParamCount == RplVec->size());
-      OS << "DEBUG:: here3\n";
-      if (ValueDecl *VD = dyn_cast<ValueDecl>(D)) {
-        OS << "DEBUG:: here4\n";
-        addASaPTypeToMap(VD, RplVec, 0);
-      } else if (CXXRecordDecl *CXXRD = dyn_cast<CXXRecordDecl>(D)) {
-        addASaPBaseTypeToMap(CXXRD, QT, RplVec);
-      } else {
-        assert(false && "Called 'checkParamAndArgCounts' with invalid Decl type.");
-      }
-      OS << "DEBUG:: here5\n";
+      addToMap(D, RplVec, QT);
     }
     break;
     default:
@@ -780,7 +766,8 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
     }
   }
   OS << "DEBUG:: checkBaseSpecifierArgs (DONE w. Step 1)\n";
-  // 2. Check that for each base class there is an attribute.
+  // 2. Check that for each base class there is an attribute,
+  // unless the base class takes no region arguments
   for (CXXRecordDecl::base_class_const_iterator
        I = D->bases_begin(), E = D->bases_end();
        I!=E; ++I) {
@@ -792,15 +779,27 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
                                         BaseClassStr.length()-prefix.length());
     }
     OS << "DEBUG::: BaseClass = " << BaseClassStr << "\n";
-    const RegionBaseArgAttr *Att = findBaseArg(D, BaseClassStr);
-    if (!Att) {
-      emitMissingBaseArgAttribute(D, BaseClassStr);
-      // TODO: add default instead of giving error
+
+    // Check if the base class takes no region arguments
+    ResultTriplet ResTriplet =
+      SymT.getRegionParamCount((*I).getType());
+    assert(ResTriplet.ResKin==RK_OK && "Unknown number of region parameters");
+    if (ResTriplet.NumArgs==0) {
+      // add an empty substitution to the inheritance map
+      addASaPBaseTypeToMap(D, (*I).getType(), 0);
+    } else {
+      const RegionBaseArgAttr *Att = findBaseArg(D, BaseClassStr);
+      if (!Att) {
+        emitMissingBaseArgAttribute(D, BaseClassStr);
+        // TODO: add default instead of giving error
+      }
     }
   }
 
-  // 3. For each attributetakes region arguments, find if the needed
-  // annotation (attribute) was provided.
+  // 3. For each base_arg attribute:
+  //    1. Check that it refers to a valid base type
+  //    2. Check for duplicates
+  //    3. Check that the number of region args is valid
   for (specific_attr_iterator<RegionBaseArgAttr>
        I = D->specific_attr_begin<RegionBaseArgAttr>(),
        E = D->specific_attr_end<RegionBaseArgAttr>();
@@ -1064,7 +1063,7 @@ bool ASaPSemanticCheckerTraverser::VisitRecordDecl (RecordDecl *D) {
     //assert(CxD->getDefinition());
     OS << "DEBUG:: D is a CXXRecordDecl and has numBases = ";
     unsigned int num = CxD->getNumBases();
-    OS <<  num <<"\n";
+    OS <<  num << "\n";
     checkBaseSpecifierArgs(CxD->getDefinition());
   }
   return true;

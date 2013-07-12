@@ -80,6 +80,9 @@ std::string Substitution::toString() const {
 
 void SubstitutionVector::
 buildSubstitutionVector(const ParameterVector *ParV, RplVector *RplVec) {
+  if (!ParV && !RplVec)
+    return; // empty SubstitutionVector
+
   assert(ParV && RplVec);
   assert(ParV->size() <= RplVec->size());
   for (size_t I = 0; I < ParV->size(); ++I) {

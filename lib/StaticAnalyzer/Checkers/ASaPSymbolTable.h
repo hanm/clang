@@ -164,6 +164,7 @@ public:
   const SubstitutionVector *getInheritanceSubVec(QualType QT);
 
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
+
   inline AnnotationSet makeDefaultEffectSummary(const FunctionDecl *F) {
     return AnnotScheme->makeEffectSummary(F);
   }
@@ -178,8 +179,14 @@ class SymbolTableEntry {
   RegionNameSet *RegnNameSet;
   EffectSummary *EffSum;
 
+  /// \brief Inheritance map for declaration
   InheritanceMapT *InheritanceMap;
+
+  /// \brief True when the Inheritance Substitution Vector map has been
+  /// computed (& cached)
   bool ComputedInheritanceSubVec;
+  /// \brief Inheritance Substitution Vector for declaration (null until
+  /// computed & cached)
   SubstitutionVector *InheritanceSubVec;
 
   // Private Methods
@@ -209,7 +216,6 @@ public:
   void addToParameterVector(ParameterVector *&PV);
   inline void setRegionNameSet(RegionNameSet *RNS) { RegnNameSet = RNS; }
   inline void setEffectSummary(EffectSummary *ES) { EffSum = ES; }
-  inline void setInheritanceMap(InheritanceMapT *Map) { InheritanceMap = Map; }
 
   // Lookup.
   const NamedRplElement *lookupRegionName(llvm::StringRef Name);
@@ -218,6 +224,8 @@ public:
   // Adders.
   void addRegionName(llvm::StringRef Name);
   void addParameterName(llvm::StringRef Name);
+
+  /// \brief Add an entry to the Inheritance Map
   bool addBaseTypeAndSub(const RecordDecl *BaseRD,
                          SymbolTableEntry *Base,
                          SubstitutionVector *&SubV);

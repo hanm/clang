@@ -73,6 +73,9 @@ class SubstitutionVector :
 
 public:
   // Methods
+  /// \brief Given a ParamVec (p_1, p_2, ..., p_n) and
+  /// an RplVec (r_1, r_2, ..., r_n),
+  /// build a SubstVec (s1, s2, ... s_n), where s_i = (p_i, r_i)
   void buildSubstitutionVector(const ParameterVector *ParV,
                                               RplVector *RplVec);
 

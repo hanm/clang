@@ -82,7 +82,7 @@ public:
   }
 
   void VisitStmt(Stmt *S) {
-    OS << "DEBUG:: GENERIC:: Visiting Stmt/Expr = \n";
+    OS << "DEBUG:: GENERIC:: Visiting Stmt/Expr = ";
     S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
     VisitChildren(S);

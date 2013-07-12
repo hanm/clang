@@ -907,6 +907,31 @@ void TypeBuilderVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   return;
 }
 
+void TypeBuilderVisitor::VisitCastExpr(CastExpr *Exp) {
+  OS << "DEBUG<TypeBuilder>:: Visiting Cast Expression!! ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  OS << "DEBUG<TypeBuilder>:: Cast Kind Name : " << Exp->getCastKindName()
+     << "\n";
+
+  Visit(Exp->getSubExpr());
+}
+
+void TypeBuilderVisitor::VisitExplicitCastExpr(ExplicitCastExpr *Exp) {
+  OS << "DEBUG<TypeBuilder>:: Visiting ExplicitCast Expression!! ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  OS << "DEBUG<TypeBuilder>:: Cast Kind Name : " << Exp->getCastKindName()
+     << "\n";
+
+  //Visit(Exp->getSubExpr());
+  //assert(!Type);
+  if (Type) {
+    delete Type;
+    Type = 0;
+  }
+  // do not visit sub-expression
+}
 
 //////////////////////////////////////////////////////////////////////////
 // BaseTypeBuilderVisitor

@@ -157,6 +157,9 @@ public:
   void VisitCallExpr(CallExpr *E);
   void VisitArraySubscriptExpr(ArraySubscriptExpr *E);
   void VisitReturnStmt(ReturnStmt *Ret);
+  void VisitCastExpr(CastExpr *Exp);
+  void VisitExplicitCastExpr(ExplicitCastExpr *Exp);
+
 }; // End class TypeBuilderVisitor.
 
 
