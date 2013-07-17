@@ -147,7 +147,7 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
           break;
         }
       }
-    }
+    } // end if VarDecl
   } // end for each declaration
 }
 
@@ -367,6 +367,7 @@ void AssignmentCheckerVisitor::
 typecheckCXXConstructExpr(VarDecl *VarD,
                           CXXConstructExpr *Exp,
                           SubstitutionVector &SubV) {
+
   CXXConstructorDecl *ConstrDecl =  Exp->getConstructor();
   DeclContext *ClassDeclContext = ConstrDecl->getDeclContext();
   assert(ClassDeclContext);
@@ -924,8 +925,6 @@ void TypeBuilderVisitor::VisitExplicitCastExpr(ExplicitCastExpr *Exp) {
   OS << "DEBUG<TypeBuilder>:: Cast Kind Name : " << Exp->getCastKindName()
      << "\n";
 
-  //Visit(Exp->getSubExpr());
-  //assert(!Type);
   if (Type) {
     delete Type;
     Type = 0;

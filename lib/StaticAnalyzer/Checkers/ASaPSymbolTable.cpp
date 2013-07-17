@@ -594,11 +594,13 @@ computeInheritanceSubVec() {
 
     assert(!InheritanceSubVec);
     InheritanceSubVec = new SubstitutionVector();
-    for(InheritanceMapT::iterator
-          I = InheritanceMap->begin(), E = InheritanceMap->end();
+    for(InheritanceMapT::iterator I = InheritanceMap->begin(),
+                                  E = InheritanceMap->end();
         I != E; ++I) {
+      // 1. Recursive call: getInheritanceSubVec()
       SymbolTableEntry *STE = (*I).second.first;
       InheritanceSubVec->push_back_vec(STE->getInheritanceSubVec());
+      // 2. Last step: add these here substitutions
       const SubstitutionVector *SubV = (*I).second.second;
       InheritanceSubVec->push_back_vec(SubV);
       // Note: this order is important (i.e., first push_back the

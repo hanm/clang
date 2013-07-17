@@ -271,17 +271,42 @@ EffectCollectorVisitor::EffectCollectorVisitor (
   OS << "DEBUG:: done running Visit\n";
   if (const CXXMethodDecl *CXXD = dyn_cast<CXXMethodDecl>(Def)) {
     // check overidden methods have an effect summary that covers this one
-    const EffectSummary *MySum = SymT.getEffectSummary(CXXD);
-    assert(MySum);
+    const EffectSummary *DerivedSum = SymT.getEffectSummary(CXXD);
+    assert(DerivedSum);
+    const CXXRecordDecl *DerivedClass = CXXD->getParent();
+
     for(CXXMethodDecl::method_iterator
         I = CXXD->begin_overridden_methods(),
         E = CXXD->end_overridden_methods();
         I != E; ++I) {
-      // aloha
-      const EffectSummary *OverriddenSum = SymT.getEffectSummary(*I);
+      const CXXMethodDecl* OverriddenMethod = *I; // i.e., base Method
+
+      const EffectSummary *OverriddenSum = SymT.getEffectSummary(OverriddenMethod);
       assert(OverriddenSum);
-      if ( ! OverriddenSum->covers(MySum) ) {
-        emitOverridenVirtualFunctionMustCoverEffectsOfChildren(*I, CXXD);
+
+      const SubstitutionVector *SubVec =SymT.getInheritanceSubVec(DerivedClass);
+      EffectSummary SubstOVRDSum(*OverriddenSum);
+      if (SubVec)
+        //SubVec->reverseApplyTo(&SubstOVRDSum);
+        SubVec->applyTo(&SubstOVRDSum);
+      //SubstBaseSum.substitute(SubVec);
+      OS << "DEBUG:: overidden summary error:\n";
+      OS << "   DerivedSum: " << DerivedSum->toString() << "\n";
+      OS << "   OverriddenSum: " << OverriddenSum->toString() << "\n";
+      OS << "   Overridden Method:";
+      OverriddenMethod->print(OS, Ctx.getPrintingPolicy());
+      OS << "\n";
+      OS << "   Derived Method:";
+      CXXD->print(OS, Ctx.getPrintingPolicy());
+      OS << "\n";
+      OS << "   DerivedClass:" << DerivedClass->getNameAsString() << "\n";
+      OS << "   InheritanceSubst: ";
+      if (SubVec)
+        SubVec->print(OS);
+      OS << " \n";
+
+      if ( ! SubstOVRDSum.covers(DerivedSum) ) {
+        emitOverridenVirtualFunctionMustCoverEffectsOfChildren(OverriddenMethod, CXXD);
       }
     }
   }

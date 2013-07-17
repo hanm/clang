@@ -101,6 +101,7 @@ public:
   // Note: That=LHS and this=RHS
   bool isAssignableTo(const ASaPType &That, SymbolTable &SymT,
                       ASTContext &Ctx, bool IsInit = false) const;
+  /// \brief true when when cast is successful
   bool implicitCastToBase(QualType BaseQT, SymbolTable &SymT);
   /// \brief  true when 'this' is a subtype (derived type) of 'that'.
   bool isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const;

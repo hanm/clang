@@ -108,6 +108,14 @@ std::string Effect::toString() const {
   return std::string(OS.str());
 }
 
+const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
+  if (this->isSubEffectOf(*SymbolTable::WritesLocal))
+    return SymbolTable::WritesLocal;
+  else
+    return ES.covers(this);
+}
+
+
 //////////////////////////////////////////////////////////////////////////
 // EffectSummary
 
@@ -117,7 +125,7 @@ const Effect *EffectSummary::covers(const Effect *Eff) const {
     return Eff;
 
   // if the Eff pointer is included in the set, return it
-  if (count(Eff)) {
+  if (count(const_cast<Effect*>(Eff))) {
     return Eff;
   }
 
@@ -180,11 +188,22 @@ std::string EffectSummary::toString() const {
   return std::string(OS.str());
 }
 
-const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
-  if (this->isSubEffectOf(*SymbolTable::WritesLocal))
-    return SymbolTable::WritesLocal;
-  else
-    return ES.covers(this);
+void EffectSummary::substitute(const Substitution *Sub) {
+  if (!Sub)
+    return;
+  for(SetT::iterator I = begin(), E = end(); I != E; ++I) {
+    Effect *Eff = *I;
+    Eff->substitute(Sub);
+  }
+}
+
+void EffectSummary::substitute(const SubstitutionVector *SubV) {
+  if (!SubV)
+    return;
+  for(SetT::iterator I = begin(), E = end(); I != E; ++I) {
+    Effect *Eff = *I;
+    Eff->substitute(SubV);
+  }
 }
 
 } // end namespace clang

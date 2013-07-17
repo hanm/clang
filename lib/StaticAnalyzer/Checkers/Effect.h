@@ -153,9 +153,9 @@ public:
 #ifndef EFFECT_SUMMARY_SIZE
   #define EFFECT_SUMMARY_SIZE 8
 #endif
-class EffectSummary : public OwningPtrSet<const Effect, EFFECT_SUMMARY_SIZE> {
+class EffectSummary : public OwningPtrSet<Effect, EFFECT_SUMMARY_SIZE> {
 public:
-  typedef OwningPtrSet<const Effect, EFFECT_SUMMARY_SIZE> BaseClass;
+  typedef OwningPtrSet<Effect, EFFECT_SUMMARY_SIZE> BaseClass;
   EffectSummary() : BaseClass() {}
   EffectSummary(Effect &E) : BaseClass(E) {}
 
@@ -176,6 +176,10 @@ public:
 
   /// \brief Returns a string with the effect summary.
   std::string toString() const;
+
+  void substitute(const Substitution *Sub);
+  void substitute(const SubstitutionVector *SubV);
+
 }; // end class EffectSummary
 
 
