@@ -46,7 +46,8 @@ public:
   void set(const RplElement *FromEl, const Rpl *ToRpl);
 
   // Apply
-  /// \brief Apply substitution to RPL
+  /// \brief Apply substitution to type *T, which must implement
+  /// T->substitute(Substitution *)
   template<typename T>
   void applyTo(T *X) const {
     if (X && FromEl && ToRpl) {
@@ -79,7 +80,8 @@ public:
   void buildSubstitutionVector(const ParameterVector *ParV,
                                               RplVector *RplVec);
 
-  // Apply
+  /// \brief Apply substitution vector to type T, which must implement
+  /// T->substitute(Subtitution *)
   template<typename T>
   void applyTo(T *X) const {
     if (X) {
