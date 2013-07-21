@@ -15,6 +15,7 @@ public:
     double &getXRef [[asap::arg("P")]] () { return x; }
     void setX1(double x_) { *getXPtr() = x_; } // expected-warning{{effect not covered by effect summary}}
     void setX2[[asap::reads("P")]](double x_) { *getXPtr() = x_; } // expected-warning{{effect not covered by effect summary}}
+    void setX3[[asap::reads("P")]](double x_) { getXRef() = x_; } // expected-warning{{effect not covered by effect summary}}
     void setX [[asap::writes("P")]](double x_) { *getXPtr() = x_; }
     }; // end class point
 
