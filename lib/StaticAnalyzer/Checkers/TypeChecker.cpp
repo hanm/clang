@@ -153,6 +153,8 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
 
 bool AssignmentCheckerVisitor::
 typecheck(const ASaPType *LHSType, const ASaPType *RHSType, bool IsInit) {
+  if (!LHSType)
+    return true; // LHS has no region info (e.g., type cast). Don't type check
   if (!RHSType)
     return true; // RHS has no region info && Clang has done typechecking
   else { // RHSType != null
@@ -229,11 +231,10 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
   OS << "\n";
   ASaPType *LHSType = TBVL.getType();
   ASaPType *RHSType = TBVR.getType();
-  assert(LHSType);
 
   // allow RHSType to be NULL, e.g., we don't create ASaP Types for constants
   // because they don't have any interesting regions to typecheck.
-  if (! typecheck(LHSType, RHSType, false)) {
+  if (!typecheck(LHSType, RHSType, false)) {
     OS << "DEBUG:: invalid assignment: gonna emit an error\n";
     helperEmitInvalidExplicitAssignmentWarning(E, LHSType, RHSType);
     FatalError = true;
@@ -243,7 +244,7 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
   // AssignmentChecker was called recursively by a TypeBuilderVisitor
   delete Type;
   Type = TBVL.stealType();
-  assert(Type);
+  //assert(Type);
 
   OS << "DEBUG:: >>>>>>>>>> DONE TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";
 }
@@ -260,9 +261,8 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   assert(FunType->isFunctionType());
   ASaPType *LHSType = new ASaPType(*FunType);
   LHSType = LHSType->getReturnType();
-  assert(LHSType);
   ASaPType *RHSType = TBVR.getType();
-  if (! typecheck(LHSType, RHSType, true)) {
+  if (!typecheck(LHSType, RHSType, true)) {
     OS << "DEBUG:: invalid assignment: gonna emit an error\n";
     helperEmitInvalidReturnTypeWarning(Ret, LHSType, RHSType);
     FatalError = true;
@@ -289,7 +289,7 @@ helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init) {
   const ASaPType *LHSType = SymT.getType(VD);
   ASaPType *RHSType = TBVR.getType();
   //OS << "DEBUG:: gonna call typecheck(LHS,RHS, IsInit=true\n";
-  if (! typecheck(LHSType, RHSType, true)) {
+  if (!typecheck(LHSType, RHSType, true)) {
     OS << "DEBUG:: invalid assignment: gonna emit an error\n";
     //  Fixme pass VS as arg instead of Init
     helperEmitInvalidInitializationWarning(Init, LHSType, RHSType);
@@ -320,7 +320,7 @@ typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
     OS << "DEBUG:: DONE performing substitution\n";
   }
   ASaPType *RHSType = TBVR.getType();
-  if (! typecheck(LHSType, RHSType, true)) {
+  if (!typecheck(LHSType, RHSType, true)) {
     OS << "DEBUG:: invalid argument to parameter assignment: "
       << "gonna emit an error\n";
     OS << "DEBUG:: Param:";
