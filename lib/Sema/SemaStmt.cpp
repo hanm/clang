@@ -93,9 +93,6 @@ void Sema::ActOnForEachDeclStmt(DeclGroupPtrTy dg) {
     return;
   }
 
-  // suppress any potential 'unused variable' warning.
-  var->setUsed();
-
   // foreach variables are never actually initialized in the way that
   // the parser came up with.
   var->setInit(0);
@@ -1219,13 +1216,13 @@ namespace {
   // of the excluded constructs are used.
   class DeclExtractor : public EvaluatedExprVisitor<DeclExtractor> {
     llvm::SmallPtrSet<VarDecl*, 8> &Decls;
-    SmallVector<SourceRange, 10> &Ranges;
+    SmallVectorImpl<SourceRange> &Ranges;
     bool Simple;
   public:
     typedef EvaluatedExprVisitor<DeclExtractor> Inherited;
 
     DeclExtractor(Sema &S, llvm::SmallPtrSet<VarDecl*, 8> &Decls,
-                  SmallVector<SourceRange, 10> &Ranges) :
+                  SmallVectorImpl<SourceRange> &Ranges) :
         Inherited(S.Context),
         Decls(Decls),
         Ranges(Ranges),
@@ -1411,7 +1408,7 @@ namespace {
     // Load SourceRanges into diagnostic if there is room.
     // Otherwise, load the SourceRange of the conditional expression.
     if (Ranges.size() <= PartialDiagnostic::MaxArguments)
-      for (SmallVector<SourceRange, 10>::iterator I = Ranges.begin(),
+      for (SmallVectorImpl<SourceRange>::iterator I = Ranges.begin(),
                                                   E = Ranges.end();
            I != E; ++I)
         PDiag << *I;
@@ -1768,7 +1765,8 @@ Sema::ActOnCXXForRangeStmt(SourceLocation ForLoc,
 
   // Claim the type doesn't contain auto: we've already done the checking.
   DeclGroupPtrTy RangeGroup =
-    BuildDeclaratorGroup((Decl**)&RangeVar, 1, /*TypeMayContainAuto=*/false);
+      BuildDeclaratorGroup(llvm::MutableArrayRef<Decl *>((Decl **)&RangeVar, 1),
+                           /*TypeMayContainAuto=*/ false);
   StmtResult RangeDecl = ActOnDeclStmt(RangeGroup, RangeLoc, RangeLoc);
   if (RangeDecl.isInvalid())
     return StmtError();
@@ -2048,7 +2046,8 @@ Sema::BuildCXXForRangeStmt(SourceLocation ForLoc, SourceLocation ColonLoc,
     Decl *BeginEndDecls[] = { BeginVar, EndVar };
     // Claim the type doesn't contain auto: we've already done the checking.
     DeclGroupPtrTy BeginEndGroup =
-      BuildDeclaratorGroup(BeginEndDecls, 2, /*TypeMayContainAuto=*/false);
+        BuildDeclaratorGroup(llvm::MutableArrayRef<Decl *>(BeginEndDecls, 2),
+                             /*TypeMayContainAuto=*/ false);
     BeginEndDecl = ActOnDeclStmt(BeginEndGroup, ColonLoc, ColonLoc);
 
     const QualType BeginRefNonRefType = BeginType.getNonReferenceType();
@@ -2369,32 +2368,23 @@ Sema::ActOnCapScopeReturnStmt(SourceLocation ReturnLoc, Expr *RetValExp) {
   // For blocks/lambdas with implicit return types, we check each return
   // statement individually, and deduce the common return type when the block
   // or lambda is completed.
-  if (AutoType *AT =
-          FnRetType.isNull() ? 0 : FnRetType->getContainedAutoType()) {
-    // In C++1y, the return type may involve 'auto'.
-    FunctionDecl *FD = cast<LambdaScopeInfo>(CurCap)->CallOperator;
-    if (CurContext->isDependentContext()) {
-      // C++1y [dcl.spec.auto]p12:
-      //   Return type deduction [...] occurs when the definition is
-      //   instantiated even if the function body contains a return
-      //   statement with a non-type-dependent operand.
-      CurCap->ReturnType = FnRetType = Context.DependentTy;
-    } else if (DeduceFunctionTypeFromReturnExpr(FD, ReturnLoc, RetValExp, AT)) {
-      FD->setInvalidDecl();
-      return StmtError();
-    } else
-      CurCap->ReturnType = FnRetType = FD->getResultType();
-  } else if (CurCap->HasImplicitReturnType) {
-    // FIXME: Fold this into the 'auto' codepath above.
+  if (CurCap->HasImplicitReturnType) {
+    // FIXME: Fold this into the 'auto' codepath below.
     if (RetValExp && !isa<InitListExpr>(RetValExp)) {
       ExprResult Result = DefaultFunctionArrayLvalueConversion(RetValExp);
       if (Result.isInvalid())
         return StmtError();
       RetValExp = Result.take();
 
-      if (!CurContext->isDependentContext())
+      if (!CurContext->isDependentContext()) {
         FnRetType = RetValExp->getType();
-      else
+        // In C++11, we take the type of the expression after decay and
+        // lvalue-to-rvalue conversion, so a class type can be cv-qualified.
+        // In C++1y, we perform template argument deduction as if the return
+        // type were 'auto', so an implicit return type is never cv-qualified.
+        if (getLangOpts().CPlusPlus1y && FnRetType.hasQualifiers())
+          FnRetType = FnRetType.getUnqualifiedType();
+      } else
         FnRetType = CurCap->ReturnType = Context.DependentTy;
     } else {
       if (RetValExp) {
@@ -2412,6 +2402,21 @@ Sema::ActOnCapScopeReturnStmt(SourceLocation ReturnLoc, Expr *RetValExp) {
     // make sure we provide a return type now for better error recovery.
     if (CurCap->ReturnType.isNull())
       CurCap->ReturnType = FnRetType;
+  } else if (AutoType *AT =
+                 FnRetType.isNull() ? 0 : FnRetType->getContainedAutoType()) {
+    // In C++1y, the return type may involve 'auto'.
+    FunctionDecl *FD = cast<LambdaScopeInfo>(CurCap)->CallOperator;
+    if (CurContext->isDependentContext()) {
+      // C++1y [dcl.spec.auto]p12:
+      //   Return type deduction [...] occurs when the definition is
+      //   instantiated even if the function body contains a return
+      //   statement with a non-type-dependent operand.
+      CurCap->ReturnType = FnRetType = Context.DependentTy;
+    } else if (DeduceFunctionTypeFromReturnExpr(FD, ReturnLoc, RetValExp, AT)) {
+      FD->setInvalidDecl();
+      return StmtError();
+    } else
+      CurCap->ReturnType = FnRetType = FD->getResultType();
   }
   assert(!FnRetType.isNull());
 
@@ -2711,11 +2716,10 @@ Sema::ActOnReturnStmt(SourceLocation ReturnLoc, Expr *RetValExp) {
       // If we have a related result type, we need to implicitly
       // convert back to the formal result type.  We can't pretend to
       // initialize the result again --- we might end double-retaining
-      // --- so instead we initialize a notional temporary; this can
-      // lead to less-than-great diagnostics, but this stage is much
-      // less likely to fail than the previous stage.
+      // --- so instead we initialize a notional temporary.
       if (!RelatedRetType.isNull()) {
-        Entity = InitializedEntity::InitializeTemporary(FnRetType);
+        Entity = InitializedEntity::InitializeRelatedResult(getCurMethodDecl(),
+                                                            FnRetType);
         Res = PerformCopyInitialization(Entity, ReturnLoc, RetValExp);
         if (Res.isInvalid()) {
           // FIXME: Clean up temporaries here anyway?

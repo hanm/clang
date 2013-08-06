@@ -538,6 +538,10 @@ def ExprInspectionChecker : Checker<"ExprInspection">,
   HelpText<"Check the analyzer's understanding of expressions">,
   DescFile<"ExprInspectionChecker.cpp">;
 
+def ExplodedGraphViewer : Checker<"ViewExplodedGraph">,
+  HelpText<"View Exploded Graphs using GraphViz">,
+  DescFile<"DebugCheckers.cpp">;
+
 } // end "debug"
 
 //===----------------------------------------------------------------------===//
@@ -556,6 +560,5 @@ def SafeParallelismChecker : Checker<"SafeParallelismChecker">,
 def GlobalAccessChecker : Checker<"GlobalAccessChecker">,
   HelpText<"Check that functions do not access globals unless properly annotated.">,
   DescFile<"SafeParallelismChecker.cpp">;
-
 } // end "experimental"
 
