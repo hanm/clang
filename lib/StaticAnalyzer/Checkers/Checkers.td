@@ -548,10 +548,5 @@ let ParentPackage = Alpha in {
 def StaticVariableAccessChecker : Checker<"StaticVariableAccessChecker">,
   HelpText<"Check access of static variables.">,
   DescFile<"StaticVariableAccessChecker.cpp">;
-
-def SafeParallelismChecker : Checker<"SafeParallelismChecker">,
-  HelpText<"Check if parallelism is Safe given region and effect annotations.">,
-  DescFile<"SafeParallelismChecker.cpp">;
-
 } // end "experimental"
 
