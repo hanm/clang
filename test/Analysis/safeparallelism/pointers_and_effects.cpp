@@ -59,7 +59,7 @@ Rectangle {
 
   void do_pointer_stuff
     [[asap::writes("Pr:R1:Point::X, Pr:R1:Point::Y, Pr:R2:*, Pr:*:Links, Links")]]
-    [[asap::reads("Pr:Next, Pr:Next:R1:Point::X")]]
+    [[asap::reads("Pr:Next")]]
     (int _x, int _y, bool b)
   {
     ppstar = ppstar1 = &p1;
