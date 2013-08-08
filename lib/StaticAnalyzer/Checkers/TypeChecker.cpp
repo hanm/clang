@@ -933,6 +933,20 @@ void TypeBuilderVisitor::VisitExplicitCastExpr(ExplicitCastExpr *Exp) {
   // do not visit sub-expression
 }
 
+void TypeBuilderVisitor::VisitVAArgExpr(VAArgExpr *Exp) {
+  OS << "DEBUG<TypeBuilder>:: Visiting VA_Arg Expression!! ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+
+  // Treat like malloc or new as a fresh memory whose region(s)
+  // depend on the LHS of the assignment.
+  if (Type) {
+    delete Type;
+    Type = 0;
+  }
+  // do not visit sub-expression
+}
+
 //////////////////////////////////////////////////////////////////////////
 // BaseTypeBuilderVisitor
 

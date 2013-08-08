@@ -159,6 +159,7 @@ public:
   void VisitReturnStmt(ReturnStmt *Ret);
   void VisitCastExpr(CastExpr *Exp);
   void VisitExplicitCastExpr(ExplicitCastExpr *Exp);
+  void VisitVAArgExpr(VAArgExpr *Exp);
 
 }; // End class TypeBuilderVisitor.
 
