@@ -33,10 +33,10 @@ namespace clang {
 namespace asap {
 
 enum ResultKind {
-  RK_OK,
-  RK_ERROR,
-  RK_NOT_VISITED,
-  RK_VAR
+  RK_OK,          // We know the result
+  RK_ERROR,       // An error occured
+  RK_NOT_VISITED, // We don't know the result because decl not yet visited
+  RK_VAR          // We don't know the result because it's a template type var
 };
 
 StringRef stringOf(ResultKind R);

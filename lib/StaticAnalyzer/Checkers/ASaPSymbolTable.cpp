@@ -170,8 +170,12 @@ ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
   } else if (QT->isTemplateTypeParmType()) {
     OSv2 << "DEBUG:: getRegionParamCount::isTemplateParmType\n";
     return ResultTriplet(RK_VAR, 0, 0);
+  } else if (QT->isDependentType()) {
+    OSv2 << "DEBUG:: getRegionParamCount::isDependentType\n";
+    return ResultTriplet(RK_VAR, 0, 0);
   } else {
-    OSv2 << "DEBUG:: getRegionParamCount::UnexpectedType\n";
+    OSv2 << "DEBUG:: getRegionParamCount::UnexpectedType!! QT = "
+         << QT.getAsString() << "\n";
     // This should not happen: unknown number of region arguments for type
     return ResultTriplet(RK_ERROR, 0, 0);
   }

@@ -54,7 +54,6 @@ class ASaPSemanticCheckerTraverser :
 
   RplVecAttrMapT RplVecAttrMap;
   bool FatalError;
-  bool NextFunctionIsATemplatePattern;
 
   void addToMap(Decl *D, RplVector *RplVec, QualType QT);
   void addASaPTypeToMap(ValueDecl *ValD, ASaPType *T);
@@ -110,14 +109,16 @@ class ASaPSemanticCheckerTraverser :
 
   /// \brief Check that the region name and region parameter declarations
   /// of D are well formed (don't contain illegal characters).
-  template<typename AttrType> bool checkRegionOrParamDecls(Decl *D);
+  //template<typename AttrType> bool checkRegionOrParamDecls(Decl *D);
 
   const RplElement *findRegionOrParamName(const Decl *D, llvm::StringRef Name);
-  const Decl *getDeclFromContext(const DeclContext *DC);
   /// \brief Looks for 'Name' in the declaration 'D' and its parent scopes.
   const RplElement *recursiveFindRegionOrParamName(const Decl *D,
                                                    llvm::StringRef Name);
+  /// \brief check that the region arguments of the type of D are compatible
+  /// with its region parameters
   void checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl);
+
   void checkBaseTypeRegionArgs(NamedDecl *D, const RegionBaseArgAttr *Att,
                         QualType BaseQT, const Rpl *DefaultInRpl);
   void checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
@@ -183,8 +184,8 @@ public:
   bool VisitParmVarDecl(ParmVarDecl *D);
   bool VisitFunctionDecl(FunctionDecl *D);
   bool VisitRecordDecl (RecordDecl *D);
-  bool VisitEmptyDecl(EmptyDecl *D);
-  bool VisitNamespaceDecl (NamespaceDecl *D);
+  //bool VisitEmptyDecl(EmptyDecl *D);
+  //bool VisitNamespaceDecl (NamespaceDecl *D);
   bool VisitFieldDecl(FieldDecl *D);
   bool VisitVarDecl(VarDecl *D);
   bool VisitCXXMethodDecl(clang::CXXMethodDecl *D);

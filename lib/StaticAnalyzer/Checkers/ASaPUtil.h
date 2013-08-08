@@ -16,6 +16,8 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_UTIL_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_UTIL_H
 
+#include "clang/AST/Decl.h"
+
 #include "ASaPFwdDecl.h"
 
 namespace clang {
@@ -65,6 +67,8 @@ void helperEmitInvalidAssignmentWarning(BugReporter &BR,
                                         const ASaPType *LHS,
                                         const ASaPType *RHS,
                                         StringRef &BugName);
+
+const Decl *getDeclFromContext(const DeclContext *DC);
 
 } // end namespace asap
 } // end namespace clang

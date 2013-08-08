@@ -18,12 +18,11 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
 
 #include "ASaPSymbolTable.h"
-
+#include "CollectRegionNamesAndParameters.h"
+#include "EffectChecker.h"
 #include "SemanticChecker.h"
 #include "TypeChecker.h"
-#include "EffectChecker.h"
 
-//#include <typeinfo>
 
 using namespace clang;
 using namespace ento;
@@ -93,33 +92,42 @@ public:
     AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(D);
     VisitorBundle VB = {BR, Ctx, Mgr, AC, os, SymT};
 
-    os << "DEBUG:: starting ASaP Semantic Checker\n";
-    ASaPSemanticCheckerTraverser SemanticChecker(VB);
-    // run checker
-    SemanticChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+    os << "DEBUG:: starting ASaP Region Name & Parameter Collector\n";
+    CollectRegionNamesAndParametersTraverser NameCollector(VB);
+    NameCollector.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
     os << "##############################################\n";
-    os << "DEBUG:: done running ASaP Semantic Checker\n\n";
-    if (SemanticChecker.encounteredFatalError()) {
-      os << "DEBUG:: SEMANTIC CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
+    os << "DEBUG:: done running ASaP Region Name & Parameter Collector\n\n";
+    if (NameCollector.encounteredFatalError()) {
+      os << "DEBUG:: NAME COLLECTOR ENCOUNTERED FATAL ERROR!! STOPPING\n";
     } else {
-      // else continue with Typechecking
-      StmtVisitorInvoker<AssignmentCheckerVisitor> TypeChecker(VB);
-      TypeChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+      os << "DEBUG:: starting ASaP Semantic Checker\n";
+      ASaPSemanticCheckerTraverser SemanticChecker(VB);
+      // run checker
+      SemanticChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
       os << "##############################################\n";
-      os << "DEBUG:: done running ASaP Type Checker\n\n";
-      if (TypeChecker.encounteredFatalError()) {
-        os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      os << "DEBUG:: done running ASaP Semantic Checker\n\n";
+      if (SemanticChecker.encounteredFatalError()) {
+        os << "DEBUG:: SEMANTIC CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
       } else {
-        // Check that Effect Summaries cover effects
-        StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker(VB);
-        EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+        // else continue with Typechecking
+        StmtVisitorInvoker<AssignmentCheckerVisitor> TypeChecker(VB);
+        TypeChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
         os << "##############################################\n";
-        os << "DEBUG:: done running ASaP Effect Checker\n\n";
-        if (EffectChecker.encounteredFatalError()) {
-          os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
-        }
-      }
-    }
+        os << "DEBUG:: done running ASaP Type Checker\n\n";
+        if (TypeChecker.encounteredFatalError()) {
+          os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
+        } else {
+          // Check that Effect Summaries cover effects
+          StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker(VB);
+          EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+          os << "##############################################\n";
+          os << "DEBUG:: done running ASaP Effect Checker\n\n";
+          if (EffectChecker.encounteredFatalError()) {
+            os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
+          }
+        } // end else (Type Checker succeeded)
+      } // end else (Semantic Checking succeeded)
+    } // end else (Name Collection Succeeded)
     SymbolTable::Destroy();
   }
 }; // end class SafeParallelismChecker

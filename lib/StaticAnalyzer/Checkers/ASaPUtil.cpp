@@ -120,5 +120,19 @@ void helperEmitInvalidAssignmentWarning(BugReporter &BR,
   BR.emitReport(R);
 }
 
+const Decl *getDeclFromContext(const DeclContext *DC) {
+  assert(DC);
+  const Decl *D = 0;
+  if (DC->isFunctionOrMethod())
+    D = dyn_cast<FunctionDecl>(DC);
+  else if (DC->isRecord())
+    D = dyn_cast<RecordDecl>(DC);
+  else if (DC->isNamespace())
+    D = dyn_cast<NamespaceDecl>(DC);
+  else if (DC->isTranslationUnit())
+    D = dyn_cast<TranslationUnitDecl>(DC);
+  return D;
+}
+
 } // end namespace asap
 } // end namespace clang

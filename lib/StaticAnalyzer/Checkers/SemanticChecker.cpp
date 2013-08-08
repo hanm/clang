@@ -40,7 +40,7 @@ void ASaPSemanticCheckerTraverser::helperPrintAttributes(Decl *D) {
   }
 }
 
-template<typename AttrType>
+/*template<typename AttrType>
 bool ASaPSemanticCheckerTraverser::checkRegionOrParamDecls(Decl *D) {
   bool Result = true;
   specific_attr_iterator<AttrType>
@@ -85,7 +85,7 @@ bool ASaPSemanticCheckerTraverser::checkRegionOrParamDecls(Decl *D) {
     } // End for each Element of Attribute.
   } // End for each Attribute of type AttrType.
   return Result;
-}
+}*/
 
 template<typename AttrType>
 bool ASaPSemanticCheckerTraverser::checkRpls(Decl* D) {
@@ -132,7 +132,7 @@ addASaPTypeToMap(ValueDecl *ValD, ASaPType *T) {
   if (T) {
     OS << "Debug :: adding type: " << T->toString(Ctx) << " to Decl: ";
     ValD->print(OS, Ctx.getPrintingPolicy());
-    OS << "\n";
+    OS << "(" << ValD << ")\n";
     if (T->hasInheritanceMap()) {
       OS << "DEBUG:: Type has an inheritance map!\n";
     }
@@ -143,6 +143,10 @@ addASaPTypeToMap(ValueDecl *ValD, ASaPType *T) {
 
 void ASaPSemanticCheckerTraverser::
 addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
+  if (SymT.hasType(ValD)) {
+    // This is an error
+    OS << "DEBUG:: D(" << ValD << ") has type " << SymT.getType(ValD)->toString() << "\n";
+  }
   assert(!SymT.hasType(ValD));
   const InheritanceMapT *IMap = SymT.getInheritanceMap(ValD);
   ASaPType *T = new ASaPType(ValD->getType(), IMap, RplV, InRpl);
@@ -158,14 +162,20 @@ addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
 void ASaPSemanticCheckerTraverser::
 addASaPBaseTypeToMap(CXXRecordDecl *CXXRD,
                      QualType BaseQT, RplVector *RplVec) {
-  OS << "DEBUG:: Adding Base class to inheritance Map!\n";
+  OS << "DEBUG:: Adding Base class to inheritance Map!\n"
+     << "      BASE=" << BaseQT.getAsString() << "\n"
+     << "   DERIVED=" << CXXRD->getQualifiedNameAsString() << "\n";
+
   const RecordType *RT = BaseQT->getAs<RecordType>();
   assert(RT);
   RecordDecl *BaseD = RT->getDecl();
   assert(BaseD);
 
-  const ParameterVector *ParV = SymT.getParameterVectorFromQualType(BaseQT);
+  const ParameterVector *ParV = SymT.getParameterVector(BaseD);
   assert(ParV && "Base class has an uninitialized ParamVec");
+
+  const ParameterVector *DerivedParV = SymT.getParameterVector(CXXRD);
+  assert(DerivedParV && "Derived class has an uninitialized ParamVec");
 
   SubstitutionVector *SubV = new SubstitutionVector();
   if (RplVec) {
@@ -178,7 +188,7 @@ addASaPBaseTypeToMap(CXXRecordDecl *CXXRD,
   SymT.addBaseTypeAndSub(CXXRD, BaseD, SubV);
 }
 
-void ASaPSemanticCheckerTraverser::
+inline void ASaPSemanticCheckerTraverser::
 emitRedeclaredRegionName(const Decl *D, const StringRef &Str) {
   StringRef BugName = "region name already declared at this scope";
   helperEmitDeclarationWarning(BR, D, Str, BugName);
@@ -368,21 +378,6 @@ findRegionOrParamName(const Decl *D, StringRef Name) {
   return Result;
 }
 
-const Decl *ASaPSemanticCheckerTraverser::
-getDeclFromContext(const DeclContext *DC) {
-  assert(DC);
-  const Decl *D = 0;
-  if (DC->isFunctionOrMethod())
-    D = dyn_cast<FunctionDecl>(DC);
-  else if (DC->isRecord())
-    D = dyn_cast<RecordDecl>(DC);
-  else if (DC->isNamespace())
-    D = dyn_cast<NamespaceDecl>(DC);
-  else if (DC->isTranslationUnit())
-    D = dyn_cast<TranslationUnitDecl>(DC);
-  return D;
-}
-
 const RplElement *ASaPSemanticCheckerTraverser::
 recursiveFindRegionOrParamName(const Decl *D, StringRef Name) {
   /// 1. try to find among regions or region parameters of function
@@ -443,10 +438,13 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
   ResultTriplet ResTriplet = SymT.getRegionParamCount(QT);
   ResultKind ResKin = ResTriplet.ResKin;
 
+  //assert(ResKin != RK_NOT_VISITED);
   if (ResKin == RK_NOT_VISITED) {
     assert(ResTriplet.DeclNotVis);
     OS << "DEBUG:: DeclNotVisited : ";
     ResTriplet.DeclNotVis->print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+    ResTriplet.DeclNotVis->dump(OS);
     OS << "\n";
     // Calling visitor on the Declaration which has not yet been visited
     // to learn how many region parameters this type takes.
@@ -769,7 +767,7 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
   // 2. Check that for each base class there is an attribute,
   // unless the base class takes no region arguments
   for (CXXRecordDecl::base_class_const_iterator
-       I = D->bases_begin(), E = D->bases_end();
+          I = D->bases_begin(), E = D->bases_end();
        I!=E; ++I) {
     std::string BaseClassStr = (*I).getType().getAsString();
     OS << "DEBUG::: BaseClass = " << BaseClassStr << "\n";
@@ -783,6 +781,11 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
     // Check if the base class takes no region arguments
     ResultTriplet ResTriplet =
       SymT.getRegionParamCount((*I).getType());
+    // If the base type is a template type variable, skip the check.
+    // We will only check fully instantiated template code.
+    if (ResTriplet.ResKin==RK_VAR)
+      continue;
+
     assert(ResTriplet.ResKin==RK_OK && "Unknown number of region parameters");
     if (ResTriplet.NumArgs==0) {
       // add an empty substitution to the inheritance map
@@ -845,8 +848,7 @@ ASaPSemanticCheckerTraverser(VisitorBundle &_VB)
   Ctx(VB.Ctx),
   OS(VB.OS),
   SymT(VB.SymT),
-  FatalError(false),
-  NextFunctionIsATemplatePattern(false) {}
+  FatalError(false) {}
 
 ASaPSemanticCheckerTraverser::~ASaPSemanticCheckerTraverser() {
   for(RplVecAttrMapT::const_iterator
@@ -858,7 +860,7 @@ ASaPSemanticCheckerTraverser::~ASaPSemanticCheckerTraverser() {
 }
 
 bool ASaPSemanticCheckerTraverser::VisitValueDecl(ValueDecl *D) {
-  OS << "DEBUG:: VisitValueDecl : ";
+  OS << "DEBUG:: VisitValueDecl (" << D << ") : ";
   D->print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
   D->dump(OS);
@@ -881,41 +883,18 @@ bool ASaPSemanticCheckerTraverser::VisitParmVarDecl(ParmVarDecl *D) {
   return true;
 }
 
-
-/*bool ASaPSemanticCheckerTraverser::TraverseFunctionDecl(FunctionDecl *D) {
-  TRY_TO(WalkUpFromFunctionDecl(D));
-  { CODE; }
-  TRY_TO(TraverseDeclContextHelper(dyn_cast<DeclContext>(D)));
-  return true;
-}*/
-/*
-#define TRY_TO(CALL_EXPR) \
-  do { if (!getDerived().CALL_EXPR) return false; } while (0)
-
-#define DEF_TRAVERSE_TYPELOC(TYPE, CODE)
-bool ASaPSemanticCheckerTraverser::
-TraverseFunctionNoProtoTypeLoc(FunctionNoProtoTypeLoc TL) {
-    if (getDerived().shouldWalkTypesOfTypeLocs())
-      TRY_TO(WalkUpFromFunctionNoProtoType(const_cast<FunctionNoProtoType*>(TL.getTypePtr())));
-    TRY_TO(WalkUpFromFunctionNoProtoTypeLoc(TL));                                  \
-    { CODE; }                                                           \
-    return true;                                                        \
-  }
-DEF_TRAVERSE_TYPELOC(FunctionNoProtoType, {
-    TRY_TO(TraverseTypeLoc(TL.getResultLoc()));
-  }
-*/
-
 bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
-  OS << "DEBUG:: VisitFunctionDecl\n";
+  OS << "DEBUG:: VisitFunctionDecl (" << D << ")\n";
   OS << "D->isThisDeclarationADefinition() = "
      << D->isThisDeclarationADefinition() << "\n";
   OS << "D->getTypeSourceInfo() = " << D->getTypeSourceInfo() << "\n";
 
-  if (NextFunctionIsATemplatePattern) {
-    NextFunctionIsATemplatePattern = false;
-    //return true; // skip this function
-  }
+  OS << "DEBUG:: D " << (D->isTemplateDecl() ? "IS " : "is NOT ")
+      << "a template\n";
+  OS << "DEBUG:: D " << (D->isTemplateParameter() ? "IS " : "is NOT ")
+      << "a template PARAMETER\n";
+  OS << "DEBUG:: D " << (D->isFunctionTemplateSpecialization() ? "IS " : "is NOT ")
+      << "a function template SPECIALIZATION\n";
 
   OS << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
     << "DEBUG:: printing ASaP attributes for method or function '";
@@ -939,8 +918,8 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
 
   /// B. Check Annotations
   /// B.1 Check Regions & Params
-  checkRegionOrParamDecls<RegionAttr>(D);
-  checkRegionOrParamDecls<RegionParamAttr>(D);
+  //checkRegionOrParamDecls<RegionAttr>(D);
+  //checkRegionOrParamDecls<RegionParamAttr>(D);
   /// B.2 Check ReturnType
   bool Success = checkRpls<RegionArgAttr>(D); // ReturnType
   if (Success) {
@@ -965,10 +944,26 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
 
     /// C.2. Check Effects covered by canonical Declaration
     const FunctionDecl *CanFD = D->getCanonicalDecl();
-    if (CanFD != D) { // Case 1: We are not visiting the canonical Decl
+    if (CanFD && CanFD != D && !D->isFunctionTemplateSpecialization()) {
+      // Case 1: We are not visiting the canonical Decl
       OS << "DEBUG:: CanFD != D\n";
       OS << "DEBUG:: D="; D->print(OS); OS << "\n";
       OS << "DEBUG:: CanFD="; CanFD->print(OS); OS << "\n";
+
+      OS << "DEBUG:: D " << (D->isTemplateDecl() ? "IS " : "is NOT ")
+         << "a template\n";
+      OS << "DEBUG:: D " << (D->isTemplateParameter() ? "IS " : "is NOT ")
+         << "a template PARAMETER\n";
+      OS << "DEBUG:: D " << (D->isFunctionTemplateSpecialization() ? "IS " : "is NOT ")
+         << "a function template SPECIALIZATION\n";
+
+      OS << "DEBUG:: CanFD " << (CanFD->isTemplateDecl() ? "IS" : "is NOT ")
+         << "a template\n";
+      OS << "DEBUG:: CanFD " << (CanFD->isTemplateParameter() ? "IS " : "is NOT ")
+         << "a template PARAMETER\n";
+      OS << "DEBUG:: CanFD " << (CanFD->isFunctionTemplateSpecialization() ? "IS " : "is NOT ")
+         << "a function template SPECIALIZATION\n";
+
       OS << "DEBUG:: D="; D->dump(OS); OS << "\n";
       OS << "DEBUG:: CanFD="; CanFD->dump(OS); OS << "\n";
 
@@ -999,7 +994,8 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
         bool Success = SymT.setEffectSummary(D, CanFD);
         assert(Success);
       }
-    } else { // Case 2: Visiting the canonical Decl.
+    } else {
+      // Case 2: Visiting the canonical Decl or FunctionTemplateSpecialization.
       // This declaration does not get effects copied from other decls.
       // (...hopefully).
       if (ES->size()==0) {
@@ -1033,8 +1029,15 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
 }
 
 bool ASaPSemanticCheckerTraverser::VisitRecordDecl (RecordDecl *D) {
-  if (SymT.hasDecl(D)) // in case we have already visited this don't re-visit.
+  /*if (SymT.hasDecl(D)) {
+    // TODO remove this check once we remove the recursion by spliting this
+    // visitor into two passes.
+
+    // in case we have already visited this don't re-visit.
+    OS << "DEBUG:: D " << (SymT.hasParameterVector(D)? "HAS " : "has NOT ")
+       << "a parameter vector!! (but has its decl in the Symbol Table)\n";
     return true;
+  }*/
   OS << "DEBUG:: printing ASaP attributes for class or struct '";
   OS << D->getDeclName();
   OS << "':\n";
@@ -1043,20 +1046,26 @@ bool ASaPSemanticCheckerTraverser::VisitRecordDecl (RecordDecl *D) {
   helperPrintAttributes<RegionParamAttr>(D);
   helperPrintAttributes<RegionBaseArgAttr>(D);
   /// B. Check Region Names
-  checkRegionOrParamDecls<RegionAttr>(D);
+  //checkRegionOrParamDecls<RegionAttr>(D);
 
   /// C. Check Param Names
-  SymT.initParameterVector(D); // An empty param vector means the class was
-                               // visited and takes no region arguments.
-  checkRegionOrParamDecls<RegionParamAttr>(D);
+  // An empty param vector means the class was visited and takes zero
+  // region arguments.
+  if (!SymT.hasParameterVector(D))
+    SymT.initParameterVector(D);
+  //checkRegionOrParamDecls<RegionParamAttr>(D);
 
   /// D. Check BaseArg Attributes (or lack thereof)
-  OS << "DEBUG:: D:" << D << "\n";
+  OS << "DEBUG:: D               :" << D << "\n";
   OS << "DEBUG:: D->getDefinition:" << D->getDefinition() << "\n";
-  OS << "DEBUG:: D:" << D << "\n";
+
+  if (D->getDefinition() && D != D->getDefinition()) {
+    OS << "DEBUG:: D     :\n"; D->dump(OS); OS << "\n";
+    OS << "DEBUG:: D->Def:\n"; D->getDefinition()->dump(OS); OS << "\n";
+  }
 
   CXXRecordDecl *CxD = dyn_cast<CXXRecordDecl>(D);
-  OS << "DEBUG:: CxD:" << CxD << "\n";
+  OS << "DEBUG:: CxD             :" << CxD << "\n";
 
   if (CxD && CxD->getDefinition()) {
     //assert(isa<CXXRecordDecl>(D));
@@ -1069,7 +1078,7 @@ bool ASaPSemanticCheckerTraverser::VisitRecordDecl (RecordDecl *D) {
   return true;
 }
 
-bool ASaPSemanticCheckerTraverser::VisitEmptyDecl(EmptyDecl *D) {
+/*bool ASaPSemanticCheckerTraverser::VisitEmptyDecl(EmptyDecl *D) {
   OS << "DEBUG:: printing ASaP attributes for empty declaration.\n'";
   /// A. Detect Region & Param Annotations
   helperPrintAttributes<RegionAttr>(D);
@@ -1091,7 +1100,7 @@ bool ASaPSemanticCheckerTraverser::VisitNamespaceDecl (NamespaceDecl *D) {
   checkRegionOrParamDecls<RegionAttr>(D);
 
   return true;
-}
+}*/
 
 bool ASaPSemanticCheckerTraverser::VisitFieldDecl(FieldDecl *D) {
   OS << "DEBUG:: VisitFieldDecl : ";
@@ -1142,7 +1151,7 @@ bool ASaPSemanticCheckerTraverser::VisitVarDecl(VarDecl *D) {
 
 bool ASaPSemanticCheckerTraverser::VisitCXXMethodDecl(clang::CXXMethodDecl *D) {
   // ATTENTION This is called after VisitFunctionDecl
-  OS << "DEBUG:: VisitCXXMethodDecl\n";
+  OS << "DEBUG:: VisitCXXMethodDecl (" << D << ")\n";
   return true;
 }
 
@@ -1176,7 +1185,6 @@ VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
     << "a template\n";
   OS << "DEBUG:: it is " << (D->isTemplateParameter() ? "" : "NOT ")
     << "a template PARAMETER\n";
-  NextFunctionIsATemplatePattern = true;
   return true;
 }
 
