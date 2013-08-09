@@ -20,6 +20,7 @@
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/Type.h"
+#include "llvm/Support/SaveAndRestore.h"
 
 #include "ASaPUtil.h"
 #include "ASaPSymbolTable.h"
@@ -753,13 +754,9 @@ void TypeBuilderVisitor::VisitMemberExpr(MemberExpr *Exp) {
     setType(VD);
 
   // Visit Base with read semantics, then restore write semantics
-  bool SavedIsBase = IsBase;
-  int SavedDerefNum = DerefNum;
-  DerefNum = Exp->isArrow() ? 1 : 0;
-  IsBase = true;
+  SaveAndRestore<bool> VisitBase(IsBase, true);
+  SaveAndRestore<int> ResetDerefNum(DerefNum, (Exp->isArrow() ? 1 : 0));
   Visit(Exp->getBase());
-  IsBase = SavedIsBase;
-  DerefNum = SavedDerefNum;
 
 } // end VisitMemberExpr
 

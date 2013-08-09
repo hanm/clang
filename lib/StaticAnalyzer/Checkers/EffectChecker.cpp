@@ -17,6 +17,7 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/Stmt.h"
 #include "clang/AST/DeclCXX.h"
+#include "llvm/Support/SaveAndRestore.h"
 
 #include "ASaPSymbolTable.h"
 #include "ASaPType.h"
@@ -210,20 +211,21 @@ checkEffectCoverage(const Expr *Exp, const Decl *D, int N) {
 }
 
 void EffectCollectorVisitor::helperVisitAssignment(BinaryOperator *E) {
-    OS << "DEBUG:: helperVisitAssignment. ";
-    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
-    OS <<")\n";
+  OS << "DEBUG:: helperVisitAssignment. ";
+  E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS <<")\n";
 
-    bool SavedHWS = HasWriteSemantics;
-    HasWriteSemantics = false;
+  // 1. Visit RHS with Read Semantics
+  {
+    SaveAndRestore<bool> VisitWithReadSemantics(HasWriteSemantics, false);
     Visit(E->getRHS());
-
-    HasWriteSemantics = true;
-    Visit(E->getLHS());
-
-    /// Restore flags
-    HasWriteSemantics = SavedHWS;
   }
+  // 2. Visit LHS with Write Semantics
+  {
+    SaveAndRestore<bool> VisitWithWriteSemantics(HasWriteSemantics, true);
+    Visit(E->getLHS());
+  }
+}
 
 void EffectCollectorVisitor::
 helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
@@ -338,19 +340,12 @@ void EffectCollectorVisitor::VisitMemberExpr(MemberExpr *Exp) {
   int EffectNr = collectEffects(VD);
 
   /// 2.3. Visit Base with read semantics, then restore write semantics
-  bool SavedHWS = HasWriteSemantics;
-  bool SavedIsBase = IsBase;
-  int SavedDerefNum = DerefNum;
+  SaveAndRestore<bool> VisitBase(IsBase, true);
+  SaveAndRestore<bool> VisitBaseWithReadSemantics(HasWriteSemantics, false);
+  SaveAndRestore<int> ResetDerefNum(DerefNum, (Exp->isArrow() ? 1 : 0));
 
-  DerefNum = Exp->isArrow() ? 1 : 0;
-  HasWriteSemantics = false;
-  IsBase = true;
   Visit(Exp->getBase());
 
-  /// Post visitation checking
-  HasWriteSemantics = SavedHWS;
-  IsBase = SavedIsBase;
-  DerefNum = SavedDerefNum;
   /// Post-Visit Actions: check that effects (after substitutions)
   /// are covered by effect summary
   checkEffectCoverage(Exp, VD, EffectNr);
@@ -372,10 +367,8 @@ void EffectCollectorVisitor::VisitUnaryDeref(UnaryOperator *E) {
 }
 
 void EffectCollectorVisitor::VisitPrePostIncDec(UnaryOperator *E) {
-  bool savedHws = HasWriteSemantics;
-  HasWriteSemantics=true;
+  SaveAndRestore<bool> VisitWithWriteSemantics(HasWriteSemantics, true);
   Visit(E->getSubExpr());
-  HasWriteSemantics = savedHws;
 }
 
 void EffectCollectorVisitor::VisitUnaryPostInc(UnaryOperator *E) {
@@ -478,13 +471,13 @@ void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
   assert(D);
 
   /// 1. Visit Arguments w. Read semantics
-  bool SavedHasWriteSemantics = HasWriteSemantics;
-  HasWriteSemantics = false;
-  for(ExprIterator I = Exp->arg_begin(), E = Exp->arg_end();
-      I != E; ++I) {
-    Visit(*I);
+  {
+    SaveAndRestore<bool> VisitWithReadSemantics(HasWriteSemantics, false);
+    for(ExprIterator I = Exp->arg_begin(), E = Exp->arg_end();
+        I != E; ++I) {
+      Visit(*I);
+    }
   }
-  HasWriteSemantics = SavedHasWriteSemantics;
 
   const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
   // TODO we shouldn't give up like this below, but doing this for now
@@ -513,14 +506,13 @@ void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
 void EffectCollectorVisitor::
 VisitArraySubscriptExpr(ArraySubscriptExpr *Exp) {
   // 1. Visit index with read semantics
-  bool SavedHasWriteSemantics = HasWriteSemantics;
-  HasWriteSemantics = false;
-  Visit(Exp->getIdx());
-  // 2. Restore semantics and visit base
-  HasWriteSemantics = SavedHasWriteSemantics;
-  DerefNum++;
+  {
+    SaveAndRestore<bool> VisitWithReadSemantics(HasWriteSemantics, false);
+    Visit(Exp->getIdx());
+  }
+  // 2. visit base
+  SaveAndRestore<int> IncreaseDerefNum(DerefNum, DerefNum+1);
   Visit(Exp->getBase());
-  DerefNum--;
 }
 
 void EffectCollectorVisitor::
@@ -530,10 +522,7 @@ VisitCXXDeleteExpr(CXXDeleteExpr *Exp) {
   OS << "\n";
 
   // 1. Visit expression
-  //bool SavedHasWriteSemantics = HasWriteSemantics;
-  //HasWriteSemantics = false;
   Visit(Exp->getArgument());
-  // HasWriteSemantics = SavedHasWriteSemantics;
 
   // Since we assume memory safety, we can ignore the effects of
   // freeing memory: the code should never access freed memory!
