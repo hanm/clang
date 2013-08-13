@@ -3,7 +3,7 @@
 // expected-no-diagnostics
 
 template<typename T>
-inline T AddGeneric (T value1, T value2 );
+inline T AddGeneric (T value1, T value2 ) { return value1 + value2; }
 
 /*template<>
 inline unsigned char AddGeneric <unsigned char> (unsigned char value1, unsigned  char value2 ) {
