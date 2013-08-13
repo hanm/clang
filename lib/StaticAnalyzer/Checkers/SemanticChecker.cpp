@@ -143,10 +143,17 @@ addASaPTypeToMap(ValueDecl *ValD, ASaPType *T) {
 
 void ASaPSemanticCheckerTraverser::
 addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
+
+  ///FIXME: Temporary fix for CLANG AST visitor problem
   if (SymT.hasType(ValD)) {
+    OS << "ERROR!! Type already in symbol table while in addASaPTypeToMap:";
+    ValD->print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
     // This is an error
     OS << "DEBUG:: D(" << ValD << ") has type " << SymT.getType(ValD)->toString() << "\n";
+    return; // Do Nothing.
   }
+
   assert(!SymT.hasType(ValD));
   const InheritanceMapT *IMap = SymT.getInheritanceMap(ValD);
   ASaPType *T = new ASaPType(ValD->getType(), IMap, RplV, InRpl);
@@ -502,7 +509,10 @@ checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
       ValueDecl *ValD = dyn_cast<ValueDecl>(D);
       if (!RplVec && ValD) {
         AnnotationSet AnSe = SymT.makeDefaultType(ValD, ParamCount);
-        OS << "DEBUG:: Default type created:" << AnSe.T->toString() << "\n";
+        OS << "DEBUG:: Default type created:" << AnSe.T->toString()
+           << "  for decl(" << ValD << "): ";
+        ValD->print(OS, Ctx.getPrintingPolicy());
+        OS << "\n";
         addASaPTypeToMap(ValD, AnSe.T);
       } else {
         emitMissingRegionArgs(D, Att, ParamCount);
