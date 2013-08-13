@@ -390,16 +390,23 @@ void EffectCollectorVisitor::VisitUnaryPreDec(UnaryOperator *E) {
 void EffectCollectorVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   // This next lookup actually returns the function type.
   const ASaPType *FunType = SymT.getType(Def);
-  assert(FunType);
+  if (!FunType) {
+    // This is probably (hopefully) a template function.
+    // We are not yet checking effects and types of parametric code
+    // (only of instantiated templates)
+    return;
+  }
 
+  assert(FunType);
   ASaPType *RetTyp = new ASaPType(*FunType);
   RetTyp = RetTyp->getReturnType();
   assert(RetTyp);
 
   if (RetTyp->getQT()->isReferenceType()) {
-    DerefNum--;
+    SaveAndRestore<int> DecrementDerefNum(DerefNum, DerefNum-1);
+    //DerefNum--;
     Visit(Ret->getRetValue());
-    DerefNum++;
+    //DerefNum++;
   } else {
     Visit(Ret->getRetValue());
   }

@@ -257,8 +257,14 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   RetExp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
 
+
   TypeBuilderVisitor TBVR(VB, Def, RetExp);
+  if (!TBVR.getType())
+    return;
+
   const ASaPType *FunType = SymT.getType(Def);
+  Def->dump(OS);
+  OS << "\n";
   assert(FunType);
   assert(FunType->isFunctionType());
   ASaPType *LHSType = new ASaPType(*FunType);
@@ -823,7 +829,7 @@ void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
     AssignmentCheckerVisitor ACV(VB, Def, Exp);
     assert(!Type && "Type must be null here");
     Type = ACV.stealType();
-    assert(Type && "Type must not be null here");
+    //assert(Type && "Type must not be null here");
   } else {
     // CommaOp
     Visit(Exp->getRHS()); // visit to typeckeck possible assignments
