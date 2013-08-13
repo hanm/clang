@@ -145,6 +145,11 @@ emitIllFormedRegionNameOrParameter(const Decl *D,
 
 bool CollectRegionNamesAndParametersTraverser::
 VisitFunctionDecl(FunctionDecl *D) {
+  OS << "DEBUG:: printing ASaP attributes for function '";
+  OS << D->getDeclName() << "\n";
+  D->dump(OS);
+  OS << "':\n";
+
 
   /// A. Detect Annotations
   /// A.1. Detect Region and Parameter Declarations
