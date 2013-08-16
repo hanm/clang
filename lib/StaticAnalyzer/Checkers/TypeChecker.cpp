@@ -907,17 +907,6 @@ void TypeBuilderVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr *Exp) {
 
   SaveAndRestore<int> IncreaseDerefNum(DerefNum, DerefNum+1);
   Visit(Exp->getBase());
-  // If Type !=0 remove array from type
-  /*if (!Type)
-    return;
-  if (Type->getQT()->isArrayType()) {
-    Type->arraySubscript();
-  } else if (Type->getQT()->isPointerType()) {
-    Type->deref();
-  } else {
-    assert(false && "unexpected ArraySubscriptExpr on "
-                    "type that is not a pointer or an array");
-  }*/
 }
 
 void TypeBuilderVisitor::VisitReturnStmt(ReturnStmt *Ret) {

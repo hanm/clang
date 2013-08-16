@@ -17,3 +17,13 @@ void foo() {
   x.y = x.xyz[1];
   x.xyz[x.x] = x.xyz[x.y];
 }
+
+void bar() {
+  union {
+    short s;
+    char c1c2[2];
+  };
+  c1c2[0] = 8; 
+  c1c2[1] = 4;
+  s = c1c2[0] + c1c2[1];
+}

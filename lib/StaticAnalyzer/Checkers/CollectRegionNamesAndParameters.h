@@ -74,6 +74,8 @@ public:
   bool VisitEmptyDecl(EmptyDecl *D);
   bool VisitNamespaceDecl (NamespaceDecl *D);
 
+  bool VisitValueDecl(ValueDecl *D);
+
 }; // End class CollectRegionNamesAndParametersTraverser.
 } // End namespace asap.
 } // End namespace clang.
