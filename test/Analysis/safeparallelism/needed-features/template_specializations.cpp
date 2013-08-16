@@ -11,6 +11,11 @@ public:
 
 };
 
+class CustomType;
+
+template<>
+class AddOperator<CustomType>;
+
 // partial specialization for pointer types
 template<typename T>
 class AddOperator<T*> {
@@ -56,14 +61,5 @@ void foo() {
   //printf ("C.value1 = %d\n", C.getValue1());
   //printf ("C.value2 = %d\n", C.getValue2());
 }
-/*
-template<>
-inline uint8_t AddGeneric <uint8_t, 1> (uint8_t value1, uint8_t value2 ) {
-      return value1 + value2;
-}
 
-template<>
-inline int AddGeneric <int, 2> (int value1, int value2 ) {
-      return 2*value1 + value2;
-}
-*/
+
