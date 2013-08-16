@@ -60,10 +60,6 @@ class ASaPSemanticCheckerTraverser :
   void addASaPTypeToMap(ValueDecl *D, RplVector *RV, Rpl *InRpl);
   void addASaPBaseTypeToMap(CXXRecordDecl *CXXRD, QualType QT, RplVector *RplVec);
 
-  /// \brief Emit error for redeclared region name within scope.
-  void emitRedeclaredRegionName(const Decl *D, const llvm::StringRef &Str);
-  /// \brief Emit error for redeclared region parameter name within scope.
-  void emitRedeclaredRegionParameter(const Decl *D, const llvm::StringRef &Str);
   /// \brief Emit error for misplaced region parameter within RPL.
   void emitMisplacedRegionParameter(const Decl *D,
                                     const Attr* A,
@@ -82,9 +78,6 @@ class ASaPSemanticCheckerTraverser :
   /// \brief Region arguments Str on declaration D are superfluous for its type.
   void emitSuperfluousRegionArg(const Decl *D, const Attr *A,
                                 int Expects, llvm::StringRef Str);
-  /// \brief Region name or parameter contains illegal characters.
-  void emitIllFormedRegionNameOrParameter(const Decl *D, const Attr *A,
-                                          llvm::StringRef Name);
   void emitCanonicalDeclHasSmallerEffectSummary(const Decl *D,
                                                 const StringRef &S);
   /// \brief Effect summary not minimal: effect E1 is covered by effect E2.
@@ -102,14 +95,6 @@ class ASaPSemanticCheckerTraverser :
 
   /// \brief Print to the debug output stream (os) the attribute.
   template<typename AttrType> void helperPrintAttributes(Decl *D);
-
-  /// \brief Return the string name of the region or region parameter declaration
-  /// based on the Kind of the Attribute (RegionAttr or RegionParamAttr).
-  llvm::StringRef getRegionOrParamName(const Attr *Attribute);
-
-  /// \brief Check that the region name and region parameter declarations
-  /// of D are well formed (don't contain illegal characters).
-  //template<typename AttrType> bool checkRegionOrParamDecls(Decl *D);
 
   const RplElement *findRegionOrParamName(const Decl *D, llvm::StringRef Name);
   /// \brief Looks for 'Name' in the declaration 'D' and its parent scopes.
@@ -184,8 +169,6 @@ public:
   bool VisitParmVarDecl(ParmVarDecl *D);
   bool VisitFunctionDecl(FunctionDecl *D);
   bool VisitRecordDecl (RecordDecl *D);
-  //bool VisitEmptyDecl(EmptyDecl *D);
-  //bool VisitNamespaceDecl (NamespaceDecl *D);
   bool VisitFieldDecl(FieldDecl *D);
   bool VisitVarDecl(VarDecl *D);
   bool VisitCXXMethodDecl(clang::CXXMethodDecl *D);

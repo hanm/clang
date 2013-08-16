@@ -20,6 +20,7 @@
 #include "ASaPSymbolTable.h"
 #include "CollectRegionNamesAndParameters.h"
 #include "EffectChecker.h"
+#include "EffectSummaryNormalizer.h"
 #include "SemanticChecker.h"
 #include "TypeChecker.h"
 
@@ -109,23 +110,34 @@ public:
       if (SemanticChecker.encounteredFatalError()) {
         os << "DEBUG:: SEMANTIC CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
       } else {
-        // else continue with Typechecking
-        StmtVisitorInvoker<AssignmentCheckerVisitor> TypeChecker(VB);
-        TypeChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+        // else continue with checking Effect Coverage
+        os << "DEBUG:: starting ASaP Effect Coverage Checker\n";
+        EffectSummaryNormalizerTraverser EffectNormalizerChecker(VB);
+        // run checker
+        EffectNormalizerChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
         os << "##############################################\n";
-        os << "DEBUG:: done running ASaP Type Checker\n\n";
-        if (TypeChecker.encounteredFatalError()) {
-          os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
+        os << "DEBUG:: done running ASaP Effect Coverage Checker\n\n";
+        if (EffectNormalizerChecker.encounteredFatalError()) {
+          os << "DEBUG:: EFFECT NORMALIZER CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
         } else {
-          // Check that Effect Summaries cover effects
-          StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker(VB);
-          EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+          // else continue with Typechecking
+          StmtVisitorInvoker<AssignmentCheckerVisitor> TypeChecker(VB);
+          TypeChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
           os << "##############################################\n";
-          os << "DEBUG:: done running ASaP Effect Checker\n\n";
-          if (EffectChecker.encounteredFatalError()) {
-            os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
-          }
-        } // end else (Type Checker succeeded)
+          os << "DEBUG:: done running ASaP Type Checker\n\n";
+          if (TypeChecker.encounteredFatalError()) {
+            os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
+          } else {
+            // Check that Effect Summaries cover effects
+            StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker(VB);
+            EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+            os << "##############################################\n";
+            os << "DEBUG:: done running ASaP Effect Checker\n\n";
+            if (EffectChecker.encounteredFatalError()) {
+              os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
+            }
+          } // end else (Type Checker succeeded)
+        } // end else (Effect Coverage Checker succeeded)
       } // end else (Semantic Checking succeeded)
     } // end else (Name Collection Succeeded)
     SymbolTable::Destroy();

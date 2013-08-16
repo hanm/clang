@@ -87,6 +87,8 @@ public:
   QualType getQT(int DerefNum) const;
   /// \brief If this is a function type, return its return type; else null.
   ASaPType *getReturnType();
+  /// \brief For ArrayType, modify type by applying one level of sub-scripting
+  void arraySubscript();
   /// \brief Dereferences this type DerefNum times.
   void deref(int DerefNum = 1);
   /// \brief Modifies this type as if its address were taken.

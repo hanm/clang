@@ -137,8 +137,12 @@ ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
     return ResultTriplet(RK_OK, 1, 0);
   } else if (QT->isArrayType()) {
     OSv2 << "DEBUG:: getRegionParamCount::isArrayType\n";
-    QualType QTBase(QT->getArrayElementTypeNoTypeQual(), 0);
-    return getRegionParamCount(QTBase);
+    // It is not allowed to use getAs<T> with T = ArrayType,
+    // so we use getAsArrayTypeUnsafe
+    const ArrayType *AT = QT->getAsArrayTypeUnsafe();
+    assert(AT);
+    QualType ElQT = AT->getElementType();
+    return getRegionParamCount(ElQT);
   } else if (QT->isPointerType()) {
     OSv2 << "DEBUG:: getRegionParamCount::isPointerType\n";
     ResultTriplet Result = getRegionParamCount(QT->getPointeeType());
@@ -173,9 +177,15 @@ ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
   } else if (QT->isDependentType()) {
     OSv2 << "DEBUG:: getRegionParamCount::isDependentType\n";
     return ResultTriplet(RK_VAR, 0, 0);
+  } else if (QT->isUnionType()) {
+    OSv2 << "DEBUG:: getRegionParamCount::isUnionType ";
+    OSv2 << (QT->hasUnnamedOrLocalType() ? "(Named Union)" : "(ANONYMOUS Union)") << "\n";
+    return ResultTriplet(RK_OK, 0, 0);
   } else {
     OSv2 << "DEBUG:: getRegionParamCount::UnexpectedType!! QT = "
          << QT.getAsString() << "\n";
+    OSv2 << "DEBUG:: QT.dump:\n";
+    QT.dump();
     // This should not happen: unknown number of region arguments for type
     return ResultTriplet(RK_ERROR, 0, 0);
   }
@@ -241,6 +251,11 @@ getInheritanceMap(const ValueDecl *D) const {
     QT = QT->getPointeeType();
   }
   if (const CXXRecordDecl *RecD = QT->getAsCXXRecordDecl()) {
+      OSv2 << "DEBUG:: the type is";
+      OSv2 << (RecD->hasNameForLinkage() ? "(Named)" : "(ANONYMOUS)") << ":\n";
+      RecD->dump(OSv2);
+      OSv2 << "\n";
+
       assert(hasDecl(RecD) && "Internal error: type missing declaration");
       Result = getInheritanceMap(RecD);
   }
@@ -359,6 +374,15 @@ bool SymbolTable::setEffectSummary(const Decl *D, const Decl *Dfrom) {
     SymTable[D]->setEffectSummary(new EffectSummary(*From));
     return true;
   }
+}
+
+void SymbolTable::resetEffectSummary(const Decl *D, const EffectSummary *ES) {
+  if (!SymTable[D])
+    SymTable[D] = new SymbolTableEntry();
+  // invariant: SymTable[D] not null
+  if (SymTable[D]->hasEffectSummary())
+    SymTable[D]->deleteEffectSummary();
+  SymTable[D]->setEffectSummary(new EffectSummary(*ES));
 }
 
 const NamedRplElement *SymbolTable::
@@ -565,6 +589,12 @@ addParameterName(StringRef Name) {
   if (!ParamVec)
     ParamVec = new ParameterVector();
   ParamVec->push_back(ParamRplElement(Name));
+}
+
+void SymbolTableEntry::
+deleteEffectSummary() {
+  delete EffSum;
+  EffSum = 0;
 }
 
 bool SymbolTableEntry::

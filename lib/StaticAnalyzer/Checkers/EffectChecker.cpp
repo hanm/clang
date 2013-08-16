@@ -101,9 +101,9 @@ int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
   // TODO is this atomic or not? just ignore atomic for now
   for (int I = DerefNum; I > 0; --I) {
     const Rpl *InRpl = T1->getInRpl();
-    assert(InRpl);
+    //assert(InRpl);
     if (InRpl) {
-      // References do not have an InRpl
+      // Arrays may not have an InRpl
       Effect E(Effect::EK_ReadsEffect, InRpl);
       EffectsTmp->push_back(&E);
       EffectNr++;
@@ -353,17 +353,15 @@ void EffectCollectorVisitor::VisitMemberExpr(MemberExpr *Exp) {
 
 void EffectCollectorVisitor::VisitUnaryAddrOf(UnaryOperator *E)  {
   assert(DerefNum>=0);
-  DerefNum--;
+  SaveAndRestore<int> DecrementDerefNum(DerefNum, DerefNum-1);
   OS << "DEBUG:: Visit Unary: AddrOf (DerefNum=" << DerefNum << ")\n";
   Visit(E->getSubExpr());
-  DerefNum++;
 }
 
 void EffectCollectorVisitor::VisitUnaryDeref(UnaryOperator *E) {
-  DerefNum++;
+  SaveAndRestore<int> IncrementDerefNum(DerefNum, DerefNum+1);
   OS << "DEBUG:: Visit Unary: Deref (DerefNum=" << DerefNum << ")\n";
   Visit(E->getSubExpr());
-  DerefNum--;
 }
 
 void EffectCollectorVisitor::VisitPrePostIncDec(UnaryOperator *E) {
@@ -404,9 +402,7 @@ void EffectCollectorVisitor::VisitReturnStmt(ReturnStmt *Ret) {
 
   if (RetTyp->getQT()->isReferenceType()) {
     SaveAndRestore<int> DecrementDerefNum(DerefNum, DerefNum-1);
-    //DerefNum--;
     Visit(Ret->getRetValue());
-    //DerefNum++;
   } else {
     Visit(Ret->getRetValue());
   }
@@ -515,6 +511,7 @@ VisitArraySubscriptExpr(ArraySubscriptExpr *Exp) {
   // 1. Visit index with read semantics
   {
     SaveAndRestore<bool> VisitWithReadSemantics(HasWriteSemantics, false);
+    SaveAndRestore<int> IncreaseDerefNum(DerefNum, 0);
     Visit(Exp->getIdx());
   }
   // 2. visit base

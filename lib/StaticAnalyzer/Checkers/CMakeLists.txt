@@ -11,6 +11,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   ASaPUtil.cpp
   Effect.cpp
   EffectChecker.cpp
+  EffectSummaryNormalizer.cpp
   Rpl.cpp
   TypeChecker.cpp
   SemanticChecker.cpp

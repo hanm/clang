@@ -145,8 +145,8 @@ emitIllFormedRegionNameOrParameter(const Decl *D,
 
 bool CollectRegionNamesAndParametersTraverser::
 VisitFunctionDecl(FunctionDecl *D) {
-  OS << "DEBUG:: printing ASaP attributes for function '";
-  OS << D->getDeclName() << "\n";
+  OS << "DEBUG:: VisitFunctionDecl (" << D << ") "
+     << D->getDeclName() << "\n";
   D->dump(OS);
   OS << "':\n";
 
@@ -168,6 +168,12 @@ VisitFunctionDecl(FunctionDecl *D) {
 bool CollectRegionNamesAndParametersTraverser::
 VisitRecordDecl (RecordDecl *D) {
 
+  OS << "DEBUG:: VisitRecordDecl (" << D << ") : ";
+  D->print(OS, Ctx.getPrintingPolicy());
+  OS << "\n";
+  D->dump(OS);
+  OS << "\n";
+
   OS << "DEBUG:: printing ASaP attributes for class or struct '";
   OS << D->getDeclName();
   OS << "':\n";
@@ -188,7 +194,7 @@ VisitRecordDecl (RecordDecl *D) {
 
 bool CollectRegionNamesAndParametersTraverser::
 VisitEmptyDecl(EmptyDecl *D) {
-  OS << "DEBUG:: printing ASaP attributes for empty declaration.\n'";
+  OS << "DEBUG:: VisitEmptyDecl\n'";
   /// A. Detect Region & Param Annotations
   helperPrintAttributes<RegionAttr>(D);
 
@@ -200,8 +206,8 @@ VisitEmptyDecl(EmptyDecl *D) {
 
 bool CollectRegionNamesAndParametersTraverser::
 VisitNamespaceDecl (NamespaceDecl *D) {
-  OS << "DEBUG:: printing ASaP attributes for namespace '";
-  OS << D->getDeclName();
+  OS << "DEBUG:: VisitNamespaceDecl (" << D << ") "
+     << D->getDeclName();
   OS << "':\n";
   /// A. Detect Region & Param Annotations
   helperPrintAttributes<RegionAttr>(D);

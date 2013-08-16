@@ -98,6 +98,7 @@ public:
   /// if unknown.
   ResultTriplet getRegionParamCount(QualType QT);
 
+  // Predicates
   bool hasDecl(const Decl *D) const;
   bool hasType(const Decl *D) const;
   bool hasParameterVector(const Decl *D) const;
@@ -105,6 +106,7 @@ public:
   bool hasEffectSummary(const Decl *D) const;
   bool hasInheritanceMap(const Decl *D) const;
 
+  // Getters
   /// \brief Returns the ASaP Type for D or null.
   const ASaPType *getType(const Decl *D) const;
   /// \brief Retuns the parameter vector for D or null.
@@ -118,6 +120,7 @@ public:
   const InheritanceMapT *getInheritanceMap(const CXXRecordDecl *D) const;
   const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;
 
+  // Setters
   /// \brief Returns true iff the type for D was not already set.
   bool setType(const Decl* D, ASaPType *T);
 
@@ -132,6 +135,10 @@ public:
   bool setEffectSummary(const Decl *D, EffectSummary *ES);
   /// \brief Sets the effect summary of D to that of Dfrom if it was set
   bool setEffectSummary(const Decl *D, const Decl *Dfrom);
+  /// \brief Sets the effect summary of D to a copy of ES after deleting
+  /// any effect summary that D may have had.
+  void resetEffectSummary(const Decl *D, const EffectSummary *ES);
+
   // Lookup
   /// \brief Returns a named RPL element of the same name or null.
   const NamedRplElement *lookupRegionName(const Decl *D,
@@ -224,6 +231,9 @@ public:
   // Adders.
   void addRegionName(llvm::StringRef Name);
   void addParameterName(llvm::StringRef Name);
+
+  // Deleters
+  inline void deleteEffectSummary();
 
   /// \brief Add an entry to the Inheritance Map
   bool addBaseTypeAndSub(const RecordDecl *BaseRD,

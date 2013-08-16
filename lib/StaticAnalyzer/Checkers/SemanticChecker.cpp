@@ -40,53 +40,6 @@ void ASaPSemanticCheckerTraverser::helperPrintAttributes(Decl *D) {
   }
 }
 
-/*template<typename AttrType>
-bool ASaPSemanticCheckerTraverser::checkRegionOrParamDecls(Decl *D) {
-  bool Result = true;
-  specific_attr_iterator<AttrType>
-      I = D->specific_attr_begin<AttrType>(),
-      E = D->specific_attr_end<AttrType>();
-  for ( ; I != E; ++I) {
-    assert(isa<RegionAttr>(*I) || isa<RegionParamAttr>(*I));
-    const llvm::StringRef ElmtNames = getRegionOrParamName(*I);
-
-    llvm::SmallVector<StringRef, 8> RplElmtVec;
-    ElmtNames.split(RplElmtVec, Rpl::RPL_LIST_SEPARATOR);
-    for (size_t Idx = 0 ; Idx != RplElmtVec.size(); ++Idx) {
-      llvm::StringRef Name = RplElmtVec[Idx].trim();
-      if (Rpl::isValidRegionName(Name)) {
-        /// Add it to the vector.
-        OS << "DEBUG:: creating RPL Element called " << Name << "\n";
-        if (isa<RegionAttr>(*I)) {
-         const Decl *ScopeDecl = D;
-          if (isa<EmptyDecl>(D)) {
-            // An empty declaration is typically at global scope
-            // E.g., [[asap::name("X")]];
-            ScopeDecl = getDeclFromContext(D->getDeclContext());
-            assert(ScopeDecl);
-          }
-          if (!SymT.addRegionName(ScopeDecl, Name)) {
-            // Region name already declared at this scope.
-            emitRedeclaredRegionName(D, Name);
-            Result = false;
-          }
-        } else if (isa<RegionParamAttr>(*I)) {
-          if (!SymT.addParameterName(D, Name)) {
-            // Region parameter already declared at this scope.
-            emitRedeclaredRegionParameter(D, Name);
-            Result = false;
-          }
-        }
-      } else {
-        /// Emit bug report: ill formed region or parameter name.
-        emitIllFormedRegionNameOrParameter(D, *I, Name);
-        Result = false;
-      }
-    } // End for each Element of Attribute.
-  } // End for each Attribute of type AttrType.
-  return Result;
-}*/
-
 template<typename AttrType>
 bool ASaPSemanticCheckerTraverser::checkRpls(Decl* D) {
   bool Success = true;
@@ -128,6 +81,15 @@ buildPartialEffectSummary(FunctionDecl *D, EffectSummary &ES) {
 
 inline void ASaPSemanticCheckerTraverser::
 addASaPTypeToMap(ValueDecl *ValD, ASaPType *T) {
+  ///FIXME: Temporary fix for CLANG AST visitor problem
+  if (SymT.hasType(ValD)) {
+    OS << "ERROR!! Type already in symbol table while in addASaPTypeToMap:";
+    ValD->print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+    // This is an error
+    OS << "DEBUG:: D(" << ValD << ") has type " << SymT.getType(ValD)->toString() << "\n";
+    return; // Do Nothing.
+  }
   assert(!SymT.hasType(ValD));
   if (T) {
     OS << "Debug :: adding type: " << T->toString(Ctx) << " to Decl: ";
@@ -195,20 +157,6 @@ addASaPBaseTypeToMap(CXXRecordDecl *CXXRD,
   SymT.addBaseTypeAndSub(CXXRD, BaseD, SubV);
 }
 
-inline void ASaPSemanticCheckerTraverser::
-emitRedeclaredRegionName(const Decl *D, const StringRef &Str) {
-  StringRef BugName = "region name already declared at this scope";
-  helperEmitDeclarationWarning(BR, D, Str, BugName);
-  // Not a Fatal Error
-}
-
-inline void ASaPSemanticCheckerTraverser::
-emitRedeclaredRegionParameter(const Decl *D, const StringRef &Str) {
-  FatalError = true;
-  StringRef BugName = "region parameter already declared at this scope";
-  helperEmitDeclarationWarning(BR, D, Str, BugName);
-}
-
 void ASaPSemanticCheckerTraverser::
 emitMisplacedRegionParameter(const Decl *D,
                              const Attr* A,
@@ -272,30 +220,11 @@ emitSuperfluousRegionArg(const Decl *D, const Attr *A,
 }
 
 void ASaPSemanticCheckerTraverser::
-emitIllFormedRegionNameOrParameter(const Decl *D,
-                                   const Attr *A, StringRef Name) {
-  // Not a fatal error (e.g., if region name is not actually used)
-  std::string AttrTypeStr = "";
-  assert(A);
-  if (isa<RegionAttr>(A))
-    AttrTypeStr = "region";
-  else if (isa<RegionParamAttr>(A))
-    AttrTypeStr = "region parameter";
-  std::string BugName = "invalid ";
-  BugName.append(AttrTypeStr);
-  BugName.append(" name");
-  helperEmitAttributeWarning(BR, D, A, Name, BugName);
-}
-
-void ASaPSemanticCheckerTraverser::
-emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef &Str) {
-  StringRef BugName = "effect summary of canonical declaration does not cover"\
-    " the summary of this declaration";
-  helperEmitDeclarationWarning(BR, D, Str, BugName);
-}
-
-void ASaPSemanticCheckerTraverser::
 emitEffectCovered(const Decl *D, const Effect *E1, const Effect *E2) {
+
+  OS << "DEBUG:: effect " << E1->toString()
+     << " covered by " << E2->toString() << "\n";
+
   // warning: e1 is covered by e2
   StringRef BugName = "effect summary is not minimal";
   std::string sbuf;
@@ -360,19 +289,6 @@ emitEmptyStringRplDisallowed(const Decl *D, Attr *A) {
 
 // End Emit Functions
 //////////////////////////////////////////////////////////////////////////
-StringRef ASaPSemanticCheckerTraverser::
-getRegionOrParamName(const Attr *Attribute) {
-  StringRef Result = "";
-  switch(Attribute->getKind()) {
-  case attr::Region:
-    Result = dyn_cast<RegionAttr>(Attribute)->getName(); break;
-  case attr::RegionParam:
-    Result = dyn_cast<RegionParamAttr>(Attribute)->getName(); break;
-  default:
-    Result = "";
-  }
-  return Result;
-}
 
 const RplElement *ASaPSemanticCheckerTraverser::
 findRegionOrParamName(const Decl *D, StringRef Name) {
@@ -427,9 +343,9 @@ checkBaseTypeRegionArgs(NamedDecl *D, const RegionBaseArgAttr *Att,
 void ASaPSemanticCheckerTraverser::
 checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
   assert(D);
-  RegionArgAttr *A = D->getAttr<RegionArgAttr>();
-  RplVector *RplVec = (A) ? RplVecAttrMap[A] : 0;
-  if (A && !RplVec && FatalError)
+  RegionArgAttr *Att = D->getAttr<RegionArgAttr>();
+  RplVector *RplVec = (Att) ? RplVecAttrMap[Att] : 0;
+  if (Att && !RplVec && FatalError)
     return; // don't check an error already occured
 
   QualType QT = D->getType();
@@ -445,7 +361,7 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
   ResultTriplet ResTriplet = SymT.getRegionParamCount(QT);
   ResultKind ResKin = ResTriplet.ResKin;
 
-  //assert(ResKin != RK_NOT_VISITED);
+  assert(ResKin != RK_NOT_VISITED); // Make sure we are not using recursion
   if (ResKin == RK_NOT_VISITED) {
     assert(ResTriplet.DeclNotVis);
     OS << "DEBUG:: DeclNotVisited : ";
@@ -459,7 +375,7 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
     OS << "DEBUG:: done with the recursive visiting\n";
     checkTypeRegionArgs(D, DefaultInRpl);
   } else {
-    checkParamAndArgCounts(D, A, QT, ResTriplet, RplVec, DefaultInRpl);
+    checkParamAndArgCounts(D, Att, QT, ResTriplet, RplVec, DefaultInRpl);
   }
 
   OS << "DEBUG:: DONE checkTypeRegionArgs\n";
@@ -470,7 +386,11 @@ addToMap(Decl *D, RplVector *RplVec, QualType QT) {
   if (ValueDecl *VD = dyn_cast<ValueDecl>(D)) {
     addASaPTypeToMap(VD, RplVec, 0);
   } else if (CXXRecordDecl *CXXRD = dyn_cast<CXXRecordDecl>(D)) {
-    addASaPBaseTypeToMap(CXXRD, QT, RplVec);
+    // TODO
+    //if (CXXRD->isUnion())
+    //  addASaPTypeToMap(CXXRD, RplVec, 0);
+    //else
+      addASaPBaseTypeToMap(CXXRD, QT, RplVec);
   } else {
     assert(false && "Called 'checkParamAndArgCounts' with invalid Decl type.");
   }
@@ -506,8 +426,10 @@ checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
   case RK_OK:
     if (ParamCount > ArgCount &&
         ParamCount > ArgCount + (DefaultInRpl?1:0)) {
+      // missing region args
       ValueDecl *ValD = dyn_cast<ValueDecl>(D);
       if (!RplVec && ValD) {
+        // 1. if no args were given -> try to use defaults
         AnnotationSet AnSe = SymT.makeDefaultType(ValD, ParamCount);
         OS << "DEBUG:: Default type created:" << AnSe.T->toString()
            << "  for decl(" << ValD << "): ";
@@ -515,10 +437,11 @@ checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
         OS << "\n";
         addASaPTypeToMap(ValD, AnSe.T);
       } else {
+        // 2. else, if args were given but not enough -> emit an error
         emitMissingRegionArgs(D, Att, ParamCount);
       }
-    } else if (ParamCount < ArgCount &&
-               ParamCount < ArgCount + (DefaultInRpl?1:0)) {
+    } else if (ParamCount < ArgCount /*&&
+               ParamCount < ArgCount + (DefaultInRpl?1:0)*/) {
       // Superfluous region args
       std::string SBuf;
       llvm::raw_string_ostream BufStream(SBuf);
@@ -532,6 +455,8 @@ checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
       }
       emitSuperfluousRegionArg(D, Att, ParamCount, BufStream.str());
     } else {
+      // This is the case where there were enough region args
+      // possibly including the DefaultInRpl
       assert(ParamCount>=0);
       if (ParamCount > ArgCount) {
         assert(DefaultInRpl);
@@ -756,6 +681,7 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
       SymT.getRegionParamCount((*I).getType());
     switch(ResTriplet.ResKin) {
     case RK_NOT_VISITED:
+      assert(false && "Internal Error: New pre-pass should have found declaration of base class");
       assert(ResTriplet.DeclNotVis);
       ResTriplet.DeclNotVis->print(OS, Ctx.getPrintingPolicy());
       // Calling visitor on the Declaration which has not yet been visited
@@ -927,10 +853,7 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
   helperPrintAttributes<AtomicWritesEffectAttr>(D); /// atomic writes
 
   /// B. Check Annotations
-  /// B.1 Check Regions & Params
-  //checkRegionOrParamDecls<RegionAttr>(D);
-  //checkRegionOrParamDecls<RegionParamAttr>(D);
-  /// B.2 Check ReturnType
+  /// B.1 Check ReturnType
   bool Success = checkRpls<RegionArgAttr>(D); // ReturnType
   if (Success) {
     Rpl Local(*SymbolTable::LOCAL_RplElmt);
@@ -952,88 +875,41 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
     OS << "Effect Summary from source file:\n";
     ES->print(OS);
 
-    /// C.2. Check Effects covered by canonical Declaration
     const FunctionDecl *CanFD = D->getCanonicalDecl();
-    if (CanFD && CanFD != D && !D->isFunctionTemplateSpecialization()) {
-      // Case 1: We are not visiting the canonical Decl
-      OS << "DEBUG:: CanFD != D\n";
-      OS << "DEBUG:: D="; D->print(OS); OS << "\n";
-      OS << "DEBUG:: CanFD="; CanFD->print(OS); OS << "\n";
 
-      OS << "DEBUG:: D " << (D->isTemplateDecl() ? "IS " : "is NOT ")
-         << "a template\n";
-      OS << "DEBUG:: D " << (D->isTemplateParameter() ? "IS " : "is NOT ")
-         << "a template PARAMETER\n";
-      OS << "DEBUG:: D " << (D->isFunctionTemplateSpecialization() ? "IS " : "is NOT ")
-         << "a function template SPECIALIZATION\n";
-
-      OS << "DEBUG:: CanFD " << (CanFD->isTemplateDecl() ? "IS" : "is NOT ")
-         << "a template\n";
-      OS << "DEBUG:: CanFD " << (CanFD->isTemplateParameter() ? "IS " : "is NOT ")
-         << "a template PARAMETER\n";
-      OS << "DEBUG:: CanFD " << (CanFD->isFunctionTemplateSpecialization() ? "IS " : "is NOT ")
-         << "a function template SPECIALIZATION\n";
-
-      OS << "DEBUG:: D="; D->dump(OS); OS << "\n";
-      OS << "DEBUG:: CanFD="; CanFD->dump(OS); OS << "\n";
-
-      const EffectSummary *DeclEffSummary = SymT.getEffectSummary(CanFD);
-      assert(DeclEffSummary); // Assume the canonical Decl has been visited.
-      if (!DeclEffSummary->covers(ES)) {
-        emitCanonicalDeclHasSmallerEffectSummary(D, D->getName());
-        // In order not to abort after this pass because of this error:
-        // make minimal, clean up EffectCoverageVector, and add to SymbolTable
-        // Note: don't complain if effect is not minimal, as the effects of the
-        // canonical decl are copied on this decl which often makes it
-        // non-minimal.
-        EffectSummary::EffectCoverageVector ECV;
-        ES->makeMinimal(ECV);
-        while(ECV.size() > 0) {
-          std::pair<const Effect*, const Effect*> *PairPtr = ECV.pop_back_val();
-          const Effect *E1 = PairPtr->first;
-          delete E1;
-          delete PairPtr;
-        }
-        bool Success = SymT.setEffectSummary(D, ES);
-        assert(Success);
-      } else { // The effect summary of the canonical decl covers this.
-
-        // Set the Effect summary of this declaration to be the same
-        // as that of the canonical declaration.
-        // (Makes a copy of the effect summary).
-        bool Success = SymT.setEffectSummary(D, CanFD);
-        assert(Success);
-      }
+    if (ES->size()==0) {
+      AnnotationSet AnSe = SymT.makeDefaultEffectSummary(CanFD);
+      delete ES;
+      ES = AnSe.EffSum;
+      OS << "Implicit Effect Summary:\n";
+      ES->print(OS);
     } else {
-      // Case 2: Visiting the canonical Decl or FunctionTemplateSpecialization.
-      // This declaration does not get effects copied from other decls.
-      // (...hopefully).
-      if (ES->size()==0) {
-        AnnotationSet AnSe = SymT.makeDefaultEffectSummary(CanFD);
-        delete ES;
-        ES = AnSe.EffSum;
-        OS << "Implicit Effect Summary:\n";
-        ES->print(OS);
-      } else {
-        /// C.2. Check Effect Summary is minimal
-        EffectSummary::EffectCoverageVector ECV;
-        ES->makeMinimal(ECV);
-        while(ECV.size() > 0) {
-          std::pair<const Effect*, const Effect*> *PairPtr = ECV.pop_back_val();
-          const Effect *E1 = PairPtr->first, *E2 = PairPtr->second;
+      /// C.2. Check Effect Summary is minimal
+      EffectSummary::EffectCoverageVector ECV;
+      ES->makeMinimal(ECV);
+      // Emit "effect not minimal" errors only on canonical declarations
+      // because other (re)declarations get attributes copied from the
+      // canonical declaration, which would lead to too many false positive
+      // errors in this case.
+      bool EmitErrors = (D==CanFD) ? true : false;
+      while(ECV.size() > 0) {
+        std::pair<const Effect*, const Effect*> *PairPtr = ECV.pop_back_val();
+        const Effect *E1 = PairPtr->first, *E2 = PairPtr->second;
+        if (EmitErrors)
           emitEffectCovered(D, E1, E2);
-          OS << "DEBUG:: effect " << E1->toString()
-            << " covered by " << E2->toString() << "\n";
-          delete E1;
-          delete E2;
-          delete PairPtr;
-        }
-        OS << "Minimal Effect Summary:\n";
-        ES->print(OS);
+        delete E1;
+        delete E2;
+        delete PairPtr;
       }
-      bool Success = SymT.setEffectSummary(D, ES);
-      assert(Success);
+      OS << "Minimal Effect Summary:\n";
+      ES->print(OS);
     }
+    bool Success = SymT.setEffectSummary(D, ES);
+    assert(Success);
+
+    /// Note: Check Effects covered by canonical Declaration in
+    /// subsequent pass because canonical Declaration may not have
+    /// been encountered yet.
   }
   return true;
 }
@@ -1048,22 +924,19 @@ bool ASaPSemanticCheckerTraverser::VisitRecordDecl (RecordDecl *D) {
        << "a parameter vector!! (but has its decl in the Symbol Table)\n";
     return true;
   }*/
-  OS << "DEBUG:: printing ASaP attributes for class or struct '";
+  OS << "DEBUG:: VisitRecordDecl (" << D << ") : ";
   OS << D->getDeclName();
   OS << "':\n";
   /// A. Detect Region & Param Annotations
   helperPrintAttributes<RegionAttr>(D);
   helperPrintAttributes<RegionParamAttr>(D);
   helperPrintAttributes<RegionBaseArgAttr>(D);
-  /// B. Check Region Names
-  //checkRegionOrParamDecls<RegionAttr>(D);
 
   /// C. Check Param Names
   // An empty param vector means the class was visited and takes zero
   // region arguments.
   if (!SymT.hasParameterVector(D))
     SymT.initParameterVector(D);
-  //checkRegionOrParamDecls<RegionParamAttr>(D);
 
   /// D. Check BaseArg Attributes (or lack thereof)
   OS << "DEBUG:: D               :" << D << "\n";
@@ -1087,30 +960,6 @@ bool ASaPSemanticCheckerTraverser::VisitRecordDecl (RecordDecl *D) {
   }
   return true;
 }
-
-/*bool ASaPSemanticCheckerTraverser::VisitEmptyDecl(EmptyDecl *D) {
-  OS << "DEBUG:: printing ASaP attributes for empty declaration.\n'";
-  /// A. Detect Region & Param Annotations
-  helperPrintAttributes<RegionAttr>(D);
-
-  /// B. Check Region & Param Names
-  checkRegionOrParamDecls<RegionAttr>(D);
-
-  return true;
-}
-
-bool ASaPSemanticCheckerTraverser::VisitNamespaceDecl (NamespaceDecl *D) {
-  OS << "DEBUG:: printing ASaP attributes for namespace '";
-  OS << D->getDeclName();
-  OS << "':\n";
-  /// A. Detect Region & Param Annotations
-  helperPrintAttributes<RegionAttr>(D);
-
-  /// B. Check Region & Param Names
-  checkRegionOrParamDecls<RegionAttr>(D);
-
-  return true;
-}*/
 
 bool ASaPSemanticCheckerTraverser::VisitFieldDecl(FieldDecl *D) {
   OS << "DEBUG:: VisitFieldDecl : ";

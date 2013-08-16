@@ -158,6 +158,18 @@ ASaPType *ASaPType::getReturnType() {
   }
 }
 
+void ASaPType::arraySubscript() {
+  assert(QT->isArrayType());
+  // It is not allowed to use getAs<T> with T = ArrayType,
+  // so we use getAsArrayTypeUnsafe
+  const ArrayType *AT = QT->getAsArrayTypeUnsafe();
+  assert(AT);
+  QT = AT->getElementType();
+  adjust();
+  // FIXME: when we introduce index parameterized arrays,
+  // we may also have to modify the (ArgV) RPLs
+}
+
 void ASaPType::deref(int DerefNum) {
   assert(DerefNum >= 0);
   if (DerefNum == 0)
@@ -166,16 +178,23 @@ void ASaPType::deref(int DerefNum) {
   while (DerefNum > 0) {
     if (InRpl)
       delete InRpl;
-    assert(QT->isPointerType() || QT->isReferenceType());
-    QT = QT->getPointeeType();
+    if (QT->isPointerType() || QT->isReferenceType()) {
+      QT = QT->getPointeeType();
+    } else if (QT->isArrayType()) {
+      QT = QT->getAsArrayTypeUnsafe()->getElementType();
+    } else {
+      assert(false && "unexpected ArraySubscriptExpr on "
+                       "type that is not a pointer or an array");
+    }
 
-    // if the dereferenced type is scalar, we place the head of the
-    // args vector in the InRpl field; otherwise InRpl stays empty
-    // as in the case of C++ object types.
-    if (QT->isScalarType())
+    // if the dereferenced type is scalar (including pointers),
+    // we place the head of the args vector in the InRpl field;
+    // otherwise InRpl stays empty as in the case of C++ object types.
+    if (QT->isScalarType()) {
       InRpl = ArgV->deref().release();
-    else
+    } else {
       InRpl = 0;
+    }
     DerefNum--;
   }
 }
