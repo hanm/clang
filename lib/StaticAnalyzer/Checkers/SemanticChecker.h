@@ -154,6 +154,9 @@ class ASaPSemanticCheckerTraverser :
   //FIXME make this function static
   const CXXBaseSpecifier *findBaseDecl(const CXXRecordDecl *D, StringRef S);
 
+  void helperMissingRegionArgs(NamedDecl *D, const Attr* Att,
+                               RplVector *RplVec, long ParamCount);
+
 public:
   typedef RecursiveASTVisitor<ASaPSemanticCheckerTraverser> BaseClass;
 

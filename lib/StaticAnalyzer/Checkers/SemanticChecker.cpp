@@ -398,6 +398,24 @@ addToMap(Decl *D, RplVector *RplVec, QualType QT) {
 
 
 void ASaPSemanticCheckerTraverser::
+helperMissingRegionArgs(NamedDecl *D, const Attr* Att,
+                        RplVector *RplVec, long ParamCount) {
+  ValueDecl *ValD = dyn_cast<ValueDecl>(D);
+  if (!RplVec && ValD) {
+    // 1. if no args were given -> try to use defaults
+    AnnotationSet AnSe = SymT.makeDefaultType(ValD, ParamCount);
+    OS << "DEBUG:: Default type created:" << AnSe.T->toString()
+        << "  for decl(" << ValD << "): ";
+    ValD->print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+    addASaPTypeToMap(ValD, AnSe.T);
+  } else {
+    // 2. else, if args were given but not enough -> emit an error
+    emitMissingRegionArgs(D, Att, ParamCount);
+  }
+}
+
+void ASaPSemanticCheckerTraverser::
 checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
                        const ResultTriplet &ResTriplet,
                        RplVector *RplVec, const Rpl *DefaultInRpl) {
@@ -419,29 +437,17 @@ checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
     // Type is TemplateTypeParam -- Any number of region args
     // could be ok. At least ParamCount are needed though.
     if (ParamCount > ArgCount &&
-      ParamCount > ArgCount + (DefaultInRpl ? 1 : 0)) {
-        emitMissingRegionArgs(D, Att, ParamCount);
+        ParamCount > ArgCount + (DefaultInRpl ? 1 : 0)) {
+      // possibly missing region args
+      helperMissingRegionArgs(D, Att, RplVec, ParamCount);
     }
     break;
   case RK_OK:
     if (ParamCount > ArgCount &&
         ParamCount > ArgCount + (DefaultInRpl?1:0)) {
-      // missing region args
-      ValueDecl *ValD = dyn_cast<ValueDecl>(D);
-      if (!RplVec && ValD) {
-        // 1. if no args were given -> try to use defaults
-        AnnotationSet AnSe = SymT.makeDefaultType(ValD, ParamCount);
-        OS << "DEBUG:: Default type created:" << AnSe.T->toString()
-           << "  for decl(" << ValD << "): ";
-        ValD->print(OS, Ctx.getPrintingPolicy());
-        OS << "\n";
-        addASaPTypeToMap(ValD, AnSe.T);
-      } else {
-        // 2. else, if args were given but not enough -> emit an error
-        emitMissingRegionArgs(D, Att, ParamCount);
-      }
-    } else if (ParamCount < ArgCount /*&&
-               ParamCount < ArgCount + (DefaultInRpl?1:0)*/) {
+      // possibly missing region args
+      helperMissingRegionArgs(D, Att, RplVec, ParamCount);
+    } else if (ParamCount < ArgCount) {
       // Superfluous region args
       std::string SBuf;
       llvm::raw_string_ostream BufStream(SBuf);
