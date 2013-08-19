@@ -223,10 +223,10 @@ VisitValueDecl(ValueDecl *D) {
   OS << "DEBUG:: VisitValueDecl (" << D << ") : ";
   D->print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
+
   // Visit the declaration of anonymous unions & structs
   CXXRecordDecl *RecD = D->getType()->getAsCXXRecordDecl();
-  if (RecD && !SymT.hasDecl(RecD)) {
-    assert(!RecD->hasNameForLinkage());
+  if (RecD && !RecD->hasNameForLinkage() && !SymT.hasDecl(RecD)) {
     VisitRecordDecl(RecD);
   }
   return true;

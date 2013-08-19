@@ -605,6 +605,34 @@ void TypeBuilderVisitor::setType(const ValueDecl *D) {
     setType(T);
 }
 
+void TypeBuilderVisitor::helperVisitLogicalExpression(Expr *Exp) {
+  if (! Exp->getType()->isDependentType() ) {
+    assert(!Type && "Type must be null");
+    Rpl LOCALRpl(*SymbolTable::LOCAL_RplElmt);
+    QualType QT = Exp->getType();
+    OS << "DEBUG:: QT = ";
+    QT.print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+    Type = new ASaPType(QT, 0, 0, &LOCALRpl);
+    OS << "DEBUG:: (VisitLogicalNotOp) Type = "
+       << Type->toString() << "\n";
+  }
+}
+
+void TypeBuilderVisitor::helperBinAddSub(Expr *LHS, Expr* RHS) {
+  OS << "DEBUG:: helperBinAddSub\n";
+  Visit(LHS);
+  ASaPType *T = stealType();
+  Visit(RHS);
+  if (Type)
+    Type->join(T);
+  else
+    Type = T;
+  // memory leak? do we need to dealloc T?
+}
+
+
+
 TypeBuilderVisitor::TypeBuilderVisitor (
   VisitorBundle &VB,
   const FunctionDecl *Def,
@@ -636,7 +664,7 @@ ASaPType *TypeBuilderVisitor::stealType() {
 
 void TypeBuilderVisitor::VisitUnaryAddrOf(UnaryOperator *Exp)  {
   assert(DerefNum>=0 && "Must be positive dereference number");
-  DerefNum--;
+  SaveAndRestore<int> DecrementDerefNum(DerefNum, DerefNum-1);
   OS << "DEBUG:: Visit Unary: AddrOf (DerefNum=" << DerefNum << ") Type = ";
   Exp->getType().print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
@@ -645,14 +673,18 @@ void TypeBuilderVisitor::VisitUnaryAddrOf(UnaryOperator *Exp)  {
   assert(RefQT->isPointerType() && "Must be a pointer type here");
 
   Visit(Exp->getSubExpr());
-  DerefNum++;
 }
 
-void TypeBuilderVisitor::VisitUnaryDeref(UnaryOperator *E) {
-  DerefNum++;
+void TypeBuilderVisitor::VisitUnaryDeref(UnaryOperator *Exp) {
+  SaveAndRestore<int> IncreaseDerefNum(DerefNum, DerefNum+1);
   OS << "DEBUG:: Visit Unary: Deref (DerefNum=" << DerefNum << ")\n";
-  Visit(E->getSubExpr());
-  DerefNum--;
+  Visit(Exp->getSubExpr());
+}
+
+void TypeBuilderVisitor::VisitUnaryLNot(UnaryOperator *Exp) {
+  OS << "DEBUG:: Visit Unary: Logical Not\n";
+  helperVisitLogicalExpression(Exp);
+  AssignmentCheckerVisitor ACV(VB, Def, Exp->getSubExpr());
 }
 
 void TypeBuilderVisitor::VisitDeclRefExpr(DeclRefExpr *E) {
@@ -766,18 +798,6 @@ void TypeBuilderVisitor::VisitMemberExpr(MemberExpr *Exp) {
 
 } // end VisitMemberExpr
 
-void TypeBuilderVisitor::helperBinAddSub(Expr *LHS, Expr* RHS) {
-  OS << "DEBUG:: helperBinAddSub\n";
-  Visit(LHS);
-  ASaPType *T = stealType();
-  Visit(RHS);
-  if (Type)
-    Type->join(T);
-  else
-    Type = T;
-  // memory leak? do we need to dealloc T?
-}
-
 
 // isPtrMemOp : BO_PtrMemD || BO_PtrMemI
 // isMultiplicativeOp: BO_Mul || BO_Div || BO_Rem
@@ -809,18 +829,11 @@ void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
     // TODO
     helperBinAddSub(Exp->getLHS(), Exp->getRHS());
   } else if (Exp->isComparisonOp() || Exp->isLogicalOp()) {
-    // BO_LT || BO_NE
-    assert(!Type && "Type must be null");
-    Rpl LOCALRpl(*SymbolTable::LOCAL_RplElmt);
-    QualType QT = Exp->getType();
-    OS << "DEBUG:: QT = ";
-    QT.print(OS, Ctx.getPrintingPolicy());
-    OS << "\n";
-    Type = new ASaPType(QT, 0, 0, &LOCALRpl);
-    OS << "DEBUG:: (VisitComparisonOrLogicalOp) Type = " << Type->toString() << "\n";
+    // BO_LT || ... || BO_NE
+    helperVisitLogicalExpression(Exp);
+
     AssignmentCheckerVisitor ACVR(VB, Def, Exp->getRHS());
     AssignmentCheckerVisitor ACVL(VB, Def, Exp->getLHS());
-    OS << "DEBUG:: (VisitComparisonOrLogicalOp) Type = " << Type->toString() << "\n";
   } else if (Exp->isAssignmentOp()) {
     OS << "DEBUG:: >>>>>>>>>>VisitBinOpAssign<<<<<<<<<<<<<<<<<\n";
     Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());

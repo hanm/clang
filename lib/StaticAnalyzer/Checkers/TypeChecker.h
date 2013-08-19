@@ -130,29 +130,30 @@ class TypeBuilderVisitor
   /// \brief collect the region arguments for a field.
   void setType(const ValueDecl *D);
   void setType(const ASaPType *T);
+  /// \brief Visit Logical Unary or Binary Expression
+  void helperVisitLogicalExpression(Expr *Exp);
+  void helperBinAddSub(Expr *LHS, Expr *RHS);
 
 public:
-  TypeBuilderVisitor (
-    VisitorBundle &VB,
-    const FunctionDecl *Def,
-    Expr *E
-    );
+  TypeBuilderVisitor (VisitorBundle &VB,
+                      const FunctionDecl *Def, Expr *E);
   virtual ~TypeBuilderVisitor();
 
   inline bool encounteredFatalError() { return FatalError; }
+
   inline ASaPType *getType() { return Type; }
   ASaPType *stealType();
 
+  // Visitors
   void VisitUnaryAddrOf(UnaryOperator *E);
   void VisitUnaryDeref(UnaryOperator *E);
+  void VisitUnaryLNot(UnaryOperator *E);
   void VisitDeclRefExpr(DeclRefExpr *E);
   void VisitCXXThisExpr(CXXThisExpr *E);
   void VisitMemberExpr(MemberExpr *E);
-  void helperBinAddSub(Expr *LHS, Expr *RHS);
   void VisitBinaryOperator(BinaryOperator *S);
   void VisitConditionalOperator(ConditionalOperator *E);
   void VisitBinaryConditionalOperator(BinaryConditionalOperator *E);
-  //void VisitCXXNewExpr(CXXNewExpr *Exp);
   void VisitCXXConstructExpr(CXXConstructExpr *E);
   void VisitCallExpr(CallExpr *E);
   void VisitArraySubscriptExpr(ArraySubscriptExpr *E);
