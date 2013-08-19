@@ -252,11 +252,14 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
 }
 
 void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
+  if (!Ret->getRetValue())
+    return; // this is a 'return' statement with no return expression
+
   Expr *RetExp = Ret->getRetValue();
-  OS << "DEBUG:: Visiting ReturnStmt: ";
+  OS << "DEBUG:: Visiting ReturnStmt (" << Ret << "). RetExp ("
+     << RetExp << "): ";
   RetExp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-
 
   TypeBuilderVisitor TBVR(VB, Def, RetExp);
   if (!TBVR.getType())
@@ -418,9 +421,11 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   OS << "DEBUG:: typecheckCallExpr: ";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-  OS << "DEBUG:: Expr:";
+  //OS << "DEBUG:: Expr:";
   //Exp->dump(OS, BR.getSourceManager());
-  OS << "\n";
+  //OS << "\n";
+  if (Exp->getType()->isDependentType())
+    return; // Don't check
 
   Decl *D = Exp->getCalleeDecl();
   assert(D);
@@ -445,7 +450,8 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   RecordDecl *ClassDecl = dyn_cast<RecordDecl>(DC);
   // ClassDecl is allowed to be null
 
-  BaseTypeBuilderVisitor  TBV(VB, Def, Exp->getCallee());
+  BaseTypeBuilderVisitor TBV(VB, Def, Exp->getCallee());
+
   // Build substitution
   const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
   if (ParamV && ParamV->size() > 0) {
@@ -642,11 +648,12 @@ TypeBuilderVisitor::TypeBuilderVisitor (
   DerefNum(0),
   Type(0) {
 
-    OS << "DEBUG:: ******** INVOKING TypeBuilderVisitor...\n";
+    OS << "DEBUG:: ******** INVOKING TypeBuilderVisitor...(" << E << ")\n";
     E->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
 
     Visit(E);
+
     OS << "DEBUG:: ******** DONE WITH TypeBuilderVisitor (Type="
        << (Type ? Type->toString() : "<null>") << ")***\n";
 }
@@ -699,71 +706,73 @@ void TypeBuilderVisitor::VisitDeclRefExpr(DeclRefExpr *E) {
     setType(VD);
 }
 
-void TypeBuilderVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
+void TypeBuilderVisitor::VisitCXXThisExpr(CXXThisExpr *Exp) {
   OS << "DEBUG:: visiting 'this' expression\n";
-  assert(E && "E can't be null");
+  assert(Exp && "Exp can't be null");
   //DerefNum = 0;
   if (!IsBase) {
-    assert(!Type && "Type must be null at this place.");
-    // Add parameter as implicit argument
-    CXXRecordDecl *RecDecl =
-      const_cast<CXXRecordDecl*>(E->getBestDynamicClassType());
-    assert(RecDecl && "RecDecl can't be null");
+    if (!Exp->getType()->isDependentType()) {
+      assert(!Type && "Type must be null at this place.");
+      // Add parameter as implicit argument
+      CXXRecordDecl *RecDecl =
+        const_cast<CXXRecordDecl*>(Exp->getBestDynamicClassType());
+      assert(RecDecl && "RecDecl can't be null");
 
-    /* Keeping this code below as an example of how to add nodes to the AST
-    /// If the declaration does not yet have an implicit region argument
-    /// add it to the Declaration
-    if (!RecDecl->getAttr<RegionArgAttr>()) {
-    const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
-    assert(Param);
-    RegionArgAttr *Arg =
-    ::new (RecDecl->getASTContext()) RegionArgAttr(Param->getRange(),
-    RecDecl->getASTContext(),
-    Param->getName());
-    RecDecl->addAttr(Arg);
+      /* Keeping this code below as an example of how to add nodes to the AST
+      /// If the declaration does not yet have an implicit region argument
+      /// add it to the Declaration
+      if (!RecDecl->getAttr<RegionArgAttr>()) {
+      const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
+      assert(Param);
+      RegionArgAttr *Arg =
+      ::new (RecDecl->getASTContext()) RegionArgAttr(Param->getRange(),
+      RecDecl->getASTContext(),
+      Param->getName());
+      RecDecl->addAttr(Arg);
 
-    /// also add it to RplMap
-    RplMap[Arg] = new Rpl(new ParamRplElement(Param->getName()));
+      /// also add it to RplMap
+      RplMap[Arg] = new Rpl(new ParamRplElement(Param->getName()));
+      }
+      RegionArgAttr* Arg = RecDecl->getAttr<RegionArgAttr>();
+      assert(Arg);
+      Rpl *Tmp = RplMap[Arg];
+      assert(Tmp);
+      TmpRegions->push_back(new Rpl(Tmp));*/
+
+      //const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
+      //assert(Param);
+
+      //RplElement *El = RplElementMap[Param];
+      //assert(El);
+      //ParamRplElement *ParamEl = dyn_cast<ParamRplElement>(El);
+      //assert(ParamEl);
+
+      const ParameterVector *ParamVec = SymT.getParameterVector(RecDecl);
+      QualType ThisQT = Exp->getType();
+
+      RplVector RV(*ParamVec);
+
+      OS << "DEBUG:: adding 'this' type : ";
+      ThisQT.print(OS, Ctx.getPrintingPolicy());
+      OS << "\n";
+      // simple==true because 'this' is an rvalue (can't have its address taken)
+      // so we want to keep InRpl=0
+      Type = new ASaPType(ThisQT, SymT.getInheritanceMap(RecDecl), &RV, 0, true);
+      if (DerefNum == -1)
+        Type->addrOf(RefQT);
+      else {
+        OS << "DEBUG :: calling ASaPType::deref(" << DerefNum << ")\n";
+        Type->deref(DerefNum);
+        OS << "DEBUG :: DONE calling ASaPType::deref\n";
+      }
+
+      OS << "DEBUG:: type actually added: " << Type->toString(Ctx) << "\n";
+
+      //TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));
     }
-    RegionArgAttr* Arg = RecDecl->getAttr<RegionArgAttr>();
-    assert(Arg);
-    Rpl *Tmp = RplMap[Arg];
-    assert(Tmp);
-    TmpRegions->push_back(new Rpl(Tmp));*/
-
-    //const RegionParamAttr *Param = RecDecl->getAttr<RegionParamAttr>();
-    //assert(Param);
-
-    //RplElement *El = RplElementMap[Param];
-    //assert(El);
-    //ParamRplElement *ParamEl = dyn_cast<ParamRplElement>(El);
-    //assert(ParamEl);
-
-    const ParameterVector *ParamVec = SymT.getParameterVector(RecDecl);
-    QualType ThisQT = E->getType();
-
-    RplVector RV(*ParamVec);
-
-    OS << "DEBUG:: adding 'this' type : ";
-    ThisQT.print(OS, Ctx.getPrintingPolicy());
-    OS << "\n";
-    // simple==true because 'this' is an rvalue (can't have its address taken)
-    // so we want to keep InRpl=0
-    Type = new ASaPType(ThisQT, SymT.getInheritanceMap(RecDecl), &RV, 0, true);
-    if (DerefNum == -1)
-      Type->addrOf(RefQT);
-    else {
-      OS << "DEBUG :: calling ASaPType::deref(" << DerefNum << ")\n";
-      Type->deref(DerefNum);
-      OS << "DEBUG :: DONE calling ASaPType::deref\n";
-    }
-
-    OS << "DEBUG:: type actually added: " << Type->toString(Ctx) << "\n";
-
-    //TmpRegions->push_back(new Rpl(new ParamRplElement(Param->getName())));
   } else { // IsBase == true
     const SubstitutionVector *InheritanceSubV =
-        SymT.getInheritanceSubVec(E->getType()->getPointeeType());
+        SymT.getInheritanceSubVec(Exp->getType()->getPointeeType());
     Type->substitute(InheritanceSubV);
   }
 
@@ -905,10 +914,12 @@ void TypeBuilderVisitor::VisitCallExpr(CallExpr *Exp) {
 
   OS << "DEBUG:: isBase = " << IsBase << "\n";
   ASaPType *T = ACV.getType();
-  if (IsBase) {
-    memberSubstitute(T);
-  } else {
-    setType(T);
+  if (T) {
+    if (IsBase) {
+      memberSubstitute(T);
+    } else {
+      setType(T);
+    }
   }
 }
 
@@ -943,12 +954,60 @@ void TypeBuilderVisitor::VisitExplicitCastExpr(ExplicitCastExpr *Exp) {
   OS << "\n";
   OS << "DEBUG<TypeBuilder>:: Cast Kind Name : " << Exp->getCastKindName()
      << "\n";
+  OS << "DEBUG<TypeBuilder>:: Cast Kind Type : " << Exp->getType().getAsString()
+     << "\n";
 
   if (Type) {
     delete Type;
     Type = 0;
   }
   // do not visit sub-expression
+}
+
+void TypeBuilderVisitor::VisitImplicitCastExpr(ImplicitCastExpr *Exp) {
+  OS << "DEBUG<TypeBuilder>:: Visiting Implicit Cast Expression!! ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  OS << "DEBUG<TypeBuilder>:: Cast Kind Name : " << Exp->getCastKindName()
+     << "\n";
+  OS << "DEBUG<TypeBuilder>:: Cast Kind Type : " << Exp->getType().getAsString()
+     << "\n";
+
+  Visit(Exp->getSubExpr());
+  if (Type) {
+    QualType CastQT = Exp->getType();
+
+    switch(Exp->getCastKind()) {
+    case CK_IntegralCast:
+    case CK_IntegralToBoolean:
+    case CK_IntegralToFloating:
+    case CK_FloatingCast:
+    case CK_FloatingToIntegral:
+    case CK_FloatingToBoolean:
+    case CK_FloatingRealToComplex:
+    case CK_FloatingComplexToReal:
+    case CK_FloatingComplexToBoolean:
+    case CK_FloatingComplexCast:
+    case CK_FloatingComplexToIntegralComplex:
+    case CK_IntegralRealToComplex:
+    case CK_IntegralComplexCast:
+    case CK_IntegralComplexToBoolean:
+    case CK_IntegralComplexToReal:
+    case CK_IntegralComplexToFloatingComplex:
+      Type->setQT(CastQT);
+      OS << "DEBUG:: ImplicitCast: Setting QT to " << CastQT.getAsString() << "\n";
+      OS << "DEBUG:: Type = " << Type->toString() << "\n";
+      break;
+    case CK_PointerToBoolean:
+      Type->setQT(CastQT);
+      Type->dropArgV();
+      OS << "DEBUG:: ImplicitCast: Setting QT to " << CastQT.getAsString() << "\n";
+      OS << "DEBUG:: Type = " << Type->toString() << "\n";
+    default:
+      // do nothing;
+      break;
+    } // end switch
+  } // end if (Type)
 }
 
 void TypeBuilderVisitor::VisitVAArgExpr(VAArgExpr *Exp) {
@@ -971,14 +1030,15 @@ void TypeBuilderVisitor::VisitVAArgExpr(VAArgExpr *Exp) {
 BaseTypeBuilderVisitor::BaseTypeBuilderVisitor(
   VisitorBundle &VB,
   const FunctionDecl *Def,
-  Expr *E
+  Expr *Exp
   ) : BaseClass(VB, Def), Type(0) {
 
     OS << "DEBUG:: ******** INVOKING BaseTypeBuilderVisitor...\n";
-    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
 
-    Visit(E);
+    Visit(Exp);
+
     OS << "DEBUG:: ******** DONE WITH BaseTypeBuilderVisitor (Type="
        << (Type ? Type->toString() : "<null>") << ")***\n";
 }
@@ -999,7 +1059,7 @@ void BaseTypeBuilderVisitor::VisitMemberExpr(MemberExpr *Exp) {
   OS << "\n";
   TypeBuilderVisitor TBV(VB, Def, Exp->getBase());
   Type = TBV.stealType();
-  if (Exp->isArrow())
+  if (Type && Exp->isArrow())
     Type->deref(1);
 }
 

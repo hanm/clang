@@ -145,21 +145,22 @@ public:
   ASaPType *stealType();
 
   // Visitors
-  void VisitUnaryAddrOf(UnaryOperator *E);
-  void VisitUnaryDeref(UnaryOperator *E);
-  void VisitUnaryLNot(UnaryOperator *E);
-  void VisitDeclRefExpr(DeclRefExpr *E);
-  void VisitCXXThisExpr(CXXThisExpr *E);
-  void VisitMemberExpr(MemberExpr *E);
-  void VisitBinaryOperator(BinaryOperator *S);
-  void VisitConditionalOperator(ConditionalOperator *E);
-  void VisitBinaryConditionalOperator(BinaryConditionalOperator *E);
-  void VisitCXXConstructExpr(CXXConstructExpr *E);
-  void VisitCallExpr(CallExpr *E);
-  void VisitArraySubscriptExpr(ArraySubscriptExpr *E);
+  void VisitUnaryAddrOf(UnaryOperator *Exp);
+  void VisitUnaryDeref(UnaryOperator *Exp);
+  void VisitUnaryLNot(UnaryOperator *Exp);
+  void VisitDeclRefExpr(DeclRefExpr *Exp);
+  void VisitCXXThisExpr(CXXThisExpr *Exp);
+  void VisitMemberExpr(MemberExpr *Exp);
+  void VisitBinaryOperator(BinaryOperator *Exp);
+  void VisitConditionalOperator(ConditionalOperator *Exp);
+  void VisitBinaryConditionalOperator(BinaryConditionalOperator *Exp);
+  void VisitCXXConstructExpr(CXXConstructExpr *Exp);
+  void VisitCallExpr(CallExpr *Exp);
+  void VisitArraySubscriptExpr(ArraySubscriptExpr *Exp);
   void VisitReturnStmt(ReturnStmt *Ret);
   void VisitCastExpr(CastExpr *Exp);
   void VisitExplicitCastExpr(ExplicitCastExpr *Exp);
+  void VisitImplicitCastExpr(ImplicitCastExpr *Exp);
   void VisitVAArgExpr(VAArgExpr *Exp);
 
 }; // End class TypeBuilderVisitor.

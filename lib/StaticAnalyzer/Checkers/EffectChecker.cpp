@@ -386,6 +386,8 @@ void EffectCollectorVisitor::VisitUnaryPreDec(UnaryOperator *E) {
 }
 
 void EffectCollectorVisitor::VisitReturnStmt(ReturnStmt *Ret) {
+  if (!Ret->getRetValue())
+    return; // this is a 'return' statement with no return expression
   // This next lookup actually returns the function type.
   const ASaPType *FunType = SymT.getType(Def);
   if (!FunType) {
@@ -396,6 +398,7 @@ void EffectCollectorVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   }
 
   assert(FunType);
+  // Make a copy because getReturnType will modify RetTyp.
   ASaPType *RetTyp = new ASaPType(*FunType);
   RetTyp = RetTyp->getReturnType();
   assert(RetTyp);
@@ -469,6 +472,9 @@ void EffectCollectorVisitor::VisitBinAssign(BinaryOperator *E) {
 }
 
 void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
+  if (Exp->getType()->isDependentType())
+    return; // Do not visit if this is dependent type
+
   OS << "DEBUG:: VisitCallExpr\n";
   Decl *D = Exp->getCalleeDecl();
   assert(D);

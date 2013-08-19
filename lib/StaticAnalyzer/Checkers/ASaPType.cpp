@@ -215,6 +215,11 @@ void ASaPType::dropInRpl() {
   InRpl = 0;
 }
 
+void ASaPType::dropArgV() {
+  delete ArgV;
+  ArgV = new RplVector();
+}
+
 std::string ASaPType::toString(ASTContext &Ctx) const {
   std::string SBuf;
   llvm::raw_string_ostream OS(SBuf);
@@ -284,9 +289,9 @@ isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const {
              (ThisCopy.InRpl==0 && ThatCopy.InRpl==0));
 
       return (ThisCopy.isSubtypeOf(ThatCopy, SymT)) &&
-             ((ThisCopy.InRpl == 0 && ThatCopy.InRpl == 0) ||
-              (ThisCopy.InRpl && ThatCopy.InRpl &&
-               ThisCopy.InRpl->isIncludedIn(*ThatCopy.InRpl)));
+              ((ThisCopy.InRpl == 0 && ThatCopy.InRpl == 0)
+               || (ThisCopy.InRpl && ThatCopy.InRpl &&
+                   ThisCopy.InRpl->isIncludedIn(*ThatCopy.InRpl)));
     } else {
       assert(isDerivedFrom(QT, That.QT));
       ASaPType ThisCopy(*this);
@@ -367,10 +372,7 @@ void ASaPType::join(ASaPType *That) {
   if (!That)
     return;
   if (! areUnqualQTsEqual(this->QT, That->QT) ) {
-    /// Typechecking has passed so we assume that this->QT <= that->QT
-    /// but we have to find follow the mapping and substitute Rpls....
-    /// TODO :)
-    assert(false); // ...just fail
+    assert(false && "cannot (yet) join types"); // ...just fail
     return; // until we support inheritance this is good enough
   }
   if (this->InRpl)

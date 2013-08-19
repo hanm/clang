@@ -70,6 +70,10 @@ public:
     return InheritanceMap ? true : false;
   }
 
+  /// \brief set the QualType part without touching the Region info.
+  /// useful for implicit casts (e.g., cast from int to float)
+  inline void setQT(QualType QT) { this->QT = QT; }
+
   /// \brief Return the size of the ArgsVector.
   int getArgVSize() const;
   /// \brief Return the In RPL which can be null.
@@ -93,8 +97,10 @@ public:
   void deref(int DerefNum = 1);
   /// \brief Modifies this type as if its address were taken.
   void addrOf(QualType RefQT);
-  /// \brief Set the InAnnotation to NULL (and free the Rpl).
+  /// \brief Set the In annotation to NULL (and free the Rpl).
   void dropInRpl();
+  /// \brief free the ArgV RPLs and allocate a new empty ArgV
+  void dropArgV();
   /// \brief Returns a string describing this ASaPType.
   std::string toString(ASTContext &Ctx) const;
   /// \brief Returns a string describing this ASaPType.

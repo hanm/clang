@@ -3,6 +3,7 @@
 // expected-no-diagnostics
 
 
+// Casting on the LHS of an assignment
 void *func(void *_Ptr, unsigned int _Marker)
     {
     if (_Ptr)
