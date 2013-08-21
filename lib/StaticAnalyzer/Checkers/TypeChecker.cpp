@@ -255,6 +255,9 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   if (!Ret->getRetValue())
     return; // this is a 'return' statement with no return expression
 
+  if (Def->getType()->isDependentType())
+    return; // do nothing if the function is a template.
+
   Expr *RetExp = Ret->getRetValue();
   OS << "DEBUG:: Visiting ReturnStmt (" << Ret << "). RetExp ("
      << RetExp << "): ";
@@ -591,6 +594,9 @@ void TypeBuilderVisitor::setType(const ASaPType *T) {
 
   assert(!Type && "Type must be null");
   Type = new ASaPType(*T); // make a copy
+  if (Type->getQT()->isReferenceType())
+      Type->deref();
+
   if (DerefNum == -1)
     Type->addrOf(RefQT);
   else {
@@ -607,8 +613,9 @@ void TypeBuilderVisitor::setType(const ValueDecl *D) {
   //OS << "\n Decl pointer address:" << D;
   OS << "\n";
   const ASaPType *T = SymT.getType(D);
-  if (T)
+  if (T) {
     setType(T);
+  }
 }
 
 void TypeBuilderVisitor::helperVisitLogicalExpression(Expr *Exp) {
@@ -912,7 +919,7 @@ void TypeBuilderVisitor::VisitCallExpr(CallExpr *Exp) {
   // Call AssignmentChecker recursively
   AssignmentCheckerVisitor ACV(VB, Def, Exp);
 
-  OS << "DEBUG:: isBase = " << IsBase << "\n";
+  OS << "DEBUG::<TypeBuilder::VisitCallExpr> isBase = " << IsBase << "\n";
   ASaPType *T = ACV.getType();
   if (T) {
     if (IsBase) {
@@ -1003,6 +1010,16 @@ void TypeBuilderVisitor::VisitImplicitCastExpr(ImplicitCastExpr *Exp) {
       Type->dropArgV();
       OS << "DEBUG:: ImplicitCast: Setting QT to " << CastQT.getAsString() << "\n";
       OS << "DEBUG:: Type = " << Type->toString() << "\n";
+    case CK_BitCast:
+      // FIXME TODO
+      // when casting to void*, we should drop the region args of the target type.
+      if (CastQT->isVoidPointerType()) {
+        // FIXME: here we should alsto take care of void **, void ***, ...
+        Type->setQT(CastQT);
+        Type->dropArgV();
+        OS << "DEBUG:: ImplicitCast: Setting QT to " << CastQT.getAsString() << "\n";
+        OS << "DEBUG:: Type = " << Type->toString() << "\n";
+      }
     default:
       // do nothing;
       break;
@@ -1022,6 +1039,24 @@ void TypeBuilderVisitor::VisitVAArgExpr(VAArgExpr *Exp) {
     Type = 0;
   }
   // do not visit sub-expression
+}
+
+void TypeBuilderVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
+  OS << "DEBUG<TypeBuilder>:: Visiting C++ 'new' Expression!! ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+
+  {
+    SaveAndRestore<int> VisitWithZeroDeref(DerefNum, 0);
+    VisitChildren(Exp);
+  }
+
+  //TypeBuilderVisitor TBV(VB, Def, Exp); // visit Exp ignoring DerefNum
+  //Type = TBV.stealType();
+  if (Type) {
+    assert(DerefNum>=0 && "DerefNum Expected to be non-negative");
+    Type->deref(DerefNum);
+  }
 }
 
 //////////////////////////////////////////////////////////////////////////

@@ -183,8 +183,8 @@ void ASaPType::deref(int DerefNum) {
     } else if (QT->isArrayType()) {
       QT = QT->getAsArrayTypeUnsafe()->getElementType();
     } else {
-      assert(false && "unexpected ArraySubscriptExpr on "
-                       "type that is not a pointer or an array");
+      OSv2 << "DEBUG:: QT = " << QT.getAsString() << "\n";
+      assert(false && "trying to dereference unexpected QualType");
     }
 
     // if the dereferenced type is scalar (including pointers),
@@ -201,6 +201,10 @@ void ASaPType::deref(int DerefNum) {
 
 void ASaPType::addrOf(QualType RefQT) {
   assert(RefQT->isPointerType() || RefQT->isReferenceType());
+  if (!areUnqualQTsEqual(this->QT, RefQT->getPointeeType())) {
+    OSv2 << "DEBUG:: ASaPType::addrOf(): Ref Type: " << RefQT.getAsString() << "\n";
+    OSv2 << "DEBUG:: ASaPType::addrOf(): Ptr Type: " << QT.getAsString() << "\n";
+  }
   assert(areUnqualQTsEqual(this->QT, RefQT->getPointeeType()));
   this->QT = RefQT;
 

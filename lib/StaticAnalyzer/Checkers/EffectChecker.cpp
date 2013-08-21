@@ -564,6 +564,16 @@ VisitCXXDeleteExpr(CXXDeleteExpr *Exp) {
   */
 }
 
+void EffectCollectorVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
+  OS << "DEBUG<EffectCollectorVisitor>:: Visiting C++ 'new' Expression!! ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+
+  SaveAndRestore<int> VisitWithZeroDeref(DerefNum, 0);
+  VisitChildren(Exp);
+}
+
+
 // End Visitors
 //////////////////////////////////////////////////////////////////////////
 void EffectCollectorVisitor::

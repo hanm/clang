@@ -162,6 +162,7 @@ public:
   void VisitExplicitCastExpr(ExplicitCastExpr *Exp);
   void VisitImplicitCastExpr(ImplicitCastExpr *Exp);
   void VisitVAArgExpr(VAArgExpr *Exp);
+  void VisitCXXNewExpr(CXXNewExpr *Exp);
 
 }; // End class TypeBuilderVisitor.
 
