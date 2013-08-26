@@ -171,6 +171,8 @@ void ASaPType::arraySubscript() {
 }
 
 void ASaPType::deref(int DerefNum) {
+  OSv2 << "DEBUG::<ASaPType::deref> DerefNum = "
+       << DerefNum << "\n";
   assert(DerefNum >= 0);
   if (DerefNum == 0)
     return;

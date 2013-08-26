@@ -367,13 +367,23 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
   }
 
   OS << "DEBUG:: CALLING typecheckParamAssignments\n";
-  FunctionDecl::param_iterator ParamI, ParamE;
-  for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
-      ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
+  FunctionDecl::param_iterator
+    ParamI = CalleeDecl->param_begin(),
+    ParamE = CalleeDecl->param_end();
+
+  if (CalleeDecl->isOverloadedOperator()) {
+    assert(ArgI!=ArgE);
+    //OS << "DEBUG:: Callee is Overloaded Operator -> skipping 1st arg"
+    ++ArgI;
+  }
+  for(; ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
     Expr *ArgExpr = *ArgI;
     ParmVarDecl *ParamDecl = *ParamI;
     typecheckSingleParamAssignment(ParamDecl, ArgExpr, SubV);
   }
+  //assert(ParamI=ParamE); // there may be parameters w. default values
+  if (!CalleeDecl->isVariadic())
+    assert(ArgI==ArgE);
   OS << "DEBUG:: DONE with typecheckParamAssignments\n";
 }
 
@@ -424,9 +434,11 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   OS << "DEBUG:: typecheckCallExpr: ";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-  //OS << "DEBUG:: Expr:";
+  OS << "DEBUG:: Expr:";
   //Exp->dump(OS, BR.getSourceManager());
-  //OS << "\n";
+  Exp->dump();
+  OS << "\n";
+
   if (Exp->getType()->isDependentType())
     return; // Don't check
 
@@ -471,7 +483,13 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
       SubV.push_back(&Sub);
     }
   }
-
+  unsigned NumArgs = Exp->getNumArgs();
+  unsigned NumParams = FD->getNumParams();
+  OS << "DEBUG:: NumArgs=" << NumArgs << ", NumParams=" << NumParams << "\n";
+  OS << "DEBUG:: isOverloadedOperator: " << (FD->isOverloadedOperator() ? "true":"false")
+     << ", isVariadic: " << (FD->isVariadic() ? "true" : "false") << "\n";
+  assert(FD->isVariadic() || NumParams+((FD->isOverloadedOperator()) ? 1 : 0) == NumArgs &&
+         "Unexpected number of arguments to a call expresion");
   typecheckParamAssignments(FD, Exp->arg_begin(), Exp->arg_end(), SubV);
   OS << "DEBUG:: DONE typecheckCallExpr\n";
 
@@ -594,8 +612,11 @@ void TypeBuilderVisitor::setType(const ASaPType *T) {
 
   assert(!Type && "Type must be null");
   Type = new ASaPType(*T); // make a copy
-  if (Type->getQT()->isReferenceType())
+
+  if (Type->getQT()->isReferenceType()) {
+      OS << "DEBUG::<TypeBuilderVisitor::setType> Type->isReferenceType()==true\n";
       Type->deref();
+  }
 
   if (DerefNum == -1)
     Type->addrOf(RefQT);
@@ -1051,11 +1072,10 @@ void TypeBuilderVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
     VisitChildren(Exp);
   }
 
-  //TypeBuilderVisitor TBV(VB, Def, Exp); // visit Exp ignoring DerefNum
-  //Type = TBV.stealType();
+  // FIXME: Set up Type properly and use it for typechecking
   if (Type) {
-    assert(DerefNum>=0 && "DerefNum Expected to be non-negative");
-    Type->deref(DerefNum);
+    delete Type;
+    Type = 0;
   }
 }
 
