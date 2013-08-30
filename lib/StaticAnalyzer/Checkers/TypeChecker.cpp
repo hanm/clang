@@ -121,6 +121,8 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
 
         OS << "DEBUG:: TypecheckDeclWithInit: Decl = ";
         VD->print(OS,  Ctx.getPrintingPolicy());
+        OS << "\n VarDecl isDependentType ? "
+          << (VD->getType()->isDependentType() ? "true" : "false") << "\n";
         OS << "\n Init Expr = ";
         Init->printPretty(OS, 0, Ctx.getPrintingPolicy());
         OS << "\n";
@@ -142,6 +144,9 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
         case VarDecl::CallInit:
           OS << "CallInit\n";
           CXXConstructExpr *Exp = dyn_cast<CXXConstructExpr>(VD->getInit());
+          if (VD->getType()->isDependentType() && !Exp)
+            break; // VD->getInit() could be a ParenListExpr or perhaps some
+                   // other Expr
           assert(Exp);
           assert(!SubV);
           SubV = new SubstitutionVector();
@@ -162,10 +167,12 @@ typecheck(const ASaPType *LHSType, const ASaPType *RHSType, bool IsInit) {
   if (!RHSType)
     return true; // RHS has no region info && Clang has done typechecking
   else { // RHSType != null
-    if (LHSType)
-      return RHSType->isAssignableTo(*LHSType, SymT, Ctx, IsInit);
-    else
-      return false;
+    OS << "DEBUG:: RHS isDependentType? "
+       << (RHSType->getQT()->isDependentType() ? "true" : "false") << "\n";
+    OS << "DEBUG:: LHS isDependentType? "
+       << (LHSType->getQT()->isDependentType() ? "true" : "false") << "\n";
+
+    return RHSType->isAssignableTo(*LHSType, SymT, Ctx, IsInit);
   }
 }
 

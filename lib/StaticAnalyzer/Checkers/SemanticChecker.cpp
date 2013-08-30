@@ -88,6 +88,8 @@ addASaPTypeToMap(ValueDecl *ValD, ASaPType *T) {
     OS << "\n";
     // This is an error
     OS << "DEBUG:: D(" << ValD << ") has type " << SymT.getType(ValD)->toString() << "\n";
+    OS << "DEBUG:: Trying to add Type    " << T->toString() << "\n";
+    delete T;
     return; // Do Nothing.
   }
 
@@ -108,16 +110,19 @@ void ASaPSemanticCheckerTraverser::
 addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
 
   ///FIXME: Temporary fix for CLANG AST visitor problem
-  if (SymT.hasType(ValD)) {
+  /*if (SymT.hasType(ValD)) {
     OS << "ERROR!!! Type already in symbol table while in addASaPTypeToMap:";
     ValD->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
     // This is an error
     OS << "DEBUG:: D(" << ValD << ") has type " << SymT.getType(ValD)->toString() << "\n";
+    OS << "DEBUG:: Trying to add Type " << T->toString() << "\n";
+    delete RplV;
+    delete InRpl;
     return; // Do Nothing.
-  }
+  }*/
 
-  assert(!SymT.hasType(ValD));
+  //assert(!SymT.hasType(ValD));
   const InheritanceMapT *IMap = SymT.getInheritanceMap(ValD);
   ASaPType *T = new ASaPType(ValD->getType(), IMap, RplV, InRpl);
   OS << "DEBUG:: D->getType() = ";

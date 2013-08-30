@@ -17,6 +17,7 @@
 #include "clang/AST/CXXInheritance.h"
 
 #include "ASaPUtil.h"
+#include "ASaPSymbolTable.h"
 #include "ASaPType.h"
 #include "Effect.h"
 #include "Rpl.h"
@@ -151,6 +152,7 @@ ASaPType *ASaPType::getReturnType() {
   if (QT->isFunctionType()) {
     const FunctionType *FT = QT->getAs<FunctionType>();
     QT = FT->getResultType();
+    InheritanceMap = SymbolTable::Table->getInheritanceMap(QT);
     adjust();
     return this;
   } else {
@@ -236,6 +238,7 @@ std::string ASaPType::toString(ASTContext &Ctx) const {
   else
     OS << "IN:<empty>";
   OS << ", ArgV:" << ArgV->toString();
+  OS << ", IMap(" << InheritanceMap << ")";
   return std::string(OS.str());
 }
 
@@ -249,6 +252,7 @@ std::string ASaPType::toString() const {
   else
     OS << "IN:<empty>";
   OS << ", ArgV:" << ArgV->toString();
+  OS << ", IMap(" << InheritanceMap << ")";
   return std::string(OS.str());
 }
 
@@ -345,6 +349,7 @@ bool ASaPType::implicitCastToBase(QualType BaseQT, SymbolTable &SymT) {
     assert(CurrMap);
     //get Sub
     QualType DirectBaseQT = I->Base->getType();
+    OSv2 << "DEBUG:: DirectBaseQT=" << DirectBaseQT.getAsString() << "\n";
 
     const RecordType *BaseRT = DirectBaseQT->getAs<RecordType>();
     assert(BaseRT);

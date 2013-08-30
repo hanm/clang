@@ -59,14 +59,15 @@ class SymbolTable {
   AnnotationScheme *AnnotScheme;
   static int Initialized;
 
+  // Private Constructors & Destructors
+  SymbolTable();
+  virtual ~SymbolTable();
+
   /// \brief The implicit region parameter "P" of implicitly boxed types
   /// such as int or pointers.
   const ParameterVector *BuiltinDefaultRegionParameterVec;
 
 public:
-  // Constructors & Destructors
-  SymbolTable();
-  virtual ~SymbolTable();
 
   // Static Constants
   static const StarRplElement *STAR_RplElmt;
@@ -75,6 +76,8 @@ public:
   static const SpecialRplElement *GLOBAL_RplElmt;
   static const SpecialRplElement *IMMUTABLE_RplElmt;
   static const Effect *WritesLocal;
+  // Unique globally accessible symbol table
+  static SymbolTable *Table;
 
   // Static Functions
   static void Initialize();
@@ -118,6 +121,7 @@ public:
   const EffectSummary *getEffectSummary(const Decl *D) const;
   const InheritanceMapT *getInheritanceMap(const ValueDecl *D) const;
   const InheritanceMapT *getInheritanceMap(const CXXRecordDecl *D) const;
+  const InheritanceMapT *getInheritanceMap(QualType QT) const;
   const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;
 
   // Setters

@@ -20,7 +20,6 @@
 
 #include "ASaPFwdDecl.h"
 #include "ASaPInheritanceMap.h"
-#include "ASaPSymbolTable.h"
 
 namespace clang {
 namespace asap {

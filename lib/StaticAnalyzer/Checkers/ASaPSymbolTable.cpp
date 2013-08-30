@@ -49,6 +49,7 @@ const SpecialRplElement *SymbolTable::LOCAL_RplElmt = 0;
 const SpecialRplElement *SymbolTable::GLOBAL_RplElmt = 0;
 const SpecialRplElement *SymbolTable::IMMUTABLE_RplElmt = 0;
 const Effect *SymbolTable::WritesLocal = 0;
+SymbolTable *SymbolTable::Table = 0;
 
 /// Static Functions
 void SymbolTable::Initialize() {
@@ -61,6 +62,7 @@ void SymbolTable::Initialize() {
     Rpl R(*LOCAL_RplElmt);
     R.appendElement(STAR_RplElmt);
     WritesLocal = new Effect(Effect::EK_WritesEffect, &R);
+    Table = new SymbolTable();
     Initialized = 1;
   }
 }
@@ -75,6 +77,7 @@ void SymbolTable::Destroy() {
     delete GLOBAL_RplElmt;
     delete IMMUTABLE_RplElmt;
     delete WritesLocal;
+    delete Table;
 
     STAR_RplElmt = 0;
     ROOT_RplElmt = 0;
@@ -82,6 +85,7 @@ void SymbolTable::Destroy() {
     GLOBAL_RplElmt = 0;
     IMMUTABLE_RplElmt = 0;
     WritesLocal = 0;
+    Table = 0;
   }
 }
 
@@ -243,9 +247,8 @@ const ParameterVector *SymbolTable::getParameterVector(const Decl *D) const {
 }
 
 const InheritanceMapT *SymbolTable::
-getInheritanceMap(const ValueDecl *D) const {
+getInheritanceMap(QualType QT) const {
   const InheritanceMapT *Result = 0;
-  QualType QT = D->getType();
   // QT might be a pointer or reference, so follow it
   while (QT->isPointerType() || QT->isReferenceType()) {
     QT = QT->getPointeeType();
@@ -260,6 +263,11 @@ getInheritanceMap(const ValueDecl *D) const {
       Result = getInheritanceMap(RecD);
   }
   return Result;
+}
+
+const InheritanceMapT *SymbolTable::
+getInheritanceMap(const ValueDecl *D) const {
+  return getInheritanceMap(D->getType());
 }
 
 const InheritanceMapT *SymbolTable::

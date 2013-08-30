@@ -85,7 +85,7 @@ public:
     SymbolTable::Initialize();
 
     // initialize traverser
-    SymbolTable SymT;
+    SymbolTable &SymT = *SymbolTable::Table;
     AnnotationSchemeT AnnotScheme(SymT);
     SymT.setAnnotationScheme(&AnnotScheme);
 
