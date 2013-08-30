@@ -20,6 +20,7 @@
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/Type.h"
+#include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "llvm/Support/SaveAndRestore.h"
 
 #include "ASaPUtil.h"
@@ -123,7 +124,8 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
         OS << "\n Init Expr = ";
         Init->printPretty(OS, 0, Ctx.getPrintingPolicy());
         OS << "\n";
-        //Init->dump(OS, BR.getSourceManager());
+        Init->dump(OS, BR.getSourceManager());
+        OS << "\n";
 
         OS << "DEBUG:: IsDirectInit = "
            << (VD->isDirectInit()?"true":"false")
@@ -439,8 +441,18 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   Exp->dump();
   OS << "\n";
 
+  OS << "DEBUG:: CalleeExpr:";
+  Exp->getCallee()->dump();
+  OS << "\n";
+
   if (Exp->getType()->isDependentType())
     return; // Don't check
+
+  // First Visit/typecheck potential sub-assignments in base expression
+  BaseTypeBuilderVisitor TBV(VB, Def, Exp->getCallee());
+
+  if (isa<CXXPseudoDestructorExpr>(Exp->getCallee()))
+    return; // Don't check if this is a pseudo destructor.
 
   Decl *D = Exp->getCalleeDecl();
   assert(D);
@@ -464,8 +476,6 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   assert(DC);
   RecordDecl *ClassDecl = dyn_cast<RecordDecl>(DC);
   // ClassDecl is allowed to be null
-
-  BaseTypeBuilderVisitor TBV(VB, Def, Exp->getCallee());
 
   // Build substitution
   const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
@@ -705,7 +715,8 @@ void TypeBuilderVisitor::VisitUnaryAddrOf(UnaryOperator *Exp)  {
   OS << "\n";
 
   RefQT = Exp->getType();
-  assert(RefQT->isPointerType() && "Must be a pointer type here");
+  assert(RefQT->isDependentType() || RefQT->isPointerType()
+         && "Must be a pointer type or a dependent type here");
 
   Visit(Exp->getSubExpr());
 }
