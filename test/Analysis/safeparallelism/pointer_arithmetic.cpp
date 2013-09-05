@@ -19,4 +19,11 @@ void foo() {
 
   x = __distance(a, b);
 
+  int A[10];
+  int *pi;
+  pi = A;
+  pi = &A[3];
+  pi += 4;
+  pi = pi - (pi - &A[3]);
+
 }

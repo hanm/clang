@@ -54,12 +54,13 @@ class ASaPType {
   /// derived from the type \p Base. (adapted from SemaDeclCXX.cpp)
   static bool isDerivedFrom(QualType Derived, QualType Base);
 
-
 public:
   ASaPType(QualType QT, const InheritanceMapT *InheritanceMap,
            RplVector *ArgV, Rpl *InRpl = 0, bool Simple = false);
   ASaPType(const ASaPType &T);
   ~ASaPType();
+
+  static QualType deref(QualType QT, int DerefNum, ASTContext &Ctx);
 
   /// \brief Returns true iff this is of FunctionType.
   inline bool isFunctionType() const { return QT->isFunctionType(); }

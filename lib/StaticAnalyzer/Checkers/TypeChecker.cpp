@@ -1065,6 +1065,17 @@ void TypeBuilderVisitor::VisitImplicitCastExpr(ImplicitCastExpr *Exp) {
       OS << "DEBUG:: ImplicitCast: Setting QT to " << CastQT.getAsString() << "\n";
       OS << "DEBUG:: Type = " << Type->toString() << "\n";
       break;
+    case CK_ArrayToPointerDecay:
+      {
+        QualType AdjustedCastQT = ASaPType::deref(CastQT, DerefNum, Ctx);
+        OS << "DEBUG:: ImplicitCast: Setting QT to " << AdjustedCastQT.getAsString() << "\n";
+        OS << "DEBBG:: DerefNum=" << DerefNum << ", CastQT=" << CastQT.getAsString() << "\n";
+        OS << "DEBUG:: Type = " << Type->toString() << "\n";
+
+        Type->setQT(AdjustedCastQT);
+        // In RPL of array is empty because it is immutable
+      }
+      break;
     case CK_PointerToBoolean:
       Type->setQT(CastQT);
       Type->dropArgV();

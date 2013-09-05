@@ -53,6 +53,21 @@ isDerivedFrom(QualType Derived, QualType Base) {
   return Result;
 }
 
+QualType ASaPType::deref(QualType QT, int DerefNum, ASTContext &Ctx)
+{
+  QualType Result = QT;
+  assert(DerefNum>=-1 && "DerefNum should never be smaller than -1");
+  if(DerefNum == -1) {
+    Result = Ctx.getPointerType(QT);
+  } else while (DerefNum > 0) {
+    assert(Result->isPointerType());
+    Result = Result->getPointeeType();
+    DerefNum--;
+  }
+  return Result;
+}
+
+
 // Non-Static Functions
 void ASaPType::adjust() {
   // Check if we might need to set InRpl.
