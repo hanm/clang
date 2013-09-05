@@ -381,9 +381,17 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
     ParamE = CalleeDecl->param_end();
 
   if (CalleeDecl->isOverloadedOperator()) {
-    assert(ArgI!=ArgE);
-    //OS << "DEBUG:: Callee is Overloaded Operator -> skipping 1st arg"
-    ++ArgI;
+    if (isa<CXXMethodDecl>(CalleeDecl)) {
+      // if the overloaded operator is a member function, it's 1st
+      // (implicit) argument is 'this' which doesn't have a corresponding
+      // parameter, so skip it!
+      assert(ArgI!=ArgE);
+      OS << "DEBUG:: Callee is Overloaded Operator -> skipping 1st arg:";
+      ArgI->printPretty(OS, 0, Ctx.getPrintingPolicy());
+      OS << ", with Type: " << ArgI->getType().getAsString();
+      OS << "\n";
+      ++ArgI;
+    }
   }
   for(; ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
     Expr *ArgExpr = *ArgI;
@@ -391,6 +399,7 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
     typecheckSingleParamAssignment(ParamDecl, ArgExpr, SubV);
   }
   //assert(ParamI=ParamE); // there may be parameters w. default values
+  // FIXME assert that remaining params take default args.
   if (!CalleeDecl->isVariadic())
     assert(ArgI==ArgE);
   OS << "DEBUG:: DONE with typecheckParamAssignments\n";
@@ -463,6 +472,9 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
 
   Decl *D = Exp->getCalleeDecl();
   assert(D);
+  OS << "DEBUG:: CalleeDecl: ";
+  D->print(OS, Ctx.getPrintingPolicy());
+  OS << "\n";
 
   FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
   // TODO we shouldn't give up like this below, but doing this for now
@@ -505,7 +517,8 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   OS << "DEBUG:: NumArgs=" << NumArgs << ", NumParams=" << NumParams << "\n";
   OS << "DEBUG:: isOverloadedOperator: " << (FD->isOverloadedOperator() ? "true":"false")
      << ", isVariadic: " << (FD->isVariadic() ? "true" : "false") << "\n";
-  assert(FD->isVariadic() || NumParams+((FD->isOverloadedOperator()) ? 1 : 0) == NumArgs &&
+  assert(FD->isVariadic() || NumParams == NumArgs ||
+         NumParams+((FD->isOverloadedOperator()) ? 1 : 0) == NumArgs &&
          "Unexpected number of arguments to a call expresion");
   typecheckParamAssignments(FD, Exp->arg_begin(), Exp->arg_end(), SubV);
   OS << "DEBUG:: DONE typecheckCallExpr\n";
@@ -1121,6 +1134,24 @@ void TypeBuilderVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
 
   // FIXME: Set up Type properly and use it for typechecking
   clearType();
+}
+
+void TypeBuilderVisitor::VisitAtomicExpr(AtomicExpr *Exp) {
+  OS << "DEBUG<TypeBuilder>:: Visiting AtomicExpr:";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  for (unsigned int i = 0; i < Exp->getNumSubExprs(); i++) {
+    OS << "DEBUG:: Atomic Expr[" << i << "]=";
+    Expr *SubExp = Exp->getSubExprs()[i];
+    SubExp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    TypeBuilderVisitor TBV(VB, Def, SubExp);
+  }
+  assert(!Type);
+  // TODO: infer region arguments of "return type"
+  QualType AtomicQT = Exp->getType();
+  OS << "DEBUG:: AtomicQT =" << AtomicQT.getAsString() << "\n";
+  Type = new ASaPType(AtomicQT, 0, 0, 0, true);
 }
 
 //////////////////////////////////////////////////////////////////////////
