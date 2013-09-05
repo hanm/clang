@@ -166,6 +166,7 @@ public:
   void VisitVAArgExpr(VAArgExpr *Exp);
   void VisitCXXNewExpr(CXXNewExpr *Exp);
   void VisitAtomicExpr(AtomicExpr *Exp);
+  void VisitUnaryExprOrTypeTraitExpr(UnaryExprOrTypeTraitExpr *Exp);
 }; // End class TypeBuilderVisitor.
 
 

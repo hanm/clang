@@ -1154,6 +1154,18 @@ void TypeBuilderVisitor::VisitAtomicExpr(AtomicExpr *Exp) {
   Type = new ASaPType(AtomicQT, 0, 0, 0, true);
 }
 
+// Takes care of SizeOf, AlignOf, and VecStep expressions
+void TypeBuilderVisitor::
+VisitUnaryExprOrTypeTraitExpr(UnaryExprOrTypeTraitExpr *Exp) {
+  if (!Exp->isArgumentType()) {
+    TypeBuilderVisitor TBV(VB, Def, Exp->getArgumentExpr());
+  }
+
+  assert(!Type);
+  // TODO build proper local temp type
+  Type = new ASaPType(Exp->getType(), 0, 0, 0, true);
+}
+
 //////////////////////////////////////////////////////////////////////////
 // BaseTypeBuilderVisitor
 
