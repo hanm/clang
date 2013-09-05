@@ -670,16 +670,36 @@ void TypeBuilderVisitor::helperVisitLogicalExpression(Expr *Exp) {
   }
 }
 
-void TypeBuilderVisitor::helperBinAddSub(Expr *LHS, Expr* RHS) {
-  OS << "DEBUG:: helperBinAddSub\n";
-  Visit(LHS);
-  ASaPType *T = stealType();
-  Visit(RHS);
-  if (Type)
-    Type->join(T);
-  else
-    Type = T;
-  // memory leak? do we need to dealloc T?
+void TypeBuilderVisitor::helperBinAddSub(BinaryOperator* Exp) {
+  TypeBuilderVisitor ASVL(VB, Def, Exp->getLHS());
+  TypeBuilderVisitor ASVR(VB, Def, Exp->getRHS());
+  QualType QT = Exp->getType();
+  OS << "DEBUG::<TypeBuilder::helperBinAddSub> Type:" << QT.getAsString()
+     << "\n";
+
+  if (QT->isDependentType()){
+    clearType();
+    return; // do nothing
+  } else if(QT->isPointerType()) {
+    // find which of the two sides is a pointer type and use that
+    const ASaPType *LHSType = ASVL.getType();
+    if (LHSType && LHSType->getQT()->isPointerType()) {
+      assert(!Type);
+      Type = ASVL.stealType();
+      return;
+    } //else
+
+    const ASaPType *RHSType = ASVL.getType();
+    if (RHSType && RHSType->getQT()->isPointerType()) {
+      assert(!Type);
+      Type = ASVR.stealType();
+      return;
+    } //else
+    assert(false && "expression evaluates to pointer but neither "
+           "side (LHS or RHS) returned a valid pointer type");
+  } else if (QT->isScalarType()) { // but isn't pointer type
+    return; // do nothing (we could also build a default Type in Local)
+  }
 }
 
 
@@ -869,6 +889,7 @@ void TypeBuilderVisitor::VisitMemberExpr(MemberExpr *Exp) {
 // BO_Comma
 void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
   OS << "Visiting Operator " << Exp->getOpcodeStr() << "\n";
+  OS << "Expression Type:" << Exp->getType().getAsString() << "\n";
   if (Exp->isPtrMemOp()) {
     // TODO
     OS << "DEBUG: iz a PtrMemOp!! ";
@@ -877,12 +898,12 @@ void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
     VisitChildren(Exp);
   } else if (Exp->isMultiplicativeOp()) {
     // TODO
-    helperBinAddSub(Exp->getLHS(), Exp->getRHS());
+    helperBinAddSub(Exp);
   } else if (Exp->isAdditiveOp()) {
-    helperBinAddSub(Exp->getLHS(), Exp->getRHS());
+    helperBinAddSub(Exp);
   } else if (Exp->isBitwiseOp()) {
     // TODO
-    helperBinAddSub(Exp->getLHS(), Exp->getRHS());
+    helperBinAddSub(Exp);
   } else if (Exp->isComparisonOp() || Exp->isLogicalOp()) {
     // BO_LT || ... || BO_NE
     helperVisitLogicalExpression(Exp);
@@ -901,7 +922,7 @@ void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
   } else {
     // CommaOp
     Visit(Exp->getRHS()); // visit to typeckeck possible assignments
-    delete Type; Type = 0; // discard results
+    clearType();
     Visit(Exp->getLHS());
   }
 }
@@ -1003,10 +1024,7 @@ void TypeBuilderVisitor::VisitExplicitCastExpr(ExplicitCastExpr *Exp) {
   OS << "DEBUG<TypeBuilder>:: Cast Kind Type : " << Exp->getType().getAsString()
      << "\n";
 
-  if (Type) {
-    delete Type;
-    Type = 0;
-  }
+  clearType();
   // do not visit sub-expression
 }
 
@@ -1016,7 +1034,10 @@ void TypeBuilderVisitor::VisitImplicitCastExpr(ImplicitCastExpr *Exp) {
   OS << "\n";
   OS << "DEBUG<TypeBuilder>:: Cast Kind Name : " << Exp->getCastKindName()
      << "\n";
-  OS << "DEBUG<TypeBuilder>:: Cast Kind Type : " << Exp->getType().getAsString()
+  OS << "DEBUG<TypeBuilder>:: Cast To Type   : " << Exp->getType().getAsString()
+     << "\n";
+  OS << "DEBUG<TypeBuilder>:: Cast From Type : "
+     << Exp->getSubExpr()->getType().getAsString()
      << "\n";
 
   Visit(Exp->getSubExpr());
@@ -1073,10 +1094,7 @@ void TypeBuilderVisitor::VisitVAArgExpr(VAArgExpr *Exp) {
 
   // Treat like malloc or new as a fresh memory whose region(s)
   // depend on the LHS of the assignment.
-  if (Type) {
-    delete Type;
-    Type = 0;
-  }
+  clearType();
   // do not visit sub-expression
 }
 
@@ -1091,10 +1109,7 @@ void TypeBuilderVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
   }
 
   // FIXME: Set up Type properly and use it for typechecking
-  if (Type) {
-    delete Type;
-    Type = 0;
-  }
+  clearType();
 }
 
 //////////////////////////////////////////////////////////////////////////

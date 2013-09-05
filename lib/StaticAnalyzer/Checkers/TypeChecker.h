@@ -20,6 +20,7 @@
 
 #include "ASaPFwdDecl.h"
 #include "ASaPGenericStmtVisitor.h"
+#include "ASaPType.h"
 
 namespace clang {
 namespace asap {
@@ -132,7 +133,8 @@ class TypeBuilderVisitor
   void setType(const ASaPType *T);
   /// \brief Visit Logical Unary or Binary Expression
   void helperVisitLogicalExpression(Expr *Exp);
-  void helperBinAddSub(Expr *LHS, Expr *RHS);
+  void helperBinAddSub(BinaryOperator* Exp);
+  void clearType() { delete Type; Type =0; }
 
 public:
   TypeBuilderVisitor (VisitorBundle &VB,
