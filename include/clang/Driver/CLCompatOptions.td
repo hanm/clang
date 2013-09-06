@@ -32,6 +32,9 @@ class CLIgnoredJoined<string name> : Option<["/", "-"], name, KIND_JOINED>,
 class CLJoinedOrSeparate<string name> : Option<["/", "-"], name,
   KIND_JOINED_OR_SEPARATE>, Group<cl_Group>, Flags<[CLOption, DriverOption]>;
 
+class CLRemainingArgs<string name> : Option<["/", "-"], name,
+  KIND_REMAINING_ARGS>, Group<cl_Group>, Flags<[CLOption, DriverOption]>;
+
 // Aliases:
 
 def _SLASH_c : CLFlag<"c">, HelpText<"Compile only">, Alias<c>;
@@ -51,6 +54,10 @@ def _SLASH_O : CLJoined<"O">, HelpText<"Optimization level">,
 def _SLASH_Ob0 : CLFlag<"Ob0">, HelpText<"Disable inlining">,
   Alias<fno_inline>;
 def _SLASH_Od : CLFlag<"Od">, HelpText<"Disable optimization">, Alias<O0>;
+def _SLASH_Oi : CLFlag<"Oi">, HelpText<"Enable use of builtin functions">,
+  Alias<fbuiltin>;
+def _SLASH_Oi_ : CLFlag<"Oi-">, HelpText<"Disable use of builtin functions">,
+  Alias<fno_builtin>;
 def _SLASH_Os : CLFlag<"Os">, HelpText<"Optimize for size">, Alias<O>,
   AliasArgs<["s"]>;
 def _SLASH_Ot : CLFlag<"Ot">, HelpText<"Optimize for speed">, Alias<O>,
@@ -64,6 +71,9 @@ def _SLASH_Oy_ : CLFlag<"Oy-">, HelpText<"Disable frame pointer omission">,
 def _SLASH_P : CLFlag<"P">, HelpText<"Only run the preprocessor">, Alias<E>;
 def _SLASH_QUESTION : CLFlag<"?">, Alias<help>,
   HelpText<"Display available options">;
+def _SLASH_showIncludes : CLFlag<"showIncludes">,
+  HelpText<"Print info about included files to stderr">,
+  Alias<show_includes>;
 def _SLASH_U : CLJoinedOrSeparate<"U">, HelpText<"Undefine macro">,
   MetaVarName<"<macro>">, Alias<U>;
 def _SLASH_W0 : CLFlag<"W0">, HelpText<"Disable all warnings">, Alias<w>;
@@ -83,6 +93,20 @@ def _SLASH_Zs : CLFlag<"Zs">, HelpText<"Syntax-check only">,
 
 // Non-aliases:
 
+def _SLASH_Fe : CLJoined<"Fe">,
+  HelpText<"Set output executable file or directory (ends in / or \\)">,
+  MetaVarName<"<file or directory>">;
+def _SLASH_Fo : CLJoined<"Fo">,
+  HelpText<"Set output object file, or directory (ends in / or \\)">,
+  MetaVarName<"<file or directory>">;
+def _SLASH_link : CLRemainingArgs<"link">,
+  HelpText<"Forward options to the linker">, MetaVarName<"<options>">;
+def _SLASH_MD : CLFlag<"MD">,
+  HelpText<"Use DLL run-time">;
+def _SLASH_MDd : CLFlag<"MDd">,
+  HelpText<"Use DLL debug run-time">;
+def _SLASH_MT : CLFlag<"MT">, HelpText<"Use static run-time">;
+def _SLASH_MTd : CLFlag<"MTd">, HelpText<"Use static debug run-time">;
 def _SLASH_Tc : CLJoinedOrSeparate<"Tc">, HelpText<"Specify a C source file">,
   MetaVarName<"<filename>">;
 def _SLASH_TC : CLFlag<"TC">, HelpText<"Treat all source files as C">;
@@ -100,13 +124,13 @@ def _SLASH_Ob1 : CLIgnoredFlag<"Ob1">;
 def _SLASH_Ob2 : CLIgnoredFlag<"Ob2">;
 def _SLASH_Zc_forScope : CLIgnoredFlag<"Zc:forScope">;
 def _SLASH_Zc_wchar_t : CLIgnoredFlag<"Zc:wchar_t">;
+def _SLASH_wd : CLIgnoredJoined<"wd">;
 
 
 // Unsupported:
 
 def _SLASH_EH : CLJoined<"EH">;
 def _SLASH_Fd : CLJoined<"Fd">;
-def _SLASH_Fo : CLJoined<"Fo">;
 def _SLASH_fp : CLJoined<"fp">;
 def _SLASH_Gd : CLFlag<"Gd">;
 def _SLASH_GL : CLFlag<"GL">;
@@ -117,14 +141,10 @@ def _SLASH_GS : CLFlag<"GS">;
 def _SLASH_Gy : CLFlag<"Gy">;
 def _SLASH_Gy_ : CLFlag<"Gy-">;
 def _SLASH_GZ : CLFlag<"GZ">;
-def _SLASH_MD : CLFlag<"MD">;
-def _SLASH_MT : CLFlag<"MT">;
-def _SLASH_MDd : CLFlag<"MDd">;
-def _SLASH_MTd : CLFlag<"MTd">;
-def _SLASH_Oi : CLFlag<"Oi">;
+def _SLASH_MP : CLJoined<"MP">;
 def _SLASH_RTC : CLJoined<"RTC">;
-def _SLASH_showIncludes : CLJoined<"showIncludes">;
 def _SLASH_w : CLJoined<"w">;
+def _SLASH_Za : CLFlag<"Za">;
 def _SLASH_Zc : CLJoined<"Zc:">;
 def _SLASH_ZI : CLFlag<"ZI">;
 def _SLASH_Zi : CLFlag<"Zi">;

@@ -144,7 +144,7 @@
 // NONFRAGILE:#define __OBJC2__ 1
 //
 //
-// RUN: %clang_cc1 -O0 -E -dM < /dev/null | FileCheck -check-prefix O0 %s
+// RUN: %clang_cc1 -E -dM < /dev/null | FileCheck -check-prefix O0 %s
 //
 // O0:#define __NO_INLINE__ 1
 // O0-NOT:#define __OPTIMIZE_SIZE__
@@ -1223,6 +1223,11 @@
 // MIPS-DSPR2:#define __mips_dsp 1
 // MIPS-DSPR2:#define __mips_dsp_rev 2
 // MIPS-DSPR2:#define __mips_dspr2 1
+//
+// RUN: %clang_cc1 -target-feature +msa \
+// RUN:   -E -dM -triple=mips-none-none < /dev/null \
+// RUN:   | FileCheck -check-prefix MIPS-MSA %s
+// MIPS-MSA:#define __mips_msa 1
 //
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=msp430-none-none < /dev/null | FileCheck -check-prefix MSP430 %s
 //
@@ -2941,3 +2946,6 @@
 // ANDROID: __ANDROID__ 1
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=powerpc64-unknown-freebsd < /dev/null | FileCheck -check-prefix PPC64-FREEBSD %s
 // PPC64-FREEBSD-NOT: #define __LONG_DOUBLE_128__ 1
+//
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=xcore-none-none < /dev/null | FileCheck -check-prefix XCORE %s
+// XCORE:#define __XS1B__ 1

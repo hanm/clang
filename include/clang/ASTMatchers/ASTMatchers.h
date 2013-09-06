@@ -1297,93 +1297,23 @@ const internal::VariadicAllOfMatcher<TypeLoc> typeLoc;
 /// \c b.
 ///
 /// Usable as: Any Matcher
-template <typename M1, typename M2>
-internal::PolymorphicMatcherWithParam2<internal::EachOfMatcher, M1, M2>
-eachOf(const M1 &P1, const M2 &P2) {
-  return internal::PolymorphicMatcherWithParam2<internal::EachOfMatcher, M1,
-                                                M2>(P1, P2);
-}
-
-/// \brief Various overloads for the anyOf matcher.
-/// @{
+const internal::VariadicOperatorMatcherFunc eachOf = {
+  internal::EachOfVariadicOperator
+};
 
 /// \brief Matches if any of the given matchers matches.
 ///
 /// Usable as: Any Matcher
-template<typename M1, typename M2>
-internal::PolymorphicMatcherWithParam2<internal::AnyOfMatcher, M1, M2>
-anyOf(const M1 &P1, const M2 &P2) {
-  return internal::PolymorphicMatcherWithParam2<internal::AnyOfMatcher,
-                                                M1, M2 >(P1, P2);
-}
-template<typename M1, typename M2, typename M3>
-internal::PolymorphicMatcherWithParam2<internal::AnyOfMatcher, M1,
-    internal::PolymorphicMatcherWithParam2<internal::AnyOfMatcher, M2, M3> >
-anyOf(const M1 &P1, const M2 &P2, const M3 &P3) {
-  return anyOf(P1, anyOf(P2, P3));
-}
-template<typename M1, typename M2, typename M3, typename M4>
-internal::PolymorphicMatcherWithParam2<internal::AnyOfMatcher, M1,
-    internal::PolymorphicMatcherWithParam2<internal::AnyOfMatcher, M2,
-        internal::PolymorphicMatcherWithParam2<internal::AnyOfMatcher,
-                                               M3, M4> > >
-anyOf(const M1 &P1, const M2 &P2, const M3 &P3, const M4 &P4) {
-  return anyOf(P1, anyOf(P2, anyOf(P3, P4)));
-}
-template<typename M1, typename M2, typename M3, typename M4, typename M5>
-internal::PolymorphicMatcherWithParam2<internal::AnyOfMatcher, M1,
-    internal::PolymorphicMatcherWithParam2<internal::AnyOfMatcher, M2,
-        internal::PolymorphicMatcherWithParam2<internal::AnyOfMatcher, M3,
-            internal::PolymorphicMatcherWithParam2<internal::AnyOfMatcher,
-                                                   M4, M5> > > >
-anyOf(const M1 &P1, const M2 &P2, const M3 &P3, const M4 &P4, const M5 &P5) {
-  return anyOf(P1, anyOf(P2, anyOf(P3, anyOf(P4, P5))));
-}
-
-/// @}
-
-/// \brief Various overloads for the allOf matcher.
-/// @{
+const internal::VariadicOperatorMatcherFunc anyOf = {
+  internal::AnyOfVariadicOperator
+};
 
 /// \brief Matches if all given matchers match.
 ///
 /// Usable as: Any Matcher
-template <typename M1, typename M2>
-internal::PolymorphicMatcherWithParam2<internal::AllOfMatcher, M1, M2>
-allOf(const M1 &P1, const M2 &P2) {
-  return internal::PolymorphicMatcherWithParam2<internal::AllOfMatcher, M1, M2>(
-      P1, P2);
-}
-template <typename M1, typename M2, typename M3>
-internal::PolymorphicMatcherWithParam2<
-    internal::AllOfMatcher, M1,
-    internal::PolymorphicMatcherWithParam2<internal::AllOfMatcher, M2, M3> >
-allOf(const M1 &P1, const M2 &P2, const M3 &P3) {
-  return allOf(P1, allOf(P2, P3));
-}
-template <typename M1, typename M2, typename M3, typename M4>
-internal::PolymorphicMatcherWithParam2<
-    internal::AllOfMatcher, M1,
-    internal::PolymorphicMatcherWithParam2<
-        internal::AllOfMatcher, M2, internal::PolymorphicMatcherWithParam2<
-                                        internal::AllOfMatcher, M3, M4> > >
-allOf(const M1 &P1, const M2 &P2, const M3 &P3, const M4 &P4) {
-  return allOf(P1, allOf(P2, P3, P4));
-}
-template <typename M1, typename M2, typename M3, typename M4, typename M5>
-internal::PolymorphicMatcherWithParam2<
-    internal::AllOfMatcher, M1,
-    internal::PolymorphicMatcherWithParam2<
-        internal::AllOfMatcher, M2,
-        internal::PolymorphicMatcherWithParam2<
-            internal::AllOfMatcher, M3,
-            internal::PolymorphicMatcherWithParam2<internal::AllOfMatcher, M4,
-                                                   M5> > > >
-allOf(const M1 &P1, const M2 &P2, const M3 &P3, const M4 &P4, const M5 &P5) {
-  return allOf(P1, allOf(P2, P3, P4, P5));
-}
-
-/// @}
+const internal::VariadicOperatorMatcherFunc allOf = {
+  internal::AllOfVariadicOperator
+};
 
 /// \brief Matches sizeof (C99), alignof (C++11) and vec_step (OpenCL)
 ///
@@ -1597,12 +1527,8 @@ AST_MATCHER_P(CXXRecordDecl, hasMethod, internal::Matcher<CXXMethodDecl>,
 /// ChildT must be an AST base type.
 ///
 /// Usable as: Any Matcher
-template <typename ChildT>
-internal::ArgumentAdaptingMatcher<internal::HasMatcher, ChildT> has(
-    const internal::Matcher<ChildT> &ChildMatcher) {
-  return internal::ArgumentAdaptingMatcher<internal::HasMatcher,
-                                           ChildT>(ChildMatcher);
-}
+const internal::ArgumentAdaptingMatcherFunc<internal::HasMatcher>
+LLVM_ATTRIBUTE_UNUSED has = {};
 
 /// \brief Matches AST nodes that have descendant AST nodes that match the
 /// provided matcher.
@@ -1618,13 +1544,8 @@ internal::ArgumentAdaptingMatcher<internal::HasMatcher, ChildT> has(
 /// DescendantT must be an AST base type.
 ///
 /// Usable as: Any Matcher
-template <typename DescendantT>
-internal::ArgumentAdaptingMatcher<internal::HasDescendantMatcher, DescendantT>
-hasDescendant(const internal::Matcher<DescendantT> &DescendantMatcher) {
-  return internal::ArgumentAdaptingMatcher<
-    internal::HasDescendantMatcher,
-    DescendantT>(DescendantMatcher);
-}
+const internal::ArgumentAdaptingMatcherFunc<internal::HasDescendantMatcher>
+LLVM_ATTRIBUTE_UNUSED hasDescendant = {};
 
 /// \brief Matches AST nodes that have child AST nodes that match the
 /// provided matcher.
@@ -1642,13 +1563,8 @@ hasDescendant(const internal::Matcher<DescendantT> &DescendantMatcher) {
 /// matches instead of only on the first one.
 ///
 /// Usable as: Any Matcher
-template <typename ChildT>
-internal::ArgumentAdaptingMatcher<internal::ForEachMatcher, ChildT> forEach(
-    const internal::Matcher<ChildT> &ChildMatcher) {
-  return internal::ArgumentAdaptingMatcher<
-    internal::ForEachMatcher,
-    ChildT>(ChildMatcher);
-}
+const internal::ArgumentAdaptingMatcherFunc<internal::ForEachMatcher>
+LLVM_ATTRIBUTE_UNUSED forEach = {};
 
 /// \brief Matches AST nodes that have descendant AST nodes that match the
 /// provided matcher.
@@ -1674,15 +1590,8 @@ internal::ArgumentAdaptingMatcher<internal::ForEachMatcher, ChildT> forEach(
 /// \endcode
 ///
 /// Usable as: Any Matcher
-template <typename DescendantT>
-internal::ArgumentAdaptingMatcher<internal::ForEachDescendantMatcher,
-                                  DescendantT>
-forEachDescendant(
-    const internal::Matcher<DescendantT> &DescendantMatcher) {
-  return internal::ArgumentAdaptingMatcher<
-    internal::ForEachDescendantMatcher,
-    DescendantT>(DescendantMatcher);
-}
+const internal::ArgumentAdaptingMatcherFunc<internal::ForEachDescendantMatcher>
+LLVM_ATTRIBUTE_UNUSED forEachDescendant = {};
 
 /// \brief Matches if the node or any descendant matches.
 ///
@@ -1700,10 +1609,7 @@ forEachDescendant(
 ///
 /// Usable as: Any Matcher
 template <typename T>
-internal::PolymorphicMatcherWithParam2<
-    internal::EachOfMatcher, internal::Matcher<T>,
-    internal::ArgumentAdaptingMatcher<internal::ForEachDescendantMatcher, T> >
-findAll(const internal::Matcher<T> &Matcher) {
+internal::Matcher<T> findAll(const internal::Matcher<T> &Matcher) {
   return eachOf(Matcher, forEachDescendant(Matcher));
 }
 
@@ -1717,15 +1623,9 @@ findAll(const internal::Matcher<T> &Matcher) {
 /// \c compoundStmt(hasParent(ifStmt())) matches "{ int x = 43; }".
 ///
 /// Usable as: Any Matcher
-template <typename ParentT>
-internal::ArgumentAdaptingMatcher<internal::HasParentMatcher, ParentT,
-                                  internal::TypeList<Decl, Stmt>,
-                                  internal::TypeList<Decl, Stmt> >
-hasParent(const internal::Matcher<ParentT> &ParentMatcher) {
-  return internal::ArgumentAdaptingMatcher<
-      internal::HasParentMatcher, ParentT, internal::TypeList<Decl, Stmt>,
-      internal::TypeList<Decl, Stmt> >(ParentMatcher);
-}
+const internal::ArgumentAdaptingMatcherFunc<
+    internal::HasParentMatcher, internal::TypeList<Decl, Stmt>,
+    internal::TypeList<Decl, Stmt> > LLVM_ATTRIBUTE_UNUSED hasParent = {};
 
 /// \brief Matches AST nodes that have an ancestor that matches the provided
 /// matcher.
@@ -1738,15 +1638,9 @@ hasParent(const internal::Matcher<ParentT> &ParentMatcher) {
 /// \c expr(integerLiteral(hasAncestor(ifStmt()))) matches \c 42, but not 43.
 ///
 /// Usable as: Any Matcher
-template <typename AncestorT>
-internal::ArgumentAdaptingMatcher<internal::HasAncestorMatcher, AncestorT,
-                                  internal::TypeList<Decl, Stmt>,
-                                  internal::TypeList<Decl, Stmt> >
-hasAncestor(const internal::Matcher<AncestorT> &AncestorMatcher) {
-  return internal::ArgumentAdaptingMatcher<
-      internal::HasAncestorMatcher, AncestorT, internal::TypeList<Decl, Stmt>,
-      internal::TypeList<Decl, Stmt> >(AncestorMatcher);
-}
+const internal::ArgumentAdaptingMatcherFunc<
+    internal::HasAncestorMatcher, internal::TypeList<Decl, Stmt>,
+    internal::TypeList<Decl, Stmt> > LLVM_ATTRIBUTE_UNUSED hasAncestor = {};
 
 /// \brief Matches if the provided matcher does not match.
 ///

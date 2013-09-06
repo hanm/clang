@@ -1431,8 +1431,7 @@ DeduceTemplateArgumentsByTypeMatch(Sema &S,
                                                               Deduced.end());
           while (!ToVisit.empty()) {
             // Retrieve the next class in the inheritance hierarchy.
-            const RecordType *NextT = ToVisit.back();
-            ToVisit.pop_back();
+            const RecordType *NextT = ToVisit.pop_back_val();
 
             // If we have already seen this type, skip it.
             if (!Visited.insert(NextT))
@@ -2091,8 +2090,7 @@ ConvertDeducedTemplateArgument(Sema &S, NamedDecl *Param,
         return true;
 
       // Move the converted template argument into our argument pack.
-      PackedArgsBuilder.push_back(Output.back());
-      Output.pop_back();
+      PackedArgsBuilder.push_back(Output.pop_back_val());
     }
 
     // Create the resulting argument pack.
@@ -2201,14 +2199,15 @@ FinishTemplateArgumentDeduction(Sema &S,
   // to the class template.
   LocalInstantiationScope InstScope(S);
   ClassTemplateDecl *ClassTemplate = Partial->getSpecializedTemplate();
-  const TemplateArgumentLoc *PartialTemplateArgs
+  const ASTTemplateArgumentListInfo *PartialTemplArgInfo
     = Partial->getTemplateArgsAsWritten();
+  const TemplateArgumentLoc *PartialTemplateArgs
+    = PartialTemplArgInfo->getTemplateArgs();
 
-  // Note that we don't provide the langle and rangle locations.
-  TemplateArgumentListInfo InstArgs;
+  TemplateArgumentListInfo InstArgs(PartialTemplArgInfo->LAngleLoc,
+                                    PartialTemplArgInfo->RAngleLoc);
 
-  if (S.Subst(PartialTemplateArgs,
-              Partial->getNumTemplateArgsAsWritten(),
+  if (S.Subst(PartialTemplateArgs, PartialTemplArgInfo->NumTemplateArgs,
               InstArgs, MultiLevelTemplateArgumentList(*DeducedArgumentList))) {
     unsigned ArgIdx = InstArgs.size(), ParamIdx = ArgIdx;
     if (ParamIdx >= Partial->getTemplateParameters()->size())
@@ -2289,7 +2288,11 @@ Sema::DeduceTemplateArguments(ClassTemplatePartialSpecializationDecl *Partial,
 
 /// Complete template argument deduction for a variable template partial
 /// specialization.
-/// TODO: Unify with ClassTemplatePartialSpecializationDecl version.
+/// TODO: Unify with ClassTemplatePartialSpecializationDecl version?
+///       May require unifying ClassTemplate(Partial)SpecializationDecl and
+///        VarTemplate(Partial)SpecializationDecl with a new data
+///        structure Template(Partial)SpecializationDecl, and
+///        using Template(Partial)SpecializationDecl as input type.
 static Sema::TemplateDeductionResult FinishTemplateArgumentDeduction(
     Sema &S, VarTemplatePartialSpecializationDecl *Partial,
     const TemplateArgumentList &TemplateArgs,
@@ -2360,13 +2363,15 @@ static Sema::TemplateDeductionResult FinishTemplateArgumentDeduction(
   // to the class template.
   LocalInstantiationScope InstScope(S);
   VarTemplateDecl *VarTemplate = Partial->getSpecializedTemplate();
-  const TemplateArgumentLoc *PartialTemplateArgs =
-      Partial->getTemplateArgsAsWritten();
+  const ASTTemplateArgumentListInfo *PartialTemplArgInfo
+    = Partial->getTemplateArgsAsWritten();
+  const TemplateArgumentLoc *PartialTemplateArgs
+    = PartialTemplArgInfo->getTemplateArgs();
 
-  // Note that we don't provide the langle and rangle locations.
-  TemplateArgumentListInfo InstArgs;
+  TemplateArgumentListInfo InstArgs(PartialTemplArgInfo->LAngleLoc,
+                                    PartialTemplArgInfo->RAngleLoc);
 
-  if (S.Subst(PartialTemplateArgs, Partial->getNumTemplateArgsAsWritten(),
+  if (S.Subst(PartialTemplateArgs, PartialTemplArgInfo->NumTemplateArgs,
               InstArgs, MultiLevelTemplateArgumentList(*DeducedArgumentList))) {
     unsigned ArgIdx = InstArgs.size(), ParamIdx = ArgIdx;
     if (ParamIdx >= Partial->getTemplateParameters()->size())
@@ -2403,7 +2408,11 @@ static Sema::TemplateDeductionResult FinishTemplateArgumentDeduction(
 /// \brief Perform template argument deduction to determine whether
 /// the given template arguments match the given variable template
 /// partial specialization per C++ [temp.class.spec.match].
-/// TODO: Unify with ClassTemplatePartialSpecializationDecl version.
+/// TODO: Unify with ClassTemplatePartialSpecializationDecl version?
+///       May require unifying ClassTemplate(Partial)SpecializationDecl and
+///        VarTemplate(Partial)SpecializationDecl with a new data
+///        structure Template(Partial)SpecializationDecl, and
+///        using Template(Partial)SpecializationDecl as input type.
 Sema::TemplateDeductionResult
 Sema::DeduceTemplateArguments(VarTemplatePartialSpecializationDecl *Partial,
                               const TemplateArgumentList &TemplateArgs,
@@ -2578,7 +2587,6 @@ Sema::SubstituteExplicitTemplateArguments(
   }
   
   // Instantiate the return type.
-  // FIXME: exception-specifications?
   QualType ResultType;
   {
     // C++11 [expr.prim.general]p3:
@@ -3257,12 +3265,10 @@ DeduceTemplateArgumentByListElement(Sema &S,
 /// about template argument deduction.
 ///
 /// \returns the result of template argument deduction.
-Sema::TemplateDeductionResult
-Sema::DeduceTemplateArguments(FunctionTemplateDecl *FunctionTemplate,
-                              TemplateArgumentListInfo *ExplicitTemplateArgs,
-                              llvm::ArrayRef<Expr *> Args,
-                              FunctionDecl *&Specialization,
-                              TemplateDeductionInfo &Info) {
+Sema::TemplateDeductionResult Sema::DeduceTemplateArguments(
+    FunctionTemplateDecl *FunctionTemplate,
+    TemplateArgumentListInfo *ExplicitTemplateArgs, ArrayRef<Expr *> Args,
+    FunctionDecl *&Specialization, TemplateDeductionInfo &Info) {
   if (FunctionTemplate->isInvalidDecl())
     return TDK_Invalid;
 
@@ -3554,11 +3560,11 @@ Sema::DeduceTemplateArguments(FunctionTemplateDecl *FunctionTemplate,
 
   // If the function has a deduced return type, substitute it for a dependent
   // type so that we treat it as a non-deduced context in what follows.
-  bool HasUndeducedReturnType = false;
+  bool HasDeducedReturnType = false;
   if (getLangOpts().CPlusPlus1y && InOverloadResolution &&
-      Function->getResultType()->isUndeducedType()) {
+      Function->getResultType()->getContainedAutoType()) {
     FunctionType = SubstAutoType(FunctionType, Context.DependentTy);
-    HasUndeducedReturnType = true;
+    HasDeducedReturnType = true;
   }
 
   if (!ArgFunctionType.isNull()) {
@@ -3580,7 +3586,7 @@ Sema::DeduceTemplateArguments(FunctionTemplateDecl *FunctionTemplate,
 
   // If the function has a deduced return type, deduce it now, so we can check
   // that the deduced function type matches the requested type.
-  if (HasUndeducedReturnType &&
+  if (HasDeducedReturnType &&
       Specialization->getResultType()->isUndeducedType() &&
       DeduceReturnType(Specialization, Info.getLocation(), false))
     return TDK_MiscellaneousDeductionFailure;
@@ -4460,7 +4466,11 @@ Sema::getMoreSpecializedPartialSpecialization(
   return Better1 ? PS1 : PS2;
 }
 
-/// TODO: Unify with ClassTemplatePartialSpecializationDecl version.
+/// TODO: Unify with ClassTemplatePartialSpecializationDecl version?
+///       May require unifying ClassTemplate(Partial)SpecializationDecl and
+///        VarTemplate(Partial)SpecializationDecl with a new data
+///        structure Template(Partial)SpecializationDecl, and
+///        using Template(Partial)SpecializationDecl as input type.
 VarTemplatePartialSpecializationDecl *
 Sema::getMoreSpecializedPartialSpecialization(
     VarTemplatePartialSpecializationDecl *PS1,

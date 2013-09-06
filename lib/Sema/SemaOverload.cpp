@@ -509,6 +509,11 @@ void UserDefinedConversionSequence::DebugPrint() const {
 /// error. Useful for debugging overloading issues.
 void ImplicitConversionSequence::DebugPrint() const {
   raw_ostream &OS = llvm::errs();
+  if (isListInitializationSequence()) {
+    OS << "List-initialization sequence: ";
+    if (isStdInitializerListElement())
+      OS << "Worst std::initializer_list element conversion: ";
+  }
   switch (ConversionKind) {
   case StandardConversion:
     OS << "Standard conversion: ";
@@ -2584,7 +2589,8 @@ bool Sema::FunctionArgTypesAreEqual(const FunctionProtoType *OldType,
   for (FunctionProtoType::arg_type_iterator O = OldType->arg_type_begin(),
        N = NewType->arg_type_begin(),
        E = OldType->arg_type_end(); O && (O != E); ++O, ++N) {
-    if (!Context.hasSameType(*O, *N)) {
+    if (!Context.hasSameType(O->getUnqualifiedType(),
+                             N->getUnqualifiedType())) {
       if (ArgPos) *ArgPos = O - OldType->arg_type_begin();
       return false;
     }
@@ -4523,11 +4529,13 @@ TryListConversion(Sema &S, InitListExpr *From, QualType ToType,
         = S.CompareReferenceRelationship(From->getLocStart(), T1, T2, dummy1,
                                          dummy2, dummy3);
 
-      if (RefRelationship >= Sema::Ref_Related)
-        return TryReferenceInit(S, Init, ToType,
-                                /*FIXME:*/From->getLocStart(),
-                                SuppressUserConversions,
-                                /*AllowExplicit=*/false);
+      if (RefRelationship >= Sema::Ref_Related) {
+        Result = TryReferenceInit(S, Init, ToType, /*FIXME*/From->getLocStart(),
+                                  SuppressUserConversions,
+                                  /*AllowExplicit=*/false);
+        Result.setListInitializationSequence();
+        return Result;
+      }
     }
 
     // Otherwise, we bind the reference to a temporary created from the
@@ -7658,11 +7666,10 @@ public:
 /// on the operator @p Op and the arguments given. For example, if the
 /// operator is a binary '+', this routine might add "int
 /// operator+(int, int)" to cover integer addition.
-void
-Sema::AddBuiltinOperatorCandidates(OverloadedOperatorKind Op,
-                                   SourceLocation OpLoc,
-                                   llvm::ArrayRef<Expr *> Args,
-                                   OverloadCandidateSet& CandidateSet) {
+void Sema::AddBuiltinOperatorCandidates(OverloadedOperatorKind Op,
+                                        SourceLocation OpLoc,
+                                        ArrayRef<Expr *> Args,
+                                        OverloadCandidateSet &CandidateSet) {
   // Find all of the types that the arguments can convert to, but only
   // if the operator we're looking at has built-in operator candidates
   // that make use of these types. Also record whether we encounter non-record
@@ -9390,7 +9397,6 @@ private:
       FailedCandidates.addCandidate()
           .set(FunctionTemplate->getTemplatedDecl(),
                MakeDeductionFailureInfo(Context, Result, Info));
-      (void)Result;
       return false;
     } 
     
@@ -9531,10 +9537,22 @@ public:
     S.Diag(OvlExpr->getLocStart(), diag::err_addr_ovl_no_viable)
         << OvlExpr->getName() << TargetFunctionType
         << OvlExpr->getSourceRange();
-    FailedCandidates.NoteCandidates(S, OvlExpr->getLocStart());
-    S.NoteAllOverloadCandidates(OvlExpr, TargetFunctionType);
-  } 
-  
+    if (FailedCandidates.empty())
+      S.NoteAllOverloadCandidates(OvlExpr, TargetFunctionType);
+    else {
+      // We have some deduction failure messages. Use them to diagnose
+      // the function templates, and diagnose the non-template candidates
+      // normally.
+      for (UnresolvedSetIterator I = OvlExpr->decls_begin(),
+                                 IEnd = OvlExpr->decls_end();
+           I != IEnd; ++I)
+        if (FunctionDecl *Fun =
+                dyn_cast<FunctionDecl>((*I)->getUnderlyingDecl()))
+          S.NoteOverloadCandidate(Fun, TargetFunctionType);
+      FailedCandidates.NoteCandidates(S, OvlExpr->getLocStart());
+    }
+  }
+
   bool IsInvalidFormOfPointerToMemberFunction() const {
     return TargetTypeIsNonStaticMemberFunction &&
       !OvlExprInfo.HasFormOfMemberPointer;
@@ -9695,7 +9713,6 @@ Sema::ResolveSingleFunctionTemplateSpecialization(OverloadExpr *ovl,
       FailedCandidates.addCandidate()
           .set(FunctionTemplate->getTemplatedDecl(),
                MakeDeductionFailureInfo(Context, Result, Info));
-      (void)Result;
       continue;
     }
 
@@ -10704,6 +10721,11 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
         Diag(OpLoc,  diag::err_ovl_no_viable_oper)
              << BinaryOperator::getOpcodeStr(Opc)
              << Args[0]->getSourceRange() << Args[1]->getSourceRange();
+        if (Args[0]->getType()->isIncompleteType()) {
+          Diag(OpLoc, diag::note_assign_lhs_incomplete)
+            << Args[0]->getType()
+            << Args[0]->getSourceRange() << Args[1]->getSourceRange();
+        }
       } else {
         // This is an erroneous use of an operator which can be overloaded by
         // a non-member function. Check for non-member operators which were

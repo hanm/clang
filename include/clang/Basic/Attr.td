@@ -385,7 +385,7 @@ def MinSize : InheritableAttr {
 
 def Format : InheritableAttr {
   let Spellings = [GNU<"format">, CXX11<"gnu", "format">];
-  let Args = [StringArgument<"Type">, IntArgument<"FormatIdx">,
+  let Args = [IdentifierArgument<"Type">, IntArgument<"FormatIdx">,
               IntArgument<"FirstArg">];
 }
 
@@ -427,6 +427,10 @@ def MaxFieldAlignment : InheritableAttr {
 
 def MayAlias : InheritableAttr {
   let Spellings = [GNU<"may_alias">, CXX11<"gnu", "may_alias">];
+}
+
+def MSABI : InheritableAttr {
+  let Spellings = [GNU<"ms_abi">, CXX11<"gnu", "ms_abi">];
 }
 
 def MSP430Interrupt : InheritableAttr, TargetSpecificAttr {
@@ -661,6 +665,10 @@ def Sentinel : InheritableAttr {
 def StdCall : InheritableAttr {
   let Spellings = [GNU<"stdcall">, CXX11<"gnu", "stdcall">,
                    Keyword<"__stdcall">, Keyword<"_stdcall">];
+}
+
+def SysVABI : InheritableAttr {
+  let Spellings = [GNU<"sysv_abi">, CXX11<"gnu", "sysv_abi">];
 }
 
 def ThisCall : InheritableAttr {
@@ -921,6 +929,44 @@ def SharedLocksRequired : InheritableAttr {
   let TemplateDependent = 1;
 }
 
+// C/C++ consumed attributes.
+
+def Consumable : InheritableAttr {
+  let Spellings = [GNU<"consumable">];
+  let Subjects = [CXXRecord];
+  let Args = [EnumArgument<"DefaultState", "ConsumedState",
+                           ["unknown", "consumed", "unconsumed"],
+                           ["Unknown", "Consumed", "Unconsumed"]>];
+}
+
+def CallableWhenUnconsumed : InheritableAttr {
+  let Spellings = [GNU<"callable_when_unconsumed">];
+  let Subjects = [CXXMethod];
+}
+
+def TestsUnconsumed : InheritableAttr {
+  let Spellings = [GNU<"tests_unconsumed">];
+  let Subjects = [CXXMethod];
+}
+
+def TestsConsumed : InheritableAttr {
+  let Spellings = [GNU<"tests_consumed">];
+  let Subjects = [CXXMethod];
+}
+
+def Consumes : InheritableAttr {
+  let Spellings = [GNU<"consumes">];
+  let Subjects = [CXXMethod];
+}
+
+def ReturnTypestate : InheritableAttr {
+  let Spellings = [GNU<"return_typestate">];
+  let Subjects = [Function];
+  let Args = [EnumArgument<"State", "ConsumedState",
+                           ["unknown", "consumed", "unconsumed"],
+                           ["Unknown", "Consumed", "Unconsumed"]>];
+}
+
 // Type safety attributes for `void *' pointers and type tags.
 
 def ArgumentWithTypeTag : InheritableAttr {
@@ -944,7 +990,7 @@ def TypeTagForDatatype : InheritableAttr {
 
 // Microsoft-related attributes
 
-def MsProperty : Attr {
+def MsProperty : IgnoredAttr {
   let Spellings = [Declspec<"property">];
 }
 

@@ -598,14 +598,19 @@ public:
   ExprResult TransformDependentScopeDeclRefExpr(DependentScopeDeclRefExpr *E,
                                                 bool IsAddressOfOperand);
 
+// FIXME: We use LLVM_ATTRIBUTE_NOINLINE because inlining causes a ridiculous
+// amount of stack usage with clang.
 #define STMT(Node, Parent)                        \
+  LLVM_ATTRIBUTE_NOINLINE \
   StmtResult Transform##Node(Node *S);
 #define EXPR(Node, Parent)                        \
+  LLVM_ATTRIBUTE_NOINLINE \
   ExprResult Transform##Node(Node *E);
 #define ABSTRACT_STMT(Stmt)
 #include "clang/AST/StmtNodes.inc"
 
 #define OPENMP_CLAUSE(Name, Class)                        \
+  LLVM_ATTRIBUTE_NOINLINE \
   OMPClause *Transform ## Class(Class *S);
 #include "clang/Basic/OpenMPKinds.def"
 
@@ -1384,9 +1389,8 @@ public:
   ///
   /// By default, performs semantic analysis to build the new statement.
   /// Subclasses may override this routine to provide different behavior.
-  StmtResult RebuildCXXTryStmt(SourceLocation TryLoc,
-                               Stmt *TryBlock,
-                               MultiStmtArg Handlers) {
+  StmtResult RebuildCXXTryStmt(SourceLocation TryLoc, Stmt *TryBlock,
+                               ArrayRef<Stmt *> Handlers) {
     return getSema().ActOnCXXTryBlock(TryLoc, TryBlock, Handlers);
   }
 
@@ -6251,7 +6255,7 @@ template<typename Derived>
 StmtResult
 TreeTransform<Derived>::TransformOMPParallelDirective(OMPParallelDirective *D) {
   // Transform the clauses
-  llvm::SmallVector<OMPClause *, 5> TClauses;
+  SmallVector<OMPClause *, 5> TClauses;
   ArrayRef<OMPClause *> Clauses = D->clauses();
   TClauses.reserve(Clauses.size());
   for (ArrayRef<OMPClause *>::iterator I = Clauses.begin(), E = Clauses.end();
@@ -6292,7 +6296,7 @@ TreeTransform<Derived>::TransformOMPDefaultClause(OMPDefaultClause *C) {
 template<typename Derived>
 OMPClause *
 TreeTransform<Derived>::TransformOMPPrivateClause(OMPPrivateClause *C) {
-  llvm::SmallVector<Expr *, 5> Vars;
+  SmallVector<Expr *, 5> Vars;
   Vars.reserve(C->varlist_size());
   for (OMPVarList<OMPPrivateClause>::varlist_iterator I = C->varlist_begin(),
                                                       E = C->varlist_end();
@@ -7317,7 +7321,7 @@ TreeTransform<Derived>::TransformCXXFunctionalCastExpr(
     return SemaRef.Owned(E);
 
   return getDerived().RebuildCXXFunctionalCastExpr(Type,
-                                      /*FIXME:*/E->getSubExpr()->getLocStart(),
+                                                   E->getLParenLoc(),
                                                    SubExpr.get(),
                                                    E->getRParenLoc());
 }
@@ -7743,8 +7747,10 @@ TreeTransform<Derived>::TransformUnresolvedLookupExpr(
       // This can happen because of dependent hiding.
       if (isa<UsingShadowDecl>(*I))
         continue;
-      else
+      else {
+        R.clear();
         return ExprError();
+      }
     }
 
     // Expand using declarations.
@@ -7779,8 +7785,10 @@ TreeTransform<Derived>::TransformUnresolvedLookupExpr(
       = cast_or_null<CXXRecordDecl>(getDerived().TransformDecl(
                                                             Old->getNameLoc(),
                                                         Old->getNamingClass()));
-    if (!NamingClass)
+    if (!NamingClass) {
+      R.clear();
       return ExprError();
+    }
 
     R.setNamingClass(NamingClass);
   }
@@ -7798,8 +7806,10 @@ TreeTransform<Derived>::TransformUnresolvedLookupExpr(
   if (Old->hasExplicitTemplateArgs() &&
       getDerived().TransformTemplateArguments(Old->getTemplateArgs(),
                                               Old->getNumTemplateArgs(),
-                                              TransArgs))
+                                              TransArgs)) {
+    R.clear();
     return ExprError();
+  }
 
   return getDerived().RebuildTemplateIdExpr(SS, TemplateKWLoc, R,
                                             Old->requiresADL(), &TransArgs);
@@ -8235,7 +8245,7 @@ TreeTransform<Derived>::TransformLambdaScope(LambdaExpr *E,
 
   // Transform any init-capture expressions before entering the scope of the
   // lambda.
-  llvm::SmallVector<ExprResult, 8> InitCaptureExprs;
+  SmallVector<ExprResult, 8> InitCaptureExprs;
   InitCaptureExprs.resize(E->explicit_capture_end() -
                           E->explicit_capture_begin());
   for (LambdaExpr::capture_iterator C = E->capture_begin(),
@@ -8254,6 +8264,7 @@ TreeTransform<Derived>::TransformLambdaScope(LambdaExpr *E,
   sema::LambdaScopeInfo *LSI
     = getSema().enterLambdaScope(CallOperator, E->getIntroducerRange(),
                                  E->getCaptureDefault(),
+                                 E->getCaptureDefaultLoc(),
                                  E->hasExplicitParameters(),
                                  E->hasExplicitResultType(),
                                  E->isMutable());
@@ -9484,7 +9495,7 @@ TreeTransform<Derived>::RebuildTemplateName(CXXScopeSpec &SS,
                                        ParsedType::make(ObjectType),
                                        /*EnteringContext=*/false,
                                        Template);
-  return Template.template getAsVal<TemplateName>();
+  return Template.get();
 }
 
 template<typename Derived>

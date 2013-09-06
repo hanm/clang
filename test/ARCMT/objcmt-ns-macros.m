@@ -64,3 +64,49 @@ enum {
   UNTwo
 };
 
+// Should use NS_ENUM even though it is all power of 2.
+enum {
+  UIKOne = 1,
+  UIKTwo = 2,
+};
+typedef NSInteger UIK;
+
+typedef enum  {
+    NSTickMarkBelow = 0,
+    NSTickMarkAbove = 1,
+    NSTickMarkLeft = NSTickMarkAbove,
+    NSTickMarkRight = NSTickMarkBelow
+} NSTickMarkPosition;
+
+enum {
+    UIViewNone         = 0x0,
+    UIViewMargin       = 0x1,
+    UIViewWidth        = 0x2,
+    UIViewRightMargin  = 0x3,
+    UIViewBottomMargin = 0xbadbeef
+};
+typedef NSInteger UITableStyle;
+
+enum {
+    UIView0         = 0,
+    UIView1 = 0XBADBEEF
+};
+typedef NSInteger UIStyle;
+
+enum {
+    NSTIFFFileType,
+    NSBMPFileType,
+    NSGIFFileType,
+    NSJPEGFileType,
+    NSPNGFileType,
+    NSJPEG2000FileType
+};
+typedef NSUInteger NSBitmapImageFileType;
+
+enum {
+    NSWarningAlertStyle = 0,
+    NSInformationalAlertStyle = 1,
+    NSCriticalAlertStyle = 2
+};
+typedef NSUInteger NSAlertStyle;
+

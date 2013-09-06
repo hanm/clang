@@ -631,6 +631,15 @@ Example matches x()
 </pre></td></tr>
 
 
+<tr><td>Matcher&lt<a href="http://clang.llvm.org/doxygen/classclang_1_1Stmt.html">Stmt</a>&gt;</td><td class="name" onclick="toggle('floatLiteral0')"><a name="floatLiteral0Anchor">floatLiteral</a></td><td>Matcher&lt<a href="http://clang.llvm.org/doxygen/classclang_1_1FloatingLiteral.html">FloatingLiteral</a>&gt;...</td></tr>
+<tr><td colspan="4" class="doc" id="floatLiteral0"><pre>Matches float literals of all sizes encodings, e.g.
+1.0, 1.0f, 1.0L and 1e10.
+
+Does not match implicit conversions such as
+  float a = 10;
+</pre></td></tr>
+
+
 <tr><td>Matcher&lt<a href="http://clang.llvm.org/doxygen/classclang_1_1Stmt.html">Stmt</a>&gt;</td><td class="name" onclick="toggle('forRangeStmt0')"><a name="forRangeStmt0Anchor">forRangeStmt</a></td><td>Matcher&lt<a href="http://clang.llvm.org/doxygen/classclang_1_1CXXForRangeStmt.html">CXXForRangeStmt</a>&gt;...</td></tr>
 <tr><td colspan="4" class="doc" id="forRangeStmt0"><pre>Matches range-based for statements.
 
@@ -699,11 +708,10 @@ initList()
 
 
 <tr><td>Matcher&lt<a href="http://clang.llvm.org/doxygen/classclang_1_1Stmt.html">Stmt</a>&gt;</td><td class="name" onclick="toggle('integerLiteral0')"><a name="integerLiteral0Anchor">integerLiteral</a></td><td>Matcher&lt<a href="http://clang.llvm.org/doxygen/classclang_1_1IntegerLiteral.html">IntegerLiteral</a>&gt;...</td></tr>
-<tr><td colspan="4" class="doc" id="integerLiteral0"><pre>Matches integer literals of all sizes encodings.
+<tr><td colspan="4" class="doc" id="integerLiteral0"><pre>Matches integer literals of all sizes encodings, e.g.
+1, 1L, 0x1 and 1U.
 
-Not matching character-encoded integers such as L'a'.
-
-Example matches 1, 1L, 0x1, 1U
+Does not match character-encoded integers such as L'a'.
 </pre></td></tr>
 
 
@@ -1265,14 +1273,14 @@ which allow users to create more powerful match expressions.</p>
 <tr style="text-align:left"><th>Return type</th><th>Name</th><th>Parameters</th></tr>
 <!-- START_NARROWING_MATCHERS -->
 
-<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('allOf0')"><a name="allOf0Anchor">allOf</a></td><td>Matcher&lt;*&gt;  P1, Matcher&lt;*&gt;  P2</td></tr>
+<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('allOf0')"><a name="allOf0Anchor">allOf</a></td><td>Matcher&lt;*&gt;, ..., Matcher&lt;*&gt;</td></tr>
 <tr><td colspan="4" class="doc" id="allOf0"><pre>Matches if all given matchers match.
 
 Usable as: Any Matcher
 </pre></td></tr>
 
 
-<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('anyOf0')"><a name="anyOf0Anchor">anyOf</a></td><td>Matcher&lt;*&gt;  P1, Matcher&lt;*&gt;  P2</td></tr>
+<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('anyOf0')"><a name="anyOf0Anchor">anyOf</a></td><td>Matcher&lt;*&gt;, ..., Matcher&lt;*&gt;</td></tr>
 <tr><td colspan="4" class="doc" id="anyOf0"><pre>Matches if any of the given matchers matches.
 
 Usable as: Any Matcher
@@ -1991,7 +1999,7 @@ match expressions.</p>
 <tr style="text-align:left"><th>Return type</th><th>Name</th><th>Parameters</th></tr>
 <!-- START_TRAVERSAL_MATCHERS -->
 
-<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('eachOf0')"><a name="eachOf0Anchor">eachOf</a></td><td>Matcher&lt;*&gt;  P1, Matcher&lt;*&gt;  P2</td></tr>
+<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('eachOf0')"><a name="eachOf0Anchor">eachOf</a></td><td>Matcher&lt;*&gt;, ..., Matcher&lt;*&gt;</td></tr>
 <tr><td colspan="4" class="doc" id="eachOf0"><pre>Matches if any of the given matchers matches.
 
 Unlike anyOf, eachOf will generate a match result for each
@@ -2010,22 +2018,7 @@ Usable as: Any Matcher
 </pre></td></tr>
 
 
-<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('findAll0')"><a name="findAll0Anchor">findAll</a></td><td>Matcher&lt;T&gt;  Matcher</td></tr>
-<tr><td colspan="4" class="doc" id="findAll0"><pre>Matches if the node or any descendant matches.
-
-Generates results for each match.
-
-For example, in:
-  class A { class B {}; class C {}; };
-The matcher:
-  recordDecl(hasName("::A"), findAll(recordDecl(isDefinition()).bind("m")))
-will generate results for A, B and C.
-
-Usable as: Any Matcher
-</pre></td></tr>
-
-
-<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('forEach0')"><a name="forEach0Anchor">forEach</a></td><td>Matcher&lt;ChildT&gt;  ChildMatcher</td></tr>
+<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('forEach0')"><a name="forEach0Anchor">forEach</a></td><td>Matcher&lt;*&gt;</td></tr>
 <tr><td colspan="4" class="doc" id="forEach0"><pre>Matches AST nodes that have child AST nodes that match the
 provided matcher.
 
@@ -2043,7 +2036,7 @@ Usable as: Any Matcher
 </pre></td></tr>
 
 
-<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('forEachDescendant0')"><a name="forEachDescendant0Anchor">forEachDescendant</a></td><td>Matcher&lt;DescendantT&gt;  DescendantMatcher</td></tr>
+<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('forEachDescendant0')"><a name="forEachDescendant0Anchor">forEachDescendant</a></td><td>Matcher&lt;*&gt;</td></tr>
 <tr><td colspan="4" class="doc" id="forEachDescendant0"><pre>Matches AST nodes that have descendant AST nodes that match the
 provided matcher.
 
@@ -2067,7 +2060,7 @@ Usable as: Any Matcher
 </pre></td></tr>
 
 
-<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('has0')"><a name="has0Anchor">has</a></td><td>Matcher&lt;ChildT&gt;  ChildMatcher</td></tr>
+<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('has0')"><a name="has0Anchor">has</a></td><td>Matcher&lt;*&gt;</td></tr>
 <tr><td colspan="4" class="doc" id="has0"><pre>Matches AST nodes that have child AST nodes that match the
 provided matcher.
 
@@ -2082,7 +2075,7 @@ Usable as: Any Matcher
 </pre></td></tr>
 
 
-<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('hasAncestor0')"><a name="hasAncestor0Anchor">hasAncestor</a></td><td>Matcher&lt;AncestorT&gt;  AncestorMatcher</td></tr>
+<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('hasAncestor0')"><a name="hasAncestor0Anchor">hasAncestor</a></td><td>Matcher&lt;*&gt;</td></tr>
 <tr><td colspan="4" class="doc" id="hasAncestor0"><pre>Matches AST nodes that have an ancestor that matches the provided
 matcher.
 
@@ -2095,7 +2088,7 @@ Usable as: Any Matcher
 </pre></td></tr>
 
 
-<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('hasDescendant0')"><a name="hasDescendant0Anchor">hasDescendant</a></td><td>Matcher&lt;DescendantT&gt;  DescendantMatcher</td></tr>
+<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('hasDescendant0')"><a name="hasDescendant0Anchor">hasDescendant</a></td><td>Matcher&lt;*&gt;</td></tr>
 <tr><td colspan="4" class="doc" id="hasDescendant0"><pre>Matches AST nodes that have descendant AST nodes that match the
 provided matcher.
 
@@ -2111,7 +2104,7 @@ Usable as: Any Matcher
 </pre></td></tr>
 
 
-<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('hasParent0')"><a name="hasParent0Anchor">hasParent</a></td><td>Matcher&lt;ParentT&gt;  ParentMatcher</td></tr>
+<tr><td>Matcher&lt;*&gt;</td><td class="name" onclick="toggle('hasParent0')"><a name="hasParent0Anchor">hasParent</a></td><td>Matcher&lt;*&gt;</td></tr>
 <tr><td colspan="4" class="doc" id="hasParent0"><pre>Matches AST nodes that have a parent that matches the provided
 matcher.
 
@@ -3305,6 +3298,21 @@ getDecl().
 Usable as: Matcher&lt<a href="http://clang.llvm.org/doxygen/classclang_1_1QualType.html">QualType</a>&gt;, Matcher&lt<a href="http://clang.llvm.org/doxygen/classclang_1_1CallExpr.html">CallExpr</a>&gt;, Matcher&lt<a href="http://clang.llvm.org/doxygen/classclang_1_1CXXConstructExpr.html">CXXConstructExpr</a>&gt;,
   Matcher&lt<a href="http://clang.llvm.org/doxygen/classclang_1_1MemberExpr.html">MemberExpr</a>&gt;, Matcher&lt<a href="http://clang.llvm.org/doxygen/classclang_1_1TypedefType.html">TypedefType</a>&gt;,
   Matcher&lt<a href="http://clang.llvm.org/doxygen/classclang_1_1TemplateSpecializationType.html">TemplateSpecializationType</a>&gt;
+</pre></td></tr>
+
+
+<tr><td>Matcher&lt;T&gt;</td><td class="name" onclick="toggle('findAll0')"><a name="findAll0Anchor">findAll</a></td><td>Matcher&lt;T&gt;  Matcher</td></tr>
+<tr><td colspan="4" class="doc" id="findAll0"><pre>Matches if the node or any descendant matches.
+
+Generates results for each match.
+
+For example, in:
+  class A { class B {}; class C {}; };
+The matcher:
+  recordDecl(hasName("::A"), findAll(recordDecl(isDefinition()).bind("m")))
+will generate results for A, B and C.
+
+Usable as: Any Matcher
 </pre></td></tr>
 
 
