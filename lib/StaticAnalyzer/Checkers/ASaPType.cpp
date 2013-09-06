@@ -17,6 +17,7 @@
 #include "clang/AST/CXXInheritance.h"
 
 #include "ASaPUtil.h"
+#include "ASaPSymbolTable.h"
 #include "ASaPType.h"
 #include "Effect.h"
 #include "Rpl.h"
@@ -51,6 +52,21 @@ isDerivedFrom(QualType Derived, QualType Base) {
   //OSv2 << "Result:" << Result << "\n";
   return Result;
 }
+
+QualType ASaPType::deref(QualType QT, int DerefNum, ASTContext &Ctx)
+{
+  QualType Result = QT;
+  assert(DerefNum>=-1 && "DerefNum should never be smaller than -1");
+  if(DerefNum == -1) {
+    Result = Ctx.getPointerType(QT);
+  } else while (DerefNum > 0) {
+    assert(Result->isPointerType());
+    Result = Result->getPointeeType();
+    DerefNum--;
+  }
+  return Result;
+}
+
 
 // Non-Static Functions
 void ASaPType::adjust() {
@@ -151,6 +167,7 @@ ASaPType *ASaPType::getReturnType() {
   if (QT->isFunctionType()) {
     const FunctionType *FT = QT->getAs<FunctionType>();
     QT = FT->getResultType();
+    InheritanceMap = SymbolTable::Table->getInheritanceMap(QT);
     adjust();
     return this;
   } else {
@@ -171,6 +188,8 @@ void ASaPType::arraySubscript() {
 }
 
 void ASaPType::deref(int DerefNum) {
+  OSv2 << "DEBUG::<ASaPType::deref> DerefNum = "
+       << DerefNum << "\n";
   assert(DerefNum >= 0);
   if (DerefNum == 0)
     return;
@@ -183,8 +202,8 @@ void ASaPType::deref(int DerefNum) {
     } else if (QT->isArrayType()) {
       QT = QT->getAsArrayTypeUnsafe()->getElementType();
     } else {
-      assert(false && "unexpected ArraySubscriptExpr on "
-                       "type that is not a pointer or an array");
+      OSv2 << "DEBUG:: QT = " << QT.getAsString() << "\n";
+      assert(false && "trying to dereference unexpected QualType");
     }
 
     // if the dereferenced type is scalar (including pointers),
@@ -201,6 +220,10 @@ void ASaPType::deref(int DerefNum) {
 
 void ASaPType::addrOf(QualType RefQT) {
   assert(RefQT->isPointerType() || RefQT->isReferenceType());
+  if (!areUnqualQTsEqual(this->QT, RefQT->getPointeeType())) {
+    OSv2 << "DEBUG:: ASaPType::addrOf(): Ref Type: " << RefQT.getAsString() << "\n";
+    OSv2 << "DEBUG:: ASaPType::addrOf(): Ptr Type: " << QT.getAsString() << "\n";
+  }
   assert(areUnqualQTsEqual(this->QT, RefQT->getPointeeType()));
   this->QT = RefQT;
 
@@ -230,6 +253,7 @@ std::string ASaPType::toString(ASTContext &Ctx) const {
   else
     OS << "IN:<empty>";
   OS << ", ArgV:" << ArgV->toString();
+  OS << ", IMap(" << InheritanceMap << ")";
   return std::string(OS.str());
 }
 
@@ -243,6 +267,7 @@ std::string ASaPType::toString() const {
   else
     OS << "IN:<empty>";
   OS << ", ArgV:" << ArgV->toString();
+  OS << ", IMap(" << InheritanceMap << ")";
   return std::string(OS.str());
 }
 
@@ -339,6 +364,7 @@ bool ASaPType::implicitCastToBase(QualType BaseQT, SymbolTable &SymT) {
     assert(CurrMap);
     //get Sub
     QualType DirectBaseQT = I->Base->getType();
+    OSv2 << "DEBUG:: DirectBaseQT=" << DirectBaseQT.getAsString() << "\n";
 
     const RecordType *BaseRT = DirectBaseQT->getAs<RecordType>();
     assert(BaseRT);

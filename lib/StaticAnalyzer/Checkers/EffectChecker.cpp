@@ -476,40 +476,45 @@ void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
     return; // Do not visit if this is dependent type
 
   OS << "DEBUG:: VisitCallExpr\n";
-  Decl *D = Exp->getCalleeDecl();
-  assert(D);
 
-  /// 1. Visit Arguments w. Read semantics
-  {
-    SaveAndRestore<bool> VisitWithReadSemantics(HasWriteSemantics, false);
-    for(ExprIterator I = Exp->arg_begin(), E = Exp->arg_end();
-        I != E; ++I) {
-      Visit(*I);
+  if (isa<CXXPseudoDestructorExpr>(Exp->getCallee())) {
+    Visit(Exp->getCallee());
+  } else {
+    Decl *D = Exp->getCalleeDecl();
+    assert(D);
+
+    /// 1. Visit Arguments w. Read semantics
+    {
+      SaveAndRestore<bool> VisitWithReadSemantics(HasWriteSemantics, false);
+      for(ExprIterator I = Exp->arg_begin(), E = Exp->arg_end();
+          I != E; ++I) {
+        Visit(*I);
+      }
     }
-  }
 
-  const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
-  // TODO we shouldn't give up like this below, but doing this for now
-  // to see how to fix this here problem...
-  // FD could be null in the case of a dependent type in a template
-  // uninstantiated (i.e., parametric) code.
-  //assert(FD);
-  if (!FD)
-    return;
-  SubstitutionVector SubV;
-  // Set up Substitution Vector
-  const ParameterVector *FD_ParamV = SymT.getParameterVector(FD);
-  if (FD_ParamV && FD_ParamV->size() > 0) {
-    buildParamSubstitutions(FD, Exp->arg_begin(),
-                            Exp->arg_end(), *FD_ParamV, SubV);
-  }
+    const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
+    // TODO we shouldn't give up like this below, but doing this for now
+    // to see how to fix this here problem...
+    // FD could be null in the case of a dependent type in a template
+    // uninstantiated (i.e., parametric) code.
+    //assert(FD);
+    if (!FD)
+      return;
+    SubstitutionVector SubV;
+    // Set up Substitution Vector
+    const ParameterVector *FD_ParamV = SymT.getParameterVector(FD);
+    if (FD_ParamV && FD_ParamV->size() > 0) {
+      buildParamSubstitutions(FD, Exp->arg_begin(),
+                              Exp->arg_end(), *FD_ParamV, SubV);
+    }
 
-  /// 2. Add effects to tmp effects
-  int EffectCount = copyAndPushFunctionEffects(FD, SubV);
-  /// 3. Visit base if it exists
-  Visit(Exp->getCallee());
-  /// 4. Check coverage
-  checkEffectCoverage(Exp, D, EffectCount);
+    /// 2. Add effects to tmp effects
+    int EffectCount = copyAndPushFunctionEffects(FD, SubV);
+    /// 3. Visit base if it exists
+    Visit(Exp->getCallee());
+    /// 4. Check coverage
+    checkEffectCoverage(Exp, D, EffectCount);
+  }
 }
 
 void EffectCollectorVisitor::
@@ -563,6 +568,16 @@ VisitCXXDeleteExpr(CXXDeleteExpr *Exp) {
   } // FIXME what about delete [] Expr (arrays) ?
   */
 }
+
+void EffectCollectorVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
+  OS << "DEBUG<EffectCollectorVisitor>:: Visiting C++ 'new' Expression!! ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+
+  SaveAndRestore<int> VisitWithZeroDeref(DerefNum, 0);
+  VisitChildren(Exp);
+}
+
 
 // End Visitors
 //////////////////////////////////////////////////////////////////////////

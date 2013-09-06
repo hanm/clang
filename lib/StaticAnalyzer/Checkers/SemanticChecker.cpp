@@ -88,8 +88,11 @@ addASaPTypeToMap(ValueDecl *ValD, ASaPType *T) {
     OS << "\n";
     // This is an error
     OS << "DEBUG:: D(" << ValD << ") has type " << SymT.getType(ValD)->toString() << "\n";
+    OS << "DEBUG:: Trying to add Type    " << T->toString() << "\n";
+    delete T;
     return; // Do Nothing.
   }
+
   assert(!SymT.hasType(ValD));
   if (T) {
     OS << "Debug :: adding type: " << T->toString(Ctx) << " to Decl: ";
@@ -107,16 +110,19 @@ void ASaPSemanticCheckerTraverser::
 addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
 
   ///FIXME: Temporary fix for CLANG AST visitor problem
-  if (SymT.hasType(ValD)) {
-    OS << "ERROR!! Type already in symbol table while in addASaPTypeToMap:";
+  /*if (SymT.hasType(ValD)) {
+    OS << "ERROR!!! Type already in symbol table while in addASaPTypeToMap:";
     ValD->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
     // This is an error
     OS << "DEBUG:: D(" << ValD << ") has type " << SymT.getType(ValD)->toString() << "\n";
+    OS << "DEBUG:: Trying to add Type " << T->toString() << "\n";
+    delete RplV;
+    delete InRpl;
     return; // Do Nothing.
-  }
+  }*/
 
-  assert(!SymT.hasType(ValD));
+  //assert(!SymT.hasType(ValD));
   const InheritanceMapT *IMap = SymT.getInheritanceMap(ValD);
   ASaPType *T = new ASaPType(ValD->getType(), IMap, RplV, InRpl);
   OS << "DEBUG:: D->getType() = ";
@@ -361,14 +367,17 @@ checkTypeRegionArgs(ValueDecl *D, const Rpl *DefaultInRpl) {
   ResultTriplet ResTriplet = SymT.getRegionParamCount(QT);
   ResultKind ResKin = ResTriplet.ResKin;
 
-  assert(ResKin != RK_NOT_VISITED); // Make sure we are not using recursion
+  //assert(ResKin != RK_NOT_VISITED); // Make sure we are not using recursion
   if (ResKin == RK_NOT_VISITED) {
     assert(ResTriplet.DeclNotVis);
     OS << "DEBUG:: DeclNotVisited : ";
     ResTriplet.DeclNotVis->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
+    OS << "DEBUG:: nameAsString:: " << ResTriplet.DeclNotVis->getNameAsString() << "\n";
     ResTriplet.DeclNotVis->dump(OS);
     OS << "\n";
+    assert(!ResTriplet.DeclNotVis->getNameAsString().compare("__va_list_tag")
+           && "Only expect __va_list_tag decl not to be visited here");
     // Calling visitor on the Declaration which has not yet been visited
     // to learn how many region parameters this type takes.
     VisitRecordDecl(ResTriplet.DeclNotVis);

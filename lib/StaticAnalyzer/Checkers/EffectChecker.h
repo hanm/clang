@@ -104,6 +104,7 @@ public:
 
   void VisitArraySubscriptExpr(ArraySubscriptExpr *E);
   void VisitCXXDeleteExpr(CXXDeleteExpr *E);
+  void VisitCXXNewExpr(CXXNewExpr *E);
 }; // End class StmtVisitor.
 } // End namespace asap.
 } // End namespace clang.

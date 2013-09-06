@@ -20,6 +20,7 @@
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/Type.h"
+#include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "llvm/Support/SaveAndRestore.h"
 
 #include "ASaPUtil.h"
@@ -120,10 +121,13 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
 
         OS << "DEBUG:: TypecheckDeclWithInit: Decl = ";
         VD->print(OS,  Ctx.getPrintingPolicy());
+        OS << "\n VarDecl isDependentType ? "
+          << (VD->getType()->isDependentType() ? "true" : "false") << "\n";
         OS << "\n Init Expr = ";
         Init->printPretty(OS, 0, Ctx.getPrintingPolicy());
         OS << "\n";
-        //Init->dump(OS, BR.getSourceManager());
+        Init->dump(OS, BR.getSourceManager());
+        OS << "\n";
 
         OS << "DEBUG:: IsDirectInit = "
            << (VD->isDirectInit()?"true":"false")
@@ -140,6 +144,9 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
         case VarDecl::CallInit:
           OS << "CallInit\n";
           CXXConstructExpr *Exp = dyn_cast<CXXConstructExpr>(VD->getInit());
+          if (VD->getType()->isDependentType() && !Exp)
+            break; // VD->getInit() could be a ParenListExpr or perhaps some
+                   // other Expr
           assert(Exp);
           assert(!SubV);
           SubV = new SubstitutionVector();
@@ -160,10 +167,12 @@ typecheck(const ASaPType *LHSType, const ASaPType *RHSType, bool IsInit) {
   if (!RHSType)
     return true; // RHS has no region info && Clang has done typechecking
   else { // RHSType != null
-    if (LHSType)
-      return RHSType->isAssignableTo(*LHSType, SymT, Ctx, IsInit);
-    else
-      return false;
+    OS << "DEBUG:: RHS isDependentType? "
+       << (RHSType->getQT()->isDependentType() ? "true" : "false") << "\n";
+    OS << "DEBUG:: LHS isDependentType? "
+       << (LHSType->getQT()->isDependentType() ? "true" : "false") << "\n";
+
+    return RHSType->isAssignableTo(*LHSType, SymT, Ctx, IsInit);
   }
 }
 
@@ -254,6 +263,9 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
 void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   if (!Ret->getRetValue())
     return; // this is a 'return' statement with no return expression
+
+  if (Def->getType()->isDependentType())
+    return; // do nothing if the function is a template.
 
   Expr *RetExp = Ret->getRetValue();
   OS << "DEBUG:: Visiting ReturnStmt (" << Ret << "). RetExp ("
@@ -364,13 +376,32 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
   }
 
   OS << "DEBUG:: CALLING typecheckParamAssignments\n";
-  FunctionDecl::param_iterator ParamI, ParamE;
-  for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
-      ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
+  FunctionDecl::param_iterator
+    ParamI = CalleeDecl->param_begin(),
+    ParamE = CalleeDecl->param_end();
+
+  if (CalleeDecl->isOverloadedOperator()) {
+    if (isa<CXXMethodDecl>(CalleeDecl)) {
+      // if the overloaded operator is a member function, it's 1st
+      // (implicit) argument is 'this' which doesn't have a corresponding
+      // parameter, so skip it!
+      assert(ArgI!=ArgE);
+      OS << "DEBUG:: Callee is Overloaded Operator -> skipping 1st arg:";
+      ArgI->printPretty(OS, 0, Ctx.getPrintingPolicy());
+      OS << ", with Type: " << ArgI->getType().getAsString();
+      OS << "\n";
+      ++ArgI;
+    }
+  }
+  for(; ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
     Expr *ArgExpr = *ArgI;
     ParmVarDecl *ParamDecl = *ParamI;
     typecheckSingleParamAssignment(ParamDecl, ArgExpr, SubV);
   }
+  //assert(ParamI=ParamE); // there may be parameters w. default values
+  // FIXME assert that remaining params take default args.
+  if (!CalleeDecl->isVariadic())
+    assert(ArgI==ArgE);
   OS << "DEBUG:: DONE with typecheckParamAssignments\n";
 }
 
@@ -421,14 +452,29 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   OS << "DEBUG:: typecheckCallExpr: ";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-  //OS << "DEBUG:: Expr:";
+  OS << "DEBUG:: Expr:";
   //Exp->dump(OS, BR.getSourceManager());
-  //OS << "\n";
+  Exp->dump();
+  OS << "\n";
+
+  OS << "DEBUG:: CalleeExpr:";
+  Exp->getCallee()->dump();
+  OS << "\n";
+
   if (Exp->getType()->isDependentType())
     return; // Don't check
 
+  // First Visit/typecheck potential sub-assignments in base expression
+  BaseTypeBuilderVisitor TBV(VB, Def, Exp->getCallee());
+
+  if (isa<CXXPseudoDestructorExpr>(Exp->getCallee()))
+    return; // Don't check if this is a pseudo destructor.
+
   Decl *D = Exp->getCalleeDecl();
   assert(D);
+  OS << "DEBUG:: CalleeDecl: ";
+  D->print(OS, Ctx.getPrintingPolicy());
+  OS << "\n";
 
   FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
   // TODO we shouldn't give up like this below, but doing this for now
@@ -450,8 +496,6 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   RecordDecl *ClassDecl = dyn_cast<RecordDecl>(DC);
   // ClassDecl is allowed to be null
 
-  BaseTypeBuilderVisitor TBV(VB, Def, Exp->getCallee());
-
   // Build substitution
   const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
   if (ParamV && ParamV->size() > 0) {
@@ -468,7 +512,14 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
       SubV.push_back(&Sub);
     }
   }
-
+  unsigned NumArgs = Exp->getNumArgs();
+  unsigned NumParams = FD->getNumParams();
+  OS << "DEBUG:: NumArgs=" << NumArgs << ", NumParams=" << NumParams << "\n";
+  OS << "DEBUG:: isOverloadedOperator: " << (FD->isOverloadedOperator() ? "true":"false")
+     << ", isVariadic: " << (FD->isVariadic() ? "true" : "false") << "\n";
+  assert(FD->isVariadic() || NumParams == NumArgs ||
+         NumParams+((FD->isOverloadedOperator()) ? 1 : 0) == NumArgs &&
+         "Unexpected number of arguments to a call expresion");
   typecheckParamAssignments(FD, Exp->arg_begin(), Exp->arg_end(), SubV);
   OS << "DEBUG:: DONE typecheckCallExpr\n";
 
@@ -591,6 +642,12 @@ void TypeBuilderVisitor::setType(const ASaPType *T) {
 
   assert(!Type && "Type must be null");
   Type = new ASaPType(*T); // make a copy
+
+  if (Type->getQT()->isReferenceType()) {
+      OS << "DEBUG::<TypeBuilderVisitor::setType> Type->isReferenceType()==true\n";
+      Type->deref();
+  }
+
   if (DerefNum == -1)
     Type->addrOf(RefQT);
   else {
@@ -607,8 +664,9 @@ void TypeBuilderVisitor::setType(const ValueDecl *D) {
   //OS << "\n Decl pointer address:" << D;
   OS << "\n";
   const ASaPType *T = SymT.getType(D);
-  if (T)
+  if (T) {
     setType(T);
+  }
 }
 
 void TypeBuilderVisitor::helperVisitLogicalExpression(Expr *Exp) {
@@ -625,16 +683,36 @@ void TypeBuilderVisitor::helperVisitLogicalExpression(Expr *Exp) {
   }
 }
 
-void TypeBuilderVisitor::helperBinAddSub(Expr *LHS, Expr* RHS) {
-  OS << "DEBUG:: helperBinAddSub\n";
-  Visit(LHS);
-  ASaPType *T = stealType();
-  Visit(RHS);
-  if (Type)
-    Type->join(T);
-  else
-    Type = T;
-  // memory leak? do we need to dealloc T?
+void TypeBuilderVisitor::helperBinAddSub(BinaryOperator* Exp) {
+  TypeBuilderVisitor ASVL(VB, Def, Exp->getLHS());
+  TypeBuilderVisitor ASVR(VB, Def, Exp->getRHS());
+  QualType QT = Exp->getType();
+  OS << "DEBUG::<TypeBuilder::helperBinAddSub> Type:" << QT.getAsString()
+     << "\n";
+
+  if (QT->isDependentType()){
+    clearType();
+    return; // do nothing
+  } else if(QT->isPointerType()) {
+    // find which of the two sides is a pointer type and use that
+    const ASaPType *LHSType = ASVL.getType();
+    if (LHSType && LHSType->getQT()->isPointerType()) {
+      assert(!Type);
+      Type = ASVL.stealType();
+      return;
+    } //else
+
+    const ASaPType *RHSType = ASVL.getType();
+    if (RHSType && RHSType->getQT()->isPointerType()) {
+      assert(!Type);
+      Type = ASVR.stealType();
+      return;
+    } //else
+    assert(false && "expression evaluates to pointer but neither "
+           "side (LHS or RHS) returned a valid pointer type");
+  } else if (QT->isScalarType()) { // but isn't pointer type
+    return; // do nothing (we could also build a default Type in Local)
+  }
 }
 
 
@@ -677,7 +755,8 @@ void TypeBuilderVisitor::VisitUnaryAddrOf(UnaryOperator *Exp)  {
   OS << "\n";
 
   RefQT = Exp->getType();
-  assert(RefQT->isPointerType() && "Must be a pointer type here");
+  assert(RefQT->isDependentType() || RefQT->isPointerType()
+         && "Must be a pointer type or a dependent type here");
 
   Visit(Exp->getSubExpr());
 }
@@ -823,6 +902,7 @@ void TypeBuilderVisitor::VisitMemberExpr(MemberExpr *Exp) {
 // BO_Comma
 void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
   OS << "Visiting Operator " << Exp->getOpcodeStr() << "\n";
+  OS << "Expression Type:" << Exp->getType().getAsString() << "\n";
   if (Exp->isPtrMemOp()) {
     // TODO
     OS << "DEBUG: iz a PtrMemOp!! ";
@@ -831,12 +911,12 @@ void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
     VisitChildren(Exp);
   } else if (Exp->isMultiplicativeOp()) {
     // TODO
-    helperBinAddSub(Exp->getLHS(), Exp->getRHS());
+    helperBinAddSub(Exp);
   } else if (Exp->isAdditiveOp()) {
-    helperBinAddSub(Exp->getLHS(), Exp->getRHS());
+    helperBinAddSub(Exp);
   } else if (Exp->isBitwiseOp()) {
     // TODO
-    helperBinAddSub(Exp->getLHS(), Exp->getRHS());
+    helperBinAddSub(Exp);
   } else if (Exp->isComparisonOp() || Exp->isLogicalOp()) {
     // BO_LT || ... || BO_NE
     helperVisitLogicalExpression(Exp);
@@ -855,7 +935,7 @@ void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
   } else {
     // CommaOp
     Visit(Exp->getRHS()); // visit to typeckeck possible assignments
-    delete Type; Type = 0; // discard results
+    clearType();
     Visit(Exp->getLHS());
   }
 }
@@ -912,7 +992,7 @@ void TypeBuilderVisitor::VisitCallExpr(CallExpr *Exp) {
   // Call AssignmentChecker recursively
   AssignmentCheckerVisitor ACV(VB, Def, Exp);
 
-  OS << "DEBUG:: isBase = " << IsBase << "\n";
+  OS << "DEBUG::<TypeBuilder::VisitCallExpr> isBase = " << IsBase << "\n";
   ASaPType *T = ACV.getType();
   if (T) {
     if (IsBase) {
@@ -957,10 +1037,7 @@ void TypeBuilderVisitor::VisitExplicitCastExpr(ExplicitCastExpr *Exp) {
   OS << "DEBUG<TypeBuilder>:: Cast Kind Type : " << Exp->getType().getAsString()
      << "\n";
 
-  if (Type) {
-    delete Type;
-    Type = 0;
-  }
+  clearType();
   // do not visit sub-expression
 }
 
@@ -970,7 +1047,10 @@ void TypeBuilderVisitor::VisitImplicitCastExpr(ImplicitCastExpr *Exp) {
   OS << "\n";
   OS << "DEBUG<TypeBuilder>:: Cast Kind Name : " << Exp->getCastKindName()
      << "\n";
-  OS << "DEBUG<TypeBuilder>:: Cast Kind Type : " << Exp->getType().getAsString()
+  OS << "DEBUG<TypeBuilder>:: Cast To Type   : " << Exp->getType().getAsString()
+     << "\n";
+  OS << "DEBUG<TypeBuilder>:: Cast From Type : "
+     << Exp->getSubExpr()->getType().getAsString()
      << "\n";
 
   Visit(Exp->getSubExpr());
@@ -998,11 +1078,32 @@ void TypeBuilderVisitor::VisitImplicitCastExpr(ImplicitCastExpr *Exp) {
       OS << "DEBUG:: ImplicitCast: Setting QT to " << CastQT.getAsString() << "\n";
       OS << "DEBUG:: Type = " << Type->toString() << "\n";
       break;
+    case CK_ArrayToPointerDecay:
+      {
+        QualType AdjustedCastQT = ASaPType::deref(CastQT, DerefNum, Ctx);
+        OS << "DEBUG:: ImplicitCast: Setting QT to " << AdjustedCastQT.getAsString() << "\n";
+        OS << "DEBBG:: DerefNum=" << DerefNum << ", CastQT=" << CastQT.getAsString() << "\n";
+        OS << "DEBUG:: Type = " << Type->toString() << "\n";
+
+        Type->setQT(AdjustedCastQT);
+        // In RPL of array is empty because it is immutable
+      }
+      break;
     case CK_PointerToBoolean:
       Type->setQT(CastQT);
       Type->dropArgV();
       OS << "DEBUG:: ImplicitCast: Setting QT to " << CastQT.getAsString() << "\n";
       OS << "DEBUG:: Type = " << Type->toString() << "\n";
+    case CK_BitCast:
+      // FIXME TODO
+      // when casting to void*, we should drop the region args of the target type.
+      if (CastQT->isVoidPointerType()) {
+        // FIXME: here we should alsto take care of void **, void ***, ...
+        Type->setQT(CastQT);
+        Type->dropArgV();
+        OS << "DEBUG:: ImplicitCast: Setting QT to " << CastQT.getAsString() << "\n";
+        OS << "DEBUG:: Type = " << Type->toString() << "\n";
+      }
     default:
       // do nothing;
       break;
@@ -1017,11 +1118,52 @@ void TypeBuilderVisitor::VisitVAArgExpr(VAArgExpr *Exp) {
 
   // Treat like malloc or new as a fresh memory whose region(s)
   // depend on the LHS of the assignment.
-  if (Type) {
-    delete Type;
-    Type = 0;
-  }
+  clearType();
   // do not visit sub-expression
+}
+
+void TypeBuilderVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
+  OS << "DEBUG<TypeBuilder>:: Visiting C++ 'new' Expression!! ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+
+  {
+    SaveAndRestore<int> VisitWithZeroDeref(DerefNum, 0);
+    VisitChildren(Exp);
+  }
+
+  // FIXME: Set up Type properly and use it for typechecking
+  clearType();
+}
+
+void TypeBuilderVisitor::VisitAtomicExpr(AtomicExpr *Exp) {
+  OS << "DEBUG<TypeBuilder>:: Visiting AtomicExpr:";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  for (unsigned int i = 0; i < Exp->getNumSubExprs(); i++) {
+    OS << "DEBUG:: Atomic Expr[" << i << "]=";
+    Expr *SubExp = Exp->getSubExprs()[i];
+    SubExp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+    OS << "\n";
+    TypeBuilderVisitor TBV(VB, Def, SubExp);
+  }
+  assert(!Type);
+  // TODO: infer region arguments of "return type"
+  QualType AtomicQT = Exp->getType();
+  OS << "DEBUG:: AtomicQT =" << AtomicQT.getAsString() << "\n";
+  Type = new ASaPType(AtomicQT, 0, 0, 0, true);
+}
+
+// Takes care of SizeOf, AlignOf, and VecStep expressions
+void TypeBuilderVisitor::
+VisitUnaryExprOrTypeTraitExpr(UnaryExprOrTypeTraitExpr *Exp) {
+  if (!Exp->isArgumentType()) {
+    TypeBuilderVisitor TBV(VB, Def, Exp->getArgumentExpr());
+  }
+
+  assert(!Type);
+  // TODO build proper local temp type
+  Type = new ASaPType(Exp->getType(), 0, 0, 0, true);
 }
 
 //////////////////////////////////////////////////////////////////////////
