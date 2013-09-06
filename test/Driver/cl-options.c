@@ -36,6 +36,12 @@
 // RUN: %clang_cl /Od -### -- %s 2>&1 | FileCheck -check-prefix=Od %s
 // Od: -O0
 
+// RUN: %clang_cl /Oi- /Oi -### -- %s 2>&1 | FileCheck -check-prefix=Oi %s
+// Oi-NOT: -fno-builtin
+
+// RUN: %clang_cl /Oi- -### -- %s 2>&1 | FileCheck -check-prefix=Oi_ %s
+// Oi_: -fno-builtin
+
 // RUN: %clang_cl /Os -### -- %s 2>&1 | FileCheck -check-prefix=Os %s
 // Os: -Os
 
@@ -52,6 +58,9 @@
 
 // RUN: %clang_cl /P -### -- %s 2>&1 | FileCheck -check-prefix=P %s
 // P: -E
+
+// RUN: %clang_cl /showIncludes -### -- %s 2>&1 | FileCheck -check-prefix=showIncludes %s
+// showIncludes: --show-includes
 
 // RUN: %clang_cl /Umymacro -### -- %s 2>&1 | FileCheck -check-prefix=U %s
 // RUN: %clang_cl /U mymacro -### -- %s 2>&1 | FileCheck -check-prefix=U %s
@@ -79,16 +88,30 @@
 // RUN: %clang_cl /Zs -### -- %s 2>&1 | FileCheck -check-prefix=Zs %s
 // Zs: -fsyntax-only
 
+// We forward any unrecognized -W diagnostic options to cc1.
+// RUN: %clang_cl -Wunused-pragmas -### -- %s 2>&1 | FileCheck -check-prefix=WJoined %s
+// WJoined: "-cc1"
+// WJoined: "-Wunused-pragmas"
 
 // Ignored options. Check that we don't get "unused during compilation" errors.
 // (/Zs is for syntax-only, /WX is for -Werror)
 // RUN: %clang_cl /Zs /WX /analyze- /errorReport:foo /nologo /Ob1 /Ob2 -- %s
-// RUN: %clang_cl /Zs /WX /Zc:forScope /Zc:wchar_t -- %s
+// RUN: %clang_cl /Zs /WX /Zc:forScope /Zc:wchar_t /wd1234 -- %s
+
+// Support ignoring warnings about unused arguments.
+// RUN: %clang_cl /Abracadabra -Qunused-arguments -### -- %s 2>&1 | FileCheck -check-prefix=UNUSED %s
+// UNUSED-NOT: warning
 
 
 // Unsupported but parsed options. Check that we don't error on them.
 // (/Zs is for syntax-only)
-// RUN: %clang_cl /Zs /EHsc /Fdfoo /Fobar /fp:precise /Gd /GL /GL- -- %s 2>&1
-// RUN: %clang_cl /Zs /Gm /Gm- /GS /Gy /Gy- /GZ /MD /MT /MDd /MTd /Oi -- %s 2>&1
+// RUN: %clang_cl /Zs /EHsc /Fdfoo /fp:precise /Gd /GL /GL- -- %s 2>&1
+// RUN: %clang_cl /Zs /Gm /Gm- /GS /Gy /Gy- /GZ -- %s 2>&1
 // RUN: %clang_cl /Zs /RTC1 /wfoo /Zc:wchar_t- -- %s 2>&1
-// RUN: %clang_cl /Zs /ZI /Zi /showIncludes -- %s 2>&1
+// RUN: %clang_cl /Zs /ZI /Zi /MP -- %s 2>&1
+
+
+// We support -Xclang for forwarding options to cc1.
+// RUN: %clang_cl -Xclang hellocc1 -### -- %s 2>&1 | FileCheck -check-prefix=Xclang %s
+// Xclang: "-cc1"
+// Xclang: "hellocc1"

@@ -412,7 +412,7 @@ class CodeGenModule : public CodeGenTypeCache {
 
   GlobalDecl initializedGlobalDecl;
 
-  llvm::SpecialCaseList SanitizerBlacklist;
+  llvm::OwningPtr<llvm::SpecialCaseList> SanitizerBlacklist;
 
   const SanitizerOptions &SanOpts;
 
@@ -519,7 +519,12 @@ public:
   CodeGenTypes &getTypes() { return Types; }
  
   CodeGenVTables &getVTables() { return VTables; }
+
   VTableContext &getVTableContext() { return VTables.getVTableContext(); }
+
+  MicrosoftVFTableContext &getVFTableContext() {
+    return VTables.getVFTableContext();
+  }
 
   llvm::MDNode *getTBAAInfo(QualType QTy);
   llvm::MDNode *getTBAAInfoForVTablePtr();
@@ -852,17 +857,11 @@ public:
 
   /// ErrorUnsupported - Print out an error that codegen doesn't support the
   /// specified stmt yet.
-  /// \param OmitOnError - If true, then this error should only be emitted if no
-  /// other errors have been reported.
-  void ErrorUnsupported(const Stmt *S, const char *Type,
-                        bool OmitOnError=false);
+  void ErrorUnsupported(const Stmt *S, const char *Type);
 
   /// ErrorUnsupported - Print out an error that codegen doesn't support the
   /// specified decl yet.
-  /// \param OmitOnError - If true, then this error should only be emitted if no
-  /// other errors have been reported.
-  void ErrorUnsupported(const Decl *D, const char *Type,
-                        bool OmitOnError=false);
+  void ErrorUnsupported(const Decl *D, const char *Type);
 
   /// SetInternalFunctionAttributes - Set the attributes on the LLVM
   /// function for the given decl and function info. This applies
@@ -972,7 +971,7 @@ public:
   void AddGlobalAnnotations(const ValueDecl *D, llvm::GlobalValue *GV);
 
   const llvm::SpecialCaseList &getSanitizerBlacklist() const {
-    return SanitizerBlacklist;
+    return *SanitizerBlacklist;
   }
 
   const SanitizerOptions &getSanOpts() const { return SanOpts; }

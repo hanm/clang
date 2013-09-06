@@ -25,6 +25,7 @@
 #include "clang/AST/StmtObjC.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Analysis/Analyses/CFGReachabilityAnalysis.h"
+#include "clang/Analysis/Analyses/Consumed.h"
 #include "clang/Analysis/Analyses/ReachableCode.h"
 #include "clang/Analysis/Analyses/ThreadSafety.h"
 #include "clang/Analysis/Analyses/UninitializedValues.h"
@@ -1241,12 +1242,8 @@ private:
 };
 }
 
-
-//===----------------------------------------------------------------------===//
-// -Wthread-safety
-//===----------------------------------------------------------------------===//
 namespace clang {
-namespace thread_safety {
+namespace {
 typedef SmallVector<PartialDiagnosticAt, 1> OptionalNotes;
 typedef std::pair<PartialDiagnosticAt, OptionalNotes> DelayedDiag;
 typedef std::list<DelayedDiag> DiagList;
@@ -1261,7 +1258,13 @@ struct SortDiagBySourceLocation {
     return SM.isBeforeInTranslationUnit(left.first.first, right.first.first);
   }
 };
+}}
 
+//===----------------------------------------------------------------------===//
+// -Wthread-safety
+//===----------------------------------------------------------------------===//
+namespace clang {
+namespace thread_safety {
 namespace {
 class ThreadSafetyReporter : public clang::thread_safety::ThreadSafetyHandler {
   Sema &S;
@@ -1412,6 +1415,99 @@ class ThreadSafetyReporter : public clang::thread_safety::ThreadSafetyHandler {
 }
 
 //===----------------------------------------------------------------------===//
+// -Wconsumed
+//===----------------------------------------------------------------------===//
+
+namespace clang {
+namespace consumed {
+namespace {
+class ConsumedWarningsHandler : public ConsumedWarningsHandlerBase {
+  
+  Sema &S;
+  DiagList Warnings;
+  
+public:
+  
+  ConsumedWarningsHandler(Sema &S) : S(S) {}
+  
+  void emitDiagnostics() {
+    Warnings.sort(SortDiagBySourceLocation(S.getSourceManager()));
+    
+    for (DiagList::iterator I = Warnings.begin(), E = Warnings.end();
+         I != E; ++I) {
+      
+      const OptionalNotes &Notes = I->second;
+      S.Diag(I->first.first, I->first.second);
+      
+      for (unsigned NoteI = 0, NoteN = Notes.size(); NoteI != NoteN; ++NoteI) {
+        S.Diag(Notes[NoteI].first, Notes[NoteI].second);
+      }
+    }
+  }
+  
+  void warnReturnTypestateForUnconsumableType(SourceLocation Loc,
+                                              StringRef TypeName) {
+    PartialDiagnosticAt Warning(Loc, S.PDiag(
+      diag::warn_return_typestate_for_unconsumable_type) << TypeName);
+    
+    Warnings.push_back(DelayedDiag(Warning, OptionalNotes()));
+  }
+  
+  void warnReturnTypestateMismatch(SourceLocation Loc, StringRef ExpectedState,
+                                   StringRef ObservedState) {
+                                    
+    PartialDiagnosticAt Warning(Loc, S.PDiag(
+      diag::warn_return_typestate_mismatch) << ExpectedState << ObservedState);
+    
+    Warnings.push_back(DelayedDiag(Warning, OptionalNotes()));
+  }
+  
+  void warnUnnecessaryTest(StringRef VariableName, StringRef VariableState,
+                           SourceLocation Loc) {
+
+    PartialDiagnosticAt Warning(Loc, S.PDiag(diag::warn_unnecessary_test) <<
+                                 VariableName << VariableState);
+    
+    Warnings.push_back(DelayedDiag(Warning, OptionalNotes()));
+  }
+  
+  void warnUseOfTempWhileConsumed(StringRef MethodName, SourceLocation Loc) {
+                                                    
+    PartialDiagnosticAt Warning(Loc, S.PDiag(
+      diag::warn_use_of_temp_while_consumed) << MethodName);
+    
+    Warnings.push_back(DelayedDiag(Warning, OptionalNotes()));
+  }
+  
+  void warnUseOfTempInUnknownState(StringRef MethodName, SourceLocation Loc) {
+  
+    PartialDiagnosticAt Warning(Loc, S.PDiag(
+      diag::warn_use_of_temp_in_unknown_state) << MethodName);
+    
+    Warnings.push_back(DelayedDiag(Warning, OptionalNotes()));
+  }
+  
+  void warnUseWhileConsumed(StringRef MethodName, StringRef VariableName,
+                            SourceLocation Loc) {
+  
+    PartialDiagnosticAt Warning(Loc, S.PDiag(diag::warn_use_while_consumed) <<
+                                MethodName << VariableName);
+    
+    Warnings.push_back(DelayedDiag(Warning, OptionalNotes()));
+  }
+  
+  void warnUseInUnknownState(StringRef MethodName, StringRef VariableName,
+                             SourceLocation Loc) {
+
+    PartialDiagnosticAt Warning(Loc, S.PDiag(diag::warn_use_in_unknown_state) <<
+                                MethodName << VariableName);
+    
+    Warnings.push_back(DelayedDiag(Warning, OptionalNotes()));
+  }
+};
+}}}
+
+//===----------------------------------------------------------------------===//
 // AnalysisBasedWarnings - Worker object used by Sema to execute analysis-based
 //  warnings on a function, method, or block.
 //===----------------------------------------------------------------------===//
@@ -1420,6 +1516,7 @@ clang::sema::AnalysisBasedWarnings::Policy::Policy() {
   enableCheckFallThrough = 1;
   enableCheckUnreachable = 0;
   enableThreadSafetyAnalysis = 0;
+  enableConsumedAnalysis = 0;
 }
 
 clang::sema::AnalysisBasedWarnings::AnalysisBasedWarnings(Sema &s)
@@ -1440,7 +1537,9 @@ clang::sema::AnalysisBasedWarnings::AnalysisBasedWarnings(Sema &s)
   DefaultPolicy.enableThreadSafetyAnalysis = (unsigned)
     (D.getDiagnosticLevel(diag::warn_double_lock, SourceLocation()) !=
      DiagnosticsEngine::Ignored);
-
+  DefaultPolicy.enableConsumedAnalysis = (unsigned)
+    (D.getDiagnosticLevel(diag::warn_use_while_consumed, SourceLocation()) !=
+     DiagnosticsEngine::Ignored);
 }
 
 static void flushDiagnostics(Sema &S, sema::FunctionScopeInfo *fscope) {
@@ -1501,7 +1600,8 @@ AnalysisBasedWarnings::IssueWarnings(sema::AnalysisBasedWarnings::Policy P,
   // prototyping, but we need a way for analyses to say what expressions they
   // expect to always be CFGElements and then fill in the BuildOptions
   // appropriately.  This is essentially a layering violation.
-  if (P.enableCheckUnreachable || P.enableThreadSafetyAnalysis) {
+  if (P.enableCheckUnreachable || P.enableThreadSafetyAnalysis ||
+      P.enableConsumedAnalysis) {
     // Unreachable code analysis and thread safety require a linearized CFG.
     AC.getCFGBuildOptions().setAllAlwaysAdd();
   }
@@ -1603,6 +1703,13 @@ AnalysisBasedWarnings::IssueWarnings(sema::AnalysisBasedWarnings::Policy P,
 
     thread_safety::runThreadSafetyAnalysis(AC, Reporter);
     Reporter.emitDiagnostics();
+  }
+
+  // Check for violations of consumed properties.
+  if (P.enableConsumedAnalysis) {
+    consumed::ConsumedWarningsHandler WarningHandler(S);
+    consumed::ConsumedAnalyzer Analyzer(WarningHandler);
+    Analyzer.run(AC);
   }
 
   if (Diags.getDiagnosticLevel(diag::warn_uninit_var, D->getLocStart())

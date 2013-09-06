@@ -21,6 +21,8 @@ Using Clang as a Compiler
    AddressSanitizer
    ThreadSanitizer
    MemorySanitizer
+   DataFlowSanitizer
+   SanitizerSpecialCaseList
    Modules
    FAQ
 
@@ -51,6 +53,7 @@ Using Clang Tools
    ClangTools
    ClangCheck
    ClangFormat
+   ClangFormatStyleOptions
 
 Design Documents
 ================

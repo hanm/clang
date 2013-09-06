@@ -293,6 +293,16 @@ bool Decl::isUsed(bool CheckUsedAttr) const {
   return false; 
 }
 
+void Decl::markUsed(ASTContext &C) {
+  if (Used)
+    return;
+
+  if (C.getASTMutationListener())
+    C.getASTMutationListener()->DeclarationMarkedUsed(this);
+
+  Used = true;
+}
+
 bool Decl::isReferenced() const { 
   if (Referenced)
     return true;
@@ -1392,14 +1402,7 @@ void DeclContext::makeDeclVisibleInContextWithFlags(NamedDecl *D, bool Internal,
   assert(this == getPrimaryContext() && "expected a primary DC");
 
   // Skip declarations within functions.
-  // FIXME: We shouldn't need to build lookup tables for function declarations
-  // ever, and we can't do so correctly because we can't model the nesting of
-  // scopes which occurs within functions. We use "qualified" lookup into
-  // function declarations when handling friend declarations inside nested
-  // classes, and consequently accept the following invalid code:
-  //
-  //   void f() { void g(); { int g; struct S { friend void g(); }; } }
-  if (isFunctionOrMethod() && !isa<FunctionDecl>(D))
+  if (isFunctionOrMethod())
     return;
 
   // Skip declarations which should be invisible to name lookup.

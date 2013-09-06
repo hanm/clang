@@ -53,8 +53,6 @@ using llvm::opt::ArgStringList;
                           bool KernelOrKext) const;
     void AddMIPSTargetArgs(const llvm::opt::ArgList &Args,
                            llvm::opt::ArgStringList &CmdArgs) const;
-    void AddPPCTargetArgs(const llvm::opt::ArgList &Args,
-                          llvm::opt::ArgStringList &CmdArgs) const;
     void AddR600TargetArgs(const llvm::opt::ArgList &Args,
                            llvm::opt::ArgStringList &CmdArgs) const;
     void AddSparcTargetArgs(const llvm::opt::ArgList &Args,
@@ -65,14 +63,15 @@ using llvm::opt::ArgStringList;
                           llvm::opt::ArgStringList &CmdArgs) const;
     void AddHexagonTargetArgs(const llvm::opt::ArgList &Args,
                               llvm::opt::ArgStringList &CmdArgs) const;
-    void AddAArch64TargetArgs(const llvm::opt::ArgList &Args,
-                              llvm::opt::ArgStringList &CmdArgs) const;
 
     enum RewriteKind { RK_None, RK_Fragile, RK_NonFragile };
 
     ObjCRuntime AddObjCRuntimeArgs(const llvm::opt::ArgList &args,
                                    llvm::opt::ArgStringList &cmdArgs,
                                    RewriteKind rewrite) const;
+
+    void AddClangCLArgs(const llvm::opt::ArgList &Args,
+                        llvm::opt::ArgStringList &CmdArgs) const;
 
   public:
     Clang(const ToolChain &TC) : Tool("clang", "clang frontend", TC) {}
@@ -90,11 +89,6 @@ using llvm::opt::ArgStringList;
 
   /// \brief Clang integrated assembler tool.
   class LLVM_LIBRARY_VISIBILITY ClangAs : public Tool {
-    void AddARMTargetArgs(const llvm::opt::ArgList &Args,
-                          llvm::opt::ArgStringList &CmdArgs) const;
-    void AddX86TargetArgs(const llvm::opt::ArgList &Args,
-                          llvm::opt::ArgStringList &CmdArgs) const;
-
   public:
     ClangAs(const ToolChain &TC) : Tool("clang::as",
                                         "clang integrated assembler", TC) {}

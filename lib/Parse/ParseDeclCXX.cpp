@@ -920,8 +920,13 @@ Parser::TypeResult Parser::ParseBaseTypeSpecifier(SourceLocation &BaseLoc,
         << Id;
     }
 
-    if (!Template)
+    if (!Template) {
+      TemplateArgList TemplateArgs;
+      SourceLocation LAngleLoc, RAngleLoc;
+      ParseTemplateIdAfterTemplateName(TemplateTy(), IdLoc, SS,
+          true, LAngleLoc, TemplateArgs, RAngleLoc);
       return true;
+    }
 
     // Form the template name
     UnqualifiedId TemplateName;
@@ -982,8 +987,8 @@ void Parser::ParseMicrosoftInheritanceClassAttributes(ParsedAttributes &attrs) {
          Tok.is(tok::kw___virtual_inheritance)) {
     IdentifierInfo *AttrName = Tok.getIdentifierInfo();
     SourceLocation AttrNameLoc = ConsumeToken();
-    attrs.addNew(AttrName, AttrNameLoc, 0, AttrNameLoc, 0,
-                 SourceLocation(), 0, 0, AttributeList::AS_GNU);
+    attrs.addNew(AttrName, AttrNameLoc, 0, AttrNameLoc, 0, 0,
+                 AttributeList::AS_GNU);
   }
 }
 
@@ -2273,8 +2278,7 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
         ThisDecl = VT->getTemplatedDecl();
 
       if (ThisDecl && AccessAttrs)
-        Actions.ProcessDeclAttributeList(getCurScope(), ThisDecl, AccessAttrs,
-                                         false, true);
+        Actions.ProcessDeclAttributeList(getCurScope(), ThisDecl, AccessAttrs);
     }
 
     // Handle the initializer.
@@ -3243,8 +3247,7 @@ void Parser::ParseCXX11AttributeSpecifier(ParsedAttributes &attrs,
       attrs.addNew(AttrName,
                    SourceRange(ScopeLoc.isValid() ? ScopeLoc : AttrLoc,
                                AttrLoc),
-                   ScopeName, ScopeLoc, 0,
-                   SourceLocation(), 0, 0, AttributeList::AS_CXX11);
+                   ScopeName, ScopeLoc, 0, 0, AttributeList::AS_CXX11);
 
     if (Tok.is(tok::ellipsis)) {
       ConsumeToken();

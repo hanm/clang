@@ -18,7 +18,12 @@ let CategoryName = "Semantic Issue" in {
 def warn_variables_not_in_loop_body : Warning<
   "variable%select{s| %1|s %1 and %2|s %1, %2, and %3|s %1, %2, %3, and %4}0 "
   "used in loop condition not modified in loop body">,
-  InGroup<DiagGroup<"loop-analysis">>, DefaultIgnore;
+  InGroup<LoopAnalysis>, DefaultIgnore;
+def warn_redundant_loop_iteration : Warning<
+  "variable %0 is %select{decremented|incremented}1 both in the loop header "
+  "and in the loop body">,
+  InGroup<LoopAnalysis>, DefaultIgnore;
+def note_loop_iteration_here : Note<"%select{decremented|incremented}0 here">;
 
 def warn_duplicate_enum_values : Warning<
   "element %0 has been implicitly assigned %1 which another element has "
@@ -890,7 +895,7 @@ def err_tagless_friend_type_template : Error<
 def err_no_matching_local_friend : Error<
   "no matching function found in local scope">;
 def err_no_matching_local_friend_suggest : Error<
-  "no matching function %0 found in local scope; did you mean %2?">;
+  "no matching function %0 found in local scope; did you mean %3?">;
 def err_partial_specialization_friend : Error<
   "partial specialization cannot be declared as a friend">;
 def err_qualified_friend_def : Error<
@@ -1291,7 +1296,9 @@ def err_destructor_template : Error<
 def err_init_conversion_failed : Error<
   "cannot initialize %select{a variable|a parameter|return object|an "
   "exception object|a member subobject|an array element|a new value|a value|a "
-  "base class|a constructor delegation|a vector element}0 "
+  "base class|a constructor delegation|a vector element|a block element|a "
+  "complex element|a lambda capture|a compound literal initializer|a "
+  "related result|a parameter of CF audited function}0 "
   "%diff{of type $ with an %select{rvalue|lvalue}2 of type $|"
   "with an %select{rvalue|lvalue}2 of incompatible type}1,3"
   "%select{|: different classes%diff{ ($ vs $)|}5,6"
@@ -1530,6 +1537,9 @@ def err_auto_fn_virtual : Error<
 // C++11 override control
 def override_keyword_only_allowed_on_virtual_member_functions : Error<
   "only virtual member functions can be marked '%0'">;
+def override_keyword_hides_virtual_member_function : Error<
+  "non-virtual member function marked '%0' hides virtual member "
+  "%select{function|functions}1">;
 def err_function_marked_override_not_overriding : Error<
   "%0 marked 'override' but does not override any member functions">;
 def err_class_marked_final_used_as_base : Error<
@@ -1892,6 +1902,10 @@ def warn_missing_atsign_prefix : Warning<
 def warn_objc_string_literal_comparison : Warning<
   "direct comparison of a string literal has undefined behavior">,
   InGroup<ObjCStringComparison>;
+def warn_concatenated_nsarray_literal : Warning<
+  "concatenated NSString literal for an NSArray expression - "
+  "possibly missing a comma">,
+  InGroup<ObjCStringConcatenation>;
 def note_objc_literal_comparison_isequal : Note<
   "use 'isEqual:' instead">;
 
@@ -2183,6 +2197,36 @@ def note_found_mutex_near_match : Note<"found near match '%0'">;
 // Dummy warning that will trigger "beta" warnings from the analysis if enabled. 
 def warn_thread_safety_beta : Warning<
   "Thread safety beta warning.">, InGroup<ThreadSafetyBeta>, DefaultIgnore;
+
+// Consumed warnings
+def warn_use_while_consumed : Warning<
+  "invocation of method '%0' on object '%1' while it is in the 'consumed' "
+  "state">, InGroup<Consumed>, DefaultIgnore;
+def warn_use_of_temp_while_consumed : Warning<
+  "invocation of method '%0' on a temporary object while it is in the "
+  "'consumed' state">, InGroup<Consumed>, DefaultIgnore;
+def warn_attr_on_unconsumable_class : Warning<
+  "consumed analysis attribute is attached to member of class '%0' which isn't "
+  "marked as consumable">, InGroup<Consumed>, DefaultIgnore;
+def warn_return_typestate_for_unconsumable_type : Warning<
+  "return state set for an unconsumable type '%0'">, InGroup<Consumed>,
+  DefaultIgnore;
+def warn_unknown_consumed_state : Warning<
+  "unknown consumed analysis state '%0'">, InGroup<Consumed>, DefaultIgnore;
+def warn_return_typestate_mismatch : Warning<
+  "return value not in expected state; expected '%0', observed '%1'">,
+  InGroup<Consumed>, DefaultIgnore;
+
+// ConsumedStrict warnings
+def warn_use_in_unknown_state : Warning<
+  "invocation of method '%0' on object '%1' while it is in an unknown state">,
+  InGroup<ConsumedStrict>, DefaultIgnore;
+def warn_use_of_temp_in_unknown_state : Warning<
+  "invocation of method '%0' on a temporary object while it is in an unknown "
+  "state">, InGroup<ConsumedStrict>, DefaultIgnore;
+def warn_unnecessary_test : Warning<
+  "unnecessary test. Variable '%0' is known to be in the '%1' state">,
+  InGroup<ConsumedStrict>, DefaultIgnore;
 
 def warn_impcast_vector_scalar : Warning<
   "implicit conversion turns vector to scalar: %0 to %1">,
@@ -2734,6 +2778,7 @@ def err_ovl_ambiguous_oper_unary : Error<
 def err_ovl_ambiguous_oper_binary : Error<
   "use of overloaded operator '%0' is ambiguous (with operand types %1 and %2)">;
 def err_ovl_no_viable_oper : Error<"no viable overloaded '%0'">;
+def note_assign_lhs_incomplete : Note<"type %0 is incomplete">;
 def err_ovl_deleted_oper : Error<
   "overload resolution selected %select{unavailable|deleted}0 operator '%1'%2">;
 def err_ovl_deleted_special_oper : Error<
@@ -2791,8 +2836,6 @@ def err_template_linkage : Error<"templates must have C++ linkage">;
 def err_template_typedef : Error<"a typedef cannot be a template">;
 def err_template_unnamed_class : Error<
   "cannot declare a class template with no name">;
-def err_var_template_unnamed_class : Error<
-  "cannot declare a variable template with no name">;
 def err_template_param_list_different_arity : Error<
   "%select{too few|too many}0 template parameters in template "
   "%select{|template parameter }1redeclaration">;
@@ -2931,9 +2974,6 @@ def err_template_arg_ref_bind_ignores_quals : Error<
   "ignores qualifiers">;
 def err_template_arg_not_decl_ref : Error<
   "non-type template argument does not refer to any declaration">;
-def err_template_arg_not_object_or_func_form : Error<
-  "non-type template argument does not directly refer to an object or "
-  "function">;
 def err_template_arg_not_address_of : Error<
   "non-type template argument for template parameter of pointer type %0 must "
   "have its address taken">;
@@ -2978,6 +3018,9 @@ def err_pointer_to_member_call_drops_quals : Error<
 def err_pointer_to_member_oper_value_classify: Error<
   "pointer-to-member function type %0 can only be called on an "
   "%select{rvalue|lvalue}1">;
+def ext_ms_deref_template_argument: ExtWarn<
+  "non-type template argument containing a dereference operation is a "
+  "Microsoft extension">, InGroup<Microsoft>;
 
 // C++ template specialization
 def err_template_spec_unknown_kind : Error<
@@ -3107,8 +3150,6 @@ def err_partial_spec_fully_specialized : Error<
   "partial specialization of %0 does not use any of its template parameters">;
 
 // C++ Variable Template Partial Specialization
-def err_var_default_arg_in_partial_spec : Error<
-  "default template argument in a variable template partial specialization">;
 def err_var_partial_spec_redeclared : Error<
   "variable template partial specialization %0 cannot be redefined">;
 def note_var_prev_partial_spec_here : Note<
@@ -3152,6 +3193,8 @@ def note_function_template_spec_here : Note<
   "in instantiation of function template specialization %q0 requested here">;
 def note_template_static_data_member_def_here : Note<
   "in instantiation of static data member %q0 requested here">;
+def note_template_variable_def_here : Note<
+  "in instantiation of variable template specialization %q0 requested here">;
 def note_template_enum_def_here : Note<
   "in instantiation of enumeration %q0 requested here">;
 def note_template_type_alias_instantiation_here : Note<
@@ -4137,6 +4180,9 @@ def ext_sizeof_alignof_void_type : Extension<
 def err_sizeof_alignof_incomplete_type : Error<
   "invalid application of '%select{sizeof|alignof|vec_step}0' to an "
   "incomplete type %1">;
+def err_sizeof_alignof_function_type : Error<
+  "invalid application of '%select{sizeof|alignof|vec_step}0' to a "
+  "function type">;
 def err_sizeof_alignof_bitfield : Error<
   "invalid application of '%select{sizeof|alignof}0' to bit-field">;
 def err_alignof_member_of_incomplete_type : Error<
@@ -4310,19 +4356,21 @@ def err_member_redeclared_in_instantiation : Error<
 def err_member_name_of_class : Error<"member %0 has the same name as its class">;
 def err_member_def_undefined_record : Error<
   "out-of-line definition of %0 from class %1 without definition">;
-def err_member_def_does_not_match : Error<
-  "out-of-line definition of %0 does not match any declaration in %1">;
+def err_member_decl_does_not_match : Error<
+  "out-of-line %select{declaration|definition}2 of %0 "
+  "does not match any declaration in %1">;
 def err_friend_decl_with_def_arg_must_be_def : Error<
   "friend declaration specifying a default argument must be a definition">;
 def err_friend_decl_with_def_arg_redeclared : Error<
   "friend declaration specifying a default argument must be the only declaration">;
 def err_friend_decl_does_not_match : Error<
   "friend declaration of %0 does not match any declaration in %1">;
-def err_member_def_does_not_match_suggest : Error<
-  "out-of-line definition of %0 does not match any declaration in %1; "
-  "did you mean %2?">;
+def err_member_decl_does_not_match_suggest : Error<
+  "out-of-line %select{declaration|definition}2 of %0 "
+  "does not match any declaration in %1; did you mean %3?">;
 def err_member_def_does_not_match_ret_type : Error<
-  "out-of-line definition of %q0 differs from the declaration in the return type">;
+  "return type of out-of-line definition of %q0 differs from "
+  "that in the declaration">;
 def err_nonstatic_member_out_of_line : Error<
   "non-static data member defined out-of-line">;
 def err_qualified_typedef_declarator : Error<
@@ -4344,6 +4392,10 @@ def note_member_def_close_const_match : Note<
   "it %select{is|is not}0 const qualified">;
 def note_member_def_close_param_match : Note<
   "type of %ordinal0 parameter of member declaration does not match definition"
+  "%diff{ ($ vs $)|}1,2">;
+def note_local_decl_close_match : Note<"local declaration nearly matches">;
+def note_local_decl_close_param_match : Note<
+  "type of %ordinal0 parameter of local declaration does not match definition"
   "%diff{ ($ vs $)|}1,2">;
 def err_typecheck_ivar_variable_size : Error<
   "instance variables must have a constant size">;
@@ -4887,7 +4939,10 @@ def note_member_declared_here : Note<
   "member %0 declared here">;
 def err_decrement_bool : Error<"cannot decrement expression of type bool">;
 def warn_increment_bool : Warning<
-  "incrementing expression of type bool is deprecated">, InGroup<Deprecated>;
+  "incrementing expression of type bool is deprecated">,
+  InGroup<DeprecatedIncrementBool>;
+def err_increment_decrement_enum : Error<
+  "cannot %select{decrement|increment}0 expression of enum type %1">;
 def err_catch_incomplete_ptr : Error<
   "cannot catch pointer to incomplete type %0">;
 def err_catch_incomplete_ref : Error<
@@ -5076,10 +5131,10 @@ def err_invalid_declarator_global_scope : Error<
   "definition or redeclaration of %0 cannot name the global scope">;
 def err_invalid_declarator_in_function : Error<
   "definition or redeclaration of %0 not allowed inside a function">;
+def err_invalid_declarator_in_block : Error<
+  "definition or redeclaration of %0 not allowed inside a block">;
 def err_not_tag_in_scope : Error<
   "no %select{struct|interface|union|class|enum}0 named %1 in %2">;
-def err_not_var_in_scope : Error<
-  "no variable template named %0 in %1">;
 
 def err_no_typeid_with_fno_rtti : Error<
   "cannot use typeid with -fno-rtti">;
@@ -6428,7 +6483,7 @@ def warn_direct_ivar_access : Warning<"instance variable %0 is being "
 
 // Spell-checking diagnostics
 def err_unknown_type_or_class_name_suggest : Error<
-  "unknown %select{type|class}2 name %0; did you mean %1?">;
+  "unknown %select{type|class}1 name %0; did you mean %2?">;
 def err_unknown_typename_suggest : Error<
   "unknown type name %0; did you mean %1?">;
 def err_unknown_nested_typename_suggest : Error<
@@ -6540,8 +6595,11 @@ def err_opencl_global_invalid_addr_space : Error<
 
 let CategoryName = "OpenMP Issue" in {
 // OpenMP support.
+def err_omp_expected_var_arg : Error<
+  "%0 is not a global variable, static local variable or static data member">;
 def err_omp_expected_var_arg_suggest : Error<
-  "%0 is not a global variable, static local variable or static data member%select{|; did you mean %2?}1">;
+  "%0 is not a global variable, static local variable or static data member; "
+  "did you mean %1">;
 def err_omp_global_var_arg : Error<
   "arguments of '#pragma omp %0' must have %select{global storage|static storage duration}1">;
 def err_omp_ref_type_arg : Error<
@@ -6601,6 +6659,8 @@ def err_module_private_local : Error<
 def err_module_private_local_class : Error<
   "local %select{struct|interface|union|class|enum}0 cannot be declared "
   "__module_private__">;
+def err_module_private_declaration : Error<
+  "declaration of %0 must be imported from module '%1' before it is required">;
 def err_module_private_definition : Error<
   "definition of %0 must be imported from module '%1' before it is required">;
 }

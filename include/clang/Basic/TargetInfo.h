@@ -112,6 +112,8 @@ public:
   ///===---- Target Data Type Query Methods -------------------------------===//
   enum IntType {
     NoInt = 0,
+    SignedChar,
+    UnsignedChar,
     SignedShort,
     UnsignedShort,
     SignedInt,
@@ -123,6 +125,7 @@ public:
   };
 
   enum RealType {
+    NoFloat = 255,
     Float = 0,
     Double,
     LongDouble
@@ -219,6 +222,12 @@ public:
   ///
   /// For example, SignedInt -> getIntWidth().
   unsigned getTypeWidth(IntType T) const;
+
+  /// \brief Return integer type with specified width.
+  IntType getIntTypeByWidth(unsigned BitWidth, bool IsSigned) const;
+
+  /// \brief Return floating point type with specified width.
+  RealType getRealTypeByWidth(unsigned BitWidth) const;
 
   /// \brief Return the alignment (in bits) of the specified integer type enum.
   ///
@@ -653,6 +662,13 @@ public:
     return false;
   }
 
+  /// \brief Use the specified unit for FP math.
+  ///
+  /// \return False on error (invalid unit name).
+  virtual bool setFPMath(StringRef Name) {
+    return false;
+  }
+
   /// \brief Use this specified C++ ABI.
   ///
   /// \return False on error (invalid C++ ABI name).
@@ -672,12 +688,10 @@ public:
 
   /// \brief Enable or disable a specific target feature;
   /// the feature name must be valid.
-  ///
-  /// \return False on error (invalid feature name).
-  virtual bool setFeatureEnabled(llvm::StringMap<bool> &Features,
+  virtual void setFeatureEnabled(llvm::StringMap<bool> &Features,
                                  StringRef Name,
                                  bool Enabled) const {
-    return false;
+    Features[Name] = Enabled;
   }
 
   /// \brief Perform initialization based on the user configured
@@ -687,7 +701,11 @@ public:
   ///
   /// The target may modify the features list, to change which options are
   /// passed onwards to the backend.
-  virtual void HandleTargetFeatures(std::vector<std::string> &Features) {
+  ///
+  /// \return  False on error.
+  virtual bool HandleTargetFeatures(std::vector<std::string> &Features,
+                                    DiagnosticsEngine &Diags) {
+    return true;
   }
 
   /// \brief Determine whether the given target has the given feature.
@@ -770,7 +788,6 @@ public:
       default:
         return CCCR_Warning;
       case CC_C:
-      case CC_Default:
         return CCCR_OK;
     }
   }
