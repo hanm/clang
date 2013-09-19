@@ -2745,22 +2745,10 @@ ExprResult Sema::BuildDeclarationNameExpr(
   }
 }
 
-ExprResult Sema::ActOnPredefinedExpr(SourceLocation Loc, tok::TokenKind Kind) {
-  PredefinedExpr::IdentType IT;
-
-  switch (Kind) {
-  default: llvm_unreachable("Unknown simple primary expr!");
-  case tok::kw___func__: IT = PredefinedExpr::Func; break; // [C99 6.4.2.2]
-  case tok::kw___FUNCTION__: IT = PredefinedExpr::Function; break;
-  case tok::kw_L__FUNCTION__: IT = PredefinedExpr::LFunction; break;
-  case tok::kw___PRETTY_FUNCTION__: IT = PredefinedExpr::PrettyFunction; break;
-  }
-
-  // Pre-defined identifiers are of type char[x], where x is the length of the
-  // string.
-
-  // Pick the current block, lambda or function.
-  Decl *currentDecl;
+ExprResult Sema::BuildPredefinedExpr(SourceLocation Loc,
+                                     PredefinedExpr::IdentType IT) {
+  // Pick the current block, lambda, captured statement or function.
+  Decl *currentDecl = 0;
   if (const BlockScopeInfo *BSI = getCurBlock())
     currentDecl = BSI->TheDecl;
   else if (const LambdaScopeInfo *LSI = getCurLambda())
@@ -2776,9 +2764,11 @@ ExprResult Sema::ActOnPredefinedExpr(SourceLocation Loc, tok::TokenKind Kind) {
   }
 
   QualType ResTy;
-  if (cast<DeclContext>(currentDecl)->isDependentContext()) {
+  if (cast<DeclContext>(currentDecl)->isDependentContext())
     ResTy = Context.DependentTy;
-  } else {
+  else {
+    // Pre-defined identifiers are of type char[x], where x is the length of
+    // the string.
     unsigned Length = PredefinedExpr::ComputeName(IT, currentDecl).length();
 
     llvm::APInt LengthI(32, Length + 1);
@@ -2788,7 +2778,22 @@ ExprResult Sema::ActOnPredefinedExpr(SourceLocation Loc, tok::TokenKind Kind) {
       ResTy = Context.CharTy.withConst();
     ResTy = Context.getConstantArrayType(ResTy, LengthI, ArrayType::Normal, 0);
   }
+
   return Owned(new (Context) PredefinedExpr(Loc, ResTy, IT));
+}
+
+ExprResult Sema::ActOnPredefinedExpr(SourceLocation Loc, tok::TokenKind Kind) {
+  PredefinedExpr::IdentType IT;
+
+  switch (Kind) {
+  default: llvm_unreachable("Unknown simple primary expr!");
+  case tok::kw___func__: IT = PredefinedExpr::Func; break; // [C99 6.4.2.2]
+  case tok::kw___FUNCTION__: IT = PredefinedExpr::Function; break;
+  case tok::kw_L__FUNCTION__: IT = PredefinedExpr::LFunction; break;
+  case tok::kw___PRETTY_FUNCTION__: IT = PredefinedExpr::PrettyFunction; break;
+  }
+
+  return BuildPredefinedExpr(Loc, IT);
 }
 
 ExprResult Sema::ActOnCharacterConstant(const Token &Tok, Scope *UDLScope) {
@@ -4456,6 +4461,19 @@ ExprResult Sema::ActOnAsTypeExpr(Expr *E, ParsedType ParsedDestTy,
                      << E->getSourceRange());
   return Owned(new (Context) AsTypeExpr(E, DstTy, VK, OK, BuiltinLoc,
                RParenLoc));
+}
+
+/// ActOnConvertVectorExpr - create a new convert-vector expression from the
+/// provided arguments.
+///
+/// __builtin_convertvector( value, dst type )
+///
+ExprResult Sema::ActOnConvertVectorExpr(Expr *E, ParsedType ParsedDestTy,
+                                        SourceLocation BuiltinLoc,
+                                        SourceLocation RParenLoc) {
+  TypeSourceInfo *TInfo;
+  GetTypeFromParser(ParsedDestTy, &TInfo);
+  return SemaConvertVectorExpr(E, TInfo, BuiltinLoc, RParenLoc);
 }
 
 /// BuildResolvedCallExpr - Build a call to a resolved expression,
@@ -7041,6 +7059,18 @@ QualType Sema::CheckSubtractionOperands(ExprResult &LHS, ExprResult &RHS,
                                                LHS.get(), RHS.get()))
         return QualType();
 
+      // The pointee type may have zero size.  As an extension, a structure or
+      // union may have zero size or an array may have zero length.  In this
+      // case subtraction does not make sense.
+      if (!rpointee->isVoidType() && !rpointee->isFunctionType()) {
+        CharUnits ElementSize = Context.getTypeSizeInChars(rpointee);
+        if (ElementSize.isZero()) {
+          Diag(Loc,diag::warn_sub_ptr_zero_size_types)
+            << rpointee.getUnqualifiedType()
+            << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+        }
+      }
+
       if (CompLHSTy) *CompLHSTy = LHS.get()->getType();
       return Context.getPointerDiffType();
     }
@@ -8413,6 +8443,9 @@ static QualType CheckIncrementDecrementOperand(Sema &S, Expr *Op,
                                           IsInc, IsPrefix);
   } else if (S.getLangOpts().AltiVec && ResType->isVectorType()) {
     // OK! ( C/C++ Language Extensions for CBEA(Version 2.6) 10.3 )
+  } else if(S.getLangOpts().OpenCL && ResType->isVectorType() &&
+            ResType->getAs<VectorType>()->getElementType()->isIntegerType()) {
+    // OpenCL V1.2 6.3 says dec/inc ops operate on integer vector types.
   } else {
     S.Diag(OpLoc, diag::err_typecheck_illegal_increment_decrement)
       << ResType << int(IsInc) << Op->getSourceRange();
@@ -9997,7 +10030,7 @@ ExprResult Sema::ActOnChooseExpr(SourceLocation BuiltinLoc,
 void Sema::ActOnBlockStart(SourceLocation CaretLoc, Scope *CurScope) {
   BlockDecl *Block = BlockDecl::Create(Context, CurContext, CaretLoc);
 
-  {
+  if (LangOpts.CPlusPlus) {
     Decl *ManglingContextDecl;
     if (MangleNumberingContext *MCtx =
             getCurrentMangleNumberContext(Block->getDeclContext(),

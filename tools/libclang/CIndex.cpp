@@ -23,6 +23,7 @@
 #include "CXType.h"
 #include "CursorVisitor.h"
 #include "SimpleFormatContext.h"
+#include "clang/AST/Attr.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/Version.h"
@@ -1935,6 +1936,9 @@ void OMPClauseEnqueue::VisitOMPDefaultClause(const OMPDefaultClause *C) { }
 
 void OMPClauseEnqueue::VisitOMPPrivateClause(const OMPPrivateClause *C) {
   PROCESS_OMP_CLAUSE_LIST(OMPPrivateClause, C)
+}
+void OMPClauseEnqueue::VisitOMPSharedClause(const OMPSharedClause *C) {
+  PROCESS_OMP_CLAUSE_LIST(OMPSharedClause, C)
 }
 #undef PROCESS_OMP_CLAUSE_LIST
 }

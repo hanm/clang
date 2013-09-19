@@ -135,6 +135,7 @@ namespace {
   template <class T> good implements_children(children_t T::*) {
     return good();
   }
+  LLVM_ATTRIBUTE_UNUSED
   static inline bad implements_children(children_t Stmt::*) {
     return bad();
   }
@@ -143,6 +144,7 @@ namespace {
   template <class T> good implements_getLocStart(getLocStart_t T::*) {
     return good();
   }
+  LLVM_ATTRIBUTE_UNUSED
   static inline bad implements_getLocStart(getLocStart_t Stmt::*) {
     return bad();
   }
@@ -151,20 +153,22 @@ namespace {
   template <class T> good implements_getLocEnd(getLocEnd_t T::*) {
     return good();
   }
+  LLVM_ATTRIBUTE_UNUSED
   static inline bad implements_getLocEnd(getLocEnd_t Stmt::*) {
     return bad();
   }
 
 #define ASSERT_IMPLEMENTS_children(type) \
-  (void) sizeof(is_good(implements_children(&type::children)))
+  (void) is_good(implements_children(&type::children))
 #define ASSERT_IMPLEMENTS_getLocStart(type) \
-  (void) sizeof(is_good(implements_getLocStart(&type::getLocStart)))
+  (void) is_good(implements_getLocStart(&type::getLocStart))
 #define ASSERT_IMPLEMENTS_getLocEnd(type) \
-  (void) sizeof(is_good(implements_getLocEnd(&type::getLocEnd)))
+  (void) is_good(implements_getLocEnd(&type::getLocEnd))
 }
 
 /// Check whether the various Stmt classes implement their member
 /// functions.
+LLVM_ATTRIBUTE_UNUSED
 static inline void check_implementations() {
 #define ABSTRACT_STMT(type)
 #define STMT(type, base) \
@@ -1111,6 +1115,16 @@ bool CapturedStmt::capturesVariable(const VarDecl *Var) const {
   return false;
 }
 
+StmtRange OMPClause::children() {
+  switch(getClauseKind()) {
+  default : break;
+#define OPENMP_CLAUSE(Name, Class)                                       \
+  case OMPC_ ## Name : return static_cast<Class *>(this)->children();
+#include "clang/Basic/OpenMPKinds.def"
+  }
+  llvm_unreachable("unknown OMPClause");
+}
+
 OMPPrivateClause *OMPPrivateClause::Create(const ASTContext &C,
                                            SourceLocation StartLoc,
                                            SourceLocation LParenLoc,
@@ -1129,6 +1143,26 @@ OMPPrivateClause *OMPPrivateClause::CreateEmpty(const ASTContext &C,
   void *Mem = C.Allocate(sizeof(OMPPrivateClause) + sizeof(Expr *) * N,
                          llvm::alignOf<OMPPrivateClause>());
   return new (Mem) OMPPrivateClause(N);
+}
+
+OMPSharedClause *OMPSharedClause::Create(const ASTContext &C,
+                                         SourceLocation StartLoc,
+                                         SourceLocation LParenLoc,
+                                         SourceLocation EndLoc,
+                                         ArrayRef<Expr *> VL) {
+  void *Mem = C.Allocate(sizeof(OMPSharedClause) + sizeof(Expr *) * VL.size(),
+                         llvm::alignOf<OMPSharedClause>());
+  OMPSharedClause *Clause = new (Mem) OMPSharedClause(StartLoc, LParenLoc,
+                                                      EndLoc, VL.size());
+  Clause->setVarRefs(VL);
+  return Clause;
+}
+
+OMPSharedClause *OMPSharedClause::CreateEmpty(const ASTContext &C,
+                                              unsigned N) {
+  void *Mem = C.Allocate(sizeof(OMPSharedClause) + sizeof(Expr *) * N,
+                         llvm::alignOf<OMPSharedClause>());
+  return new (Mem) OMPSharedClause(N);
 }
 
 void OMPExecutableDirective::setClauses(ArrayRef<OMPClause *> Clauses) {

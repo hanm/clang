@@ -272,6 +272,9 @@ void OMPClauseProfiler::VisitOMPDefaultClause(const OMPDefaultClause *C) { }
 void OMPClauseProfiler::VisitOMPPrivateClause(const OMPPrivateClause *C) {
   PROCESS_OMP_CLAUSE_LIST(OMPPrivateClause, C)
 }
+void OMPClauseProfiler::VisitOMPSharedClause(const OMPSharedClause *C) {
+  PROCESS_OMP_CLAUSE_LIST(OMPSharedClause, C)
+}
 #undef PROCESS_OMP_CLAUSE_LIST
 }
 
@@ -448,6 +451,10 @@ void StmtProfiler::VisitStmtExpr(const StmtExpr *S) {
 }
 
 void StmtProfiler::VisitShuffleVectorExpr(const ShuffleVectorExpr *S) {
+  VisitExpr(S);
+}
+
+void StmtProfiler::VisitConvertVectorExpr(const ConvertVectorExpr *S) {
   VisitExpr(S);
 }
 

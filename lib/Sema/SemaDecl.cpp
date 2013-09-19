@@ -1177,6 +1177,14 @@ bool Sema::mightHaveNonExternalLinkage(const DeclaratorDecl *D) {
   return !D->isExternallyVisible();
 }
 
+// FIXME: This needs to be refactored; some other isInMainFile users want
+// these semantics.
+static bool isMainFileLoc(const Sema &S, SourceLocation Loc) {
+  if (S.TUKind != TU_Complete)
+    return false;
+  return S.SourceMgr.isInMainFile(Loc);
+}
+
 bool Sema::ShouldWarnIfUnusedFileScopedDecl(const DeclaratorDecl *D) const {
   assert(D);
 
@@ -1196,12 +1204,9 @@ bool Sema::ShouldWarnIfUnusedFileScopedDecl(const DeclaratorDecl *D) const {
       if (MD->isVirtual() || IsDisallowedCopyOrAssign(MD))
         return false;
     } else {
-      // 'static inline' functions are used in headers; don't warn.
-      // Make sure we get the storage class from the canonical declaration,
-      // since otherwise we will get spurious warnings on specialized
-      // static template functions.
-      if (FD->getCanonicalDecl()->getStorageClass() == SC_Static &&
-          FD->isInlineSpecified())
+      // 'static inline' functions are defined in headers; don't warn.
+      if (FD->isInlineSpecified() &&
+          !isMainFileLoc(*this, FD->getLocation()))
         return false;
     }
 
@@ -1209,21 +1214,18 @@ bool Sema::ShouldWarnIfUnusedFileScopedDecl(const DeclaratorDecl *D) const {
         Context.DeclMustBeEmitted(FD))
       return false;
   } else if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
-    // Don't warn on variables of const-qualified or reference type, since their
-    // values can be used even if though they're not odr-used, and because const
-    // qualified variables can appear in headers in contexts where they're not
-    // intended to be used.
-    // FIXME: Use more principled rules for these exemptions.
-    if (!VD->isFileVarDecl() ||
-        VD->getType().isConstQualified() ||
-        VD->getType()->isReferenceType() ||
-        Context.DeclMustBeEmitted(VD))
+    // Constants and utility variables are defined in headers with internal
+    // linkage; don't warn.  (Unlike functions, there isn't a convenient marker
+    // like "inline".)
+    if (!isMainFileLoc(*this, VD->getLocation()))
+      return false;
+
+    if (Context.DeclMustBeEmitted(VD))
       return false;
 
     if (VD->isStaticDataMember() &&
         VD->getTemplateSpecializationKind() == TSK_ImplicitInstantiation)
       return false;
-
   } else {
     return false;
   }
@@ -2382,9 +2384,11 @@ bool Sema::MergeFunctionDecl(FunctionDecl *New, Decl *OldD, Scope *S,
   }
   
   if (RequiresAdjustment) {
-    NewType = Context.adjustFunctionType(NewType, NewTypeInfo);
-    New->setType(QualType(NewType, 0));
+    const FunctionType *AdjustedType = New->getType()->getAs<FunctionType>();
+    AdjustedType = Context.adjustFunctionType(AdjustedType, NewTypeInfo);
+    New->setType(QualType(AdjustedType, 0));
     NewQType = Context.getCanonicalType(New->getType());
+    NewType = cast<FunctionType>(NewQType);
   }
 
   // If this redeclaration makes the function inline, we may need to add it to
@@ -3071,6 +3075,9 @@ Decl *Sema::ParsedFreeStandingDeclSpec(Scope *S, AccessSpecifier AS,
 }
 
 static void HandleTagNumbering(Sema &S, const TagDecl *Tag) {
+  if (!S.Context.getLangOpts().CPlusPlus)
+    return;
+
   if (isa<CXXRecordDecl>(Tag->getParent())) {
     // If this tag is the direct child of a class, number it if
     // it is anonymous.
@@ -4801,21 +4808,6 @@ static bool shouldConsiderLinkage(const FunctionDecl *FD) {
   llvm_unreachable("Unexpected context");
 }
 
-bool Sema::HandleVariableRedeclaration(Decl *D, CXXScopeSpec &SS) {
-  // If this is a redeclaration of a variable template or a forward
-  // declaration of a variable template partial specialization 
-  // with nested name specifier, complain.
-
-  if (D && SS.isNotEmpty() &&
-      (isa<VarTemplateDecl>(D) ||
-       isa<VarTemplatePartialSpecializationDecl>(D))) {
-    Diag(SS.getBeginLoc(), diag::err_forward_var_nested_name_specifier)
-      << isa<VarTemplatePartialSpecializationDecl>(D) << SS.getRange();
-    return true;
-  }
-  return false;
-}
-
 NamedDecl *
 Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
                               TypeSourceInfo *TInfo, LookupResult &Previous,
@@ -5344,7 +5336,7 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       isIncompleteDeclExternC(*this, NewVD))
     RegisterLocallyScopedExternCDecl(NewVD, S);
 
-  if (NewVD->isStaticLocal()) {
+  if (getLangOpts().CPlusPlus && NewVD->isStaticLocal()) {
     Decl *ManglingContextDecl;
     if (MangleNumberingContext *MCtx =
             getCurrentMangleNumberContext(NewVD->getDeclContext(),
@@ -6874,6 +6866,9 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     if (!NewFD->isInvalidDecl() && NewFD->isMain())
       CheckMain(NewFD, D.getDeclSpec());
 
+    if (!NewFD->isInvalidDecl() && NewFD->isMSVCRTEntryPoint())
+      CheckMSVCRTEntryPoint(NewFD);
+
     if (!NewFD->isInvalidDecl())
       D.setRedeclaration(CheckFunctionDeclaration(S, NewFD, Previous,
                                                   isExplicitSpecialization));
@@ -6992,6 +6987,9 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     if (!isDependentClassScopeExplicitSpecialization) {
       if (!NewFD->isInvalidDecl() && NewFD->isMain())
         CheckMain(NewFD, D.getDeclSpec());
+
+      if (!NewFD->isInvalidDecl() && NewFD->isMSVCRTEntryPoint())
+        CheckMSVCRTEntryPoint(NewFD);
 
       if (NewFD->isInvalidDecl()) {
         // If this is a class member, mark the class invalid immediately.
@@ -7663,7 +7661,27 @@ void Sema::CheckMain(FunctionDecl* FD, const DeclSpec& DS) {
   }
   
   if (!FD->isInvalidDecl() && FD->getDescribedFunctionTemplate()) {
-    Diag(FD->getLocation(), diag::err_main_template_decl);
+    Diag(FD->getLocation(), diag::err_mainlike_template_decl) << FD->getName();
+    FD->setInvalidDecl();
+  }
+}
+
+void Sema::CheckMSVCRTEntryPoint(FunctionDecl *FD) {
+  QualType T = FD->getType();
+  assert(T->isFunctionType() && "function decl is not of function type");
+  const FunctionType *FT = T->castAs<FunctionType>();
+
+  // Set an implicit return of 'zero' if the function can return some integral,
+  // enumeration, pointer or nullptr type.
+  if (FT->getResultType()->isIntegralOrEnumerationType() ||
+      FT->getResultType()->isAnyPointerType() ||
+      FT->getResultType()->isNullPtrType())
+    // DllMain is exempt because a return value of zero means it failed.
+    if (FD->getName() != "DllMain")
+      FD->setHasImplicitReturnZero(true);
+
+  if (!FD->isInvalidDecl() && FD->getDescribedFunctionTemplate()) {
+    Diag(FD->getLocation(), diag::err_mainlike_template_decl) << FD->getName();
     FD->setInvalidDecl();
   }
 }
@@ -8781,13 +8799,21 @@ Sema::DeclGroupPtrTy Sema::FinalizeDeclaratorGroup(Scope *S, const DeclSpec &DS,
   if (DS.isTypeSpecOwned())
     Decls.push_back(DS.getRepAsDecl());
 
+  DeclaratorDecl *FirstDeclaratorInGroup = 0;
   for (unsigned i = 0, e = Group.size(); i != e; ++i)
-    if (Decl *D = Group[i])
+    if (Decl *D = Group[i]) {
+      if (DeclaratorDecl *DD = dyn_cast<DeclaratorDecl>(D))
+        if (!FirstDeclaratorInGroup)
+          FirstDeclaratorInGroup = DD;
       Decls.push_back(D);
+    }
 
   if (DeclSpec::isDeclRep(DS.getTypeSpecType())) {
-    if (const TagDecl *Tag = dyn_cast_or_null<TagDecl>(DS.getRepAsDecl()))
+    if (TagDecl *Tag = dyn_cast_or_null<TagDecl>(DS.getRepAsDecl())) {
       HandleTagNumbering(*this, Tag);
+      if (!Tag->hasNameForLinkage() && !Tag->hasDeclaratorForAnonDecl())
+        Tag->setDeclaratorForAnonDecl(FirstDeclaratorInGroup);
+    }
   }
 
   return BuildDeclaratorGroup(Decls, DS.containsPlaceholderType());

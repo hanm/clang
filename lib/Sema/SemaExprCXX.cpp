@@ -462,11 +462,16 @@ ExprResult Sema::BuildCXXUuidof(QualType TypeInfoType,
                                 TypeSourceInfo *Operand,
                                 SourceLocation RParenLoc) {
   if (!Operand->getType()->isDependentType()) {
-    if (!CXXUuidofExpr::GetUuidAttrOfType(Operand->getType()))
-      return ExprError(Diag(TypeidLoc, diag::err_uuidof_without_guid));
+    bool HasMultipleGUIDs = false;
+    if (!CXXUuidofExpr::GetUuidAttrOfType(Operand->getType(),
+                                          &HasMultipleGUIDs)) {
+      if (HasMultipleGUIDs)
+        return ExprError(Diag(TypeidLoc, diag::err_uuidof_with_multiple_guids));
+      else
+        return ExprError(Diag(TypeidLoc, diag::err_uuidof_without_guid));
+    }
   }
 
-  // FIXME: add __uuidof semantic analysis for type operand.
   return Owned(new (Context) CXXUuidofExpr(TypeInfoType.withConst(),
                                            Operand,
                                            SourceRange(TypeidLoc, RParenLoc)));
@@ -478,11 +483,16 @@ ExprResult Sema::BuildCXXUuidof(QualType TypeInfoType,
                                 Expr *E,
                                 SourceLocation RParenLoc) {
   if (!E->getType()->isDependentType()) {
-    if (!CXXUuidofExpr::GetUuidAttrOfType(E->getType()) &&
-        !E->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull))
-      return ExprError(Diag(TypeidLoc, diag::err_uuidof_without_guid));
+    bool HasMultipleGUIDs = false;
+    if (!CXXUuidofExpr::GetUuidAttrOfType(E->getType(), &HasMultipleGUIDs) &&
+        !E->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull)) {
+      if (HasMultipleGUIDs)
+        return ExprError(Diag(TypeidLoc, diag::err_uuidof_with_multiple_guids));
+      else
+        return ExprError(Diag(TypeidLoc, diag::err_uuidof_without_guid));
+    }
   }
-  // FIXME: add __uuidof semantic analysis for type operand.
+
   return Owned(new (Context) CXXUuidofExpr(TypeInfoType.withConst(),
                                            E,
                                            SourceRange(TypeidLoc, RParenLoc)));
@@ -1938,22 +1948,23 @@ void Sema::DeclareGlobalAllocationFunction(DeclarationName Name,
   DeclContext *GlobalCtx = Context.getTranslationUnitDecl();
 
   // Check if this function is already declared.
-  {
-    DeclContext::lookup_result R = GlobalCtx->lookup(Name);
-    for (DeclContext::lookup_iterator Alloc = R.begin(), AllocEnd = R.end();
-         Alloc != AllocEnd; ++Alloc) {
-      // Only look at non-template functions, as it is the predefined,
-      // non-templated allocation function we are trying to declare here.
-      if (FunctionDecl *Func = dyn_cast<FunctionDecl>(*Alloc)) {
+  DeclContext::lookup_result R = GlobalCtx->lookup(Name);
+  for (DeclContext::lookup_iterator Alloc = R.begin(), AllocEnd = R.end();
+       Alloc != AllocEnd; ++Alloc) {
+    // Only look at non-template functions, as it is the predefined,
+    // non-templated allocation function we are trying to declare here.
+    if (FunctionDecl *Func = dyn_cast<FunctionDecl>(*Alloc)) {
+      if (Func->getNumParams() == 1) {
         QualType InitialParamType =
           Context.getCanonicalType(
             Func->getParamDecl(0)->getType().getUnqualifiedType());
         // FIXME: Do we need to check for default arguments here?
-        if (Func->getNumParams() == 1 && InitialParamType == Argument) {
+        if (InitialParamType == Argument) {
           if (AddMallocAttr && !Func->hasAttr<MallocAttr>())
-            Func->addAttr(::new (Context) MallocAttr(SourceLocation(), Context));
-          // Make the function visible to name lookup, even if we found it in an
-          // unimported module. It either is an implicitly-declared global
+            Func->addAttr(::new (Context) MallocAttr(SourceLocation(),
+                                                     Context));
+          // Make the function visible to name lookup, even if we found it in
+          // an unimported module. It either is an implicitly-declared global
           // allocation function, or is suppressing that function.
           Func->setHidden(false);
           return;
@@ -3512,24 +3523,24 @@ static bool evaluateTypeTrait(Sema &S, TypeTrait Kind, SourceLocation KWLoc,
         << 1 << 1 << 1 << (int)Args.size();
       return false;
     }
-    
-    bool SawVoid = false;
+
+    // Precondition: T and all types in the parameter pack Args shall be
+    // complete types, (possibly cv-qualified) void, or arrays of
+    // unknown bound.
     for (unsigned I = 0, N = Args.size(); I != N; ++I) {
-      if (Args[I]->getType()->isVoidType()) {
-        SawVoid = true;
+      QualType ArgTy = Args[I]->getType();
+      if (ArgTy->isVoidType() || ArgTy->isIncompleteArrayType())
         continue;
-      }
-      
-      if (!Args[I]->getType()->isIncompleteType() &&
-        S.RequireCompleteType(KWLoc, Args[I]->getType(), 
+
+      if (S.RequireCompleteType(KWLoc, ArgTy, 
           diag::err_incomplete_type_used_in_type_trait_expr))
         return false;
     }
-    
-    // If any argument was 'void', of course it won't type-check.
-    if (SawVoid)
+
+    // Make sure the first argument is a complete type.
+    if (Args[0]->getType()->isIncompleteType())
       return false;
-    
+
     SmallVector<OpaqueValueExpr, 2> OpaqueArgExprs;
     SmallVector<Expr *, 2> ArgExprs;
     ArgExprs.reserve(Args.size() - 1);
