@@ -351,7 +351,7 @@ public:
   // ---- Methods on TypeLocs ----
   // FIXME: this currently just calls the matching Type methods
 
-  // Declare Traverse*() for all concrete Type classes.
+  // Declare Traverse*() for all concrete TypeLoc classes.
 #define ABSTRACT_TYPELOC(CLASS, BASE)
 #define TYPELOC(CLASS, BASE) \
   bool Traverse##CLASS##TypeLoc(CLASS##TypeLoc TL);
@@ -1778,6 +1778,14 @@ bool RecursiveASTVisitor<Derived>::TraverseFunctionHelper(FunctionDecl *D) {
   // including exception specifications.
   if (TypeSourceInfo *TSI = D->getTypeSourceInfo()) {
     TRY_TO(TraverseTypeLoc(TSI->getTypeLoc()));
+  } else if (getDerived().shouldVisitImplicitCode()) {
+    // Visit parameter variable declarations of the implicit function
+    // if the traverser is visiting implicit code. Parameter variable
+    // declarations do not have valid TypeSourceInfo, so to visit them
+    // we need to traverse the declarations explicitly.
+    for (FunctionDecl::param_const_iterator I = D->param_begin(),
+                                            E = D->param_end(); I != E; ++I)
+      TRY_TO(TraverseDecl(*I));
   }
 
   if (CXXConstructorDecl *Ctor = dyn_cast<CXXConstructorDecl>(D)) {
@@ -2256,6 +2264,7 @@ DEF_TRAVERSE_STMT(ParenExpr, { })
 DEF_TRAVERSE_STMT(ParenListExpr, { })
 DEF_TRAVERSE_STMT(PredefinedExpr, { })
 DEF_TRAVERSE_STMT(ShuffleVectorExpr, { })
+DEF_TRAVERSE_STMT(ConvertVectorExpr, { })
 DEF_TRAVERSE_STMT(StmtExpr, { })
 DEF_TRAVERSE_STMT(UnresolvedLookupExpr, {
   TRY_TO(TraverseNestedNameSpecifierLoc(S->getQualifierLoc()));
@@ -2348,9 +2357,14 @@ bool RecursiveASTVisitor<Derived>::VisitOMPDefaultClause(OMPDefaultClause *C) {
     TraverseStmt(*I);
 
 template<typename Derived>
-bool RecursiveASTVisitor<Derived>::VisitOMPPrivateClause(
-                                                      OMPPrivateClause *C) {
+bool RecursiveASTVisitor<Derived>::VisitOMPPrivateClause(OMPPrivateClause *C) {
   PROCESS_OMP_CLAUSE_LIST(OMPPrivateClause, C)
+  return true;
+}
+
+template<typename Derived>
+bool RecursiveASTVisitor<Derived>::VisitOMPSharedClause(OMPSharedClause *C) {
+  PROCESS_OMP_CLAUSE_LIST(OMPSharedClause, C)
   return true;
 }
 

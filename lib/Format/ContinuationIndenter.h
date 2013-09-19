@@ -41,7 +41,8 @@ public:
 
   /// \brief Get the initial state, i.e. the state after placing \p Line's
   /// first token at \p FirstIndent.
-  LineState getInitialState(unsigned FirstIndent, const AnnotatedLine *Line);
+  LineState getInitialState(unsigned FirstIndent, const AnnotatedLine *Line,
+                            bool DryRun);
 
   // FIXME: canBreak and mustBreak aren't strictly indentation-related. Find a
   // better home.
@@ -83,13 +84,12 @@ private:
   unsigned breakProtrudingToken(const FormatToken &Current, LineState &State,
                                 bool DryRun);
 
-  /// \brief Adds a multiline string literal to the \p State.
+  /// \brief Adds a multiline token to the \p State.
   ///
   /// \returns Extra penalty for the first line of the literal: last line is
   /// handled in \c addNextStateToQueue, and the penalty for other lines doesn't
   /// matter, as we don't change them.
-  unsigned addMultilineStringLiteral(const FormatToken &Current,
-                                     LineState &State);
+  unsigned addMultilineToken(const FormatToken &Current, LineState &State);
 
   /// \brief Returns \c true if the next token starts a multiline string
   /// literal.

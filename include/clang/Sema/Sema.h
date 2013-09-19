@@ -703,12 +703,7 @@ public:
 
     /// \brief Retrieve the mangling numbering context, used to consistently
     /// number constructs like lambdas for mangling.
-    MangleNumberingContext &getMangleNumberingContext() {
-      assert(ManglingContextDecl && "Need to have a context declaration");
-      if (!MangleNumbering)
-        MangleNumbering = new MangleNumberingContext;
-      return *MangleNumbering;
-    }
+    MangleNumberingContext &getMangleNumberingContext(ASTContext &Ctx);
 
     bool isUnevaluated() const {
       return Context == Unevaluated || Context == UnevaluatedAbstract;
@@ -1409,7 +1404,7 @@ public:
       case NC_VarTemplate:
         return TNK_Var_template;
       default:
-        llvm_unreachable("unsuported name classification.");
+        llvm_unreachable("unsupported name classification.");
       }
     }
   };
@@ -1465,7 +1460,6 @@ public:
                                     LookupResult &Previous);
   NamedDecl* ActOnTypedefNameDecl(Scope* S, DeclContext* DC, TypedefNameDecl *D,
                                   LookupResult &Previous, bool &Redeclaration);
-  bool HandleVariableRedeclaration(Decl *D, CXXScopeSpec &SS);
   NamedDecl *ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
                                      TypeSourceInfo *TInfo,
                                      LookupResult &Previous,
@@ -1500,6 +1494,7 @@ public:
                                 FunctionDecl *NewFD, LookupResult &Previous,
                                 bool IsExplicitSpecialization);
   void CheckMain(FunctionDecl *FD, const DeclSpec &D);
+  void CheckMSVCRTEntryPoint(FunctionDecl *FD);
   Decl *ActOnParamDeclarator(Scope *S, Declarator &D);
   ParmVarDecl *BuildParmVarDeclForTypedef(DeclContext *DC,
                                           SourceLocation Loc,
@@ -3241,6 +3236,8 @@ public:
                                       SourceLocation LitEndLoc,
                             TemplateArgumentListInfo *ExplicitTemplateArgs = 0);
 
+  ExprResult BuildPredefinedExpr(SourceLocation Loc,
+                                 PredefinedExpr::IdentType IT);
   ExprResult ActOnPredefinedExpr(SourceLocation Loc, tok::TokenKind Kind);
   ExprResult ActOnIntegerConstant(SourceLocation Loc, uint64_t Val);
   ExprResult ActOnNumericConstant(const Token &Tok, Scope *UDLScope = 0);
@@ -3547,6 +3544,13 @@ public:
   /// literal was successfully completed.  ^(int x){...}
   ExprResult ActOnBlockStmtExpr(SourceLocation CaretLoc, Stmt *Body,
                                 Scope *CurScope);
+
+  //===---------------------------- Clang Extensions ----------------------===//
+
+  /// __builtin_convertvector(...)
+  ExprResult ActOnConvertVectorExpr(Expr *E, ParsedType ParsedDestTy,
+                                    SourceLocation BuiltinLoc,
+                                    SourceLocation RParenLoc);
 
   //===---------------------------- OpenCL Features -----------------------===//
 
@@ -5430,7 +5434,7 @@ public:
 
     /// \brief Block expression,
     UPPC_Block
-};
+  };
 
   /// \brief Diagnose unexpanded parameter packs.
   ///
@@ -5837,12 +5841,12 @@ public:
                                                    FunctionTemplateDecl *FT2,
                                                    SourceLocation Loc,
                                            TemplatePartialOrderingContext TPOC,
-                                                   unsigned NumCallArguments);
+                                                   unsigned NumCallArguments1,
+                                                   unsigned NumCallArguments2);
   UnresolvedSetIterator
   getMostSpecialized(UnresolvedSetIterator SBegin, UnresolvedSetIterator SEnd,
                      TemplateSpecCandidateSet &FailedCandidates,
-                     TemplatePartialOrderingContext TPOC,
-                     unsigned NumCallArguments, SourceLocation Loc,
+                     SourceLocation Loc,
                      const PartialDiagnostic &NoneDiag,
                      const PartialDiagnostic &AmbigDiag,
                      const PartialDiagnostic &CandidateDiag,
@@ -6213,7 +6217,7 @@ public:
 
   /// \brief RAII class used to determine whether SFINAE has
   /// trapped any errors that occur during template argument
-  /// deduction.`
+  /// deduction.
   class SFINAETrap {
     Sema &SemaRef;
     unsigned PrevSFINAEErrors;
@@ -6245,9 +6249,33 @@ public:
     }
   };
 
+  /// \brief RAII class used to indicate that we are performing provisional
+  /// semantic analysis to determine the validity of a construct, so
+  /// typo-correction and diagnostics in the immediate context (not within
+  /// implicitly-instantiated templates) should be suppressed.
+  class TentativeAnalysisScope {
+    Sema &SemaRef;
+    // FIXME: Using a SFINAETrap for this is a hack.
+    SFINAETrap Trap;
+    bool PrevDisableTypoCorrection;
+  public:
+    explicit TentativeAnalysisScope(Sema &SemaRef)
+        : SemaRef(SemaRef), Trap(SemaRef, true),
+          PrevDisableTypoCorrection(SemaRef.DisableTypoCorrection) {
+      SemaRef.DisableTypoCorrection = true;
+    }
+    ~TentativeAnalysisScope() {
+      SemaRef.DisableTypoCorrection = PrevDisableTypoCorrection;
+    }
+  };
+
   /// \brief The current instantiation scope used to store local
   /// variables.
   LocalInstantiationScope *CurrentInstantiationScope;
+
+  /// \brief Tracks whether we are in a context where typo correction is
+  /// disabled.
+  bool DisableTypoCorrection;
 
   /// \brief The number of typos corrected by CorrectTypo.
   unsigned TyposCorrected;
@@ -6887,6 +6915,20 @@ public:
                       unsigned SpellingListIndex, bool IsPackExpansion);
 
   // OpenMP directives and clauses.
+private:
+  void *VarDataSharingAttributesStack;
+  /// \brief Initialization of data-sharing attributes stack.
+  void InitDataSharingAttributesStack();
+  void DestroyDataSharingAttributesStack();
+public:
+  /// \brief Called on start of new data sharing attribute block.
+  void StartOpenMPDSABlock(OpenMPDirectiveKind K,
+                           const DeclarationNameInfo &DirName,
+                           Scope *CurScope);
+  /// \brief Called on end of data sharing attribute block.
+  void EndOpenMPDSABlock(Stmt *CurDirective);
+
+  // OpenMP directives and clauses.
   /// \brief Called on correct id-expression from the '#pragma omp
   /// threadprivate'.
   ExprResult ActOnOpenMPIdExpression(Scope *CurScope,
@@ -6936,6 +6978,11 @@ public:
                                       SourceLocation StartLoc,
                                       SourceLocation LParenLoc,
                                       SourceLocation EndLoc);
+  /// \brief Called on well-formed 'shared' clause.
+  OMPClause *ActOnOpenMPSharedClause(ArrayRef<Expr *> VarList,
+                                     SourceLocation StartLoc,
+                                     SourceLocation LParenLoc,
+                                     SourceLocation EndLoc);
 
   /// \brief The kind of conversion being performed.
   enum CheckedConversionKind {
@@ -7670,6 +7717,9 @@ private:
 public:
   // Used by C++ template instantiation.
   ExprResult SemaBuiltinShuffleVector(CallExpr *TheCall);
+  ExprResult SemaConvertVectorExpr(Expr *E, TypeSourceInfo *TInfo,
+                                   SourceLocation BuiltinLoc,
+                                   SourceLocation RParenLoc);
 
 private:
   bool SemaBuiltinPrefetch(CallExpr *TheCall);

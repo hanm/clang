@@ -1312,6 +1312,14 @@ public:
                                               EndLoc);
   }
 
+  OMPClause *RebuildOMPSharedClause(ArrayRef<Expr *> VarList,
+                                    SourceLocation StartLoc,
+                                    SourceLocation LParenLoc,
+                                    SourceLocation EndLoc) {
+    return getSema().ActOnOpenMPSharedClause(VarList, StartLoc, LParenLoc,
+                                             EndLoc);
+  }
+
   /// \brief Rebuild the operand to an Objective-C \@synchronized statement.
   ///
   /// By default, performs semantic analysis to build the new statement.
@@ -2538,6 +2546,14 @@ public:
     return SemaRef.SemaBuiltinShuffleVector(cast<CallExpr>(TheCall.take()));
   }
 
+  /// \brief Build a new convert vector expression.
+  ExprResult RebuildConvertVectorExpr(SourceLocation BuiltinLoc,
+                                      Expr *SrcExpr, TypeSourceInfo *DstTInfo,
+                                      SourceLocation RParenLoc) {
+    return SemaRef.SemaConvertVectorExpr(SrcExpr, DstTInfo,
+                                         BuiltinLoc, RParenLoc);
+  }
+
   /// \brief Build a new template argument pack expansion.
   ///
   /// By default, performs semantic analysis to build a new pack expansion
@@ -2752,7 +2768,7 @@ ExprResult TreeTransform<Derived>::TransformInitializer(Expr *Init,
                                         Construct->getType());
 
   // Build a ParenListExpr to represent anything else.
-  SourceRange Parens = Construct->getParenRange();
+  SourceRange Parens = Construct->getParenOrBraceRange();
   return getDerived().RebuildParenListExpr(Parens.getBegin(), NewArgs,
                                            Parens.getEnd());
 }
@@ -6254,33 +6270,44 @@ TreeTransform<Derived>::TransformSEHHandler(Stmt *Handler) {
 template<typename Derived>
 StmtResult
 TreeTransform<Derived>::TransformOMPParallelDirective(OMPParallelDirective *D) {
+  DeclarationNameInfo DirName;
+  getSema().StartOpenMPDSABlock(OMPD_parallel, DirName, 0);
+
   // Transform the clauses
-  SmallVector<OMPClause *, 5> TClauses;
+  llvm::SmallVector<OMPClause *, 16> TClauses;
   ArrayRef<OMPClause *> Clauses = D->clauses();
   TClauses.reserve(Clauses.size());
   for (ArrayRef<OMPClause *>::iterator I = Clauses.begin(), E = Clauses.end();
        I != E; ++I) {
     if (*I) {
       OMPClause *Clause = getDerived().TransformOMPClause(*I);
-      if (!Clause)
+      if (!Clause) {
+        getSema().EndOpenMPDSABlock(0);
         return StmtError();
+      }
       TClauses.push_back(Clause);
     }
     else {
       TClauses.push_back(0);
     }
   }
-  if (!D->getAssociatedStmt())
+  if (!D->getAssociatedStmt()) {
+    getSema().EndOpenMPDSABlock(0);
     return StmtError();
+  }
   StmtResult AssociatedStmt =
     getDerived().TransformStmt(D->getAssociatedStmt());
-  if (AssociatedStmt.isInvalid())
+  if (AssociatedStmt.isInvalid()) {
+    getSema().EndOpenMPDSABlock(0);
     return StmtError();
+  }
 
-  return getDerived().RebuildOMPParallelDirective(TClauses,
-                                                  AssociatedStmt.take(),
-                                                  D->getLocStart(),
-                                                  D->getLocEnd());
+  StmtResult Res = getDerived().RebuildOMPParallelDirective(TClauses,
+                                                            AssociatedStmt.take(),
+                                                            D->getLocStart(),
+                                                            D->getLocEnd());
+  getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
 }
 
 template<typename Derived>
@@ -6296,7 +6323,7 @@ TreeTransform<Derived>::TransformOMPDefaultClause(OMPDefaultClause *C) {
 template<typename Derived>
 OMPClause *
 TreeTransform<Derived>::TransformOMPPrivateClause(OMPPrivateClause *C) {
-  SmallVector<Expr *, 5> Vars;
+  llvm::SmallVector<Expr *, 16> Vars;
   Vars.reserve(C->varlist_size());
   for (OMPVarList<OMPPrivateClause>::varlist_iterator I = C->varlist_begin(),
                                                       E = C->varlist_end();
@@ -6310,6 +6337,25 @@ TreeTransform<Derived>::TransformOMPPrivateClause(OMPPrivateClause *C) {
                                               C->getLocStart(),
                                               C->getLParenLoc(),
                                               C->getLocEnd());
+}
+
+template<typename Derived>
+OMPClause *
+TreeTransform<Derived>::TransformOMPSharedClause(OMPSharedClause *C) {
+  llvm::SmallVector<Expr *, 16> Vars;
+  Vars.reserve(C->varlist_size());
+  for (OMPVarList<OMPSharedClause>::varlist_iterator I = C->varlist_begin(),
+                                                     E = C->varlist_end();
+       I != E; ++I) {
+    ExprResult EVar = getDerived().TransformExpr(cast<Expr>(*I));
+    if (EVar.isInvalid())
+      return 0;
+    Vars.push_back(EVar.take());
+  }
+  return getDerived().RebuildOMPSharedClause(Vars,
+                                             C->getLocStart(),
+                                             C->getLParenLoc(),
+                                             C->getLocEnd());
 }
 
 //===----------------------------------------------------------------------===//
@@ -8138,7 +8184,7 @@ TreeTransform<Derived>::TransformCXXConstructExpr(CXXConstructExpr *E) {
                                               E->isListInitialization(),
                                               E->requiresZeroInitialization(),
                                               E->getConstructionKind(),
-                                              E->getParenRange());
+                                              E->getParenOrBraceRange());
 }
 
 /// \brief Transform a C++ temporary-binding expression.
@@ -9123,6 +9169,27 @@ TreeTransform<Derived>::TransformShuffleVectorExpr(ShuffleVectorExpr *E) {
 
   return getDerived().RebuildShuffleVectorExpr(E->getBuiltinLoc(),
                                                SubExprs,
+                                               E->getRParenLoc());
+}
+
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformConvertVectorExpr(ConvertVectorExpr *E) {
+  ExprResult SrcExpr = getDerived().TransformExpr(E->getSrcExpr());
+  if (SrcExpr.isInvalid())
+    return ExprError();
+
+  TypeSourceInfo *Type = getDerived().TransformType(E->getTypeSourceInfo());
+  if (!Type)
+    return ExprError();
+
+  if (!getDerived().AlwaysRebuild() &&
+      Type == E->getTypeSourceInfo() &&
+      SrcExpr.get() == E->getSrcExpr())
+    return SemaRef.Owned(E);
+
+  return getDerived().RebuildConvertVectorExpr(E->getBuiltinLoc(),
+                                               SrcExpr.get(), Type,
                                                E->getRParenLoc());
 }
 

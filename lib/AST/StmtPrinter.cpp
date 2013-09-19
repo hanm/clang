@@ -614,6 +614,14 @@ void OMPClausePrinter::VisitOMPPrivateClause(OMPPrivateClause *Node) {
   }
 }
 
+void OMPClausePrinter::VisitOMPSharedClause(OMPSharedClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "shared";
+    PROCESS_OMP_CLAUSE_LIST(OMPSharedClause, Node, '(')
+    OS << ")";
+  }
+}
+
 #undef PROCESS_OMP_CLAUSE_LIST
 }
 
@@ -1077,6 +1085,14 @@ void StmtPrinter::VisitShuffleVectorExpr(ShuffleVectorExpr *Node) {
     if (i) OS << ", ";
     PrintExpr(Node->getExpr(i));
   }
+  OS << ")";
+}
+
+void StmtPrinter::VisitConvertVectorExpr(ConvertVectorExpr *Node) {
+  OS << "__builtin_convertvector(";
+  PrintExpr(Node->getSrcExpr());
+  OS << ", ";
+  Node->getType().print(OS, Policy);
   OS << ")";
 }
 

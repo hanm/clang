@@ -229,6 +229,8 @@ void ASTDeclWriter::VisitTagDecl(TagDecl *D) {
   Record.push_back(D->hasExtInfo());
   if (D->hasExtInfo())
     Writer.AddQualifierInfo(*D->getExtInfo(), Record);
+  else if (D->hasDeclaratorForAnonDecl())
+    Writer.AddDeclRef(D->getDeclaratorForAnonDecl(), Record);
   else
     Writer.AddDeclRef(D->getTypedefNameForAnonDecl(), Record);
 }
@@ -1158,13 +1160,6 @@ void ASTDeclWriter::VisitClassTemplateSpecializationDecl(
     Writer.AddTemplateArgumentList(&D->getTemplateInstantiationArgs(), Record);
   }
 
-  // Explicit info.
-  Writer.AddTypeSourceInfo(D->getTypeAsWritten(), Record);
-  if (D->getTypeAsWritten()) {
-    Writer.AddSourceLocation(D->getExternLoc(), Record);
-    Writer.AddSourceLocation(D->getTemplateKeywordLoc(), Record);
-  }
-
   Writer.AddTemplateArgumentList(&D->getTemplateArgs(), Record);
   Writer.AddSourceLocation(D->getPointOfInstantiation(), Record);
   Record.push_back(D->getSpecializationKind());
@@ -1173,6 +1168,13 @@ void ASTDeclWriter::VisitClassTemplateSpecializationDecl(
   if (D->isCanonicalDecl()) {
     // When reading, we'll add it to the folding set of the following template. 
     Writer.AddDeclRef(D->getSpecializedTemplate()->getCanonicalDecl(), Record);
+  }
+
+  // Explicit info.
+  Writer.AddTypeSourceInfo(D->getTypeAsWritten(), Record);
+  if (D->getTypeAsWritten()) {
+    Writer.AddSourceLocation(D->getExternLoc(), Record);
+    Writer.AddSourceLocation(D->getTemplateKeywordLoc(), Record);
   }
 
   Code = serialization::DECL_CLASS_TEMPLATE_SPECIALIZATION;
