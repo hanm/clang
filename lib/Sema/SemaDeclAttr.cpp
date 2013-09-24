@@ -54,7 +54,8 @@ enum AttributeDeclKind {
   ExpectedVariableOrField,
   ExpectedVariableFieldOrTag,
   ExpectedTypeOrNamespace,
-  ExpectedObjectiveCInterface
+  ExpectedObjectiveCInterface,
+  ExpectedMethodOrProperty
 };
 
 //===----------------------------------------------------------------------===//
@@ -4144,30 +4145,39 @@ static void handleNSReturnsRetainedAttr(Sema &S, Decl *D,
 
 static void handleObjCReturnsInnerPointerAttr(Sema &S, Decl *D,
                                               const AttributeList &attr) {
+  const int EP_ObjCMethod = 1;
+  const int EP_ObjCProperty = 2;
+  
   SourceLocation loc = attr.getLoc();
-
+  QualType resultType;
+  
   ObjCMethodDecl *method = dyn_cast<ObjCMethodDecl>(D);
 
   if (!method) {
-    S.Diag(D->getLocStart(), diag::err_attribute_wrong_decl_type)
-      << SourceRange(loc, loc) << attr.getName() << ExpectedMethod;
-    return;
+    ObjCPropertyDecl *property = dyn_cast<ObjCPropertyDecl>(D);
+    if (!property) {
+      S.Diag(D->getLocStart(), diag::err_attribute_wrong_decl_type)
+        << SourceRange(loc, loc) << attr.getName() << ExpectedMethodOrProperty;
+      return;
+    }
+    resultType = property->getType();
   }
-
-  // Check that the method returns a normal pointer.
-  QualType resultType = method->getResultType();
+  else
+    // Check that the method returns a normal pointer.
+    resultType = method->getResultType();
 
   if (!resultType->isReferenceType() &&
       (!resultType->isPointerType() || resultType->isObjCRetainableType())) {
-    S.Diag(method->getLocStart(), diag::warn_ns_attribute_wrong_return_type)
+    S.Diag(D->getLocStart(), diag::warn_ns_attribute_wrong_return_type)
       << SourceRange(loc)
-      << attr.getName() << /*method*/ 1 << /*non-retainable pointer*/ 2;
+    << attr.getName() << (method ? EP_ObjCMethod : EP_ObjCProperty)
+    << /*non-retainable pointer*/ 2;
 
     // Drop the attribute.
     return;
   }
 
-  method->addAttr(::new (S.Context)
+  D->addAttr(::new (S.Context)
                   ObjCReturnsInnerPointerAttr(attr.getRange(), S.Context,
                                               attr.getAttributeSpellingListIndex()));
 }
