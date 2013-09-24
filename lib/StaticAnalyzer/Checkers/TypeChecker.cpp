@@ -76,11 +76,13 @@ ASaPType *AssignmentCheckerVisitor::stealType() {
 
 void AssignmentCheckerVisitor::
 VisitCallExpr(CallExpr *Exp) {
-  assert(!SubV);
-  SubV = new SubstitutionVector();
-  typecheckCallExpr(Exp, *SubV);
-  delete SubV;
-  SubV = 0;
+  if (!Exp->isBuiltinCall()) {
+    assert(!SubV);
+    SubV = new SubstitutionVector();
+    typecheckCallExpr(Exp, *SubV);
+    delete SubV;
+    SubV = 0;
+  }
 }
 
 void AssignmentCheckerVisitor::VisitMemberExpr(MemberExpr *Exp) {
@@ -517,6 +519,9 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   OS << "DEBUG:: NumArgs=" << NumArgs << ", NumParams=" << NumParams << "\n";
   OS << "DEBUG:: isOverloadedOperator: " << (FD->isOverloadedOperator() ? "true":"false")
      << ", isVariadic: " << (FD->isVariadic() ? "true" : "false") << "\n";
+  OS << "DEBUG:: FD:";
+  FD->print(OS, Ctx.getPrintingPolicy());
+  OS << "\n";
   assert(FD->isVariadic() || NumParams == NumArgs ||
          NumParams+((FD->isOverloadedOperator()) ? 1 : 0) == NumArgs &&
          "Unexpected number of arguments to a call expresion");
