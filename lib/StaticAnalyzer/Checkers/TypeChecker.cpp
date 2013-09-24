@@ -639,7 +639,10 @@ void TypeBuilderVisitor::memberSubstitute(const ValueDecl *D) {
 
 void TypeBuilderVisitor::setType(const ASaPType *T) {
   assert(T && "T can't be null");
+  OS << "DEBUG:: in TypeBuilder::setType(T): " << T->toString() << "\n";
 
+  if (Type)
+    OS << "DEBUG:: <TypeBuilderVisitor::setType(T)>: type already set:" << Type->toString() << "\n";
   assert(!Type && "Type must be null");
   Type = new ASaPType(*T); // make a copy
 
@@ -659,7 +662,7 @@ void TypeBuilderVisitor::setType(const ASaPType *T) {
 }
 
 void TypeBuilderVisitor::setType(const ValueDecl *D) {
-  OS << "DEBUG:: in TypeBuilder::setType: ";
+  OS << "DEBUG:: in TypeBuilder::setType(D): ";
   D->print(OS, Ctx.getPrintingPolicy());
   //OS << "\n Decl pointer address:" << D;
   OS << "\n";
@@ -1126,14 +1129,24 @@ void TypeBuilderVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
   OS << "DEBUG<TypeBuilder>:: Visiting C++ 'new' Expression!! ";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-
-  {
+  if (Exp->isArray()) {
+    AssignmentCheckerVisitor ACV(VB, Def, Exp->getArraySize());
+  }
+  if (Exp->hasInitializer()) {
+    AssignmentCheckerVisitor ACV(VB, Def, Exp->getInitializer());
+  }
+  for(CXXNewExpr::arg_iterator I = Exp->placement_arg_begin(),
+                          E = Exp->placement_arg_end();
+       I != E; ++I) {
+    AssignmentCheckerVisitor ACV(VB, Def, *I);
+  }
+  /*{
     SaveAndRestore<int> VisitWithZeroDeref(DerefNum, 0);
     VisitChildren(Exp);
   }
 
   // FIXME: Set up Type properly and use it for typechecking
-  clearType();
+  clearType();*/
 }
 
 void TypeBuilderVisitor::VisitAtomicExpr(AtomicExpr *Exp) {
