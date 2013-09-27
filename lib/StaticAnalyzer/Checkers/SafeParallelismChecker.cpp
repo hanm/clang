@@ -79,9 +79,11 @@ class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
 
 public:
-  void checkASTDecl(const TranslationUnitDecl *D,
+  void checkASTDecl(const TranslationUnitDecl *TUDeclConst,
                     AnalysisManager &Mgr,
                     BugReporter &BR) const {
+
+    TranslationUnitDecl *TUDecl = const_cast<TranslationUnitDecl*>(TUDeclConst);
     SymbolTable::Initialize();
 
     // initialize traverser
@@ -89,57 +91,63 @@ public:
     AnnotationSchemeT AnnotScheme(SymT);
     SymT.setAnnotationScheme(&AnnotScheme);
 
-    ASTContext &Ctx = D->getASTContext();
-    AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(D);
+    ASTContext &Ctx = TUDecl->getASTContext();
+    AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(TUDecl);
     VisitorBundle VB = {BR, Ctx, Mgr, AC, os, SymT};
 
     os << "DEBUG:: starting ASaP Region Name & Parameter Collector\n";
     CollectRegionNamesAndParametersTraverser NameCollector(VB);
-    NameCollector.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
+    NameCollector.TraverseDecl(TUDecl);
     os << "##############################################\n";
     os << "DEBUG:: done running ASaP Region Name & Parameter Collector\n\n";
     if (NameCollector.encounteredFatalError()) {
       os << "DEBUG:: NAME COLLECTOR ENCOUNTERED FATAL ERROR!! STOPPING\n";
-    } else {
-      os << "DEBUG:: starting ASaP Semantic Checker\n";
-      ASaPSemanticCheckerTraverser SemanticChecker(VB);
-      // run checker
-      SemanticChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
-      os << "##############################################\n";
-      os << "DEBUG:: done running ASaP Semantic Checker\n\n";
-      if (SemanticChecker.encounteredFatalError()) {
-        os << "DEBUG:: SEMANTIC CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
-      } else {
-        // else continue with checking Effect Coverage
-        os << "DEBUG:: starting ASaP Effect Coverage Checker\n";
-        EffectSummaryNormalizerTraverser EffectNormalizerChecker(VB);
-        // run checker
-        EffectNormalizerChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
-        os << "##############################################\n";
-        os << "DEBUG:: done running ASaP Effect Coverage Checker\n\n";
-        if (EffectNormalizerChecker.encounteredFatalError()) {
-          os << "DEBUG:: EFFECT NORMALIZER CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
-        } else {
-          // else continue with Typechecking
-          StmtVisitorInvoker<AssignmentCheckerVisitor> TypeChecker(VB);
-          TypeChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
-          os << "##############################################\n";
-          os << "DEBUG:: done running ASaP Type Checker\n\n";
-          if (TypeChecker.encounteredFatalError()) {
-            os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
-          } else {
-            // Check that Effect Summaries cover effects
-            StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker(VB);
-            EffectChecker.TraverseDecl(const_cast<TranslationUnitDecl*>(D));
-            os << "##############################################\n";
-            os << "DEBUG:: done running ASaP Effect Checker\n\n";
-            if (EffectChecker.encounteredFatalError()) {
-              os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
-            }
-          } // end else (Type Checker succeeded)
-        } // end else (Effect Coverage Checker succeeded)
-      } // end else (Semantic Checking succeeded)
-    } // end else (Name Collection Succeeded)
+      SymbolTable::Destroy();
+      return;
+    }
+
+    os << "DEBUG:: starting ASaP Semantic Checker\n";
+    ASaPSemanticCheckerTraverser SemanticChecker(VB);
+    SemanticChecker.TraverseDecl(TUDecl);
+    os << "##############################################\n";
+    os << "DEBUG:: done running ASaP Semantic Checker\n\n";
+    if (SemanticChecker.encounteredFatalError()) {
+      os << "DEBUG:: SEMANTIC CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      SymbolTable::Destroy();
+      return;
+    }
+
+    os << "DEBUG:: starting ASaP Effect Coverage Checker\n";
+    EffectSummaryNormalizerTraverser EffectNormalizerChecker(VB);
+    EffectNormalizerChecker.TraverseDecl(TUDecl);
+    os << "##############################################\n";
+    os << "DEBUG:: done running ASaP Effect Coverage Checker\n\n";
+    if (EffectNormalizerChecker.encounteredFatalError()) {
+      os << "DEBUG:: EFFECT NORMALIZER CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      SymbolTable::Destroy();
+      return;
+    }
+
+    os << "DEBUG:: starting ASaP Type Checker\n";
+    StmtVisitorInvoker<AssignmentCheckerVisitor> TypeChecker(VB);
+    TypeChecker.TraverseDecl(TUDecl);
+    os << "##############################################\n";
+    os << "DEBUG:: done running ASaP Type Checker\n\n";
+    if (TypeChecker.encounteredFatalError()) {
+      os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      SymbolTable::Destroy();
+      return;
+    }
+    // Check that Effect Summaries cover effects
+    StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker(VB);
+    EffectChecker.TraverseDecl(TUDecl);
+    os << "##############################################\n";
+    os << "DEBUG:: done running ASaP Effect Checker\n\n";
+    if (EffectChecker.encounteredFatalError()) {
+      os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      SymbolTable::Destroy();
+      return;
+    }
     SymbolTable::Destroy();
   }
 }; // end class SafeParallelismChecker

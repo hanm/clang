@@ -10,6 +10,7 @@
 // This file defines the Effect Summary Normalizer pass of the Safe
 // Parallelism checker, which tries to prove the safety of parallelism
 // given region and effect annotations.
+//
 // This pass checks that the effect summary of canonical declarations
 // cover the effect summaries of the redeclarations.
 //

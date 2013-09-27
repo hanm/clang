@@ -42,7 +42,8 @@ AssignmentCheckerVisitor::AssignmentCheckerVisitor(
   ) : BaseClass(VB, Def),
       Type(0), SubV(0) {
 
-    OS << "DEBUG:: ******** INVOKING AssignmentCheckerVisitor...\n";
+    OS << "DEBUG:: ******** INVOKING AssignmentCheckerVisitor...(VisitInit="
+       << (VisitCXXInitializer?"ture":"false") << ")\n";
     OS << "DEBUG:: Stmt:";
     S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
