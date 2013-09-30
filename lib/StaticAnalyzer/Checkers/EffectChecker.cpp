@@ -17,6 +17,7 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/Stmt.h"
 #include "clang/AST/DeclCXX.h"
+#include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "llvm/Support/SaveAndRestore.h"
 
 #include "ASaPSymbolTable.h"
@@ -31,6 +32,85 @@
 namespace clang {
 namespace asap {
 
+EffectCollectorVisitor::EffectCollectorVisitor (
+  VisitorBundle &VB,
+  const FunctionDecl* Def,
+  Stmt *S,
+  bool VisitCXXInitializer,
+  bool HasWriteSemantics
+  ) : BaseClass(VB, Def),
+      HasWriteSemantics(HasWriteSemantics),
+      IsBase(false),
+      DerefNum(0),
+      IsCoveredBySummary(true) {
+  EffectsTmp = new EffectVector();
+  OS << "DEBUG:: ******** INVOKING EffectCheckerVisitor...\n";
+
+  if (!BR.getSourceManager().isInMainFile(Def->getLocation())) {
+    OS << "DEBUG::EffectChecker::Skipping Declaration that is not in main compilation file\n";
+    return;
+  }
+
+  Def->print(OS, Ctx.getPrintingPolicy());
+  //S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  // Check that the effect summary on the canonical decl covers this one.
+
+  EffSummary = SymT.getEffectSummary(this->Def);
+  assert(EffSummary);
+
+  if (VisitCXXInitializer) {
+    if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
+      helperVisitCXXConstructorDecl(D);
+    }
+  }
+  Visit(S);
+  OS << "DEBUG:: done running Visit\n";
+  if (const CXXMethodDecl *CXXD = dyn_cast<CXXMethodDecl>(Def)) {
+    // check overidden methods have an effect summary that covers this one
+    const EffectSummary *DerivedSum = SymT.getEffectSummary(CXXD);
+    assert(DerivedSum);
+    const CXXRecordDecl *DerivedClass = CXXD->getParent();
+
+    for(CXXMethodDecl::method_iterator
+        I = CXXD->begin_overridden_methods(),
+        E = CXXD->end_overridden_methods();
+        I != E; ++I) {
+      const CXXMethodDecl* OverriddenMethod = *I; // i.e., base Method
+
+      const EffectSummary *OverriddenSum = SymT.getEffectSummary(OverriddenMethod);
+      assert(OverriddenSum);
+
+      const SubstitutionVector *SubVec =SymT.getInheritanceSubVec(DerivedClass);
+      EffectSummary SubstOVRDSum(*OverriddenSum);
+      if (SubVec)
+        //SubVec->reverseApplyTo(&SubstOVRDSum);
+        SubVec->applyTo(&SubstOVRDSum);
+      //SubstBaseSum.substitute(SubVec);
+      OS << "DEBUG:: overidden summary error:\n";
+      OS << "   DerivedSum: " << DerivedSum->toString() << "\n";
+      OS << "   OverriddenSum: " << OverriddenSum->toString() << "\n";
+      OS << "   Overridden Method:";
+      OverriddenMethod->print(OS, Ctx.getPrintingPolicy());
+      OS << "\n";
+      OS << "   Derived Method:";
+      CXXD->print(OS, Ctx.getPrintingPolicy());
+      OS << "\n";
+      OS << "   DerivedClass:" << DerivedClass->getNameAsString() << "\n";
+      OS << "   InheritanceSubst: ";
+      if (SubVec)
+        SubVec->print(OS);
+      OS << " \n";
+
+      if ( ! SubstOVRDSum.covers(DerivedSum) ) {
+        emitOverridenVirtualFunctionMustCoverEffectsOfChildren(OverriddenMethod, CXXD);
+      }
+    }
+  }
+  OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
+  delete EffectsTmp;
+}
+
 void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
   assert(D && "D can't be null");
   const ASaPType *T0 = SymT.getType(D);
@@ -41,29 +121,24 @@ void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
     T1 = T1->getReturnType();
   if (!T1)
     return;
- OS << "DEBUG:: Type used for substitution = " << T1->toString(Ctx) << "\n";
+  OS << "DEBUG:: Type used for substitution = " << T1->toString(Ctx)
+     << ", (DerefNum=" << DerefNum << ")\n";
 
-  QualType QT = T1->getQT(DerefNum);
+  T1->deref(DerefNum);
 
-  const ParameterVector *ParamVec = SymT.getParameterVectorFromQualType(QT);
+  const ParameterVector *ParamVec =
+      SymT.getParameterVectorFromQualType(T1->getQT());
   if (!ParamVec || ParamVec->size() == 0)
     return; // Nothing to do here
 
   // First, compute inheritance induced substitutions
-  const SubstitutionVector *InheritanceSubV =
-      SymT.getInheritanceSubVec(QT);
+  const SubstitutionVector *InheritanceSubV = // memory leak?
+      SymT.getInheritanceSubVec(T1->getQT());
   EffectsTmp->substitute(InheritanceSubV);
 
-  // Next, build&apply SubstitutionVector
-  RplVector RplVec;
-  for (size_t I = 0; I < ParamVec->size(); ++I) {
-    const Rpl *ToRpl = T1->getSubstArg(DerefNum+I);
-    assert(ToRpl);
-    RplVec.push_back(ToRpl);
-  }
-  SubstitutionVector SubV;
-  SubV.buildSubstitutionVector(ParamVec, &RplVec);
-  EffectsTmp->substitute(&SubV);
+  std::auto_ptr<SubstitutionVector> SubV = T1->getSubstitutionVector();
+
+  EffectsTmp->substitute(SubV.get());
 
   OS << "   DONE\n";
   delete T1;
@@ -242,79 +317,6 @@ helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
       emitUnsupportedConstructorInitializer(D);
     }
   }
-}
-
-EffectCollectorVisitor::EffectCollectorVisitor (
-  VisitorBundle &VB,
-  const FunctionDecl* Def,
-  Stmt *S,
-  bool VisitCXXInitializer,
-  bool HasWriteSemantics
-  ) : BaseClass(VB, Def),
-      HasWriteSemantics(HasWriteSemantics),
-      IsBase(false),
-      DerefNum(0),
-      IsCoveredBySummary(true) {
-  EffectsTmp = new EffectVector();
-  OS << "DEBUG:: ******** INVOKING EffectCheckerVisitor...\n";
-  Def->print(OS, Ctx.getPrintingPolicy());
-  //S->printPretty(OS, 0, Ctx.getPrintingPolicy());
-  OS << "\n";
-  // Check that the effect summary on the canonical decl covers this one.
-
-  EffSummary = SymT.getEffectSummary(this->Def);
-  assert(EffSummary);
-
-  if (VisitCXXInitializer) {
-    if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
-      helperVisitCXXConstructorDecl(D);
-    }
-  }
-  Visit(S);
-  OS << "DEBUG:: done running Visit\n";
-  if (const CXXMethodDecl *CXXD = dyn_cast<CXXMethodDecl>(Def)) {
-    // check overidden methods have an effect summary that covers this one
-    const EffectSummary *DerivedSum = SymT.getEffectSummary(CXXD);
-    assert(DerivedSum);
-    const CXXRecordDecl *DerivedClass = CXXD->getParent();
-
-    for(CXXMethodDecl::method_iterator
-        I = CXXD->begin_overridden_methods(),
-        E = CXXD->end_overridden_methods();
-        I != E; ++I) {
-      const CXXMethodDecl* OverriddenMethod = *I; // i.e., base Method
-
-      const EffectSummary *OverriddenSum = SymT.getEffectSummary(OverriddenMethod);
-      assert(OverriddenSum);
-
-      const SubstitutionVector *SubVec =SymT.getInheritanceSubVec(DerivedClass);
-      EffectSummary SubstOVRDSum(*OverriddenSum);
-      if (SubVec)
-        //SubVec->reverseApplyTo(&SubstOVRDSum);
-        SubVec->applyTo(&SubstOVRDSum);
-      //SubstBaseSum.substitute(SubVec);
-      OS << "DEBUG:: overidden summary error:\n";
-      OS << "   DerivedSum: " << DerivedSum->toString() << "\n";
-      OS << "   OverriddenSum: " << OverriddenSum->toString() << "\n";
-      OS << "   Overridden Method:";
-      OverriddenMethod->print(OS, Ctx.getPrintingPolicy());
-      OS << "\n";
-      OS << "   Derived Method:";
-      CXXD->print(OS, Ctx.getPrintingPolicy());
-      OS << "\n";
-      OS << "   DerivedClass:" << DerivedClass->getNameAsString() << "\n";
-      OS << "   InheritanceSubst: ";
-      if (SubVec)
-        SubVec->print(OS);
-      OS << " \n";
-
-      if ( ! SubstOVRDSum.covers(DerivedSum) ) {
-        emitOverridenVirtualFunctionMustCoverEffectsOfChildren(OverriddenMethod, CXXD);
-      }
-    }
-  }
-  OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
-  delete EffectsTmp;
 }
 
 void EffectCollectorVisitor::VisitMemberExpr(MemberExpr *Exp) {

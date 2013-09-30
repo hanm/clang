@@ -60,8 +60,14 @@ QualType ASaPType::deref(QualType QT, int DerefNum, ASTContext &Ctx)
   if(DerefNum == -1) {
     Result = Ctx.getPointerType(QT);
   } else while (DerefNum > 0) {
-    assert(Result->isPointerType());
-    Result = Result->getPointeeType();
+    if (Result->isPointerType() || Result->isReferenceType()) {
+      Result = Result->getPointeeType();
+    } else if (Result->isArrayType()) {
+      Result = Result->getAsArrayTypeUnsafe()->getElementType();
+    } else {
+      OSv2 << "DEBUG:: QT = " << Result.getAsString() << "\n";
+      assert(false && "trying to dereference unexpected QualType");
+    }
     DerefNum--;
   }
   return Result;
@@ -142,15 +148,31 @@ const Rpl *ASaPType::getInRpl(int DerefNum) const {
 
 const Rpl *ASaPType::getSubstArg(int DerefNum) const {
   assert(DerefNum >= -1);
-  if (DerefNum == -1) return InRpl;
+  if (DerefNum == -1) return InRpl; // FIXME: this seems wrong
   if (InRpl) {
     if (DerefNum == 0)
-      assert(false);
+      return InRpl;
     else
       return this->ArgV->getRplAt(DerefNum-1);
   } else
     return this->ArgV->getRplAt(DerefNum);
 }
+
+std::auto_ptr<SubstitutionVector> ASaPType::getSubstitutionVector() {
+  const ParameterVector *ParamV =
+    SymbolTable::Table->getParameterVectorFromQualType(QT);
+  RplVector *RplV = new RplVector();
+  for (size_t I = 0; I < ParamV->size(); ++I) {
+    const Rpl *ToRpl = getSubstArg(I);
+    assert(ToRpl);
+    RplV->push_back(ToRpl);
+  }
+
+  SubstitutionVector *SubV = new SubstitutionVector();
+  SubV->buildSubstitutionVector(ParamV, RplV);
+  return std::auto_ptr<SubstitutionVector>(SubV);
+}
+
 
 QualType ASaPType::getQT(int DerefNum) const {
   assert(DerefNum >= 0);

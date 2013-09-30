@@ -44,6 +44,10 @@ AssignmentCheckerVisitor::AssignmentCheckerVisitor(
 
     OS << "DEBUG:: ******** INVOKING AssignmentCheckerVisitor...(VisitInit="
        << (VisitCXXInitializer?"ture":"false") << ")\n";
+    if (!BR.getSourceManager().isInMainFile(Def->getLocation())) {
+      OS << "DEBUG::TypeChecker::Skipping Declaration that is not in main compilation file\n";
+      return;
+    }
     OS << "DEBUG:: Stmt:";
     S->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
@@ -222,8 +226,16 @@ helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
   for(; I != E; ++I) {
     CXXCtorInitializer *Init = *I;
     if (Init->isMemberInitializer()) {
+      OS << "DEBUG::helperVisitCXXConstructorDecl::isMemberInitializer\n";
       helperTypecheckDeclWithInit(Init->getMember(), Init->getInit());
     } else if (Init->isBaseInitializer()) {
+      OS << "DEBUG::helperVisitCXXConstructorDecl::isBaseInitializer\n";
+      Expr *E = Init->getInit();
+      E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+      OS << "\n";
+      E->dump();
+      OS << "\n";
+      const class Type *BaseClass = Init->getBaseClass();
       //AssignmentCheckerVisitor ACV(BR, Ctx, Mgr, AC, OS,
       //  SymT, Def, Init->getInit());
       //FatalError |= ACV.encounteredFatalError();
@@ -1014,12 +1026,30 @@ void TypeBuilderVisitor::VisitCallExpr(CallExpr *Exp) {
 
 void TypeBuilderVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr *Exp) {
   // Visit index expression in case we need to typecheck assignments
+  OS << "DEBUG::<TypeBuilderVisitor::VisitArraySubscriptExpr>::\n";
+  OS << "     IdxExpr:";
+  Exp->getIdx()->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  OS << "     BaseExpr:";
+  Exp->getBase()->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+
   AssignmentCheckerVisitor
     ACV(VB, Def, Exp->getIdx());
   // For now ignore the index type
 
-  SaveAndRestore<int> IncreaseDerefNum(DerefNum, DerefNum+1);
-  Visit(Exp->getBase());
+  OS << "DEBUG:: BaseExpType=" << Exp->getBase()->getType().getAsString() << "\n";
+  if (Exp->getBase()->getType()->isDependentType() &&
+      !(Exp->getBase()->getType()->isPointerType() ||
+        Exp->getBase()->getType()->isArrayType())) {
+    // Sometimes it is not possible to know which is the base and which
+    // is the index expression in e1[e2] (e.g., if the types of both are
+    // template parameters.
+    Visit(Exp->getBase());
+  } else {
+    SaveAndRestore<int> IncreaseDerefNum(DerefNum, DerefNum+1);
+    Visit(Exp->getBase());
+  }
 }
 
 void TypeBuilderVisitor::VisitReturnStmt(ReturnStmt *Ret) {
