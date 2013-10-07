@@ -54646,26 +54646,26 @@ public:
         int j;
         for(j=range.begin(); j<range.end(); j++) {
 
-     int oldGatek;
+            int oldGatek;
             int freshNode,currentEdge;
 
-            currentEdge = vertices[currentLevelSet[i]]+j;
+            currentEdge = vertices[currentLevelSet[i]]+j;  // reads currentLevelSet[i] vertices[?]
 
 
-            freshNode = edges[currentEdge][1];
+            freshNode = edges[currentEdge][1]; // reads edges[?]
 
 
 
             oldGatek = -1;
 
-            oldGatek = gatekeeper[freshNode].fetch_and_increment();
+            oldGatek = gatekeeper[freshNode].fetch_and_increment(); // atomic_writes gatekeeper[?]
      if (oldGatek == 0) {
 
-                int myIndex = newLevelIndex.fetch_and_increment();
+                int myIndex = newLevelIndex.fetch_and_increment(); // atomic_writes newLevelIndex
 
-         newLevelSet[myIndex] = freshNode;
+         newLevelSet[myIndex] = freshNode; // writes newLevelSet[?] 
 
-         level[freshNode] = currentLevel + 1;
+         level[freshNode] = currentLevel + 1; // writes level[?]
      }
         }
     }
