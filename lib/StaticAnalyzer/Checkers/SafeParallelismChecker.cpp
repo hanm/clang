@@ -19,6 +19,7 @@
 
 #include "ASaPSymbolTable.h"
 #include "CollectRegionNamesAndParameters.h"
+#include "DetectTBBParallelism.h"
 #include "EffectChecker.h"
 #include "EffectSummaryNormalizer.h"
 #include "SemanticChecker.h"
@@ -94,6 +95,17 @@ public:
     ASTContext &Ctx = TUDecl->getASTContext();
     AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(TUDecl);
     VisitorBundle VB = {BR, Ctx, Mgr, AC, os, SymT};
+
+    os << "DEBUG:: starting ASaP TBB Parallelism Detection\n";
+    DetectTBBParallelism DetectTBBPar(VB);
+    DetectTBBPar.TraverseDecl(TUDecl);
+    os << "##############################################\n";
+    os << "DEBUG:: done running ASaP TBB Parallelism Detection\n\n";
+    if (DetectTBBPar.encounteredFatalError()) {
+      os << "DEBUG:: TBB PARALLELISM DETECTION ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      SymbolTable::Destroy();
+      return;
+    }
 
     os << "DEBUG:: starting ASaP Region Name & Parameter Collector\n";
     CollectRegionNamesAndParametersTraverser NameCollector(VB);

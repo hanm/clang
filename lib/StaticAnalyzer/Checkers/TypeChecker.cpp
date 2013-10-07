@@ -472,9 +472,14 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   Exp->dump();
   OS << "\n";
 
-  OS << "DEBUG:: CalleeExpr:";
-  Exp->getCallee()->dump();
-  OS << "\n";
+  Decl *D = Exp->getCalleeDecl();
+  if (D) {
+    OS << "DEBUG:: CalleeExpr(" << D << "):";
+    D->dump();
+    OS << "\n";
+  } else { // D == null
+    OS << "DEBUG:: CalleeExpr(" << D << ")\n";
+  }
 
   if (Exp->getType()->isDependentType())
     return; // Don't check
@@ -485,7 +490,6 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   if (isa<CXXPseudoDestructorExpr>(Exp->getCallee()))
     return; // Don't check if this is a pseudo destructor.
 
-  Decl *D = Exp->getCalleeDecl();
   assert(D);
   OS << "DEBUG:: CalleeDecl: ";
   D->print(OS, Ctx.getPrintingPolicy());
@@ -572,11 +576,12 @@ buildParamSubstitutions(const FunctionDecl *CalleeDecl,
 }
 
 void AssignmentCheckerVisitor::
-buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
-                             const ParameterVector &ParamV,
-                             SubstitutionVector &SubV) {
-  // if param has argument that is a parameter, create a substitution
-  // based on the argument
+buildSingleParamSubstitution(
+    ParmVarDecl *Param, Expr *Arg,
+    const ParameterVector &ParamV, // Vector of fn region params
+    SubstitutionVector &SubV) {
+  // if the function parameter has region argument that is a region
+  // parameter, infer a substitution based on the type of the function argument
   const ASaPType *ParamType = SymT.getType(Param);
   if (!ParamType)
     return;
@@ -598,7 +603,7 @@ buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
       ParamI != ParamE && ArgI != ArgE; ++ParamI, ++ArgI) {
     const Rpl *ParamR = *ParamI;
     assert(ParamR && "RplVector should not contain null Rpl pointer");
-    if (ParamR->length() != 1)
+    if (ParamR->length() < 1)
       continue;
     const RplElement *Elmt = ParamR->getFirstElement();
     assert(Elmt && "Rpl should not contain null RplElement pointer");
@@ -1074,6 +1079,9 @@ void TypeBuilderVisitor::VisitExplicitCastExpr(ExplicitCastExpr *Exp) {
   OS << "DEBUG<TypeBuilder>:: Cast Kind Name : " << Exp->getCastKindName()
      << "\n";
   OS << "DEBUG<TypeBuilder>:: Cast Kind Type : " << Exp->getType().getAsString()
+     << "\n";
+  OS << "DEBUG<TypeBuilder>:: Cast From Type : "
+     << Exp->getSubExpr()->getType().getAsString()
      << "\n";
 
   clearType();
