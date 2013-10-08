@@ -1,4 +1,4 @@
-//=== EffectChecker.h - Safe Parallelism checker -----*- C++ -*----===//
+//=== EffectChecker.h - Safe Parallelism checker -------*- C++ -*----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,6 +10,9 @@
 // This file defines the Effect Checker pass of the Safe Parallelism
 // checker, which tries to prove the safety of parallelism given region
 // and effect annotations.
+//
+// The effect checker makes sure that function effect summaries are
+// conservative by covering all the effects of the body of the function.
 //
 //===----------------------------------------------------------------===//
 
@@ -73,7 +76,7 @@ class EffectCollectorVisitor
                                SubstitutionVector &SubV);
 
 public:
-  /// Constructor
+  // Constructor
   EffectCollectorVisitor (
     VisitorBundle &VB,
     const FunctionDecl* Def,
@@ -83,10 +86,10 @@ public:
 
   //~EffectCollectorVisitor();
 
-  /// Getters
+  // Getters
   inline bool getIsCoveredBySummary() { return IsCoveredBySummary; }
-  inline bool encounteredFatalError() { return FatalError; }
 
+  // Visitors
   void VisitMemberExpr(MemberExpr *E);
   void VisitUnaryAddrOf(UnaryOperator *E);
   void VisitUnaryDeref(UnaryOperator *E);

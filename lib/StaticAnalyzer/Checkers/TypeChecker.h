@@ -53,7 +53,6 @@ public:
 
   ~AssignmentCheckerVisitor();
 
-  inline bool encounteredFatalError() { return FatalError; }
   inline ASaPType *getType() { return Type; }
   ASaPType *stealType();
 

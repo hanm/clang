@@ -495,68 +495,68 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   D->print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
 
-  FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
-  // TODO we shouldn't give up like this below, but doing this for now
-  // to see how to fix this here problem...
-  // FD could be null in the case of a dependent type in a template
-  // uninstantiated (i.e., parametric) code.
-  //assert(FD);
-  if (!FD)
-    return;
-  // Set up Substitution Vector
-  const ParameterVector *FD_ParamV = SymT.getParameterVector(FD);
-  if (FD_ParamV && FD_ParamV->size() > 0) {
-    buildParamSubstitutions(FD, Exp->arg_begin(),
-                            Exp->arg_end(), *FD_ParamV, SubV);
-  }
-
-  DeclContext *DC = FD->getDeclContext();
-  assert(DC);
-  RecordDecl *ClassDecl = dyn_cast<RecordDecl>(DC);
-  // ClassDecl is allowed to be null
-
-  // Build substitution
-  const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
-  if (ParamV && ParamV->size() > 0) {
-    assert(ParamV->size() == 1); // until we support multiple region params
-    const ParamRplElement *ParamEl = ParamV->getParamAt(0);
-
-    ASaPType *T = TBV.getType();
-    if (T) {
-      OS << "DEBUG:: Base Type = " << T->toString(Ctx) << "\n";
-      const Rpl *R = T->getSubstArg();
-      Substitution Sub(ParamEl, R);
-      OS << "DEBUG:: typecheckCallExpr Substitution = "
-        << Sub.toString() << "\n";
-      SubV.push_back(&Sub);
+  FunctionDecl *FunD = dyn_cast<FunctionDecl>(D);
+  VarDecl *VarD = dyn_cast<VarDecl>(D); // Non-null if calling through fn-ptr
+  assert(FunD || VarD);
+  if (FunD) {
+    // Set up Substitution Vector
+    const ParameterVector *FD_ParamV = SymT.getParameterVector(FunD);
+    if (FD_ParamV && FD_ParamV->size() > 0) {
+      buildParamSubstitutions(FunD, Exp->arg_begin(),
+                              Exp->arg_end(), *FD_ParamV, SubV);
     }
-  }
-  unsigned NumArgs = Exp->getNumArgs();
-  unsigned NumParams = FD->getNumParams();
-  OS << "DEBUG:: NumArgs=" << NumArgs << ", NumParams=" << NumParams << "\n";
-  OS << "DEBUG:: isOverloadedOperator: " << (FD->isOverloadedOperator() ? "true":"false")
-     << ", isVariadic: " << (FD->isVariadic() ? "true" : "false") << "\n";
-  OS << "DEBUG:: FD:";
-  FD->print(OS, Ctx.getPrintingPolicy());
-  OS << "\n";
-  assert(FD->isVariadic() || NumParams == NumArgs ||
-         NumParams+((FD->isOverloadedOperator()) ? 1 : 0) == NumArgs &&
-         "Unexpected number of arguments to a call expresion");
-  typecheckParamAssignments(FD, Exp->arg_begin(), Exp->arg_end(), SubV);
-  OS << "DEBUG:: DONE typecheckCallExpr\n";
 
-  // Now set Type to the return type of this call
-  const ASaPType *FunType = SymT.getType(FD);
-  if (FunType) {
-    assert(FunType->isFunctionType());
-    ASaPType *RetTyp = new ASaPType(*FunType);
-    RetTyp = RetTyp->getReturnType();
-    if (RetTyp) {
-      delete Type;
-      // set Type
-      Type = RetTyp; // RetTyp is already a copy, no need to re-copy
-      Type->substitute(&SubV);
+    DeclContext *DC = FunD->getDeclContext();
+    assert(DC);
+    RecordDecl *ClassDecl = dyn_cast<RecordDecl>(DC);
+    // ClassDecl is allowed to be null
+
+    // Build substitution
+    const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
+    if (ParamV && ParamV->size() > 0) {
+      assert(ParamV->size() == 1); // until we support multiple region params
+      const ParamRplElement *ParamEl = ParamV->getParamAt(0);
+
+      ASaPType *T = TBV.getType();
+      if (T) {
+        OS << "DEBUG:: Base Type = " << T->toString(Ctx) << "\n";
+        const Rpl *R = T->getSubstArg();
+        Substitution Sub(ParamEl, R);
+        OS << "DEBUG:: typecheckCallExpr Substitution = "
+           << Sub.toString() << "\n";
+        SubV.push_back(&Sub);
+      }
     }
+    unsigned NumArgs = Exp->getNumArgs();
+    unsigned NumParams = FunD->getNumParams();
+    OS << "DEBUG:: NumArgs=" << NumArgs << ", NumParams=" << NumParams << "\n";
+    OS << "DEBUG:: isOverloadedOperator: " << (FunD->isOverloadedOperator() ? "true":"false")
+       << ", isVariadic: " << (FunD->isVariadic() ? "true" : "false") << "\n";
+    OS << "DEBUG:: FunD:";
+    FunD->print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+    assert(FunD->isVariadic() || NumParams == NumArgs ||
+          NumParams+((FunD->isOverloadedOperator()) ? 1 : 0) == NumArgs &&
+          "Unexpected number of arguments to a call expresion");
+    typecheckParamAssignments(FunD, Exp->arg_begin(), Exp->arg_end(), SubV);
+    OS << "DEBUG:: DONE typecheckCallExpr\n";
+
+    // Now set Type to the return type of this call
+    const ASaPType *FunType = SymT.getType(FunD);
+    if (FunType) {
+      assert(FunType->isFunctionType());
+      ASaPType *RetTyp = new ASaPType(*FunType);
+      RetTyp = RetTyp->getReturnType();
+      if (RetTyp) {
+        delete Type;
+        // set Type
+        Type = RetTyp; // RetTyp is already a copy, no need to re-copy
+        Type->substitute(&SubV);
+      }
+    }
+  // end if (FunD)
+  } else { // VarD != null (call through function pointer)
+    // TODO
   }
 } // End typecheckCallExpr
 

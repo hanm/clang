@@ -11,6 +11,9 @@
 // checker, which tries to prove the safety of parallelism given region
 // and effect annotations.
 //
+// The effect checker makes sure that function effect summaries are
+// conservative by covering all the effects of the body of the function.
+//
 //===----------------------------------------------------------------===//
 
 #include "clang/AST/ASTContext.h"
@@ -482,6 +485,7 @@ void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
   if (isa<CXXPseudoDestructorExpr>(Exp->getCallee())) {
     Visit(Exp->getCallee());
   } else {
+    // Not a PseudoDestructorExpr -> Exp->getCalleeDecl should return non-null
     Decl *D = Exp->getCalleeDecl();
     assert(D);
 
@@ -494,28 +498,29 @@ void EffectCollectorVisitor::VisitCallExpr(CallExpr *Exp) {
       }
     }
 
-    const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
-    // TODO we shouldn't give up like this below, but doing this for now
-    // to see how to fix this here problem...
-    // FD could be null in the case of a dependent type in a template
-    // uninstantiated (i.e., parametric) code.
-    //assert(FD);
-    if (!FD)
-      return;
-    SubstitutionVector SubV;
-    // Set up Substitution Vector
-    const ParameterVector *FD_ParamV = SymT.getParameterVector(FD);
-    if (FD_ParamV && FD_ParamV->size() > 0) {
-      buildParamSubstitutions(FD, Exp->arg_begin(),
-                              Exp->arg_end(), *FD_ParamV, SubV);
-    }
+    FunctionDecl *FunD = dyn_cast<FunctionDecl>(D);
+    VarDecl *VarD = dyn_cast<VarDecl>(D); // Non-null if calling through fn-ptr
+    assert(FunD || VarD);
+    if (FunD) {
 
-    /// 2. Add effects to tmp effects
-    int EffectCount = copyAndPushFunctionEffects(FD, SubV);
-    /// 3. Visit base if it exists
-    Visit(Exp->getCallee());
-    /// 4. Check coverage
-    checkEffectCoverage(Exp, D, EffectCount);
+      SubstitutionVector SubV;
+      // Set up Substitution Vector
+      const ParameterVector *FD_ParamV = SymT.getParameterVector(FunD);
+      if (FD_ParamV && FD_ParamV->size() > 0) {
+        buildParamSubstitutions(FunD, Exp->arg_begin(),
+                                Exp->arg_end(), *FD_ParamV, SubV);
+      }
+
+      /// 2. Add effects to tmp effects
+      int EffectCount = copyAndPushFunctionEffects(FunD, SubV);
+      /// 3. Visit base if it exists
+      Visit(Exp->getCallee());
+      /// 4. Check coverage
+      checkEffectCoverage(Exp, D, EffectCount);
+    // end if (FunD)
+    } else { // VarD != null (call through function pointer)
+    // TODO
+    }
   }
 }
 

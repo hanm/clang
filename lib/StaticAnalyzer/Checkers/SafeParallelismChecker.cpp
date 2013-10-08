@@ -22,6 +22,7 @@
 #include "DetectTBBParallelism.h"
 #include "EffectChecker.h"
 #include "EffectSummaryNormalizer.h"
+#include "NonInterferenceChecker.h"
 #include "SemanticChecker.h"
 #include "TypeChecker.h"
 
@@ -96,6 +97,12 @@ public:
     AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(TUDecl);
     VisitorBundle VB = {BR, Ctx, Mgr, AC, os, SymT};
 
+    runCheckers(TUDecl, VB);
+
+    SymbolTable::Destroy();
+  }
+
+  void runCheckers(TranslationUnitDecl *TUDecl, VisitorBundle &VB) const {
     os << "DEBUG:: starting ASaP TBB Parallelism Detection\n";
     DetectTBBParallelism DetectTBBPar(VB);
     DetectTBBPar.TraverseDecl(TUDecl);
@@ -103,7 +110,16 @@ public:
     os << "DEBUG:: done running ASaP TBB Parallelism Detection\n\n";
     if (DetectTBBPar.encounteredFatalError()) {
       os << "DEBUG:: TBB PARALLELISM DETECTION ENCOUNTERED FATAL ERROR!! STOPPING\n";
-      SymbolTable::Destroy();
+      return;
+    }
+
+    os << "DEBUG:: starting ASaP Non-Interference Checking\n";
+    StmtVisitorInvoker<NonInterferenceChecker> NonIChecker(VB);
+    NonIChecker.TraverseDecl(TUDecl);
+    os << "##############################################\n";
+    os << "DEBUG:: done running ASaP Non-Interference Checking\n\n";
+    if (NonIChecker.encounteredFatalError()) {
+      os << "DEBUG:: NON-INTERFERENCE CHECKING ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;
     }
 
@@ -114,7 +130,6 @@ public:
     os << "DEBUG:: done running ASaP Region Name & Parameter Collector\n\n";
     if (NameCollector.encounteredFatalError()) {
       os << "DEBUG:: NAME COLLECTOR ENCOUNTERED FATAL ERROR!! STOPPING\n";
-      SymbolTable::Destroy();
       return;
     }
 
@@ -125,7 +140,6 @@ public:
     os << "DEBUG:: done running ASaP Semantic Checker\n\n";
     if (SemanticChecker.encounteredFatalError()) {
       os << "DEBUG:: SEMANTIC CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
-      SymbolTable::Destroy();
       return;
     }
 
@@ -136,7 +150,6 @@ public:
     os << "DEBUG:: done running ASaP Effect Coverage Checker\n\n";
     if (EffectNormalizerChecker.encounteredFatalError()) {
       os << "DEBUG:: EFFECT NORMALIZER CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
-      SymbolTable::Destroy();
       return;
     }
 
@@ -147,7 +160,6 @@ public:
     os << "DEBUG:: done running ASaP Type Checker\n\n";
     if (TypeChecker.encounteredFatalError()) {
       os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
-      SymbolTable::Destroy();
       return;
     }
     // Check that Effect Summaries cover effects
@@ -157,10 +169,8 @@ public:
     os << "DEBUG:: done running ASaP Effect Checker\n\n";
     if (EffectChecker.encounteredFatalError()) {
       os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
-      SymbolTable::Destroy();
       return;
     }
-    SymbolTable::Destroy();
   }
 }; // end class SafeParallelismChecker
 } // end unnamed namespace
