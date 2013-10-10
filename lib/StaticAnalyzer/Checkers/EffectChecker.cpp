@@ -36,12 +36,11 @@ namespace clang {
 namespace asap {
 
 EffectCollectorVisitor::EffectCollectorVisitor (
-  VisitorBundle &VB,
   const FunctionDecl* Def,
   Stmt *S,
   bool VisitCXXInitializer,
   bool HasWriteSemantics
-  ) : BaseClass(VB, Def),
+  ) : BaseClass(Def),
       HasWriteSemantics(HasWriteSemantics),
       IsBase(false),
       DerefNum(0),
@@ -615,7 +614,7 @@ buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
   const RplVector *ParamArgV = ParamType->getArgV();
   if (!ParamArgV)
     return;
-  TypeBuilderVisitor TBV(VB, Def, Arg);
+  TypeBuilderVisitor TBV(Def, Arg);
   const ASaPType *ArgType = TBV.getType();
   if (!ArgType)
     return;

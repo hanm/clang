@@ -39,6 +39,7 @@ using ento::AnalysisManager;
 class AnalysisDeclContext;
 class ASTContext;
 class Attr;
+class CallExpr;
 class CXXConstructorDecl;
 class CXXRecordDecl;
 class Decl;

@@ -27,13 +27,12 @@ namespace clang {
 namespace asap {
 
 EffectSummaryNormalizerTraverser::
-EffectSummaryNormalizerTraverser(VisitorBundle &_VB)
-  : VB(_VB),
-  BR(VB.BR),
-  Ctx(VB.Ctx),
-  OS(VB.OS),
-  SymT(VB.SymT),
-  FatalError(false) {}
+EffectSummaryNormalizerTraverser()
+  : BR(*SymbolTable::VB.BR),
+    Ctx(*SymbolTable::VB.Ctx),
+    OS(*SymbolTable::VB.OS),
+    SymT(*SymbolTable::Table),
+    FatalError(false) {}
 
 void EffectSummaryNormalizerTraverser::
 emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef &Str) {

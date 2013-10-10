@@ -45,8 +45,6 @@ class ASaPSemanticCheckerTraverser :
 
   typedef llvm::DenseMap<const Attr*, RplVector*> RplVecAttrMapT;
 
-  VisitorBundle &VB;
-
   BugReporter &BR;
   ASTContext &Ctx;
   raw_ostream &OS;
@@ -160,7 +158,7 @@ class ASaPSemanticCheckerTraverser :
 public:
   typedef RecursiveASTVisitor<ASaPSemanticCheckerTraverser> BaseClass;
 
-  explicit ASaPSemanticCheckerTraverser (VisitorBundle &VB);
+  explicit ASaPSemanticCheckerTraverser ();
   virtual ~ASaPSemanticCheckerTraverser ();
   inline bool encounteredFatalError() { return FatalError; }
 

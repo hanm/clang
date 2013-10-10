@@ -25,15 +25,22 @@
 namespace clang {
 namespace asap {
 
+/*DetectTBBParallelism::
+DetectTBBParallelism()
+  : BR(*SymbolTable.VB.BR),
+    Ctx(*SymbolTable.VB.Ctx),
+    OS(*SymbolTable.VB.OS),
+    SymT(*SymbolTable.VB.Table),
+    FatalError(false) {}*/
+
 // Constructor
 CollectRegionNamesAndParametersTraverser::
-CollectRegionNamesAndParametersTraverser(VisitorBundle &_VB)
-  : VB(_VB),
-  BR(VB.BR),
-  Ctx(VB.Ctx),
-  OS(VB.OS),
-  SymT(VB.SymT),
-  FatalError(false) {}
+CollectRegionNamesAndParametersTraverser()
+  : BR(*SymbolTable::VB.BR),
+    Ctx(*SymbolTable::VB.Ctx),
+    OS(*SymbolTable::VB.OS),
+    SymT(*SymbolTable::Table),
+    FatalError(false) {}
 
 // Private Functions
 inline StringRef CollectRegionNamesAndParametersTraverser::

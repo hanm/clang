@@ -44,7 +44,6 @@ class AssignmentCheckerVisitor
 
 public:
   AssignmentCheckerVisitor (
-    VisitorBundle &VB,
     const FunctionDecl *Def,
     Stmt *S,
     bool VisitCXXInitializer = false  // true when called on the function,
@@ -136,8 +135,7 @@ class TypeBuilderVisitor
   void clearType() { delete Type; Type =0; }
 
 public:
-  TypeBuilderVisitor (VisitorBundle &VB,
-                      const FunctionDecl *Def, Expr *E);
+  TypeBuilderVisitor (const FunctionDecl *Def, Expr *E);
   virtual ~TypeBuilderVisitor();
 
   inline bool encounteredFatalError() { return FatalError; }
@@ -179,11 +177,7 @@ class BaseTypeBuilderVisitor
   QualType RefQT;
 
 public:
-  BaseTypeBuilderVisitor (
-    VisitorBundle &VB,
-    const FunctionDecl *Def,
-    Expr *E
-    );
+  BaseTypeBuilderVisitor (const FunctionDecl *Def, Expr *E);
 
   virtual ~BaseTypeBuilderVisitor();
 

@@ -72,6 +72,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   ReturnUndefChecker.cpp
   SafeParallelismChecker.cpp
   SimpleStreamChecker.cpp
+  SpecificNIChecker.cpp
   StackAddrEscapeChecker.cpp
   StaticVariableAccessChecker.cpp
   StreamChecker.cpp

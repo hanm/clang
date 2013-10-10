@@ -30,12 +30,11 @@ extern raw_ostream &OSv2;
 
 
 struct VisitorBundle {
-  BugReporter &BR;
-  ASTContext &Ctx;
-  AnalysisManager &Mgr;
+  BugReporter *BR;
+  ASTContext *Ctx;
+  AnalysisManager *Mgr;
   AnalysisDeclContext *AC;
-  raw_ostream &OS;
-  SymbolTable &SymT;
+  raw_ostream *OS;
 };
 
 /// \brief Issues Warning: '<str>': <bugName> on Declaration.

@@ -35,11 +35,10 @@ namespace asap {
 
 
 AssignmentCheckerVisitor::AssignmentCheckerVisitor(
-  VisitorBundle &VB,
   const FunctionDecl *Def,
   Stmt *S,
   bool VisitCXXInitializer
-  ) : BaseClass(VB, Def),
+  ) : BaseClass(Def),
       Type(0), SubV(0) {
 
     OS << "DEBUG:: ******** INVOKING AssignmentCheckerVisitor...(VisitInit="
@@ -235,7 +234,7 @@ helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
       OS << "\n";
       E->dump();
       OS << "\n";
-      const class Type *BaseClass = Init->getBaseClass();
+      //const class Type *BaseClass = Init->getBaseClass();
       //AssignmentCheckerVisitor ACV(BR, Ctx, Mgr, AC, OS,
       //  SymT, Def, Init->getInit());
       //FatalError |= ACV.encounteredFatalError();
@@ -250,8 +249,8 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
   OS << "DEBUG:: >>>>>>>>>> TYPECHECKING BinAssign<<<<<<<<<<<<<<<<<\n";
   E->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-  TypeBuilderVisitor TBVR(VB, Def, E->getRHS());
-  TypeBuilderVisitor TBVL(VB, Def, E->getLHS());
+  TypeBuilderVisitor TBVR(Def, E->getRHS());
+  TypeBuilderVisitor TBVL(Def, E->getLHS());
   OS << "DEBUG:: Ran type builder on RHS & LHS\n";
   E->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
@@ -288,7 +287,7 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   RetExp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
 
-  TypeBuilderVisitor TBVR(VB, Def, RetExp);
+  TypeBuilderVisitor TBVR(Def, RetExp);
   if (!TBVR.getType())
     return;
 
@@ -323,7 +322,7 @@ VisitCXXConstructExpr(CXXConstructExpr *Exp) {
 
 void AssignmentCheckerVisitor::
 helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init) {
-  TypeBuilderVisitor TBVR(VB, Def, Init);
+  TypeBuilderVisitor TBVR(Def, Init);
   const ASaPType *LHSType = SymT.getType(VD);
   ASaPType *RHSType = TBVR.getType();
   //OS << "DEBUG:: gonna call typecheck(LHS,RHS, IsInit=true\n";
@@ -347,7 +346,7 @@ typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
   OS << "SubstitutionVector Size = " << SubV.size() << "\n";
   OS << "SubVec: " << SubV.toString();
 
-  TypeBuilderVisitor TBVR(VB, Def, Arg);
+  TypeBuilderVisitor TBVR(Def, Arg);
   const ASaPType *LHSType = SymT.getType(Param);
   ASaPType *LHSTypeMod = 0;
   if (SubV.size() > 0 && LHSType) {
@@ -485,7 +484,7 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
     return; // Don't check
 
   // First Visit/typecheck potential sub-assignments in base expression
-  BaseTypeBuilderVisitor TBV(VB, Def, Exp->getCallee());
+  BaseTypeBuilderVisitor TBV(Def, Exp->getCallee());
 
   if (isa<CXXPseudoDestructorExpr>(Exp->getCallee()))
     return; // Don't check if this is a pseudo destructor.
@@ -588,7 +587,7 @@ buildSingleParamSubstitution(
   const RplVector *ParamArgV = ParamType->getArgV();
   if (!ParamArgV)
     return;
-  TypeBuilderVisitor TBV(VB, Def, Arg);
+  TypeBuilderVisitor TBV(Def, Arg);
   const ASaPType *ArgType = TBV.getType();
   if (!ArgType)
     return;
@@ -710,8 +709,8 @@ void TypeBuilderVisitor::helperVisitLogicalExpression(Expr *Exp) {
 }
 
 void TypeBuilderVisitor::helperBinAddSub(BinaryOperator* Exp) {
-  TypeBuilderVisitor ASVL(VB, Def, Exp->getLHS());
-  TypeBuilderVisitor ASVR(VB, Def, Exp->getRHS());
+  TypeBuilderVisitor ASVL(Def, Exp->getLHS());
+  TypeBuilderVisitor ASVR(Def, Exp->getRHS());
   QualType QT = Exp->getType();
   OS << "DEBUG::<TypeBuilder::helperBinAddSub> Type:" << QT.getAsString()
      << "\n";
@@ -743,23 +742,18 @@ void TypeBuilderVisitor::helperBinAddSub(BinaryOperator* Exp) {
 
 
 
-TypeBuilderVisitor::TypeBuilderVisitor (
-  VisitorBundle &VB,
-  const FunctionDecl *Def,
-  Expr *E
-  ) : BaseClass(VB, Def),
-  IsBase(false),
-  DerefNum(0),
-  Type(0) {
+TypeBuilderVisitor::
+TypeBuilderVisitor (const FunctionDecl *Def, Expr *E)
+  : BaseClass(Def), IsBase(false), DerefNum(0), Type(0) {
 
-    OS << "DEBUG:: ******** INVOKING TypeBuilderVisitor...(" << E << ")\n";
-    E->printPretty(OS, 0, Ctx.getPrintingPolicy());
-    OS << "\n";
+  OS << "DEBUG:: ******** INVOKING TypeBuilderVisitor...(" << E << ")\n";
+  E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
 
-    Visit(E);
+  Visit(E);
 
-    OS << "DEBUG:: ******** DONE WITH TypeBuilderVisitor (Type="
-       << (Type ? Type->toString() : "<null>") << ")***\n";
+  OS << "DEBUG:: ******** DONE WITH TypeBuilderVisitor (Type="
+     << (Type ? Type->toString() : "<null>") << ")***\n";
 }
 
 TypeBuilderVisitor::~TypeBuilderVisitor() {
@@ -796,7 +790,7 @@ void TypeBuilderVisitor::VisitUnaryDeref(UnaryOperator *Exp) {
 void TypeBuilderVisitor::VisitUnaryLNot(UnaryOperator *Exp) {
   OS << "DEBUG:: Visit Unary: Logical Not\n";
   helperVisitLogicalExpression(Exp);
-  AssignmentCheckerVisitor ACV(VB, Def, Exp->getSubExpr());
+  AssignmentCheckerVisitor ACV(Def, Exp->getSubExpr());
 }
 
 void TypeBuilderVisitor::VisitDeclRefExpr(DeclRefExpr *E) {
@@ -947,14 +941,14 @@ void TypeBuilderVisitor::VisitBinaryOperator(BinaryOperator* Exp) {
     // BO_LT || ... || BO_NE
     helperVisitLogicalExpression(Exp);
 
-    AssignmentCheckerVisitor ACVR(VB, Def, Exp->getRHS());
-    AssignmentCheckerVisitor ACVL(VB, Def, Exp->getLHS());
+    AssignmentCheckerVisitor ACVR(Def, Exp->getRHS());
+    AssignmentCheckerVisitor ACVL(Def, Exp->getLHS());
   } else if (Exp->isAssignmentOp()) {
     OS << "DEBUG:: >>>>>>>>>>VisitBinOpAssign<<<<<<<<<<<<<<<<<\n";
     Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
 
-    AssignmentCheckerVisitor ACV(VB, Def, Exp);
+    AssignmentCheckerVisitor ACV(Def, Exp);
     assert(!Type && "Type must be null here");
     Type = ACV.stealType();
     //assert(Type && "Type must not be null here");
@@ -970,7 +964,7 @@ void TypeBuilderVisitor::VisitConditionalOperator(ConditionalOperator *Exp) {
   OS << "DEBUG:: @@@@@@@@@@@@VisitConditionalOp@@@@@@@@@@@@@@\n";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-  AssignmentCheckerVisitor ACV(VB, Def, Exp->getCond());
+  AssignmentCheckerVisitor ACV(Def, Exp->getCond());
   FatalError |= ACV.encounteredFatalError();
 
   assert(!Type && "Type must be null here");
@@ -1003,7 +997,7 @@ void TypeBuilderVisitor::VisitCXXConstructExpr(CXXConstructExpr *Exp) {
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
   // Call AssignmentChecker recursively
-  AssignmentCheckerVisitor ACV(VB, Def, Exp);
+  AssignmentCheckerVisitor ACV(Def, Exp);
   // CXXConstruct Expr return Types without region constraints.
   // The region is fresh. Think of it as an object with
   // parametric region that gets unified based on the region args
@@ -1016,7 +1010,7 @@ void TypeBuilderVisitor::VisitCallExpr(CallExpr *Exp) {
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
   // Call AssignmentChecker recursively
-  AssignmentCheckerVisitor ACV(VB, Def, Exp);
+  AssignmentCheckerVisitor ACV(Def, Exp);
 
   OS << "DEBUG::<TypeBuilder::VisitCallExpr> isBase = " << IsBase << "\n";
   ASaPType *T = ACV.getType();
@@ -1040,7 +1034,7 @@ void TypeBuilderVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr *Exp) {
   OS << "\n";
 
   AssignmentCheckerVisitor
-    ACV(VB, Def, Exp->getIdx());
+    ACV(Def, Exp->getIdx());
   // For now ignore the index type
 
   OS << "DEBUG:: BaseExpType=" << Exp->getBase()->getType().getAsString() << "\n";
@@ -1174,15 +1168,15 @@ void TypeBuilderVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
   if (Exp->isArray()) {
-    AssignmentCheckerVisitor ACV(VB, Def, Exp->getArraySize());
+    AssignmentCheckerVisitor ACV(Def, Exp->getArraySize());
   }
   if (Exp->hasInitializer()) {
-    AssignmentCheckerVisitor ACV(VB, Def, Exp->getInitializer());
+    AssignmentCheckerVisitor ACV(Def, Exp->getInitializer());
   }
   for(CXXNewExpr::arg_iterator I = Exp->placement_arg_begin(),
                           E = Exp->placement_arg_end();
        I != E; ++I) {
-    AssignmentCheckerVisitor ACV(VB, Def, *I);
+    AssignmentCheckerVisitor ACV(Def, *I);
   }
   /*{
     SaveAndRestore<int> VisitWithZeroDeref(DerefNum, 0);
@@ -1202,7 +1196,7 @@ void TypeBuilderVisitor::VisitAtomicExpr(AtomicExpr *Exp) {
     Expr *SubExp = Exp->getSubExprs()[i];
     SubExp->printPretty(OS, 0, Ctx.getPrintingPolicy());
     OS << "\n";
-    TypeBuilderVisitor TBV(VB, Def, SubExp);
+    TypeBuilderVisitor TBV(Def, SubExp);
   }
   assert(!Type);
   // TODO: infer region arguments of "return type"
@@ -1215,7 +1209,7 @@ void TypeBuilderVisitor::VisitAtomicExpr(AtomicExpr *Exp) {
 void TypeBuilderVisitor::
 VisitUnaryExprOrTypeTraitExpr(UnaryExprOrTypeTraitExpr *Exp) {
   if (!Exp->isArgumentType()) {
-    TypeBuilderVisitor TBV(VB, Def, Exp->getArgumentExpr());
+    TypeBuilderVisitor TBV(Def, Exp->getArgumentExpr());
   }
 
   assert(!Type);
@@ -1226,20 +1220,18 @@ VisitUnaryExprOrTypeTraitExpr(UnaryExprOrTypeTraitExpr *Exp) {
 //////////////////////////////////////////////////////////////////////////
 // BaseTypeBuilderVisitor
 
-BaseTypeBuilderVisitor::BaseTypeBuilderVisitor(
-  VisitorBundle &VB,
-  const FunctionDecl *Def,
-  Expr *Exp
-  ) : BaseClass(VB, Def), Type(0) {
+BaseTypeBuilderVisitor::
+BaseTypeBuilderVisitor(const FunctionDecl *Def, Expr *Exp)
+  : BaseClass(Def), Type(0) {
 
-    OS << "DEBUG:: ******** INVOKING BaseTypeBuilderVisitor...\n";
-    Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
-    OS << "\n";
+  OS << "DEBUG:: ******** INVOKING BaseTypeBuilderVisitor...\n";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
 
-    Visit(Exp);
+  Visit(Exp);
 
-    OS << "DEBUG:: ******** DONE WITH BaseTypeBuilderVisitor (Type="
-       << (Type ? Type->toString() : "<null>") << ")***\n";
+  OS << "DEBUG:: ******** DONE WITH BaseTypeBuilderVisitor (Type="
+     << (Type ? Type->toString() : "<null>") << ")***\n";
 }
 
 BaseTypeBuilderVisitor::~BaseTypeBuilderVisitor() {
@@ -1256,7 +1248,7 @@ void BaseTypeBuilderVisitor::VisitMemberExpr(MemberExpr *Exp) {
   OS << "DEBUG:: VisitMemberExpr: ";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-  TypeBuilderVisitor TBV(VB, Def, Exp->getBase());
+  TypeBuilderVisitor TBV(Def, Exp->getBase());
   Type = TBV.stealType();
   if (Type && Exp->isArrow())
     Type->deref(1);

@@ -30,8 +30,6 @@ namespace asap {
 class CollectRegionNamesAndParametersTraverser :
   public RecursiveASTVisitor<CollectRegionNamesAndParametersTraverser> {
 
-  VisitorBundle &VB;
-
   BugReporter &BR;
   ASTContext &Ctx;
   raw_ostream &OS;
@@ -60,7 +58,7 @@ class CollectRegionNamesAndParametersTraverser :
 public:
   typedef RecursiveASTVisitor<CollectRegionNamesAndParametersTraverser> BaseClass;
 
-  explicit CollectRegionNamesAndParametersTraverser (VisitorBundle &VB);
+  explicit CollectRegionNamesAndParametersTraverser ();
   //virtual ~CollectRegionNamesAndParametersTraverser ();
 
   inline bool encounteredFatalError() { return FatalError; }

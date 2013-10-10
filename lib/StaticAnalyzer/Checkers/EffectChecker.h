@@ -77,12 +77,10 @@ class EffectCollectorVisitor
 
 public:
   // Constructor
-  EffectCollectorVisitor (
-    VisitorBundle &VB,
-    const FunctionDecl* Def,
-    Stmt *S,
-    bool VisitCXXInitializer = false,
-    bool HasWriteSemantics = false );
+  EffectCollectorVisitor (const FunctionDecl* Def,
+                          Stmt *S,
+                          bool VisitCXXInitializer = false,
+                          bool HasWriteSemantics = false );
 
   //~EffectCollectorVisitor();
 

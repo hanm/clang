@@ -19,16 +19,17 @@
 
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 
+#include "ASaPSymbolTable.h"
 #include "NonInterferenceChecker.h"
+#include "SpecificNIChecker.h"
 
 namespace clang {
 namespace asap {
 
 NonInterferenceChecker::NonInterferenceChecker (
-  VisitorBundle &VB,
   const FunctionDecl* Def,
   Stmt *S,
-  bool VisitCXXInitializer) : BaseClass(VB, Def) {
+  bool VisitCXXInitializer) : BaseClass(Def) {
   OS << "DEBUG:: ******** INVOKING NonInterferenceChecker ...\n";
 
   if (!BR.getSourceManager().isInMainFile(Def->getLocation())) {
@@ -52,19 +53,26 @@ void NonInterferenceChecker::VisitCallExpr(CallExpr *Exp) {
   if (!isa<CXXPseudoDestructorExpr>(Exp->getCallee())) {
     Decl *D = Exp->getCalleeDecl();
     assert(D);
-    OS << "DEBUG:: CaleeDecl(" << D << "):\n";
+    DeclaratorDecl *DeclD = dyn_cast<DeclaratorDecl>(D);
+    assert(DeclD);
+    StringRef Name = DeclD->getQualifiedNameAsString();
+    OS << "DEBUG:: CalleeDecl(" << D << "). Name = " << Name << "\n";
     D->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
 
     D->dump(OS);
     OS << "\n";
 
-    const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
+    const FunctionDecl *FunD = dyn_cast<FunctionDecl>(D);
     const VarDecl *VarD = dyn_cast<VarDecl>(D);
-    assert(VarD || FD); // The callee should be a function or a fn-pointer
-
-
-
+    assert(VarD || FunD); // The callee should be a function or a fn-pointer
+    if (FunD) {
+      if (const SpecificNIChecker *SNIC = SymT.getNIChecker(FunD)) {
+        SNIC->check(Exp);
+      } // otherwise there's nothing to check
+    } else { // VarD
+      // TODO
+    }
   }
   return;
 }

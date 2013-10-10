@@ -17,23 +17,25 @@
 //#include "clang/AST/Decl.h"
 
 #include "ASaPUtil.h"
+#include "ASaPSymbolTable.h"
 #include "DetectTBBParallelism.h"
+#include "SpecificNIChecker.h"
 
 namespace clang {
 namespace asap {
 
 DetectTBBParallelism::
-DetectTBBParallelism(VisitorBundle &_VB)
-  : VB(_VB),
-  BR(VB.BR),
-  Ctx(VB.Ctx),
-  OS(VB.OS),
-  SymT(VB.SymT),
-  FatalError(false) {}
+DetectTBBParallelism()
+  : BR(*SymbolTable::VB.BR),
+    Ctx(*SymbolTable::VB.Ctx),
+    OS(*SymbolTable::VB.OS),
+    SymT(*SymbolTable::Table),
+    FatalError(false) {}
 
 bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
 
-  OS << "DEBUG:: VisitFunctionDecl (" << D << ")\n";
+  StringRef Name = D->getNameInfo().getAsString();
+  OS << "DEBUG:: VisitFunctionDecl (" << D << "). Name = " << Name << "\n";
   OS << "D->isThisDeclarationADefinition() = "
      << D->isThisDeclarationADefinition() << "\n";
   OS << "D->getTypeSourceInfo() = " << D->getTypeSourceInfo() << "\n";
@@ -51,14 +53,15 @@ bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
   OS << "DEBUG:: D->getPrimaryTemplate() = " << FTD1 << "\n";
   FunctionTemplateDecl *FTD2 = D->getDescribedFunctionTemplate();
   OS << "DEBUG:: D->getDescribedTemplate() = " << FTD2 << "\n";
-  OS << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-    << "DEBUG:: printing ASaP attributes for method or function '";
   //D->getDeclName().printName(OS);
   D->print(OS, Ctx.getPrintingPolicy());
+  OS << "\n";
+  D->dump(OS);
   OS << "':\n";
+  OS << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
 
-  StringRef Name = D->getNameInfo().getAsString();
-  OS << "DEBUG:: FunctionDecl Name = " << Name << "\n";
+  // Detect tbb::parallel_for
+  OS << "DEBUG:: Name = " << Name << "\n";
   if (!Name.compare("parallel_for")) {
     // Find the namespace, make sure it's 'tbb'
     DeclContext *NamespaceCtx = D->getEnclosingNamespaceContext();
@@ -68,8 +71,28 @@ bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
     StringRef NamespaceStr = NamespaceD->getName();
     OS << "DEBUG:: enclosing namespace = " << NamespaceStr << "\n";
     if (!NamespaceStr.compare("tbb")) {
-      OS << "Found one!\n\n";
+      OS << "DEBUG:: Found one!\n";
       // TODO:  Add D to Symboltable Map.
+      ParmVarDecl *Parm1 = D->getParamDecl(0);
+      StringRef ParmTypeStr = Parm1->getType().getAsString();
+      OS << "DEBUG:: 1st Param Type = " << ParmTypeStr << "\n";
+      // Case 1. parallel_for(Range, Body, ...)
+      if (ParmTypeStr.startswith("const class tbb::blocked_range")) {
+        // Find Body
+        ParmVarDecl *Body = D->getParamDecl(1);
+        OS << "DEBUG:: 2nd parameter should be a Body: ";
+        Body->print(OS, Ctx.getPrintingPolicy());
+        OS << "\n";
+        // Add to SymT
+        OS << "DEBUG:: Adding a 'Range' parallel_for to SymT\n";
+
+        bool Result = SymT.addParallelFun(D, new TBBParallelForRangeNIChecker());
+        assert(Result && "failed adding SpecificNIChecker to ParTable");
+      }
+      // Case 2. parallel_for(Index, ..., Function, ...)
+      else {
+        // TODO
+      }
     }
 
   }

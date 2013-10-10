@@ -37,12 +37,8 @@ class NonInterferenceChecker
 
 public:
   // Constructor
-  NonInterferenceChecker (VisitorBundle &VB,
-                          const FunctionDecl* Def, Stmt *S,
+  NonInterferenceChecker (const FunctionDecl* Def, Stmt *S,
                           bool VisitCXXInitializer = false);
-
-  // Getters
-  //inline bool encounteredFatalError() { return FatalError; }
 
   // Visitors
   void VisitCallExpr(CallExpr *E);

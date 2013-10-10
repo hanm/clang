@@ -50,9 +50,10 @@ const SpecialRplElement *SymbolTable::GLOBAL_RplElmt = 0;
 const SpecialRplElement *SymbolTable::IMMUTABLE_RplElmt = 0;
 const Effect *SymbolTable::WritesLocal = 0;
 SymbolTable *SymbolTable::Table = 0;
+VisitorBundle SymbolTable::VB;
 
 /// Static Functions
-void SymbolTable::Initialize() {
+void SymbolTable::Initialize(VisitorBundle &VisB) {
   if (!Initialized) {
     STAR_RplElmt = new StarRplElement();
     ROOT_RplElmt = new SpecialRplElement("Root");
@@ -63,6 +64,7 @@ void SymbolTable::Initialize() {
     R.appendElement(STAR_RplElmt);
     WritesLocal = new Effect(Effect::EK_WritesEffect, &R);
     Table = new SymbolTable();
+    VB = VisB;
     Initialized = 1;
   }
 }
@@ -129,9 +131,15 @@ SymbolTable::~SymbolTable() {
   delete BuiltinDefaultRegionParameterVec;
 
   for(SymbolTableMapT::iterator I = SymTable.begin(), E = SymTable.end();
-    I != E; ++I) {
-      // for this key, delete the value
-      delete (*I).second;
+      I != E; ++I) {
+    // for this key, delete the value
+    delete (*I).second;
+  }
+
+  for(ParallelismMapT::iterator I = ParTable.begin(), E = ParTable.end();
+      I != E; ++I) {
+    // for this key, delete the value
+    delete (*I).second;
   }
 }
 
@@ -446,7 +454,8 @@ bool SymbolTable::addParameterName(const Decl *D, StringRef Name) {
   return true;
 }
 
-bool SymbolTable::addBaseTypeAndSub(const Decl *D, const RecordDecl *Base,
+bool SymbolTable::addBaseTypeAndSub(const Decl *D,
+                                    const RecordDecl *Base,
                                     SubstitutionVector *&SubV) {
   if (!SubV)
     return true; // Nothing to do here
@@ -463,6 +472,15 @@ bool SymbolTable::addBaseTypeAndSub(const Decl *D, const RecordDecl *Base,
   return true;
 }
 
+bool SymbolTable::
+addParallelFun(const FunctionDecl *D, const SpecificNIChecker *NIC) {
+  if (!ParTable.lookup(D)) {
+    ParTable[D] = NIC;
+    return true;
+  } else {
+    return false;
+  }
+}
 
 const ParameterVector *SymbolTable::getParameterVectorFromQualType(QualType QT) {
   const ParameterVector *ParamVec = 0;

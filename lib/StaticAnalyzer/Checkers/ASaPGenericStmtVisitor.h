@@ -1,4 +1,4 @@
-//=== Effect.h - Safe Parallelism checker -----*- C++ -*--------------===//
+//=== ASaPGenericStmtVisitor.h - Safe Parallelism checker -*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,9 +7,13 @@
 //
 //===----------------------------------------------------------------===//
 //
-// This file defines the Effect and EffectSummary classes used by the Safe
+// This file defines the ASaPStmtVisitor template classe used by the Safe
 // Parallelism checker, which tries to prove the safety of parallelism
 // given region and effect annotations.
+//
+// ASaPStmtVisitor extends clang::StmtVisitor and it includes common
+// functionality shared by the ASaP passes that visit statements,
+// including TypeBuilder, AssignmentChecker, EffectCollector, and more.
 //
 //===----------------------------------------------------------------===//
 
@@ -19,6 +23,7 @@
 #include "clang/AST/StmtVisitor.h"
 #include "clang/AST/ASTContext.h"
 
+#include "ASaPSymbolTable.h"
 #include "ASaPUtil.h"
 
 
@@ -35,8 +40,6 @@ class ASaPStmtVisitor
 
 protected:
   /// Fields
-  VisitorBundle &VB;
-
   BugReporter &BR;
   ASTContext &Ctx;
   AnalysisManager &Mgr;
@@ -50,16 +53,13 @@ protected:
 
 public:
   /// Constructor
-  explicit ASaPStmtVisitor(
-      VisitorBundle &VB,
-      const FunctionDecl *Def)
-      : VB(VB),
-        BR(VB.BR),
-        Ctx(VB.Ctx),
-        Mgr(VB.Mgr),
-        AC(VB.AC),
-        OS(VB.OS),
-        SymT(VB.SymT),
+  explicit ASaPStmtVisitor(const FunctionDecl *Def)
+      : BR(*SymbolTable::VB.BR),
+        Ctx(*SymbolTable::VB.Ctx),
+        Mgr(*SymbolTable::VB.Mgr),
+        AC(SymbolTable::VB.AC),
+        OS(*SymbolTable::VB.OS),
+        SymT(*SymbolTable::Table),
         Def(Def),
         FatalError(false) {
     OS << "DEBUG:: ******** INVOKING Generic STMT Visitor...\n";

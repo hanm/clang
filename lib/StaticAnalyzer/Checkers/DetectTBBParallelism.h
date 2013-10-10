@@ -27,8 +27,6 @@ namespace asap {
 class DetectTBBParallelism :
   public RecursiveASTVisitor<DetectTBBParallelism> {
 
-  VisitorBundle &VB;
-
   BugReporter &BR;
   ASTContext &Ctx;
   raw_ostream &OS;
@@ -39,7 +37,7 @@ class DetectTBBParallelism :
 public:
   typedef RecursiveASTVisitor<DetectTBBParallelism> BaseClass;
 
-  explicit DetectTBBParallelism (VisitorBundle &VB);
+  explicit DetectTBBParallelism ();
   //virtual ~DetectTBBParallelism ();
   inline bool encounteredFatalError() { return FatalError; }
 

@@ -42,13 +42,11 @@ class StmtVisitorInvoker :
 
 private:
   /// Private Fields
-  VisitorBundle &VB;
-
   bool FatalError;
 
 public:
   /// Constructor
-  explicit StmtVisitorInvoker(VisitorBundle &VB) : VB(VB), FatalError(false) {}
+  explicit StmtVisitorInvoker() : FatalError(false) {}
 
   bool shouldVisitTemplateInstantiations() const { return true; }
   bool shouldVisitImplicitCode() const { return true; }
@@ -64,7 +62,7 @@ public:
       Stmt* S = Definition->getBody();
       assert(S);
 
-      StmtVisitorT StmtVisitor(VB, Definition, S, true);
+      StmtVisitorT StmtVisitor(Definition, S, true);
 
       FatalError |= StmtVisitor.encounteredFatalError();
     }
@@ -86,25 +84,25 @@ public:
                     BugReporter &BR) const {
 
     TranslationUnitDecl *TUDecl = const_cast<TranslationUnitDecl*>(TUDeclConst);
-    SymbolTable::Initialize();
+    ASTContext &Ctx = TUDecl->getASTContext();
+    AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(TUDecl);
+    VisitorBundle VB = {&BR, &Ctx, &Mgr, AC, &os};
+    SymbolTable::Initialize(VB);
 
     // initialize traverser
     SymbolTable &SymT = *SymbolTable::Table;
     AnnotationSchemeT AnnotScheme(SymT);
     SymT.setAnnotationScheme(&AnnotScheme);
 
-    ASTContext &Ctx = TUDecl->getASTContext();
-    AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(TUDecl);
-    VisitorBundle VB = {BR, Ctx, Mgr, AC, os, SymT};
 
-    runCheckers(TUDecl, VB);
+    runCheckers(TUDecl);
 
     SymbolTable::Destroy();
   }
 
-  void runCheckers(TranslationUnitDecl *TUDecl, VisitorBundle &VB) const {
+  void runCheckers(TranslationUnitDecl *TUDecl) const {
     os << "DEBUG:: starting ASaP TBB Parallelism Detection\n";
-    DetectTBBParallelism DetectTBBPar(VB);
+    DetectTBBParallelism DetectTBBPar;
     DetectTBBPar.TraverseDecl(TUDecl);
     os << "##############################################\n";
     os << "DEBUG:: done running ASaP TBB Parallelism Detection\n\n";
@@ -114,7 +112,7 @@ public:
     }
 
     os << "DEBUG:: starting ASaP Non-Interference Checking\n";
-    StmtVisitorInvoker<NonInterferenceChecker> NonIChecker(VB);
+    StmtVisitorInvoker<NonInterferenceChecker> NonIChecker;
     NonIChecker.TraverseDecl(TUDecl);
     os << "##############################################\n";
     os << "DEBUG:: done running ASaP Non-Interference Checking\n\n";
@@ -124,7 +122,7 @@ public:
     }
 
     os << "DEBUG:: starting ASaP Region Name & Parameter Collector\n";
-    CollectRegionNamesAndParametersTraverser NameCollector(VB);
+    CollectRegionNamesAndParametersTraverser NameCollector;
     NameCollector.TraverseDecl(TUDecl);
     os << "##############################################\n";
     os << "DEBUG:: done running ASaP Region Name & Parameter Collector\n\n";
@@ -134,7 +132,7 @@ public:
     }
 
     os << "DEBUG:: starting ASaP Semantic Checker\n";
-    ASaPSemanticCheckerTraverser SemanticChecker(VB);
+    ASaPSemanticCheckerTraverser SemanticChecker;
     SemanticChecker.TraverseDecl(TUDecl);
     os << "##############################################\n";
     os << "DEBUG:: done running ASaP Semantic Checker\n\n";
@@ -144,7 +142,7 @@ public:
     }
 
     os << "DEBUG:: starting ASaP Effect Coverage Checker\n";
-    EffectSummaryNormalizerTraverser EffectNormalizerChecker(VB);
+    EffectSummaryNormalizerTraverser EffectNormalizerChecker;
     EffectNormalizerChecker.TraverseDecl(TUDecl);
     os << "##############################################\n";
     os << "DEBUG:: done running ASaP Effect Coverage Checker\n\n";
@@ -154,7 +152,7 @@ public:
     }
 
     os << "DEBUG:: starting ASaP Type Checker\n";
-    StmtVisitorInvoker<AssignmentCheckerVisitor> TypeChecker(VB);
+    StmtVisitorInvoker<AssignmentCheckerVisitor> TypeChecker;
     TypeChecker.TraverseDecl(TUDecl);
     os << "##############################################\n";
     os << "DEBUG:: done running ASaP Type Checker\n\n";
@@ -163,7 +161,7 @@ public:
       return;
     }
     // Check that Effect Summaries cover effects
-    StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker(VB);
+    StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker;
     EffectChecker.TraverseDecl(TUDecl);
     os << "##############################################\n";
     os << "DEBUG:: done running ASaP Effect Checker\n\n";

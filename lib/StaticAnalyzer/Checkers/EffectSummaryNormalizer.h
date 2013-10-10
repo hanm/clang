@@ -31,8 +31,6 @@ namespace asap {
 class EffectSummaryNormalizerTraverser :
   public RecursiveASTVisitor<EffectSummaryNormalizerTraverser> {
 
-  VisitorBundle &VB;
-
   BugReporter &BR;
   ASTContext &Ctx;
   raw_ostream &OS;
@@ -46,7 +44,7 @@ class EffectSummaryNormalizerTraverser :
 public:
   typedef RecursiveASTVisitor<EffectSummaryNormalizerTraverser> BaseClass;
 
-  explicit EffectSummaryNormalizerTraverser (VisitorBundle &VB);
+  explicit EffectSummaryNormalizerTraverser ();
   inline bool encounteredFatalError() { return FatalError; }
 
   bool shouldVisitTemplateInstantiations() const { return true; }

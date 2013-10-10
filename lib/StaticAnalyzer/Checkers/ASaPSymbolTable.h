@@ -26,8 +26,10 @@
 #include "clang/AST/Type.h"
 
 #include "ASaPAnnotationScheme.h"
+#include "ASaPUtil.h"
 #include "ASaPFwdDecl.h"
 #include "ASaPInheritanceMap.h"
+#include "SpecificNIChecker.h"
 
 namespace clang {
 namespace asap {
@@ -54,8 +56,20 @@ public:
 
 class SymbolTable {
   typedef llvm::DenseMap<const Decl*, SymbolTableEntry*>  SymbolTableMapT;
-  // Symbol Table Map
+  typedef llvm::DenseMap<const FunctionDecl*,
+                          const SpecificNIChecker*> ParallelismMapT;
+
+  /// \brief Symbol Table Map
   SymbolTableMapT SymTable;
+
+  /// \brief Parallelism Checker Map: maps specific function declarations
+  /// to objects that 'know' which NI constraints need checking.
+  ///
+  /// These objects have types derived from SpecificNIChecker that 'know'
+  /// what NI constraints each function needs (e.g., parallel_for w. range,
+  /// parallel_for with iterators, parallel_reduce, parallel_invoke, etc).
+  ParallelismMapT ParTable;
+
   AnnotationScheme *AnnotScheme;
   static int Initialized;
 
@@ -78,9 +92,10 @@ public:
   static const Effect *WritesLocal;
   // Unique globally accessible symbol table
   static SymbolTable *Table;
+  static VisitorBundle VB;
 
   // Static Functions
-  static void Initialize();
+  static void Initialize(VisitorBundle &VB);
   static void Destroy();
   static inline bool isNonPointerScalarType(QualType QT) {
     return (QT->isScalarType() && !QT->isPointerType());
@@ -93,7 +108,7 @@ public:
 
   // Functions
   /// \brief set the pointer to the annotation scheme.
-  void setAnnotationScheme(AnnotationScheme *AnS) {
+  inline void setAnnotationScheme(AnnotationScheme *AnS) {
     AnnotScheme = AnS;
   }
 
@@ -124,6 +139,9 @@ public:
   const InheritanceMapT *getInheritanceMap(QualType QT) const;
   const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;
 
+  inline const SpecificNIChecker *getNIChecker(const FunctionDecl *FD) const {
+    return ParTable.lookup(FD);
+  }
   // Setters
   /// \brief Returns true iff the type for D was not already set.
   bool setType(const Decl* D, ASaPType *T);
@@ -167,7 +185,7 @@ public:
   bool addBaseTypeAndSub(const Decl *D, const RecordDecl *Base,
                          SubstitutionVector *&SubV);
 
-
+  bool addParallelFun(const FunctionDecl *D, const SpecificNIChecker *NIC);
 
   /// \brief Get parameter vector from Clang::Type
   const ParameterVector *getParameterVectorFromQualType(QualType QT);
