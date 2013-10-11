@@ -53,6 +53,47 @@ helperMakeLocalType(const ValueDecl *D, long ArgNum) {
 }
 
 
+inline AnnotationSet AnnotationScheme::
+helperMakeWritesLocalEffectSummary(const FunctionDecl *D) {
+  AnnotationSet Result;
+  // Writes Local
+  Rpl LocalRpl(*SymbolTable::LOCAL_RplElmt);
+  Effect WritesLocal(Effect::EK_WritesEffect, &LocalRpl);
+  Result.EffSum = new EffectSummary(WritesLocal);
+
+  return Result;
+}
+
+inline AnnotationSet AnnotationScheme::
+helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT) {
+
+  AnnotationSet Result;
+  RplVector RplV;
+  int I = 0;
+  Result.ParamVec = new ParameterVector();
+
+  OSv2 << "DEBUG:: QT (" << (QT->isScalarType()? "is Scalar" : "is *NOT* Scalar")
+       << ") = " << QT.getAsString() << "\n";
+  if (QT->isScalarType()) {
+    // 1st Arg = Local, then create a new parameter for each subsequent one
+    I = 1;
+    RplV.push_back(Rpl(*SymbolTable::LOCAL_RplElmt));
+  }
+  for (; I < ArgNum; ++I) {
+    std::stringstream ss;
+    ss << D->getNameAsString() << "_" << I;
+    std::string ParamName = ss.str();
+    OSv2 << "DEBUG:: adding param named: " << ParamName << "\n";
+    ParamRplElement Param(ParamName);
+    Result.ParamVec->push_back(Param); // makes a (persistent) copy of Param
+    RplV.push_back(Rpl(*Result.ParamVec->back())); // use the persistent copy
+  }
+  Result.T = new ASaPType(D->getType(), SymT.getInheritanceMap(D), &RplV);
+  OSv2 << "DEBUG:: made default ParamType : " << Result.T->toString() << "\n";
+  return Result;
+
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 AnnotationSet ParametricAnnotationScheme::
 makeClassParams(const RecordDecl *D) {
@@ -99,39 +140,21 @@ makeFieldType(const FieldDecl *D, long ArgNum) {
 
 AnnotationSet ParametricAnnotationScheme::
 makeParamType(const ParmVarDecl *D, long ArgNum) {
-  AnnotationSet Result;
-  RplVector RplV;
-  int I = 0;
-  QualType QT = D->getType();
-  if (QT->isScalarType()) {
-    // 1st Arg = Local, then create a new parameter for each subsequent one
-    I = 1;
-    RplV.push_back(Rpl(*SymbolTable::LOCAL_RplElmt));
-    Result.ParamVec = new ParameterVector();
-  }
-  for (; I < ArgNum; ++I) {
-    std::stringstream ss;
-    ss << D->getNameAsString() << I;
-    std::string ParamName = ss.str();
-    ParamRplElement Param(ParamName);
-    Result.ParamVec->push_back(Param);
-    RplV.push_back(Rpl(*SymbolTable::LOCAL_RplElmt));
-  }
-  Result.T = new ASaPType(D->getType(), SymT.getInheritanceMap(D), &RplV);
-  return Result;
+  return helperMakeParametricType(D, ArgNum, D->getType());
 }
 
 AnnotationSet ParametricAnnotationScheme::
 makeReturnType(const FunctionDecl *D, long ArgNum) {
-  assert(false && "Implement Me!");
-  return helperMakeLocalType(D, ArgNum);
+  QualType QT = D->getType();
+  assert(QT->isFunctionType());
+  const FunctionType *FT = QT->getAs<FunctionType>();
+  QT = FT->getResultType();
+  return helperMakeParametricType(D, ArgNum, QT);
 }
 
 AnnotationSet ParametricAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
-  AnnotationSet Result;
-  assert(false && "Implement Me!");
-  return Result;
+  return helperMakeWritesLocalEffectSummary(D);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -170,13 +193,7 @@ makeReturnType(const FunctionDecl *D, long ArgNum) {
 
 AnnotationSet SimpleAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
-  AnnotationSet Result;
-  // Writes Local
-  Rpl LocalRpl(*SymbolTable::LOCAL_RplElmt);
-  Effect WritesLocal(Effect::EK_WritesEffect, &LocalRpl);
-  Result.EffSum = new EffectSummary(WritesLocal);
-
-  return Result;
+  return helperMakeWritesLocalEffectSummary(D);
 }
 ///////////////////////////////////////////////////////////////////////////////
 

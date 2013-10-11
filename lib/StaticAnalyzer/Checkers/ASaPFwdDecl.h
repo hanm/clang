@@ -43,6 +43,7 @@ class CallExpr;
 class CXXConstructorDecl;
 class CXXRecordDecl;
 class Decl;
+class DeclaratorDecl;
 class Expr;
 class FunctionDecl;
 class ParmVarDecl;
