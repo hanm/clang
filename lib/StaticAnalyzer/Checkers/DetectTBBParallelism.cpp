@@ -98,20 +98,20 @@ bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
           // Add to SymT
           OS << "DEBUG:: Adding a parallel_for<Range> to SymT\n";
 
-          bool Result = SymT.addParallelFun(FunD, new TBBParallelForRangeNIChecker());
+          SymT.addParallelFun(FunD, new TBBParallelForRangeNIChecker());
           //assert(Result && "failed adding SpecificNIChecker to ParTable");
         }
         // Case 2. parallel_for(Index, ..., Function, ...)
         else {
           // Add to SymT
           OS << "DEBUG:: Adding a parallel_for<Index> to SymT\n";
-          bool Result = SymT.addParallelFun(FunD, new TBBParallelForIndexNIChecker());
+          SymT.addParallelFun(FunD, new TBBParallelForIndexNIChecker());
           //assert(Result && "failed adding SpecificNIChecker to ParTable");
         }
       } else if (!Name.compare("parallel_invoke")) {
         // Add to SymT
         OS << "DEBUG:: Adding a parallel_invoke to SymT (" << FunD << ")\n";
-        bool Result = SymT.addParallelFun(FunD, new TBBParallelInvokeNIChecker());
+        SymT.addParallelFun(FunD, new TBBParallelInvokeNIChecker());
         //assert(Result && "failed adding SpecificNIChecker to ParTable");
       }
     } // end if tbb

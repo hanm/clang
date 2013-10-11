@@ -262,10 +262,10 @@ getInheritanceMap(QualType QT) const {
     QT = QT->getPointeeType();
   }
   if (const CXXRecordDecl *RecD = QT->getAsCXXRecordDecl()) {
-      OSv2 << "DEBUG:: the type is";
+      /*OSv2 << "DEBUG:: the type is";
       OSv2 << (RecD->hasNameForLinkage() ? "(Named)" : "(ANONYMOUS)") << ":\n";
       RecD->dump(OSv2);
-      OSv2 << "\n";
+      OSv2 << "\n";*/
 
       assert(hasDecl(RecD) && "Internal error: type missing declaration");
       Result = getInheritanceMap(RecD);
@@ -478,6 +478,7 @@ addParallelFun(const FunctionDecl *D, const SpecificNIChecker *NIC) {
     ParTable[D] = NIC;
     return true;
   } else {
+    delete NIC;
     return false;
   }
 }
@@ -525,7 +526,7 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
   } else if (ImplicitParamDecl *ImplParamD = dyn_cast<ImplicitParamDecl>(ValD)) {
     assert(false && "Implement ME! :)");
   } else if (ParmVarDecl *ParamD = dyn_cast<ParmVarDecl>(ValD)) {
-    OSv2 << "DEBUG::         case ParmVarDecl\n";
+    OSv2 << "DEBUG::         case ParmVarDecl (ParamCount = " << ParamCount << "\n";
     AnnotationSet AnSe = AnnotScheme->makeParamType(ParamD, ParamCount);
     if (AnSe.ParamVec) {
       DeclContext *DC = ParamD->getDeclContext();
@@ -539,6 +540,7 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
       addToParameterVector(FunD, AnSe.ParamVec);
       assert(AnSe.ParamVec == 0);
     }
+    OSv2 << "DEBUG::         case ParmVarDecl = DONE\n";
     return AnSe;
   } else if (VarDecl *VarD = dyn_cast<VarDecl>(ValD)) {
       if (VarD->isStaticLocal() || VarD->isStaticDataMember()
