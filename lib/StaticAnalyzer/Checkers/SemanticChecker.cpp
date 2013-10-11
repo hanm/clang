@@ -438,6 +438,11 @@ checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
   OS << "ArgCount = " << ArgCount << "\n";
   OS << "DefaultInRpl ="  <<  ((DefaultInRpl) ? DefaultInRpl->toString() : "")
      << "\n";
+
+  // Ignore DefaultInRpl if QualType is a ReferenceType
+  if (QT->isReferenceType())
+    DefaultInRpl = 0;
+
   switch(ResKin) {
   case RK_ERROR:
     emitUnknownNumberOfRegionParamsForType(D);
@@ -1058,6 +1063,18 @@ VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
     << "a template\n";
   OS << "DEBUG:: it is " << (D->isTemplateParameter() ? "" : "NOT ")
     << "a template PARAMETER\n";
+  return true;
+}
+
+bool ASaPSemanticCheckerTraverser::
+TraverseTypedefDecl(TypedefDecl *D) {
+  OS << "DEBUG:: TraverseTypedefDecl (" << D << ") : ";
+  if (D) {
+    D->print(OS, Ctx.getPrintingPolicy());
+    OS << "\n";
+    D->dump(OS);
+  }
+  // Don't Walk-Up or Visit nodes under a TypedefDecl.
   return true;
 }
 

@@ -71,7 +71,6 @@ public:
   bool VisitRecordDecl (RecordDecl *D);
   bool VisitEmptyDecl(EmptyDecl *D);
   bool VisitNamespaceDecl (NamespaceDecl *D);
-
   bool VisitValueDecl(ValueDecl *D);
 
 }; // End class CollectRegionNamesAndParametersTraverser.

@@ -29,22 +29,40 @@ namespace asap {
 /// \brief abstract base class of all NIChecker classes
 class SpecificNIChecker {
 public:
+  virtual ~SpecificNIChecker() {};
   virtual bool check(CallExpr *E) const = 0;
 }; // end class SpecificNIChecker
 
 /// \brief abstract base class of all TBB related NIChecker classes
 class TBBSpecificNIChecker : public SpecificNIChecker {
+public:
+//  virtual ~TBBSpecificNIChecker() = 0;
+  virtual bool check(CallExpr *E) const { return false; };
 }; // end class TBBSpecificNIChecker
 
 /// \brief base class for all TBB parallel_for related NIChecker classes
 class TBBParallelForNIChecker : public TBBSpecificNIChecker {
 }; // end class TBBParallelForChecker
 
+/// \brief class for checking TBB parallel_for with Range iterator
 class TBBParallelForRangeNIChecker : public TBBParallelForNIChecker {
 public:
-  // Methods
+  virtual ~TBBParallelForRangeNIChecker() {}
+}; // end class TBBParallelForRangeChecker
+
+/// \brief class for checking TBB parallel_for with Iterator
+class TBBParallelForIndexNIChecker : public TBBParallelForNIChecker {
+public:
+  virtual ~TBBParallelForIndexNIChecker() {};
+}; // end class TBBParallelForRangeChecker
+
+/// \brief class for checking TBB parallel_invoke
+class TBBParallelInvokeNIChecker : public TBBSpecificNIChecker {
+public:
+  virtual ~TBBParallelInvokeNIChecker() {};
   virtual bool check(CallExpr *E) const;
 }; // end class TBBParallelForRangeChecker
+
 
 } // end namespace asap
 } // end namespace clang

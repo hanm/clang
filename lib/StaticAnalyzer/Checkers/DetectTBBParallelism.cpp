@@ -34,7 +34,8 @@ DetectTBBParallelism()
 
 bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
 
-  StringRef Name = D->getNameInfo().getAsString();
+  std::string Str = D->getNameInfo().getAsString();
+  StringRef Name(Str);
   OS << "DEBUG:: VisitFunctionDecl (" << D << "). Name = " << Name << "\n";
   OS << "D->isThisDeclarationADefinition() = "
      << D->isThisDeclarationADefinition() << "\n";
@@ -60,41 +61,60 @@ bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
   OS << "':\n";
   OS << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
 
+  // Detect TBB functions
+  // As far as I know so far, all the TBB APIs are templates, so we will
+  // simply add the template function and not all the instantiations.
+  // We will also have to change acoordingly the call-site detection
+  // code in NonInterferenceChecker so that if the FunctionDecl kind
+  // is FunctionTemplateSpecialization, we look-up the Function template
+  // in the ParTable of the SymbolTable.
+  FunctionDecl *FunD = D;
+  if (FunD->getTemplatedKind() == FunctionDecl::TK_FunctionTemplateSpecialization) {
+    FunD = FunD->getPrimaryTemplate()->getTemplatedDecl();
+  }
   // Detect tbb::parallel_for
   OS << "DEBUG:: Name = " << Name << "\n";
-  if (!Name.compare("parallel_for")) {
-    // Find the namespace, make sure it's 'tbb'
-    DeclContext *NamespaceCtx = D->getEnclosingNamespaceContext();
-    assert(isa<NamespaceDecl>(NamespaceCtx));
+  DeclContext *NamespaceCtx = FunD->getEnclosingNamespaceContext();
+  if (isa<NamespaceDecl>(NamespaceCtx)) {
     NamespaceDecl *NamespaceD = dyn_cast<NamespaceDecl>(NamespaceCtx);
     assert(NamespaceD);
     StringRef NamespaceStr = NamespaceD->getName();
     OS << "DEBUG:: enclosing namespace = " << NamespaceStr << "\n";
     if (!NamespaceStr.compare("tbb")) {
-      OS << "DEBUG:: Found one!\n";
-      // TODO:  Add D to Symboltable Map.
-      ParmVarDecl *Parm1 = D->getParamDecl(0);
-      StringRef ParmTypeStr = Parm1->getType().getAsString();
-      OS << "DEBUG:: 1st Param Type = " << ParmTypeStr << "\n";
-      // Case 1. parallel_for(Range, Body, ...)
-      if (ParmTypeStr.startswith("const class tbb::blocked_range")) {
-        // Find Body
-        ParmVarDecl *Body = D->getParamDecl(1);
-        OS << "DEBUG:: 2nd parameter should be a Body: ";
-        Body->print(OS, Ctx.getPrintingPolicy());
-        OS << "\n";
+      if (!Name.compare("parallel_for")) {
+        // Find the namespace, make sure it's 'tbb'
+        OS << "DEBUG:: Found one!\n";
+        // TODO:  Add D to Symboltable Map.
+        ParmVarDecl *Parm1 = FunD->getParamDecl(0);
+        StringRef ParmTypeStr = Parm1->getType().getAsString();
+        OS << "DEBUG:: 1st Param Type = " << ParmTypeStr << "\n";
+        // Case 1. parallel_for(Range, Body, ...)
+        //if (ParmTypeStr.startswith("const class tbb::blocked_range")) {
+        if (!ParmTypeStr.compare("Range")) {
+          ParmVarDecl *Body = D->getParamDecl(1);
+          OS << "DEBUG:: 2nd parameter should be a Body: ";
+          Body->print(OS, Ctx.getPrintingPolicy());
+          OS << "\n";
+          // Add to SymT
+          OS << "DEBUG:: Adding a parallel_for<Range> to SymT\n";
+
+          bool Result = SymT.addParallelFun(FunD, new TBBParallelForRangeNIChecker());
+          //assert(Result && "failed adding SpecificNIChecker to ParTable");
+        }
+        // Case 2. parallel_for(Index, ..., Function, ...)
+        else {
+          // Add to SymT
+          OS << "DEBUG:: Adding a parallel_for<Index> to SymT\n";
+          bool Result = SymT.addParallelFun(FunD, new TBBParallelForIndexNIChecker());
+          //assert(Result && "failed adding SpecificNIChecker to ParTable");
+        }
+      } else if (!Name.compare("parallel_invoke")) {
         // Add to SymT
-        OS << "DEBUG:: Adding a 'Range' parallel_for to SymT\n";
-
-        bool Result = SymT.addParallelFun(D, new TBBParallelForRangeNIChecker());
-        assert(Result && "failed adding SpecificNIChecker to ParTable");
+        OS << "DEBUG:: Adding a parallel_invoke to SymT (" << FunD << ")\n";
+        bool Result = SymT.addParallelFun(FunD, new TBBParallelInvokeNIChecker());
+        //assert(Result && "failed adding SpecificNIChecker to ParTable");
       }
-      // Case 2. parallel_for(Index, ..., Function, ...)
-      else {
-        // TODO
-      }
-    }
-
+    } // end if tbb
   }
   return true;
 }

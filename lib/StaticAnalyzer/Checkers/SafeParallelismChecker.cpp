@@ -111,16 +111,6 @@ public:
       return;
     }
 
-    os << "DEBUG:: starting ASaP Non-Interference Checking\n";
-    StmtVisitorInvoker<NonInterferenceChecker> NonIChecker;
-    NonIChecker.TraverseDecl(TUDecl);
-    os << "##############################################\n";
-    os << "DEBUG:: done running ASaP Non-Interference Checking\n\n";
-    if (NonIChecker.encounteredFatalError()) {
-      os << "DEBUG:: NON-INTERFERENCE CHECKING ENCOUNTERED FATAL ERROR!! STOPPING\n";
-      return;
-    }
-
     os << "DEBUG:: starting ASaP Region Name & Parameter Collector\n";
     CollectRegionNamesAndParametersTraverser NameCollector;
     NameCollector.TraverseDecl(TUDecl);
@@ -169,12 +159,26 @@ public:
       os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;
     }
+    os << "DEBUG:: starting ASaP Non-Interference Checking\n";
+    StmtVisitorInvoker<NonInterferenceChecker> NonIChecker;
+    NonIChecker.TraverseDecl(TUDecl);
+    os << "##############################################\n";
+    os << "DEBUG:: done running ASaP Non-Interference Checking\n\n";
+    if (NonIChecker.encounteredFatalError()) {
+      os << "DEBUG:: NON-INTERFERENCE CHECKING ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      return;
+    }
+
   }
 }; // end class SafeParallelismChecker
 } // end unnamed namespace
 
 void ento::registerSafeParallelismChecker(CheckerManager &mgr) {
   mgr.registerChecker<SafeParallelismChecker<SimpleAnnotationScheme> >();
+}
+
+void ento::registerParametricSafeParallelismChecker(CheckerManager &mgr) {
+  mgr.registerChecker<SafeParallelismChecker<ParametricAnnotationScheme> >();
 }
 
 void ento::registerGlobalAccessChecker(CheckerManager &mgr) {

@@ -79,6 +79,13 @@ makeFieldType(const FieldDecl *D, long ArgNum) {
 
   AnnotationSet Result;
   RplVector RplV;
+
+  if (!ParamV || ParamV->size()==0) {
+    Result.ParamVec = new ParameterVector();
+    ParamRplElement Param("P");
+    Result.ParamVec->push_back(Param);
+    ParamV = Result.ParamVec;
+  }
   assert(ParamV && ParamV->size()>0
          && "Internal error: empty region parameter vector.");
 
@@ -93,11 +100,16 @@ makeFieldType(const FieldDecl *D, long ArgNum) {
 AnnotationSet ParametricAnnotationScheme::
 makeParamType(const ParmVarDecl *D, long ArgNum) {
   AnnotationSet Result;
-  // 1st Arg = Local, then create a new parameter for each subsequent one
   RplVector RplV;
-  RplV.push_back(Rpl(*SymbolTable::LOCAL_RplElmt));
-  Result.ParamVec = new ParameterVector();
-  for (int I = 1; I < ArgNum; ++I) {
+  int I = 0;
+  QualType QT = D->getType();
+  if (QT->isScalarType()) {
+    // 1st Arg = Local, then create a new parameter for each subsequent one
+    I = 1;
+    RplV.push_back(Rpl(*SymbolTable::LOCAL_RplElmt));
+    Result.ParamVec = new ParameterVector();
+  }
+  for (; I < ArgNum; ++I) {
     std::stringstream ss;
     ss << D->getNameAsString() << I;
     std::string ParamName = ss.str();

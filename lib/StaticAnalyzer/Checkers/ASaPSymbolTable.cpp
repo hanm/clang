@@ -513,10 +513,33 @@ getInheritanceSubVec(QualType QT) {
 }
 
 AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
+  OSv2 << "DEBUG:: SymbolTable::makeDefaultType\n";
   if (FieldDecl *FieldD = dyn_cast<FieldDecl>(ValD)) {
-    return AnnotScheme->makeFieldType(FieldD, ParamCount);
+    AnnotationSet AnSe = AnnotScheme->makeFieldType(FieldD, ParamCount);
+    if (AnSe.ParamVec) {
+      const RecordDecl *ReD = FieldD->getParent();
+      addToParameterVector(ReD, AnSe.ParamVec);
+      assert(AnSe.ParamVec == 0);
+    }
+    return AnSe;
   } else if (ImplicitParamDecl *ImplParamD = dyn_cast<ImplicitParamDecl>(ValD)) {
     assert(false && "Implement ME! :)");
+  } else if (ParmVarDecl *ParamD = dyn_cast<ParmVarDecl>(ValD)) {
+    OSv2 << "DEBUG::         case ParmVarDecl\n";
+    AnnotationSet AnSe = AnnotScheme->makeParamType(ParamD, ParamCount);
+    if (AnSe.ParamVec) {
+      DeclContext *DC = ParamD->getDeclContext();
+      OSv2 << "DEBUG:: DeclContext:";
+      DC->dumpDeclContext();
+      OSv2 << "\n";
+      assert(DC->isFunctionOrMethod() && "Internal error: ParmVarDecl found "
+             "outside FunctionDecl Context.");
+      FunctionDecl *FunD = dyn_cast<FunctionDecl>(DC);
+      assert(FunD);
+      addToParameterVector(FunD, AnSe.ParamVec);
+      assert(AnSe.ParamVec == 0);
+    }
+    return AnSe;
   } else if (VarDecl *VarD = dyn_cast<VarDecl>(ValD)) {
       if (VarD->isStaticLocal() || VarD->isStaticDataMember()
           || VarD->getDeclContext()->isFileContext()) {
@@ -526,18 +549,6 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
         // Local
         return AnnotScheme->makeStackType(VarD, ParamCount);
       }
-  } else if (ParmVarDecl *ParamD = dyn_cast<ParmVarDecl>(ValD)) {
-    AnnotationSet AnSe = AnnotScheme->makeParamType(ParamD, ParamCount);
-    if (AnSe.ParamVec) {
-      DeclContext *DC = ParamD->getDeclContext();
-      assert(DC->isFunctionOrMethod() && "Internal error: ParmVarDecl found "
-             "outside FunctionDecl Context.");
-      FunctionDecl *FunD = dyn_cast<FunctionDecl>(DC);
-      assert(FunD);
-      addToParameterVector(FunD, AnSe.ParamVec);
-      assert(AnSe.ParamVec == 0);
-    }
-    return AnSe;
   } else if (FunctionDecl *FunD = dyn_cast<FunctionDecl>(ValD)) {
     // FIXME: Merge this branch with if ParamVarDecl
     AnnotationSet AnSe = AnnotScheme->makeReturnType(FunD, ParamCount);

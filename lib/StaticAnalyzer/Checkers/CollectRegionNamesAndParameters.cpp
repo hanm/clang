@@ -25,14 +25,6 @@
 namespace clang {
 namespace asap {
 
-/*DetectTBBParallelism::
-DetectTBBParallelism()
-  : BR(*SymbolTable.VB.BR),
-    Ctx(*SymbolTable.VB.Ctx),
-    OS(*SymbolTable.VB.OS),
-    SymT(*SymbolTable.VB.Table),
-    FatalError(false) {}*/
-
 // Constructor
 CollectRegionNamesAndParametersTraverser::
 CollectRegionNamesAndParametersTraverser()
@@ -232,6 +224,8 @@ VisitValueDecl(ValueDecl *D) {
   OS << "\n";
 
   // Visit the declaration of anonymous unions & structs
+  // These anonymous unions or structs will not be traversed
+  // by the regular visitors for NamedDecl
   CXXRecordDecl *RecD = D->getType()->getAsCXXRecordDecl();
   if (RecD && !RecD->hasNameForLinkage() && !SymT.hasDecl(RecD)) {
     VisitRecordDecl(RecD);

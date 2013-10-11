@@ -166,6 +166,7 @@ public:
   bool shouldVisitImplicitCode() const { return true; }
   bool shouldWalkTypesOfTypeLocs() const { return true; }
 
+  // Visitors
   bool VisitValueDecl(ValueDecl *D);
   bool VisitParmVarDecl(ParmVarDecl *D);
   bool VisitFunctionDecl(FunctionDecl *D);
@@ -177,7 +178,8 @@ public:
   bool VisitCXXDestructorDecl(CXXDestructorDecl *D);
   bool VisitCXXConversionDecl(CXXConversionDecl *D);
   bool VisitFunctionTemplateDecl(FunctionTemplateDecl *D);
-
+  // Traversers
+  bool TraverseTypedefDecl(TypedefDecl *D);
 }; // End class ASaPSemanticCheckerTraverser.
 } // End namespace asap.
 } // End namespace clang.

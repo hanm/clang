@@ -23,6 +23,9 @@
 namespace clang {
 namespace asap {
 
+bool SpecificNIChecker::check(CallExpr *E) const {
+  return false;
+}
 //TBBParallelForRangeNIChecker::
 //TBBParallelForRangeNIChecker(const VarDecl *Body, const VarDecl *Range) /*:
 //  Body(Body), Range(Range)*/ { this->Body = Body; this->Range = Range; }
@@ -32,7 +35,7 @@ TBBParallelForRangeNIChecker(const VarDecl *Body, const VarDecl *Range) :
   TBBParallelForNIChecker(Body), Range(Range) { }*/
 
 // Methods
-bool TBBParallelForRangeNIChecker::check(CallExpr *Exp) const {
+bool TBBParallelInvokeNIChecker::check(CallExpr *Exp) const {
   // Find Body
 
   // Compute Effects of Body::operator() (or use its effect summary)
