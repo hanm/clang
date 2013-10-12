@@ -36,8 +36,7 @@ public:
 /// \brief abstract base class of all TBB related NIChecker classes
 class TBBSpecificNIChecker : public SpecificNIChecker {
 public:
-//  virtual ~TBBSpecificNIChecker() = 0;
-  virtual bool check(CallExpr *E) const { return false; };
+  virtual bool check(CallExpr *E) const;
 }; // end class TBBSpecificNIChecker
 
 /// \brief base class for all TBB parallel_for related NIChecker classes
@@ -46,20 +45,15 @@ class TBBParallelForNIChecker : public TBBSpecificNIChecker {
 
 /// \brief class for checking TBB parallel_for with Range iterator
 class TBBParallelForRangeNIChecker : public TBBParallelForNIChecker {
-public:
-  virtual ~TBBParallelForRangeNIChecker() {}
 }; // end class TBBParallelForRangeChecker
 
 /// \brief class for checking TBB parallel_for with Iterator
 class TBBParallelForIndexNIChecker : public TBBParallelForNIChecker {
-public:
-  virtual ~TBBParallelForIndexNIChecker() {};
 }; // end class TBBParallelForRangeChecker
 
 /// \brief class for checking TBB parallel_invoke
 class TBBParallelInvokeNIChecker : public TBBSpecificNIChecker {
 public:
-  virtual ~TBBParallelInvokeNIChecker() {};
   virtual bool check(CallExpr *E) const;
 }; // end class TBBParallelForRangeChecker
 

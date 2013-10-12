@@ -17,6 +17,7 @@
 //
 //===----------------------------------------------------------------===//
 
+#include "clang/AST/DeclTemplate.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 
 #include "ASaPSymbolTable.h"
@@ -67,7 +68,12 @@ void NonInterferenceChecker::VisitCallExpr(CallExpr *Exp) {
     const VarDecl *VarD = dyn_cast<VarDecl>(D);
     assert(VarD || FunD); // The callee should be a function or a fn-pointer
     if (FunD) {
-      if (const SpecificNIChecker *SNIC = SymT.getNIChecker(FunD)) {
+      if(FunD->getTemplatedKind() ==
+         FunctionDecl::TK_FunctionTemplateSpecialization) {
+        FunD = FunD->getPrimaryTemplate()->getTemplatedDecl();
+      }
+      const SpecificNIChecker *SNIC = SymT.getNIChecker(FunD);
+      if (SNIC) {
         SNIC->check(Exp);
       } // otherwise there's nothing to check
     } else { // VarD

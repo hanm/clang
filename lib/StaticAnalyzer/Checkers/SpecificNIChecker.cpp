@@ -17,31 +17,35 @@
 //
 //===----------------------------------------------------------------===//
 #include "clang/AST/Decl.h"
+#include "clang/AST/Expr.h"
 
+#include "ASaPSymbolTable.h"
 #include "SpecificNIChecker.h"
 
 namespace clang {
 namespace asap {
 
-bool SpecificNIChecker::check(CallExpr *E) const {
+void emitNICheckNotImplemented(const Stmt *S, const FunctionDecl *FunD) {
+  StringRef BugName = "Non-interference check not implemented";
+  std::string Name;
+  if (FunD)
+    Name = FunD->getNameInfo().getAsString();
+  else
+    Name = "";
+  StringRef Str(Name);
+  helperEmitStatementWarning(*SymbolTable::VB.BR,
+                             SymbolTable::VB.AC,
+                             S, FunD, Str, BugName, false);
+
+}
+
+bool TBBSpecificNIChecker::check(CallExpr *E) const {
+  emitNICheckNotImplemented(E, 0);
   return false;
 }
-//TBBParallelForRangeNIChecker::
-//TBBParallelForRangeNIChecker(const VarDecl *Body, const VarDecl *Range) /*:
-//  Body(Body), Range(Range)*/ { this->Body = Body; this->Range = Range; }
 
-/*TBBParallelForRangeNIChecker::
-TBBParallelForRangeNIChecker(const VarDecl *Body, const VarDecl *Range) :
-  TBBParallelForNIChecker(Body), Range(Range) { }*/
-
-// Methods
 bool TBBParallelInvokeNIChecker::check(CallExpr *Exp) const {
-  // Find Body
-
-  // Compute Effects of Body::operator() (or use its effect summary)
-
-  // Find induction variables
-
+  // TODO
   return true;
 }
 
