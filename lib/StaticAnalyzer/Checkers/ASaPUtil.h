@@ -52,12 +52,14 @@ void helperEmitAttributeWarning(BugReporter &BR,
                                 const StringRef &BugName,
                                 bool AddQuotes = true);
 
+/// \brief Issues Warning: '<str>' <bugName> on Statement
 void helperEmitStatementWarning(BugReporter &BR,
                                 AnalysisDeclContext *AC,
                                 const Stmt *S,
                                 const Decl *D,
                                 const StringRef &Str,
-                                const StringRef &BugName);
+                                const StringRef &BugName,
+                                bool AddQuotes = true);
 
 void helperEmitInvalidAssignmentWarning(BugReporter &BR,
                                         AnalysisDeclContext *AC,

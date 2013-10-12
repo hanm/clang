@@ -54659,14 +54659,24 @@ public:
             oldGatek = -1;
 
             oldGatek = gatekeeper[freshNode].fetch_and_increment(); // atomic_writes gatekeeper[?]
-     if (oldGatek == 0) {
+            if (oldGatek == 0) {
 
                 int myIndex = newLevelIndex.fetch_and_increment(); // atomic_writes newLevelIndex
 
-         newLevelSet[myIndex] = freshNode; // writes newLevelSet[?] 
-
-         level[freshNode] = currentLevel + 1; // writes level[?]
-     }
+                newLevelSet[myIndex] = freshNode; // writes newLevelSet[?] 
+ 
+                level[freshNode] = currentLevel + 1; // (atomic) writes level[?]
+            }
+            /*
+            atomic {
+              if (gatekeeper[freshNode] == 0) {
+                gatekeeper[freshNode] = 1;
+                int myIndex = newLevelIndex.fetch_and_increment(); // atomic writes newLevelIndex
+                newLevelSet[myIndex] = freshNode; // atomic writes newLevelSet[?] 
+                level[freshNode] = currentLevel + 1; // atomic writes level[?]
+              }
+            }
+            */
         }
     }
 
@@ -54684,7 +54694,7 @@ public:
         tbb::auto_partitioner partitioner;
         for (i=range.begin(); i<range.end(); i++) {
 # 122 "bfs.cpp"
-            tbb::parallel_for (tbb::blocked_range<int>(0,degrees[currentLevelSet[i]],1), innerLoopBody(i), partitioner);
+            tbb::parallel_for (tbb::blocked_range<int>(0,degrees[currentLevelSet[i]],1), innerLoopBody(i), partitioner); // expected-warning{{Non-interference check not implemented}}
 
         }
     }
@@ -54727,7 +54737,7 @@ int main [[asap::writes("Global")]] (int argc, char* argv[])
 
             newLevelIndex = 0;
 
-            tbb::parallel_for (tbb::blocked_range<int>(0, currentLevelSize, 1), outerLoopBody(), partitioner);
+            tbb::parallel_for (tbb::blocked_range<int>(0, currentLevelSize, 1), outerLoopBody(), partitioner); // expected-warning{{Non-interference check not implemented}}
 
 
             currentLevel++;

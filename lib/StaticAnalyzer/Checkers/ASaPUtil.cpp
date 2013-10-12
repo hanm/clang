@@ -80,10 +80,12 @@ void helperEmitStatementWarning(BugReporter &BR,
                                 const Stmt *S,
                                 const Decl *D,
                                 const StringRef &Str,
-                                const StringRef &BugName) {
+                                const StringRef &BugName,
+                                bool AddQuotes) {
   std::string Description;
   raw_string_ostream DescrOS(Description);
-  DescrOS << "'" << Str << "' " << BugName;
+  DescrOS << (AddQuotes ? "'" : "") << Str
+          << (AddQuotes ? "'" : "") << ": " << BugName;
 
   StringRef BugStr = DescrOS.str();
 

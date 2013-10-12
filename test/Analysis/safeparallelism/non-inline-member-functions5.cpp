@@ -29,7 +29,7 @@ void C::do_something [[asap::writes("Class")]]  () { // expected-warning{{effect
 
 void func1 ( C *c [[asap::arg("Local,R")]] ) {
   if (!isNull(c))
-    c->do_something(); // expected-warning{{'Reads Effect on R' effect not covered by effect summary}}
+    c->do_something(); // expected-warning{{'Reads Effect on R': effect not covered by effect summary}}
     // Note: the checker uses the effect summary of the canonical declaration of do_something
     // to calculate the effects of the call above, so it complains that the reads effect is not covered.
 }

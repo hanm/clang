@@ -45,7 +45,7 @@ public:
             I = From.VectorT::begin(),
             E = From.VectorT::end();
          I != E; ++I) {
-      push_back(*I);
+      push_back(*I); // push_back makes a copy of *I
     }
   }
 

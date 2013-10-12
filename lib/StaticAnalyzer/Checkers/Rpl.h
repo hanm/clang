@@ -51,7 +51,7 @@ public:
     return (this == &That) ? true : false;
   }
   virtual ~RplElement() {}
-};
+}; // end class RplElement
 
 class SpecialRplElement : public RplElement {
   /// Fields
