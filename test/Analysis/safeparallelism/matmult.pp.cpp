@@ -1,5 +1,4 @@
 // RUN: %clang_cc1 -std=c++11  -fcxx-exceptions -analyze -analyzer-checker=alpha.GlobalAccessChecker %s -verify
-// expected-no-diagnostics
 
 # 1 "matmult.cpp"
 # 1 "<built-in>" 1
