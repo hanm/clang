@@ -214,14 +214,6 @@ emitOverridenVirtualFunctionMustCoverEffectsOfChildren(
 }
 
 void EffectCollectorVisitor::
-emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef &Str) {
-  FatalError = true;
-  StringRef BugName = "effect summary of canonical declaration does not cover"\
-    " the summary of this declaration";
-  helperEmitDeclarationWarning(BR, D, Str, BugName);
-}
-
-void EffectCollectorVisitor::
 emitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
   FatalError = true;
     StringRef BugName = "unsupported constructor initializer."
