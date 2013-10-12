@@ -17,7 +17,6 @@
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_DETECT_TBB_PARALLELISM_H
 
 #include "clang/AST/RecursiveASTVisitor.h"
-#include "clang/AST/Type.h"
 
 #include "ASaPFwdDecl.h"
 

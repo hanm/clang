@@ -14,7 +14,6 @@
 //===--------------------------------------------------------------------===//
 
 #include "clang/AST/ASTContext.h"
-//#include "clang/AST/Decl.h"
 
 #include "ASaPUtil.h"
 #include "ASaPSymbolTable.h"
@@ -58,8 +57,7 @@ bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
   D->print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
   D->dump(OS);
-  OS << "':\n";
-  OS << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
+  OS << "'\n";
 
   // Detect TBB functions
   // As far as I know so far, all the TBB APIs are templates, so we will
@@ -69,7 +67,8 @@ bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
   // is FunctionTemplateSpecialization, we look-up the Function template
   // in the ParTable of the SymbolTable.
   FunctionDecl *FunD = D;
-  if (FunD->getTemplatedKind() == FunctionDecl::TK_FunctionTemplateSpecialization) {
+  if (FunD->getTemplatedKind() ==
+      FunctionDecl::TK_FunctionTemplateSpecialization) {
     FunD = FunD->getPrimaryTemplate()->getTemplatedDecl();
   }
   // Detect tbb::parallel_for
@@ -96,7 +95,7 @@ bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
           Body->print(OS, Ctx.getPrintingPolicy());
           OS << "\n";
           // Add to SymT
-          OS << "DEBUG:: Adding a parallel_for<Range> to SymT\n";
+          OS << "DEBUG:: Adding a parallel_for<Range> to SymT (" << FunD << ")\n";
 
           SymT.addParallelFun(FunD, new TBBParallelForRangeNIChecker());
           //assert(Result && "failed adding SpecificNIChecker to ParTable");
@@ -104,7 +103,7 @@ bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
         // Case 2. parallel_for(Index, ..., Function, ...)
         else {
           // Add to SymT
-          OS << "DEBUG:: Adding a parallel_for<Index> to SymT\n";
+          OS << "DEBUG:: Adding a parallel_for<Index> to SymT (" << FunD << ")\n";
           SymT.addParallelFun(FunD, new TBBParallelForIndexNIChecker());
           //assert(Result && "failed adding SpecificNIChecker to ParTable");
         }
@@ -116,6 +115,7 @@ bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
       }
     } // end if tbb
   }
+  OS << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
   return true;
 }
 
