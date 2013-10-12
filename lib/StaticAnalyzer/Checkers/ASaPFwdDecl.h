@@ -67,6 +67,7 @@ class Rpl;
 class RplElement;
 class RplVector;
 class SpecialRplElement;
+class SpecificNIChecker;
 class StarRplElement;
 class Substitution;
 class SubstitutionVector;

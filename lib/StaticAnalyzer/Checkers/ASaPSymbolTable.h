@@ -29,7 +29,6 @@
 #include "ASaPUtil.h"
 #include "ASaPFwdDecl.h"
 #include "ASaPInheritanceMap.h"
-#include "SpecificNIChecker.h"
 
 namespace clang {
 namespace asap {

@@ -25,6 +25,7 @@
 #include "ASaPUtil.h"
 #include "Effect.h"
 #include "Rpl.h"
+#include "SpecificNIChecker.h"
 #include "Substitution.h"
 
 namespace clang {
