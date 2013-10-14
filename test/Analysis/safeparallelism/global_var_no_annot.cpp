@@ -1,6 +1,5 @@
 // RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
 //
-// expected-no-diagnostics
 
 int GlobalVar;
 
@@ -85,12 +84,12 @@ int main [[asap::writes("Global")]] () {
  
     // warning if they are forked as different tasks
     // (we don't support tbb fork syntax yet.)
-    tbb::parallel_invoke(foo, bar);
+    tbb::parallel_invoke(foo, bar); // expected-warning{{Interfering effects}}
     // no warning here as zoo has ready only effect
     tbb::parallel_invoke(zoo1, zoo2);
     // warning: the effects of Z2 and B2 are interferring 
     // (if we had "joined" Z2 above, it would be safe)
-    tbb::parallel_invoke(zoo1, callsBar);
+    tbb::parallel_invoke(zoo1, callsBar); // expected-warning{{Interfering effects}}
 
     return 0;
 } //  end main

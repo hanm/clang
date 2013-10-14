@@ -1,5 +1,4 @@
 // RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker %s -verify
-// expected-no-diagnostics
 
 namespace tbb {
     template<typename Func0, typename Func1>
@@ -17,7 +16,7 @@ int do_nothing()
  
 int func()
     {
-    tbb::parallel_invoke(do_nothing, do_nothing);
+    tbb::parallel_invoke(do_nothing, do_nothing); // expected-warning{{Non-interference check not implemented}}
     return 0;
     }
 
