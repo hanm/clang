@@ -80,6 +80,37 @@ bool Effect::isSubEffectKindOf(const Effect &E) const {
   return Result;
 }
 
+bool Effect::isNonInterfering(const Effect &That) const {
+  switch (Kind) {
+  case EK_NoEffect:
+    return true;
+    break;
+  case EK_ReadsEffect:
+  case EK_AtomicReadsEffect:
+    switch (That.Kind) {
+    case EK_NoEffect:
+    case EK_ReadsEffect:
+    case EK_AtomicReadsEffect:
+      return true;
+      break;
+    case EK_AtomicWritesEffect:
+    case EK_WritesEffect:
+      assert(R && "Internal ERROR: missing Rpl in non-pure Effect");
+      assert(That.R && "Internal ERROR: missing Rpl in non-pure Effect");
+      return R->isDisjoint(*That.R);
+    }
+  case EK_WritesEffect:
+  case EK_AtomicWritesEffect:
+    if (That.Kind == EK_NoEffect)
+      return true;
+    else {
+      assert(R && "Internal ERROR: missing Rpl in non-pure Effect");
+      assert(That.R && "Internal ERROR: missing Rpl in non-pure Effect");
+      return R->isDisjoint(*That.R);
+    }
+  }
+}
+
 bool Effect::printEffectKind(raw_ostream &OS) const {
   bool HasRpl = true;
   switch(Kind) {
@@ -149,6 +180,32 @@ bool EffectSummary::covers(const EffectSummary *Sum) const {
   return true;
 }
 
+
+bool EffectSummary::isNonInterfering(const Effect *Eff) const {
+  if (!Eff || Eff->isNoEffect())
+    return true;
+
+  SetT::const_iterator I = begin(), E = end();
+  for(; I != E; ++I) {
+    if (!Eff->isNonInterfering(*(*I)))
+      return false;
+  }
+  return true;
+
+}
+
+bool EffectSummary::isNonInterfering(const EffectSummary *Sum) const {
+  if (!Sum)
+    return true;
+
+  SetT::const_iterator I = Sum->begin(), E = Sum->end();
+  for(; I != E; ++I) {
+    if (!this->isNonInterfering(*I))
+      return false;
+  }
+  return true;
+}
+
 void EffectSummary::makeMinimal(EffectCoverageVector &ECV) {
   SetT::iterator I = begin(); // not a const iterator
   while (I != end()) { // EffectSum.end() is not loop invariant
@@ -174,17 +231,30 @@ void EffectSummary::makeMinimal(EffectCoverageVector &ECV) {
   } // end while loop
 }
 
-void EffectSummary::print(raw_ostream &OS, char Separator) const {
-  for(SetT::const_iterator I = begin(), E = end(); I != E; ++I) {
+void EffectSummary::print(raw_ostream &OS,
+                          std::string Separator,
+                          bool PrintLastSeparator) const {
+  SetT::const_iterator I = begin(), E = end(), Ip1 = begin();
+  if (Ip1 != E)
+    ++Ip1;
+
+  for(; Ip1 != E; ++I, ++Ip1) {
     (*I)->print(OS);
     OS << Separator;
   }
+  // print last element
+  if (I != E) {
+    (*I)->print(OS);
+    if (PrintLastSeparator)
+      OS << Separator;
+  }
 }
 
-std::string EffectSummary::toString() const {
+std::string EffectSummary::toString(std::string Separator,
+                                    bool PrintLastSeparator) const {
   std::string SBuf;
   llvm::raw_string_ostream OS(SBuf);
-  print(OS);
+  print(OS, Separator, PrintLastSeparator);
   return std::string(OS.str());
 }
 

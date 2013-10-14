@@ -103,12 +103,15 @@ public:
   void substitute(const SubstitutionVector *SubV);
 
 
-  /// \brief SubEffect Rule: true if this <= e
+  /// \brief SubEffect Rule: true if this <= that
   ///
   ///  RPL1 c= RPL2   E1 c= E2
   /// ~~~~~~~~~~~~~~~~~~~~~~~~~
   ///    E1(RPL1) <= E2(RPL2)
   bool isSubEffectOf(const Effect &That) const;
+
+  /// \brief true iff this # That
+  bool isNonInterfering(const Effect &That) const;
 
   /// \brief Returns covering effect in effect summary or null.
   const Effect *isCoveredBy(const EffectSummary &ES);
@@ -161,7 +164,13 @@ public:
 
   /// \brief Returns the effect that covers Eff or null otherwise.
   const Effect *covers(const Effect *Eff) const;
+  /// \brief Returns true iff 'this' covers 'Sum'
   bool covers(const EffectSummary *Sum) const;
+  /// \brief Returns true iff 'this' is non-interfering with 'Eff'
+  bool isNonInterfering(const Effect *Eff) const;
+  /// \brief Returns true iff 'this' is non-interfering with 'Sum'
+  bool isNonInterfering(const EffectSummary *Sum) const;
+
 
   // contains effect pairs (E1, E2) such that E1 is covered by E2.
   typedef llvm::SmallVector<std::pair<const Effect*, const Effect*> *, 8>
@@ -172,10 +181,12 @@ public:
   void makeMinimal(EffectCoverageVector &ECV);
 
   /// \brief Prints effect summary to raw output stream.
-  void print(raw_ostream &OS, char Separator='\n') const;
+  void print(raw_ostream &OS, std::string Separator="\n",
+                              bool PrintLastSeparator=true) const;
 
   /// \brief Returns a string with the effect summary.
-  std::string toString() const;
+  std::string toString(std::string Separator=", ",
+                       bool PrintLastSeparator=false) const;
 
   void substitute(const Substitution *Sub);
   void substitute(const SubstitutionVector *SubV);

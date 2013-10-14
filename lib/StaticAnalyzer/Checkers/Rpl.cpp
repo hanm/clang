@@ -72,51 +72,102 @@ bool Rpl::isValidRegionName(const llvm::StringRef& Str) {
   }
   return true;
 }
-} // End namespace asap.
-} // End namespace clang.
 
-    bool Rpl::RplRef::isUnder(RplRef& RHS) {
-      OSv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
-          << this->toString() << ", " << RHS.toString() << ")\n";
-      /// R <= Root
-      if (RHS.isEmpty())
-        return true;
-      if (isEmpty()) /// and RHS is not Empty
-        return false;
-      /// R <= R' <== R c= R'
-      if (isIncludedIn(RHS)) return true;
-      /// R:* <= R' <== R <= R'
-      if (getLastElement() == SymbolTable::STAR_RplElmt)
-        return stripLast().isUnder(RHS);
-      /// R:r <= R' <==  R <= R'
-      /// R:[i] <= R' <==  R <= R'
-      return stripLast().isUnder(RHS);
-      // TODO z-regions
-    }
+bool Rpl::RplRef::isUnder(RplRef& RHS) {
+  OSv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
+        << this->toString() << ", " << RHS.toString() << ")\n";
+  /// R <= Root
+  if (RHS.isEmpty())
+    return true;
+  if (isEmpty()) /// and RHS is not Empty
+    return false;
+  /// R <= R' <== R c= R'
+  if (isIncludedIn(RHS)) return true;
+  /// R:* <= R' <== R <= R'
+  if (getLastElement() == SymbolTable::STAR_RplElmt)
+    return stripLast().isUnder(RHS);
+  /// R:r <= R' <==  R <= R'
+  /// R:[i] <= R' <==  R <= R'
+  return stripLast().isUnder(RHS);
+  // TODO z-regions
+}
 
-    bool Rpl::RplRef::isIncludedIn(RplRef& RHS) {
-      OSv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef]("
-          << this->toString() << ", " << RHS.toString() << ")\n";
-      if (RHS.isEmpty()) {
-        /// Root c= Root
-        if (isEmpty()) return true;
-        /// RPL c=? Root and RPL!=Root ==> not included
-        else /*!isEmpty()*/ return false;
-      } else { /// RHS is not empty
-        /// R c= R':* <==  R <= R'
-        if (RHS.getLastElement() == SymbolTable::STAR_RplElmt) {
-          OSv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
-          return isUnder(RHS.stripLast());
-        }
-        ///   R:r c= R':r    <==  R <= R'
-        /// R:[i] c= R':[i]  <==  R <= R'
-        if (!isEmpty()) {
-          if ( *getLastElement() == *RHS.getLastElement() )
-            return stripLast().isIncludedIn(RHS.stripLast());
-        }
-        return false;
-      }
+bool Rpl::RplRef::isIncludedIn(RplRef& RHS) {
+  OSv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef]("
+        << this->toString() << ", " << RHS.toString() << ")\n";
+  if (RHS.isEmpty()) {
+    /// Root c= Root
+    if (isEmpty()) return true;
+    /// RPL c=? Root and RPL!=Root ==> not included
+    else /*!isEmpty()*/ return false;
+  } else { /// RHS is not empty
+    /// R c= R':* <==  R <= R'
+    if (RHS.getLastElement() == SymbolTable::STAR_RplElmt) {
+      OSv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
+      return isUnder(RHS.stripLast());
     }
+    ///   R:r c= R':r    <==  R <= R'
+    /// R:[i] c= R':[i]  <==  R <= R'
+    if (!isEmpty()) {
+      if ( *getLastElement() == *RHS.getLastElement() )
+        return stripLast().isIncludedIn(RHS.stripLast());
+    }
+    return false;
+  }
+}
+
+bool Rpl::RplRef::isDisjointLeft(RplRef &That) {
+  if (this->isEmpty()) {
+    if (That.isEmpty())
+      return false;
+    else
+      return true;
+  } else { // 'this' is not empty
+    if (That.isEmpty())
+      return true;
+    else { // both 'this' and 'That' non empty
+      if (this->getFirstElement() == That.getFirstElement())
+          return this->stripFirst().isDisjointLeft(That.stripFirst());
+      else
+        if (this->getFirstElement() == SymbolTable::STAR_RplElmt
+            || That.getFirstElement() == SymbolTable::STAR_RplElmt)
+          return false;
+        else
+          return true;
+    }
+  }
+}
+
+bool Rpl::RplRef::isDisjointRight(RplRef &That) {
+  if (this->isEmpty()) {
+    if (That.isEmpty())
+      return false;
+    else
+      return true;
+  } else { // 'this' is not empty
+    if (That.isEmpty())
+      return true;
+    else { // both 'this' and 'That' non empty
+      if (this->getLastElement() == That.getLastElement())
+          return this->stripLast().isDisjointRight(That.stripLast());
+      else
+        if (this->getLastElement() == SymbolTable::STAR_RplElmt
+            || That.getLastElement() == SymbolTable::STAR_RplElmt)
+          return false;
+        else
+          return true;
+    }
+  }
+}
+
+bool Rpl::isDisjoint(const Rpl &That) const {
+  RplRef LHS1(*this);
+  RplRef RHS1(That);
+  RplRef LHS2(*this);
+  RplRef RHS2(That);
+
+  return LHS1.isDisjointLeft(RHS1) || LHS2.isDisjointRight(RHS2);
+}
 
 void Rpl::print(raw_ostream &OS) const {
   RplElementVectorTy::const_iterator I = RplElements.begin();
@@ -255,4 +306,7 @@ Rpl *Rpl::capture() {
   if (this->isFullySpecified()) return this;
   else return new Rpl(*new CaptureRplElement(*this));
 }
+
+} // End namespace asap.
+} // End namespace clang.
 

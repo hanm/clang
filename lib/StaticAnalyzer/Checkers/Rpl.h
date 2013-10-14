@@ -193,6 +193,12 @@ typedef llvm::SmallVector<const RplElement*,
       lastIdx--;
       return *this;
     }
+
+    RplRef& stripFirst() {
+      firstIdx++;
+      return *this;
+    }
+
     inline bool isEmpty() {
       //os  << "DEBUG:: isEmpty[RplRef] returned "
       //    << (lastIdx<firstIdx ? "true" : "false") << "\n";
@@ -204,6 +210,9 @@ typedef llvm::SmallVector<const RplElement*,
 
     /// \brief Inclusion: true  iff  this c= rhs
     bool isIncludedIn(RplRef& RHS);
+
+    bool isDisjointLeft(RplRef &That);
+    bool isDisjointRight(RplRef &That);
 
   }; /// end class RplRef
   ///////////////////////////////////////////////////////////////////////////
@@ -255,11 +264,14 @@ typedef llvm::SmallVector<const RplElement*,
 
   // Nesting (Under)
   /// \brief Returns true iff this is under That
-  bool isUnder(const Rpl& That) const;
+  bool isUnder(const Rpl &That) const;
 
   // Inclusion
   /// \brief Returns true iff this RPL is included in That
-  bool isIncludedIn(const Rpl& That) const;
+  bool isIncludedIn(const Rpl &That) const;
+
+  /// \brief Returns true iff this RPL is disjoint from That
+  bool isDisjoint(const Rpl &That) const;
 
   // Substitution (Rpl)
   /// \brief this[FromEl <- ToRpl]
