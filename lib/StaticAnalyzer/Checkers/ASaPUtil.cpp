@@ -28,7 +28,7 @@ namespace asap {
 static StringRef BugCategory = "Safe Parallelism";
 
 #ifdef ASAP_DEBUG
-raw_ostream& os = llvm::errs();
+raw_ostream &os = llvm::errs();
 #else
 raw_ostream &os = llvm::nulls();
 #endif
