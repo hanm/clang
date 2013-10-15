@@ -1606,6 +1606,18 @@ bool Lexer::LexNumericConstant(Token &Result, const char *CurPtr) {
       return LexNumericConstant(Result, ConsumeChar(CurPtr, Size, Result));
   }
 
+  // If we have a digit separator, continue.
+  if (C == '\'' && getLangOpts().CPlusPlus1y) {
+    unsigned NextSize;
+    char Next = getCharAndSizeNoWarn(CurPtr + Size, NextSize, getLangOpts());
+    if (isIdentifierBody(Next)) {
+      if (!isLexingRawMode())
+        Diag(CurPtr, diag::warn_cxx11_compat_digit_separator);
+      CurPtr = ConsumeChar(CurPtr, Size, Result);
+      return LexNumericConstant(Result, CurPtr);
+    }
+  }
+
   // Update the location of token as well as BufferPtr.
   const char *TokStart = BufferPtr;
   FormTokenWithChars(Result, CurPtr, tok::numeric_constant);
@@ -1643,7 +1655,7 @@ const char *Lexer::LexUDSuffix(Token &Result, const char *CurPtr,
       // In C++1y, we need to look ahead a few characters to see if this is a
       // valid suffix for a string literal or a numeric literal (this could be
       // the 'operator""if' defining a numeric literal operator).
-      const int MaxStandardSuffixLength = 3;
+      const unsigned MaxStandardSuffixLength = 3;
       char Buffer[MaxStandardSuffixLength] = { C };
       unsigned Consumed = Size;
       unsigned Chars = 1;

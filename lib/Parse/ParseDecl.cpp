@@ -2094,6 +2094,8 @@ bool Parser::ParseImplicitInt(DeclSpec &DS, CXXScopeSpec *SS,
       DS.getStorageClassSpec() == DeclSpec::SCS_auto) {
     // Don't require a type specifier if we have the 'auto' storage class
     // specifier in C++98 -- we'll promote it to a type specifier.
+    if (SS)
+      AnnotateScopeToken(*SS, /*IsNewAnnotation*/false);
     return false;
   }
 
@@ -2155,16 +2157,6 @@ bool Parser::ParseImplicitInt(DeclSpec &DS, CXXScopeSpec *SS,
     // Look ahead to the next token to try to figure out what this declaration
     // was supposed to be.
     switch (NextToken().getKind()) {
-    case tok::comma:
-    case tok::equal:
-    case tok::kw_asm:
-    case tok::l_brace:
-    case tok::l_square:
-    case tok::semi:
-      // This looks like a variable declaration. The type is probably missing.
-      // We're done parsing decl-specifiers.
-      return false;
-
     case tok::l_paren: {
       // static x(4); // 'x' is not a type
       // x(int n);    // 'x' is not a type
@@ -2177,12 +2169,37 @@ bool Parser::ParseImplicitInt(DeclSpec &DS, CXXScopeSpec *SS,
       ConsumeToken();
       TPResult TPR = TryParseDeclarator(/*mayBeAbstract*/false);
       PA.Revert();
-      if (TPR == TPResult::False())
-        return false;
-      // The identifier is followed by a parenthesized declarator.
-      // It's supposed to be a type.
-      break;
+
+      if (TPR != TPResult::False()) {
+        // The identifier is followed by a parenthesized declarator.
+        // It's supposed to be a type.
+        break;
+      }
+
+      // If we're in a context where we could be declaring a constructor,
+      // check whether this is a constructor declaration with a bogus name.
+      if (DSC == DSC_class || (DSC == DSC_top_level && SS)) {
+        IdentifierInfo *II = Tok.getIdentifierInfo();
+        if (Actions.isCurrentClassNameTypo(II, SS)) {
+          Diag(Loc, diag::err_constructor_bad_name)
+            << Tok.getIdentifierInfo() << II
+            << FixItHint::CreateReplacement(Tok.getLocation(), II->getName());
+          Tok.setIdentifierInfo(II);
+        }
+      }
+      // Fall through.
     }
+    case tok::comma:
+    case tok::equal:
+    case tok::kw_asm:
+    case tok::l_brace:
+    case tok::l_square:
+    case tok::semi:
+      // This looks like a variable or function declaration. The type is
+      // probably missing. We're done parsing decl-specifiers.
+      if (SS)
+        AnnotateScopeToken(*SS, /*IsNewAnnotation*/false);
+      return false;
 
     default:
       // This is probably supposed to be a type. This includes cases like:
@@ -4676,6 +4693,7 @@ void Parser::ParseDirectDeclarator(Declarator &D) {
     //   as part of the parameter-declaration-clause.
     if (Tok.is(tok::ellipsis) && D.getCXXScopeSpec().isEmpty() &&
         !((D.getContext() == Declarator::PrototypeContext ||
+           D.getContext() == Declarator::LambdaExprParameterContext ||
            D.getContext() == Declarator::BlockLiteralContext) &&
           NextToken().is(tok::r_paren) &&
           !D.hasGroupingParens() &&
@@ -4738,11 +4756,16 @@ void Parser::ParseDirectDeclarator(Declarator &D) {
     ConsumeToken();
     goto PastIdentifier;
   } else if (Tok.is(tok::identifier) && D.diagnoseIdentifier()) {
-    Diag(Tok.getLocation(), diag::err_unexpected_unqualified_id)
-      << FixItHint::CreateRemoval(Tok.getLocation());
-    D.SetIdentifier(0, Tok.getLocation());
-    ConsumeToken();
-    goto PastIdentifier;
+    // A virt-specifier isn't treated as an identifier if it appears after a
+    // trailing-return-type.
+    if (D.getContext() != Declarator::TrailingReturnContext ||
+        !isCXX11VirtSpecifier(Tok)) {
+      Diag(Tok.getLocation(), diag::err_unexpected_unqualified_id)
+        << FixItHint::CreateRemoval(Tok.getLocation());
+      D.SetIdentifier(0, Tok.getLocation());
+      ConsumeToken();
+      goto PastIdentifier;
+    }
   }
 
   if (Tok.is(tok::l_paren)) {
@@ -5001,7 +5024,6 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
   TypeResult TrailingReturnType;
 
   Actions.ActOnStartFunctionDeclarator();
-
   /* LocalEndLoc is the end location for the local FunctionTypeLoc.
      EndLoc is the end location for the function declarator.
      They differ for trailing return types. */
@@ -5022,7 +5044,8 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
     EndLoc = RParenLoc;
   } else {
     if (Tok.isNot(tok::r_paren))
-      ParseParameterDeclarationClause(D, FirstArgAttrs, ParamInfo, EllipsisLoc);
+      ParseParameterDeclarationClause(D, FirstArgAttrs, ParamInfo, 
+                                      EllipsisLoc);
     else if (RequiresArg)
       Diag(Tok, diag::err_argument_required_after_attribute);
 
@@ -5253,7 +5276,6 @@ void Parser::ParseParameterDeclarationClause(
        ParsedAttributes &FirstArgAttrs,
        SmallVectorImpl<DeclaratorChunk::ParamInfo> &ParamInfo,
        SourceLocation &EllipsisLoc) {
-
   while (1) {
     if (Tok.is(tok::ellipsis)) {
       // FIXME: Issue a diagnostic if we parsed an attribute-specifier-seq
@@ -5283,16 +5305,21 @@ void Parser::ParseParameterDeclarationClause(
 
     ParseDeclarationSpecifiers(DS);
 
-    // Parse the declarator.  This is "PrototypeContext", because we must
-    // accept either 'declarator' or 'abstract-declarator' here.
-    Declarator ParmDecl(DS, Declarator::PrototypeContext);
-    ParseDeclarator(ParmDecl);
+
+    // Parse the declarator.  This is "PrototypeContext" or 
+    // "LambdaExprParameterContext", because we must accept either 
+    // 'declarator' or 'abstract-declarator' here.
+    Declarator ParmDeclarator(DS, 
+              D.getContext() == Declarator::LambdaExprContext ?
+                                  Declarator::LambdaExprParameterContext : 
+                                                Declarator::PrototypeContext);
+    ParseDeclarator(ParmDeclarator);
 
     // Parse GNU attributes, if present.
-    MaybeParseGNUAttributes(ParmDecl);
+    MaybeParseGNUAttributes(ParmDeclarator);
 
     // Remember this parsed parameter in ParamInfo.
-    IdentifierInfo *ParmII = ParmDecl.getIdentifier();
+    IdentifierInfo *ParmII = ParmDeclarator.getIdentifier();
 
     // DefArgToks is used when the parsing of default arguments needs
     // to be delayed.
@@ -5300,8 +5327,8 @@ void Parser::ParseParameterDeclarationClause(
 
     // If no parameter was specified, verify that *something* was specified,
     // otherwise we have a missing type and identifier.
-    if (DS.isEmpty() && ParmDecl.getIdentifier() == 0 &&
-        ParmDecl.getNumTypeObjects() == 0) {
+    if (DS.isEmpty() && ParmDeclarator.getIdentifier() == 0 &&
+        ParmDeclarator.getNumTypeObjects() == 0) {
       // Completely missing, emit error.
       Diag(DSStart, diag::err_missing_param);
     } else {
@@ -5310,8 +5337,8 @@ void Parser::ParseParameterDeclarationClause(
 
       // Inform the actions module about the parameter declarator, so it gets
       // added to the current scope.
-      Decl *Param = Actions.ActOnParamDeclarator(getCurScope(), ParmDecl);
-
+      Decl *Param = Actions.ActOnParamDeclarator(getCurScope(), 
+                                                       ParmDeclarator);
       // Parse the default argument, if any. We parse the default
       // arguments in all dialects; the semantic analysis in
       // ActOnParamDefaultArgument will reject the default argument in
@@ -5370,8 +5397,8 @@ void Parser::ParseParameterDeclarationClause(
       }
 
       ParamInfo.push_back(DeclaratorChunk::ParamInfo(ParmII,
-                                          ParmDecl.getIdentifierLoc(), Param,
-                                          DefArgToks));
+                                          ParmDeclarator.getIdentifierLoc(), 
+                                          Param, DefArgToks));
     }
 
     // If the next token is a comma, consume it and keep reading arguments.

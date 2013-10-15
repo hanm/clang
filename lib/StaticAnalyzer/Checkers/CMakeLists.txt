@@ -34,7 +34,6 @@ add_clang_library(clangStaticAnalyzerCheckers
   ChrootChecker.cpp
   ClangCheckers.cpp
   CollectRegionNamesAndParameters.cpp
-  CommonBugCategories.cpp
   DeadStoresChecker.cpp
   DebugCheckers.cpp
   DereferenceChecker.cpp
