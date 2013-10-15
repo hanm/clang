@@ -827,7 +827,7 @@ template<typename Derived>
 bool RecursiveASTVisitor<Derived>::TraverseLambdaCapture(
     LambdaExpr *LE, const LambdaExpr::Capture *C) {
   if (C->isInitCapture())
-    TRY_TO(TraverseStmt(LE->getInitCaptureInit(C)));
+    TRY_TO(TraverseDecl(C->getCapturedVar()));
   return true;
 }
 
@@ -2364,6 +2364,13 @@ void RecursiveASTVisitor<Derived>::VisitOMPClauseList(T *Node) {
 
 template<typename Derived>
 bool RecursiveASTVisitor<Derived>::VisitOMPPrivateClause(OMPPrivateClause *C) {
+  VisitOMPClauseList(C);
+  return true;
+}
+
+template<typename Derived>
+bool RecursiveASTVisitor<Derived>::VisitOMPFirstprivateClause(
+                                                    OMPFirstprivateClause *C) {
   VisitOMPClauseList(C);
   return true;
 }

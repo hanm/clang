@@ -2001,7 +2001,7 @@ QualType Sema::CheckTemplateIdType(TemplateName Name,
 
     LocalInstantiationScope Scope(*this);
     InstantiatingTemplate Inst(*this, TemplateLoc, Template);
-    if (Inst)
+    if (Inst.isInvalid())
       return QualType();
 
     CanonType = SubstType(Pattern->getUnderlyingType(),
@@ -2091,6 +2091,9 @@ QualType Sema::CheckTemplateIdType(TemplateName Name,
       if (ClassTemplate->isOutOfLine())
         Decl->setLexicalDeclContext(ClassTemplate->getLexicalDeclContext());
     }
+
+    // Diagnose uses of this specialization.
+    (void)DiagnoseUseOfDecl(Decl, TemplateLoc);
 
     CanonType = Context.getTypeDeclType(Decl);
     assert(isa<RecordType>(CanonType) &&
@@ -2377,7 +2380,7 @@ DeclResult Sema::ActOnVarTemplateSpecialization(
     TemplateArgumentList TemplateArgList(TemplateArgumentList::OnStack,
                                          Converted.data(), Converted.size());
     InstantiatingTemplate Inst(*this, TemplateKWLoc, VarTemplate);
-    if (Inst)
+    if (Inst.isInvalid())
       return true;
     VarDecl *Templated = VarTemplate->getTemplatedDecl();
     ExpectedDI =
@@ -3058,7 +3061,7 @@ SubstDefaultTemplateArgument(Sema &SemaRef,
     Sema::InstantiatingTemplate Inst(SemaRef, TemplateLoc,
                                      Template, Converted,
                                      SourceRange(TemplateLoc, RAngleLoc));
-    if (Inst)
+    if (Inst.isInvalid())
       return 0;
 
     TemplateArgumentList TemplateArgs(TemplateArgumentList::OnStack,
@@ -3111,7 +3114,7 @@ SubstDefaultTemplateArgument(Sema &SemaRef,
   Sema::InstantiatingTemplate Inst(SemaRef, TemplateLoc,
                                    Template, Converted,
                                    SourceRange(TemplateLoc, RAngleLoc));
-  if (Inst)
+  if (Inst.isInvalid())
     return ExprError();
 
   TemplateArgumentList TemplateArgs(TemplateArgumentList::OnStack,
@@ -3163,7 +3166,7 @@ SubstDefaultTemplateArgument(Sema &SemaRef,
                              NestedNameSpecifierLoc &QualifierLoc) {
   Sema::InstantiatingTemplate Inst(SemaRef, TemplateLoc, Template, Converted,
                                    SourceRange(TemplateLoc, RAngleLoc));
-  if (Inst)
+  if (Inst.isInvalid())
     return TemplateName();
 
   TemplateArgumentList TemplateArgs(TemplateArgumentList::OnStack,
@@ -3314,7 +3317,7 @@ bool Sema::CheckTemplateArgument(NamedDecl *Param,
       InstantiatingTemplate Inst(*this, TemplateLoc, Template,
                                  NTTP, Converted,
                                  SourceRange(TemplateLoc, RAngleLoc));
-      if (Inst)
+      if (Inst.isInvalid())
         return true;
 
       TemplateArgumentList TemplateArgs(TemplateArgumentList::OnStack,
@@ -3449,7 +3452,7 @@ bool Sema::CheckTemplateArgument(NamedDecl *Param,
     InstantiatingTemplate Inst(*this, TemplateLoc, Template,
                                TempParm, Converted,
                                SourceRange(TemplateLoc, RAngleLoc));
-    if (Inst)
+    if (Inst.isInvalid())
       return true;
 
     TemplateArgumentList TemplateArgs(TemplateArgumentList::OnStack,
@@ -3760,10 +3763,9 @@ bool Sema::CheckTemplateArgumentList(TemplateDecl *Template,
 
     // Introduce an instantiation record that describes where we are using
     // the default template argument.
-    InstantiatingTemplate Instantiating(*this, RAngleLoc, Template,
-                                        *Param, Converted,
-                                        SourceRange(TemplateLoc, RAngleLoc));
-    if (Instantiating)
+    InstantiatingTemplate Inst(*this, RAngleLoc, Template, *Param, Converted,
+                               SourceRange(TemplateLoc, RAngleLoc));
+    if (Inst.isInvalid())
       return true;
 
     // Check the default template argument.
@@ -5448,7 +5450,7 @@ Sema::CheckTemplateDeclScope(Scope *S, TemplateParameterList *TemplateParams) {
   // C++ [temp]p2:
   //   A template-declaration can appear only as a namespace scope or
   //   class scope declaration.
-  DeclContext *Ctx = static_cast<DeclContext *>(S->getEntity());
+  DeclContext *Ctx = S->getEntity();
   if (Ctx && isa<LinkageSpecDecl>(Ctx) &&
       cast<LinkageSpecDecl>(Ctx)->getLanguage() != LinkageSpecDecl::lang_cxx)
     return Diag(TemplateParams->getTemplateLoc(), diag::err_template_linkage)
@@ -7372,13 +7374,8 @@ DeclResult Sema::ActOnExplicitInstantiation(Scope *S,
     CheckExplicitInstantiationScope(*this, Prev, D.getIdentifierLoc(), true);
 
     // Verify that it is okay to explicitly instantiate here.
-    MemberSpecializationInfo *MSInfo = Prev->getMemberSpecializationInfo();
-    TemplateSpecializationKind PrevTSK =
-        MSInfo ? MSInfo->getTemplateSpecializationKind()
-               : Prev->getTemplateSpecializationKind();
-    SourceLocation POI = MSInfo ? MSInfo->getPointOfInstantiation()
-                                : cast<VarTemplateSpecializationDecl>(Prev)
-                                      ->getPointOfInstantiation();
+    TemplateSpecializationKind PrevTSK = Prev->getTemplateSpecializationKind();
+    SourceLocation POI = Prev->getPointOfInstantiation();
     bool HasNoEffect = false;
     if (CheckSpecializationInstantiationRedecl(D.getIdentifierLoc(), TSK, Prev,
                                                PrevTSK, POI, HasNoEffect))
