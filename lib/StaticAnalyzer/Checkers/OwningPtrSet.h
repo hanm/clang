@@ -39,7 +39,7 @@ public:
     insert(E);
   }
 
-  OwningPtrSet(const OwningPtrSet &Set) {
+  OwningPtrSet(const OwningPtrSet &Set) : SetT() {
     for (typename SetT::const_iterator
             I = Set.SetT::begin(),
             E = Set.SetT::end();

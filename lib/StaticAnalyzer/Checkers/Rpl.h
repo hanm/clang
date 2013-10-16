@@ -125,7 +125,6 @@ class Effect;
 
 
 class Rpl {
-  friend class Rpl;
 public:
   /// Static Constants
   static const char RPL_SPLIT_CHARACTER = ':';

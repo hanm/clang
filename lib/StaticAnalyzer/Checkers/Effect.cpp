@@ -108,6 +108,8 @@ bool Effect::isNonInterfering(const Effect &That) const {
       assert(That.R && "Internal ERROR: missing Rpl in non-pure Effect");
       return R->isDisjoint(*That.R);
     }
+  default:
+    return false; // control should never reach here
   }
 }
 

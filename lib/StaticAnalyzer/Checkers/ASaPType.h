@@ -25,8 +25,6 @@ namespace clang {
 namespace asap {
 
 class ASaPType {
-  friend class ASaPType;
-
   /// \brief C++ Qualified Type of ASaPType
   QualType QT;
   /// \brief this map is owned by the SymbolTableEntry and should be immutable.

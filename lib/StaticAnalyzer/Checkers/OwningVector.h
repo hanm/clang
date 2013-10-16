@@ -40,7 +40,7 @@ public:
       push_back(new ElmtTyp(*E));
   }
 
-  OwningVector(const OwningVector &From) {
+  OwningVector(const OwningVector &From) : VectorT() {
     for (typename VectorT::const_iterator
             I = From.VectorT::begin(),
             E = From.VectorT::end();

@@ -534,8 +534,8 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
     OS << "DEBUG:: FunD:";
     FunD->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";
-    assert(FunD->isVariadic() || NumParams == NumArgs ||
-          NumParams+((FunD->isOverloadedOperator()) ? 1 : 0) == NumArgs &&
+    assert((FunD->isVariadic() || NumParams == NumArgs ||
+          NumParams+((FunD->isOverloadedOperator()) ? 1 : 0) == NumArgs) &&
           "Unexpected number of arguments to a call expresion");
     typecheckParamAssignments(FunD, Exp->arg_begin(), Exp->arg_end(), SubV);
     OS << "DEBUG:: DONE typecheckCallExpr\n";
@@ -775,7 +775,7 @@ void TypeBuilderVisitor::VisitUnaryAddrOf(UnaryOperator *Exp)  {
   OS << "\n";
 
   RefQT = Exp->getType();
-  assert(RefQT->isDependentType() || RefQT->isPointerType()
+  assert((RefQT->isDependentType() || RefQT->isPointerType())
          && "Must be a pointer type or a dependent type here");
 
   Visit(Exp->getSubExpr());

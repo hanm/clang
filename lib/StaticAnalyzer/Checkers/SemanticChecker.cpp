@@ -641,7 +641,7 @@ const RegionBaseArgAttr *ASaPSemanticCheckerTraverser::
 findBaseArg(const CXXRecordDecl *D, StringRef BaseStr) {
   OS << "DEBUG:: findBaseArg for type '" << BaseStr <<"'\n";
   const RegionBaseArgAttr *Result = 0;
-  bool multipleAttrs = false;
+
   // iterate over base_args of D
   for (specific_attr_iterator<RegionBaseArgAttr>
        I = D->specific_attr_begin<RegionBaseArgAttr>(),
@@ -653,8 +653,6 @@ findBaseArg(const CXXRecordDecl *D, StringRef BaseStr) {
       if (!Result) {
         Result = *I;
       } else {
-        multipleAttrs = true;
-        //emitMultipleAttributesForBaseClass(D, A, BaseStr);
         emitDuplicateBaseArgAttributesForSameBase(D, Result, A);
       }
     }
@@ -693,7 +691,6 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
   // 1. Before actually doing any checking, for each base class,
   // check that it has been visited and that we know how many region
   // arguments it takes
-  bool Error = false;
   for (CXXRecordDecl::base_class_const_iterator
           I = D->bases_begin(), E = D->bases_end();
        I!=E; ++I) {
@@ -710,7 +707,6 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
       break;
     case RK_ERROR:
       emitUnknownNumberOfRegionParamsForType(D);
-      Error = true;
       break;
     case RK_VAR:
     case RK_OK:
