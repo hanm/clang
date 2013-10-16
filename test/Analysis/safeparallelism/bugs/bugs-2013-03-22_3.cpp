@@ -15,7 +15,7 @@ void do_nothing()
  
 int func()
     {
-    tbb::parallel_invoke(do_nothing, do_nothing); // expected-warning{{Non-interference check not implemented}}
+    tbb::parallel_invoke(do_nothing, do_nothing); // expected-warning{{Non-interference check not implemented}} expected-warning{{Non-interference check not implemented}}
     return 0;
     }
 
