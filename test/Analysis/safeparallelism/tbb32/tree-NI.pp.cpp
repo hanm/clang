@@ -6038,18 +6038,18 @@ public:
 };
 
 void GrowTreeLeft::operator() () const {
-
-
-
-
+  if (Node->left==__null) {
+    Node->left = new TreeNode(Node->value+1);
+    Node->left->growTree(Depth-1);
+  }
 }
 
 void GrowTreeRight::operator() () const {
-
-
-
-
-
+  if (Node->right==__null) {
+    int newValue = Node->value + (1<<(Depth));
+    Node->right = new TreeNode(newValue);
+    Node->right->growTree(Depth-1);
+  }
 }
 # 142 "tree-NI.cpp"
 int main [[asap::region("MAIN"), asap::writes("MAIN:*")]]
