@@ -29,6 +29,7 @@
 #include "ASaPUtil.h"
 #include "ASaPFwdDecl.h"
 #include "ASaPInheritanceMap.h"
+#include "OwningPtrSet.h"
 
 namespace clang {
 namespace asap {
@@ -57,6 +58,7 @@ class SymbolTable {
   typedef llvm::DenseMap<const Decl*, SymbolTableEntry*>  SymbolTableMapT;
   typedef llvm::DenseMap<const FunctionDecl*,
                           const SpecificNIChecker*> ParallelismMapT;
+  typedef OwningPtrSet<std::string, 1024> FreshNamesSetT;
 
   /// \brief Symbol Table Map
   SymbolTableMapT SymTable;
@@ -68,6 +70,8 @@ class SymbolTable {
   /// what NI constraints each function needs (e.g., parallel_for w. range,
   /// parallel_for with iterators, parallel_reduce, parallel_invoke, etc).
   ParallelismMapT ParTable;
+
+  FreshNamesSetT FreshNames;
 
   AnnotationScheme *AnnotScheme;
   static int Initialized;
@@ -191,6 +195,13 @@ public:
 
   const SubstitutionVector *getInheritanceSubVec(QualType QT);
 
+  inline StringRef addFreshName(StringRef SRef) {
+    std::string *S = new std::string(SRef.str());
+    StringRef Result(*S);
+    FreshNames.insert(S);
+    return Result;
+  }
+  // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
 
   inline AnnotationSet makeDefaultEffectSummary(const FunctionDecl *F) {

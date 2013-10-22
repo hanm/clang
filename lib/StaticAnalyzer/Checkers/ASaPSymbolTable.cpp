@@ -553,7 +553,6 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
         return AnnotScheme->makeStackType(VarD, ParamCount);
       }
   } else if (FunctionDecl *FunD = dyn_cast<FunctionDecl>(ValD)) {
-    // FIXME: Merge this branch with if ParamVarDecl
     AnnotationSet AnSe = AnnotScheme->makeReturnType(FunD, ParamCount);
     if (AnSe.ParamVec) {
       addToParameterVector(FunD, AnSe.ParamVec);

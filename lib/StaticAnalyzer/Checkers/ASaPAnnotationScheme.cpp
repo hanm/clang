@@ -82,10 +82,8 @@ helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT) {
   for (; I < ArgNum; ++I) {
     std::stringstream ss;
     ss << D->getNameAsString() << "_" << I;
-    // FIXME: small memory leak. The allocated string is not deallocated
-    // when the ParamRplElement is destroyed at the end of checking.
-    std::string *ParamName = new std::string(ss.str());
-    ParamRplElement Param(*ParamName);
+    StringRef ParamName = SymT.addFreshName(ss.str());
+    ParamRplElement Param(ParamName);
     Result.ParamVec->push_back(Param); // makes a (persistent) copy of Param
     RplV.push_back(Rpl(*Result.ParamVec->back())); // use the persistent copy
   }
