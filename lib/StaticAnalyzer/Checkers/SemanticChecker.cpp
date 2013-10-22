@@ -438,10 +438,19 @@ checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
   OS << "ArgCount = " << ArgCount << "\n";
   OS << "DefaultInRpl ="  <<  ((DefaultInRpl) ? DefaultInRpl->toString() : "")
      << "\n";
+  //OS << "QT:" << QT.getAsString() << "\n";
 
   // Ignore DefaultInRpl if QualType is a ReferenceType
   if (QT->isReferenceType())
     DefaultInRpl = 0;
+  else if (QT->isFunctionType()) {
+    const FunctionType *FT = QT->getAs<FunctionType>();
+    QualType ResultQT = FT->getResultType();
+    if (ResultQT->isReferenceType())
+      DefaultInRpl = 0;
+    //OS << "ResultQT:" << ResultQT.getAsString() << " [is Reference="
+    //   << (ResultQT->isReferenceType()?"true":"false") << "]\n";
+  }
 
   switch(ResKin) {
   case RK_ERROR:
