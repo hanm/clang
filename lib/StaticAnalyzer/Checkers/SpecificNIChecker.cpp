@@ -116,6 +116,8 @@ std::auto_ptr<EffectSummary> getInvokeEffectSummary(Expr *Arg) {
     std::auto_ptr<SubstitutionVector> SubV = T->getSubstitutionVector();
     ES->substitute(SubV.get());
     return std::auto_ptr<EffectSummary>(ES);
+  //} else if (QTArg->isLambdaType()) {
+    //TODO
   } else {
     // fn-pointer style and lambda style parallel_invoke not supported yet
     emitNICheckNotImplemented(Arg, 0);
@@ -129,7 +131,7 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp) const {
   // FIXME just dealing with 2 params for now
   unsigned int NumArgs = Exp->getNumArgs();
   assert(NumArgs>=2 &&
-         "tbb::parallel_invoke with fewer than two args makes no sense");
+         "tbb::parallel_invoke with fewer than two args is unexpected");
   //EffectSummaryVector ESVec
 #ifndef EFFECT_SUMMARY_VECTOR_SIZE
 #define EFFECT_SUMMARY_VECTOR_SIZE 8

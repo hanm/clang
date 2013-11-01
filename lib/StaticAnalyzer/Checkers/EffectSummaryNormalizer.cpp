@@ -94,7 +94,8 @@ bool EffectSummaryNormalizerTraverser::VisitFunctionDecl(FunctionDecl *D) {
       const EffectSummary *CanES = SymT.getEffectSummary(CanFD);
       assert(CanES && "Function missing effect summary");
       if ( ! CanES->covers(ES) ) {
-        emitCanonicalDeclHasSmallerEffectSummary(D, D->getName());
+        StringRef Name = D->getNameInfo().getAsString();
+        emitCanonicalDeclHasSmallerEffectSummary(D, Name);
       } else { // The effect summary of the canonical decl covers this.
 
         // Set the Effect summary of this declaration to be the same

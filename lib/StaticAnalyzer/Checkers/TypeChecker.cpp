@@ -232,7 +232,7 @@ helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
       Expr *E = Init->getInit();
       E->printPretty(OS, 0, Ctx.getPrintingPolicy());
       OS << "\n";
-      E->dump();
+      E->dump(OS, BR.getSourceManager());
       OS << "\n";
       //const class Type *BaseClass = Init->getBaseClass();
       //AssignmentCheckerVisitor ACV(BR, Ctx, Mgr, AC, OS,
@@ -468,13 +468,13 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   OS << "\n";
   OS << "DEBUG:: Expr:";
   //Exp->dump(OS, BR.getSourceManager());
-  Exp->dump();
+  Exp->dump(OS, BR.getSourceManager());
   OS << "\n";
 
   Decl *D = Exp->getCalleeDecl();
   if (D) {
     OS << "DEBUG:: CalleeExpr(" << D << "):";
-    D->dump();
+    D->dump(OS);
     OS << "\n";
   } else { // D == null
     OS << "DEBUG:: CalleeExpr(" << D << ")\n";
