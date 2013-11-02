@@ -22,20 +22,22 @@ class [[asap::param("P_r")]]
   int v [[asap::arg("P_r")]];
 public:
   SetRestFunctor(ListNode *n [[asap::arg("P_r")]], int v) : n(n), v(v) {}
-  void operator () [[asap::reads("P_r, P_r:ListNode::Next")
+  void operator () [[asap::reads("P_r, P_r:*:ListNode::Next, P_r:*:ListNode::Link")
                      asap::writes("P_r:ListNode::Next:*:ListNode::Value")]]
                    () const;
 }; // end class SetRestFunctor
 
-class [[asap::param("P"), asap::region("Next, Value")]] 
+/////////////////////////////////////////////////////////////////////////////
+class [[asap::param("P"), asap::region("Link, Next, Value")]] 
       ListNode {
   friend class SetThisFunctor;
   friend class SetRestFunctor;
 
   int value [[asap::arg("P:Value")]];
-  ListNode *next [[asap::arg("P, P:Next")]];
+  ListNode *next [[asap::arg("P:Link, P:Next")]];
 public:
-  void setAllTo(int x) {
+  void setAllTo [[asap::reads("P, P:*:Next, P:*:Link"), 
+                  asap::writes("P:*:Value")]] (int x) {
     SetThisFunctor SetThis [[asap::arg("P")]] (this, x);
     SetRestFunctor SetRest [[asap::arg("P")]] (this, x);
     tbb::parallel_invoke(SetThis, SetRest);

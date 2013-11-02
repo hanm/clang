@@ -30,13 +30,13 @@ namespace asap {
 class SpecificNIChecker {
 public:
   virtual ~SpecificNIChecker() {};
-  virtual bool check(CallExpr *E) const = 0;
+  virtual bool check(CallExpr *E, const FunctionDecl *Def) const = 0;
 }; // end class SpecificNIChecker
 
 /// \brief abstract base class of all TBB related NIChecker classes
 class TBBSpecificNIChecker : public SpecificNIChecker {
 public:
-  virtual bool check(CallExpr *E) const;
+  virtual bool check(CallExpr *E, const FunctionDecl *Def) const;
 }; // end class TBBSpecificNIChecker
 
 /// \brief base class for all TBB parallel_for related NIChecker classes
@@ -54,7 +54,7 @@ class TBBParallelForIndexNIChecker : public TBBParallelForNIChecker {
 /// \brief class for checking TBB parallel_invoke
 class TBBParallelInvokeNIChecker : public TBBSpecificNIChecker {
 public:
-  virtual bool check(CallExpr *E) const;
+  virtual bool check(CallExpr *E, const FunctionDecl *Def) const;
 }; // end class TBBParallelForRangeChecker
 
 

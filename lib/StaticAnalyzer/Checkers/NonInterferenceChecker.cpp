@@ -74,7 +74,7 @@ void NonInterferenceChecker::VisitCallExpr(CallExpr *Exp) {
       }
       const SpecificNIChecker *SNIC = SymT.getNIChecker(FunD);
       if (SNIC) {
-        SNIC->check(Exp);
+        SNIC->check(Exp, Def);
       } // otherwise there's nothing to check
     } else { // VarD
       // TODO

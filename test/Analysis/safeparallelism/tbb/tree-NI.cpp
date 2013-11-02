@@ -18,29 +18,34 @@ int printf ( const char * format, ... );
 #endif
 
 class TreeNode;
+[[asap::region("ReadOnly")]];
 
-class [[asap::param("P_gtl"), asap::region("GTL")]] GrowTreeLeft {
-  TreeNode *Node [[asap::arg("GTL, P_gtl")]];
-  int Depth [[asap::arg("GTL")]];
+class [[asap::param("P_gtl")]] GrowTreeLeft {
+  TreeNode *Node [[asap::arg("ReadOnly, P_gtl")]];
+  int Depth [[asap::arg("ReadOnly")]];
 
 public:
   GrowTreeLeft(TreeNode *n[[asap::arg("P_gtl")]], int depth) : Node(n), Depth(depth) {}
 
-  void operator() [[asap::reads("GTL, P_gtl:*:TreeNode::V"), 
-                    asap::writes("P_gtl:TreeNode::L, P_gtl:TreeNode::L:*:TreeNode::L, P_gtl:TreeNode::L:*:TreeNode::R")]] 
+  void operator() [[asap::reads("ReadOnly, P_gtl:*:TreeNode::V"), 
+                    asap::writes("P_gtl:TreeNode::L,"
+                                 "P_gtl:TreeNode::L:*:TreeNode::L,"
+                                 "P_gtl:TreeNode::L:*:TreeNode::R")]] 
                   () const;
 
 }; // end class GrowTreeLeft
 
-class [[asap::param("P_gtr"), asap::region("GTR")]] GrowTreeRight {
-  TreeNode *Node [[asap::arg("GTR, P_gtr")]];
-  int Depth [[asap::arg("GTR")]];
+class [[asap::param("P_gtr")]] GrowTreeRight {
+  TreeNode *Node [[asap::arg("ReadOnly, P_gtr")]];
+  int Depth [[asap::arg("ReadOnly")]];
 
 public:
   GrowTreeRight(TreeNode *n[[asap::arg("P_gtr")]], int depth) : Node(n), Depth(depth) {}
 
-  void operator() [[asap::reads("GTR, P_gtr:*:TreeNode::V"), 
-                    asap::writes("P_gtr:TreeNode::R, P_gtr:TreeNode::R:*:TreeNode::L, P_gtr:TreeNode::R:*:TreeNode::R")]] 
+  void operator() [[asap::reads("ReadOnly, P_gtr:*:TreeNode::V"), 
+                    asap::writes("P_gtr:TreeNode::R,"
+                                 "P_gtr:TreeNode::R:*:TreeNode::L,"
+                                 "P_gtr:TreeNode::R:*:TreeNode::R")]] 
                   () const;
 
 }; // end class GrowTreeRight
@@ -66,7 +71,7 @@ public:
     right = N;
   }
 
-  void growTree [[asap::reads("P:*:V"), asap::writes("P:*:L, P:*:R")]]
+  void growTree [[asap::reads("P:*:V, ReadOnly"), asap::writes("P:*:L, P:*:R")]]
                 (int depth) {
     if (depth<=0) return;
 #ifdef SEQUENTIAL
@@ -81,28 +86,10 @@ public:
       right->growTree(depth-1);
     }
 #else
-#ifdef LAMDAS
-    tbb::parallel_invoke(
-      [this, depth] {
-        // TODO: parallelize
-        if (left==NULL) {
-          left = new TreeNode(value+1);
-          left->growTree(depth-1);
-        }
-      },
-      [this, depth] {
-        if (right==NULL) {
-          int newValue = value + (1<<(depth));
-          right = new TreeNode(newValue);
-          right->growTree(depth-1);
-        }
-      });
-#else // !LAMBDAS -> FUNCTORS
- 
-#endif
     GrowTreeLeft Left [[asap::arg("P")]] (this, depth);
     GrowTreeRight Right [[asap::arg("P")]] (this, depth);
-    tbb::parallel_invoke(Left, Right);
+    tbb::parallel_invoke(Left, 
+                         Right);
 #endif      
   }
 
@@ -130,24 +117,8 @@ void GrowTreeRight::operator() () const {
     Node->right->growTree(Depth-1);
   }
 }
-/*TreeNode *buildTree [[asap::param("P_bt"), asap::arg("P_bt")]]
-                    (int depth, int value = 0) {
-  if (depth<=0) 
-  return NULL;
-  // INVARIANT: depth >= 1
-  TreeNode *Result [[asap::arg("P_bt")]] = new TreeNode(value);
-  if (depth>1) {
-    // TODO: parallelize
-    TreeNode *LeftChild [[asap::arg("P_bt:TreeNode::L")]] = buildTree(depth-1, value+1);
-    Result->addLeftChild(LeftChild);
-    TreeNode *RightChild [[asap::arg("P_bt:TreeNode::R")]] = buildTree(depth-1, value+(1<<(depth-1)));
-    Result->addRightChild(RightChild);
-  }
-  return Result;
-}*/
 
-
-int main [[asap::region("MAIN"), asap::writes("MAIN:*")]]
+int main [[asap::region("MAIN"), asap::reads("ReadOnly"), asap::writes("MAIN:*")]]
          (int argc, char *argv [[asap::arg("Local, Local")]] [])
 {
     int nth=-1; // number of (hardware) threads (-1 means undefined)

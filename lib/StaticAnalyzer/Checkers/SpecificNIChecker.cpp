@@ -43,8 +43,8 @@ static void emitNICheckNotImplemented(const Stmt *S, const FunctionDecl *FunD) {
 }
 
 static void emitInterferingEffects(const Stmt *S,
-                            const EffectSummary &ES1,
-                            const EffectSummary &ES2) {
+                                   const EffectSummary &ES1,
+                                   const EffectSummary &ES2) {
   StringRef BugName = "Interfering effects";
   std::string SBuf;
   llvm::raw_string_ostream OS(SBuf);
@@ -55,7 +55,16 @@ static void emitInterferingEffects(const Stmt *S,
                              S, 0, Str, BugName, false);
 }
 
-bool TBBSpecificNIChecker::check(CallExpr *E) const {
+static void emitEffectsNotCoveredWarning(const Stmt *S,
+                                        const Decl *D,
+                                        const StringRef &Str) {
+  StringRef BugName = "effects not covered by effect summary";
+  helperEmitStatementWarning(*SymbolTable::VB.BR,
+                             SymbolTable::VB.AC,
+                             S, D, Str, BugName);
+}
+
+bool TBBSpecificNIChecker::check(CallExpr *E, const FunctionDecl *Def) const {
   emitNICheckNotImplemented(E, 0);
   return false;
 }
@@ -125,14 +134,14 @@ std::auto_ptr<EffectSummary> getInvokeEffectSummary(Expr *Arg) {
   }
 }
 
-bool TBBParallelInvokeNIChecker::check(CallExpr *Exp) const {
+bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) const {
   // for each of the arguments to this call (except the last which may be a
   // context argument) get its effects and make sure they don't interfere
-  // FIXME just dealing with 2 params for now
+  // FIXME add support for the trailing context argument
+  bool Result = true;
   unsigned int NumArgs = Exp->getNumArgs();
   assert(NumArgs>=2 &&
          "tbb::parallel_invoke with fewer than two args is unexpected");
-  //EffectSummaryVector ESVec
 #ifndef EFFECT_SUMMARY_VECTOR_SIZE
 #define EFFECT_SUMMARY_VECTOR_SIZE 8
 #endif
@@ -154,16 +163,36 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp) const {
       if ((*I) && !(*I)->isNonInterfering(*J)) {
         assert(*J);
         emitInterferingEffects(Exp, *(*I), *(*J));
+        Result = false;
       }
       ++J;
     }
   }
-
+  // check effect coverage
+  const EffectSummary *DefES = SymbolTable::Table->getEffectSummary(Def);
+  assert(DefES);
+  llvm::raw_ostream &OS = *SymbolTable::VB.OS;
+  OS << "DEBUG:: Checking if the effects of the calls through parallel_invoke "
+     << "are covered by the effect summary of the enclosing function, which is:\n"
+     << DefES->toString() << "\n";
+  {
+    unsigned int Idx = 0;
+    EffectSummaryVector::iterator I = ESVec.begin(), E = ESVec.end();
+    for(; I != E; ++I, ++Idx) {
+      assert(Idx<NumArgs && "Internal Error: Unexpected number of Effect Summaries");
+      if (!DefES->covers(*I)) {
+        std::string Str = (*I)->toString();
+        emitEffectsNotCoveredWarning(Exp->getArg(Idx), Def, Str);
+        Result = false;
+      }
+    }
+  }
+  // delete effect summaries
   for(EffectSummaryVector::iterator I = ESVec.begin(), E = ESVec.end();
       I != E; ++I) {
     delete (*I);
   }
-  return true;
+  return Result;
 }
 
 } // end namespace asap

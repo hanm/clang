@@ -5908,29 +5908,32 @@ inline double tick_count::interval_t::seconds() const {
 
 
 class TreeNode;
+[[asap::region("ReadOnly")]];
 
-class [[asap::param("P_gtl"), asap::region("GTL")]] GrowTreeLeft {
-  TreeNode *Node [[asap::arg("GTL, P_gtl")]];
-  int Depth [[asap::arg("GTL")]];
+class [[asap::param("P_gtl")]] GrowTreeLeft {
+  TreeNode *Node [[asap::arg("ReadOnly, P_gtl")]];
+  int Depth [[asap::arg("ReadOnly")]];
 
 public:
   GrowTreeLeft(TreeNode *n[[asap::arg("P_gtl")]], int depth) : Node(n), Depth(depth) {}
 
-  void operator() [[asap::reads("GTL, P_gtl:*:TreeNode::V"),
-                    asap::writes("P_gtl:TreeNode::Links, P_gtl:TreeNode::L:*")]]
+  void operator() [[asap::reads("ReadOnly, P_gtl:*:TreeNode::V"),
+                    asap::writes("P_gtl:TreeNode::Links, P_gtl:TreeNode::L:*:TreeNode::Links, "
+                                 "P_gtl:TreeNode::L:*:TreeNode::L, P_gtl:TreeNode::L:*:TreeNode::R")]]
                   () const;
 
 };
 
-class [[asap::param("P_gtr"), asap::region("GTR")]] GrowTreeRight {
-  TreeNode *Node [[asap::arg("GTR, P_gtr")]];
-  int Depth [[asap::arg("GTR")]];
+class [[asap::param("P_gtr")]] GrowTreeRight {
+  TreeNode *Node [[asap::arg("ReadOnly, P_gtr")]];
+  int Depth [[asap::arg("ReadOnly")]];
 
 public:
   GrowTreeRight(TreeNode *n[[asap::arg("P_gtr")]], int depth) : Node(n), Depth(depth) {}
 
-  void operator() [[asap::reads("GTR, P_gtr:*:TreeNode::V"),
-                    asap::writes("P_gtr:TreeNode::Links, P_gtr:TreeNode::R:*")]]
+  void operator() [[asap::reads("ReadOnly, P_gtr:*:TreeNode::V"),
+                    asap::writes("P_gtr:TreeNode::Links, P_gtr:TreeNode::R:*:TreeNode::Links, "
+                                 "P_gtr:TreeNode::R:*:TreeNode::L, P_gtr:TreeNode::R:*:TreeNode::R")]]
                   () const;
 
 };
@@ -5956,7 +5959,8 @@ public:
     right = N;
   }
 
-  void growTree [[asap::reads("P:*:V"), asap::writes("P:*:Links, P:*:L, P:*:R")]]
+  void growTree [[asap::reads("P:*:V, ReadOnly"), 
+                  asap::writes("P:*:Links, P:*:L, P:*:R")]]
                 (int depth) {
     if (depth<=0) return;
 # 95 "tree.cpp"
@@ -5976,9 +5980,7 @@ public:
 
 };
 
-void GrowTreeLeft::operator() [[asap::reads("GTL, P_gtl:*:TreeNode::V"),
-                                asap::writes("P_gtl:TreeNode::Links, P_gtl:TreeNode::L:*")]]
-                              () const {
+void GrowTreeLeft::operator() () const {
   if (Node->left==__null) {
     Node->left = new TreeNode(Node->value+1);
     Node->left->growTree(Depth-1);
@@ -5993,7 +5995,7 @@ void GrowTreeRight::operator() () const {
   }
 }
 # 144 "tree.cpp"
-int main [[asap::region("MAIN"), asap::writes("MAIN:*")]]
+int main [[asap::region("MAIN"), asap::reads("ReadOnly"), asap::writes("MAIN:*")]]
          (int argc, char *argv [[asap::arg("Local, Local")]] [])
 {
     int nth=-1;

@@ -107,7 +107,7 @@ EffectCollectorVisitor::EffectCollectorVisitor (
       if ( ! SubstOVRDSum.covers(DerivedSum) ) {
         emitOverridenVirtualFunctionMustCoverEffectsOfChildren(OverriddenMethod, CXXD);
       }
-    }
+    } // end forall method declarations
   }
   OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
   delete EffectsTmp;
