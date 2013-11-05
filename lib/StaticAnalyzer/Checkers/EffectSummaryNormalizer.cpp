@@ -35,10 +35,12 @@ EffectSummaryNormalizerTraverser()
     FatalError(false) {}
 
 void EffectSummaryNormalizerTraverser::
-emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef &Str) {
+emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef Str) {
+
   StringRef BugName = "effect summary of canonical declaration does not cover"\
     " the summary of this declaration";
   helperEmitDeclarationWarning(BR, D, Str, BugName);
+  FatalError = true;
 }
 
 // Visitors
@@ -94,7 +96,7 @@ bool EffectSummaryNormalizerTraverser::VisitFunctionDecl(FunctionDecl *D) {
       const EffectSummary *CanES = SymT.getEffectSummary(CanFD);
       assert(CanES && "Function missing effect summary");
       if ( ! CanES->covers(ES) ) {
-        StringRef Name = D->getNameInfo().getAsString();
+        std::string Name = D->getNameInfo().getAsString();
         emitCanonicalDeclHasSmallerEffectSummary(D, Name);
       } else { // The effect summary of the canonical decl covers this.
 

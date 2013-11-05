@@ -39,7 +39,7 @@ class EffectSummaryNormalizerTraverser :
   bool FatalError;
 
   void emitCanonicalDeclHasSmallerEffectSummary(const Decl *D,
-                                                const StringRef &S);
+                                                const StringRef S);
 
 public:
   typedef RecursiveASTVisitor<EffectSummaryNormalizerTraverser> BaseClass;
