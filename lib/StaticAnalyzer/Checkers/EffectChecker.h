@@ -55,8 +55,6 @@ class EffectCollectorVisitor
   void emitOverridenVirtualFunctionMustCoverEffectsOfChildren(
                                               const CXXMethodDecl *Parent,
                                                 const CXXMethodDecl *Child);
-  void emitCanonicalDeclHasSmallerEffectSummary(const Decl *D,
-                                                const StringRef &Str);
   void emitUnsupportedConstructorInitializer(const CXXConstructorDecl *D);
   /// \brief Copy the effect summary of FunD and push it to the TmpEffects.
   int copyAndPushFunctionEffects(const FunctionDecl *FunD,
