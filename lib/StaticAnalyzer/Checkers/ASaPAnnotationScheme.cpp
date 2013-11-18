@@ -129,7 +129,7 @@ makeFieldType(const FieldDecl *D, long ArgNum) {
   RplVector RplV;
 
   // NOTE: We are not allowed to add a parameter here.
-  // We should do it though the makeClassParam method during the
+  // We should do it though the makeClassParams method during the
   // CollectRegionNamesAndParams pass.
   assert(ParamV && ParamV->size()>0
          && "Internal error: empty region parameter vector.");
