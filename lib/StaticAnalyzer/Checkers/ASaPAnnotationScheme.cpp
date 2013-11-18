@@ -91,14 +91,23 @@ helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT) {
   return Result;
 
 }
-
-///////////////////////////////////////////////////////////////////////////////
-AnnotationSet ParametricAnnotationScheme::
-makeClassParams(const RecordDecl *D) {
+inline AnnotationSet AnnotationScheme::
+helperMakeClassParams(const RecordDecl *D) {
   AnnotationSet Result;
   ParamRplElement Param("P");
   Result.ParamVec = new ParameterVector(Param);
   return Result;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+AnnotationSet ParametricAnnotationScheme::
+makeClassParams(const RecordDecl *D) {
+  // we don't need a class parameter if the class has no fields
+  AnnotationSet Result;
+  if (D->field_empty())
+    return Result;
+  else
+    return helperMakeClassParams(D);
 }
 
 AnnotationSet ParametricAnnotationScheme::
@@ -119,12 +128,9 @@ makeFieldType(const FieldDecl *D, long ArgNum) {
   AnnotationSet Result;
   RplVector RplV;
 
-  if (!ParamV || ParamV->size()==0) {
-    Result.ParamVec = new ParameterVector();
-    ParamRplElement Param("P");
-    Result.ParamVec->push_back(Param);
-    ParamV = Result.ParamVec;
-  }
+  // NOTE: We are not allowed to add a parameter here.
+  // We should do it though the makeClassParam method during the
+  // CollectRegionNamesAndParams pass.
   assert(ParamV && ParamV->size()>0
          && "Internal error: empty region parameter vector.");
 

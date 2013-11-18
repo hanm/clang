@@ -187,7 +187,14 @@ VisitRecordDecl (RecordDecl *D) {
   // zero region arguments.
   SymT.initParameterVector(D);
   checkRegionOrParamDecls<RegionParamAttr>(D);
-
+  // If there weren't any explicit region params, perhaps the annotation scheme
+  // will fill in some
+  const ParameterVector *ParmV = SymT.getParameterVector(D);
+  if (ParmV->size() == 0) {
+    AnnotationSet AnSe = SymT.makeDefaultClassParams(D);
+    SymT.addToParameterVector(D, AnSe.ParamVec);
+    assert(AnSe.ParamVec == 0);
+  }
   return true;
 }
 

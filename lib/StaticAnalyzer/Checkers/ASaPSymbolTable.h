@@ -204,6 +204,10 @@ public:
   // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
 
+  inline AnnotationSet makeDefaultClassParams(RecordDecl *RecD) {
+    return AnnotScheme->makeClassParams(RecD);
+  }
+
   inline AnnotationSet makeDefaultEffectSummary(const FunctionDecl *F) {
     return AnnotScheme->makeEffectSummary(F);
   }

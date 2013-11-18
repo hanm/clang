@@ -53,10 +53,14 @@ public:
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D) = 0;
 
 protected:
+  AnnotationSet helperMakeClassParams(const RecordDecl *D);
+
   AnnotationSet helperMakeGlobalType(const VarDecl *D, long ArgNum);
   AnnotationSet helperMakeLocalType(const ValueDecl *D, long ArgNum);
-  AnnotationSet helperMakeWritesLocalEffectSummary(const FunctionDecl *D);
+
   AnnotationSet helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT);
+
+  AnnotationSet helperMakeWritesLocalEffectSummary(const FunctionDecl *D);
 
 };
 

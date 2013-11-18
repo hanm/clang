@@ -518,11 +518,8 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
   OSv2 << "DEBUG:: SymbolTable::makeDefaultType\n";
   if (FieldDecl *FieldD = dyn_cast<FieldDecl>(ValD)) {
     AnnotationSet AnSe = AnnotScheme->makeFieldType(FieldD, ParamCount);
-    if (AnSe.ParamVec) {
-      const RecordDecl *ReD = FieldD->getParent();
-      addToParameterVector(ReD, AnSe.ParamVec);
-      assert(AnSe.ParamVec == 0);
-    }
+    assert(AnSe.ParamVec == 0 && "Internal Error: Not allowed to create a "
+                                 "region parameter in method makeDefaultType");
     return AnSe;
   } else if (/*ImplicitParamDecl *ImplParamD = */dyn_cast<ImplicitParamDecl>(ValD)) {
     assert(false && "Implement ME! :)");
