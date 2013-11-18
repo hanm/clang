@@ -3812,22 +3812,10 @@ def warn_cxx98_compat_ctor_list_init : Warning<
 def err_illegal_initializer : Error<
   "illegal initializer (only variables can be initialized)">;
 def err_illegal_initializer_type : Error<"illegal initializer type %0">;
-<<<<<<< HEAD
-def err_init_list_type_narrowing_sfinae : Error<
-  "type %0 cannot be narrowed to %1 in initializer list">;
-def err_init_list_type_narrowing : ExtWarn<
-  "type %0 cannot be narrowed to %1 in initializer list">,
-  InGroup<CXX11Narrowing>, DefaultError;
-def err_init_list_variable_narrowing_sfinae : Error<
-  "non-constant-expression cannot be narrowed from type %0 to %1 in "
-  "initializer list">;
-def err_init_list_variable_narrowing : ExtWarn<
-=======
 def ext_init_list_type_narrowing : ExtWarn<
   "type %0 cannot be narrowed to %1 in initializer list">, 
   InGroup<CXX11Narrowing>, DefaultError, SFINAEFailure;
 def ext_init_list_variable_narrowing : ExtWarn<
->>>>>>> 3ce1d5796fd0cfdd6ff84188dba34abf0380e1b8
   "non-constant-expression cannot be narrowed from type %0 to %1 in "
   "initializer list">, InGroup<CXX11Narrowing>, DefaultError, SFINAEFailure;
 def ext_init_list_constant_narrowing : ExtWarn<
