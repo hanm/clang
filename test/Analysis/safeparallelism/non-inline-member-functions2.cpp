@@ -7,7 +7,7 @@ public:
    virtual void do_something ();
 };
 
-void C::do_something [[asap::writes("Class")]]  () { // expected-warning{{effect summary of canonical declaration}}
+void C::do_something [[asap::writes("Class")]]  () { // expected-warning{{effect summary of canonical declaration does not cover the summary of this declaration}}
   x = 0;
 }
 

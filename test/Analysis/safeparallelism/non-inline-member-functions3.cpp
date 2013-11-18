@@ -9,7 +9,7 @@ public:
 
 [[asap::region("R")]];
 void func ( C *c [[asap::arg("Local,R")]] ) {
-  c->do_something(); // expected-warning{{effect not covered}}
+  c->do_something(); 
 }
 
 void C::do_something [[asap::writes("Class")]]  () { // expected-warning{{effect summary of canonical declaration does not cover the summary of this declaration}}
