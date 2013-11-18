@@ -121,7 +121,7 @@ public:
   void mangleDeclaration(const NamedDecl *ND);
   void mangleFunctionEncoding(const FunctionDecl *FD);
   void mangleVariableEncoding(const VarDecl *VD);
-  void mangleNumber(int64_t Number);
+  void mangleNumber(uint32_t Number);
   void mangleNumber(const llvm::APSInt &Value);
   void mangleType(QualType T, SourceRange Range,
                   QualifierMangleMode QMM = QMM_Mangle);
@@ -179,8 +179,10 @@ class MicrosoftMangleContextImpl : public MicrosoftMangleContext {
 public:
   MicrosoftMangleContextImpl(ASTContext &Context, DiagnosticsEngine &Diags)
       : MicrosoftMangleContext(Context, Diags) {}
-  virtual bool shouldMangleDeclName(const NamedDecl *D);
-  virtual void mangleName(const NamedDecl *D, raw_ostream &Out);
+  virtual bool shouldMangleCXXName(const NamedDecl *D);
+  virtual void mangleCXXName(const NamedDecl *D, raw_ostream &Out);
+  virtual void mangleVirtualMemPtrThunk(const CXXMethodDecl *MD,
+                                        int OffsetInVFTable, raw_ostream &);
   virtual void mangleThunk(const CXXMethodDecl *MD,
                            const ThunkInfo &Thunk,
                            raw_ostream &);
@@ -211,16 +213,7 @@ private:
 
 }
 
-bool MicrosoftMangleContextImpl::shouldMangleDeclName(const NamedDecl *D) {
-  // In C, functions with no attributes never need to be mangled. Fastpath them.
-  if (!getASTContext().getLangOpts().CPlusPlus && !D->hasAttrs())
-    return false;
-
-  // Any decl can be declared with __asm("foo") on it, and this takes precedence
-  // over all other naming in the .o file.
-  if (D->hasAttr<AsmLabelAttr>())
-    return true;
-
+bool MicrosoftMangleContextImpl::shouldMangleCXXName(const NamedDecl *D) {
   if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
     LanguageLinkage L = FD->getLanguageLinkage();
     // Overloadable functions need mangling.
@@ -281,14 +274,6 @@ void MicrosoftCXXNameMangler::mangle(const NamedDecl *D,
   // default, we emit an asm marker at the start so we get the name right.
   // Callers can override this with a custom prefix.
 
-  // Any decl can be declared with __asm("foo") on it, and this takes precedence
-  // over all other naming in the .o file.
-  if (const AsmLabelAttr *ALA = D->getAttr<AsmLabelAttr>()) {
-    // If we have an asm name, then we use it as the mangling.
-    Out << '\01' << ALA->getLabel();
-    return;
-  }
-
   // <mangled-name> ::= ? <name> <type-encoding>
   Out << Prefix;
   mangleName(D);
@@ -313,7 +298,7 @@ void MicrosoftCXXNameMangler::mangleFunctionEncoding(const FunctionDecl *FD) {
   // Since MSVC operates on the type as written and not the canonical type, it
   // actually matters which decl we have here.  MSVC appears to choose the
   // first, since it is most likely to be the declaration in a header file.
-  FD = FD->getFirstDeclaration();
+  FD = FD->getFirstDecl();
 
   // We should never ever see a FunctionNoProtoType at this point.
   // We don't even know how to mangle their types anyway :).
@@ -404,8 +389,8 @@ void MicrosoftCXXNameMangler::mangleName(const NamedDecl *ND) {
   Out << '@';
 }
 
-void MicrosoftCXXNameMangler::mangleNumber(int64_t Number) {
-  llvm::APSInt APSNumber(/*BitWidth=*/64, /*isUnsigned=*/false);
+void MicrosoftCXXNameMangler::mangleNumber(uint32_t Number) {
+  llvm::APSInt APSNumber(/*BitWidth=*/32, /*isUnsigned=*/true);
   APSNumber = Number;
   mangleNumber(APSNumber);
 }
@@ -853,7 +838,7 @@ void MicrosoftCXXNameMangler::mangleLocalName(const FunctionDecl *FD) {
   // functions. You could have a method baz of class C inside a function bar
   // inside a function foo, like so:
   // ?baz@C@?3??bar@?1??foo@@YAXXZ@YAXXZ@QAEXXZ
-  int NestLevel = getLocalNestingLevel(FD);
+  unsigned NestLevel = getLocalNestingLevel(FD);
   Out << '?';
   mangleNumber(NestLevel);
   Out << '?';
@@ -1384,24 +1369,18 @@ void MicrosoftCXXNameMangler::mangleFunctionClass(const FunctionDecl *FD) {
   //                   ::= D # private: static far
   //                   ::= E # private: virtual near
   //                   ::= F # private: virtual far
-  //                   ::= G # private: thunk near
-  //                   ::= H # private: thunk far
   //                   ::= I # protected: near
   //                   ::= J # protected: far
   //                   ::= K # protected: static near
   //                   ::= L # protected: static far
   //                   ::= M # protected: virtual near
   //                   ::= N # protected: virtual far
-  //                   ::= O # protected: thunk near
-  //                   ::= P # protected: thunk far
   //                   ::= Q # public: near
   //                   ::= R # public: far
   //                   ::= S # public: static near
   //                   ::= T # public: static far
   //                   ::= U # public: virtual near
   //                   ::= V # public: virtual far
-  //                   ::= W # public: thunk near
-  //                   ::= X # public: thunk far
   // <global-function> ::= Y # global near
   //                   ::= Z # global far
   if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(FD)) {
@@ -1845,8 +1824,8 @@ void MicrosoftCXXNameMangler::mangleType(const AtomicType *T,
     << Range;
 }
 
-void MicrosoftMangleContextImpl::mangleName(const NamedDecl *D,
-                                            raw_ostream &Out) {
+void MicrosoftMangleContextImpl::mangleCXXName(const NamedDecl *D,
+                                               raw_ostream &Out) {
   assert((isa<FunctionDecl>(D) || isa<VarDecl>(D)) &&
          "Invalid mangleName() call, argument is not a variable or function!");
   assert(!isa<CXXConstructorDecl>(D) && !isa<CXXDestructorDecl>(D) &&
@@ -1860,12 +1839,61 @@ void MicrosoftMangleContextImpl::mangleName(const NamedDecl *D,
   return Mangler.mangle(D);
 }
 
+// <this-adjustment> ::= <no-adjustment> | <static-adjustment> |
+//                       <virtual-adjustment>
+// <no-adjustment>      ::= A # private near
+//                      ::= B # private far
+//                      ::= I # protected near
+//                      ::= J # protected far
+//                      ::= Q # public near
+//                      ::= R # public far
+// <static-adjustment>  ::= G <static-offset> # private near
+//                      ::= H <static-offset> # private far
+//                      ::= O <static-offset> # protected near
+//                      ::= P <static-offset> # protected far
+//                      ::= W <static-offset> # public near
+//                      ::= X <static-offset> # public far
+// <virtual-adjustment> ::= $0 <virtual-shift> <static-offset> # private near
+//                      ::= $1 <virtual-shift> <static-offset> # private far
+//                      ::= $2 <virtual-shift> <static-offset> # protected near
+//                      ::= $3 <virtual-shift> <static-offset> # protected far
+//                      ::= $4 <virtual-shift> <static-offset> # public near
+//                      ::= $5 <virtual-shift> <static-offset> # public far
+// <virtual-shift>      ::= <vtordisp-shift> | <vtordispex-shift>
+// <vtordisp-shift>     ::= <offset-to-vtordisp>
+// <vtordispex-shift>   ::= <offset-to-vbptr> <vbase-offset-offset>
+//                          <offset-to-vtordisp>
 static void mangleThunkThisAdjustment(const CXXMethodDecl *MD,
                                       const ThisAdjustment &Adjustment,
                                       MicrosoftCXXNameMangler &Mangler,
                                       raw_ostream &Out) {
-  // FIXME: add support for vtordisp thunks.
-  if (Adjustment.NonVirtual != 0) {
+  if (!Adjustment.Virtual.isEmpty()) {
+    Out << '$';
+    char AccessSpec;
+    switch (MD->getAccess()) {
+    case AS_none:
+      llvm_unreachable("Unsupported access specifier");
+    case AS_private:
+      AccessSpec = '0';
+      break;
+    case AS_protected:
+      AccessSpec = '2';
+      break;
+    case AS_public:
+      AccessSpec = '4';
+    }
+    if (Adjustment.Virtual.Microsoft.VBPtrOffset) {
+      Out << 'R' << AccessSpec;
+      Mangler.mangleNumber(Adjustment.Virtual.Microsoft.VBPtrOffset);
+      Mangler.mangleNumber(Adjustment.Virtual.Microsoft.VBOffsetOffset);
+      Mangler.mangleNumber(Adjustment.Virtual.Microsoft.VtordispOffset);
+      Mangler.mangleNumber(Adjustment.NonVirtual);
+    } else {
+      Out << AccessSpec;
+      Mangler.mangleNumber(Adjustment.Virtual.Microsoft.VtordispOffset);
+      Mangler.mangleNumber(-Adjustment.NonVirtual);
+    }
+  } else if (Adjustment.NonVirtual != 0) {
     switch (MD->getAccess()) {
     case AS_none:
       llvm_unreachable("Unsupported access specifier");
@@ -1878,9 +1906,7 @@ static void mangleThunkThisAdjustment(const CXXMethodDecl *MD,
     case AS_public:
       Out << 'W';
     }
-    llvm::APSInt APSNumber(/*BitWidth=*/32, /*isUnsigned=*/true);
-    APSNumber = -Adjustment.NonVirtual;
-    Mangler.mangleNumber(APSNumber);
+    Mangler.mangleNumber(-Adjustment.NonVirtual);
   } else {
     switch (MD->getAccess()) {
     case AS_none:
@@ -1895,6 +1921,19 @@ static void mangleThunkThisAdjustment(const CXXMethodDecl *MD,
       Out << 'Q';
     }
   }
+}
+
+void MicrosoftMangleContextImpl::mangleVirtualMemPtrThunk(
+    const CXXMethodDecl *MD, int OffsetInVFTable, raw_ostream &Out) {
+  bool Is64Bit = getASTContext().getTargetInfo().getPointerWidth(0) == 64;
+
+  MicrosoftCXXNameMangler Mangler(*this, Out);
+  Mangler.getStream() << "\01??_9";
+  Mangler.mangleName(MD->getParent());
+  Mangler.getStream() << "$B";
+  Mangler.mangleNumber(OffsetInVFTable);
+  Mangler.getStream() << "A";
+  Mangler.getStream() << (Is64Bit ? "A" : "E");
 }
 
 void MicrosoftMangleContextImpl::mangleThunk(const CXXMethodDecl *MD,

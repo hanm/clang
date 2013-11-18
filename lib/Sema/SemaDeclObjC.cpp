@@ -406,9 +406,7 @@ void Sema::ActOnStartOfObjCMethodDef(Scope *FnBodyScope, Decl *D) {
         if (Context.getLangOpts().getGC() != LangOptions::NonGC)
           getCurFunction()->ObjCShouldCallSuper = true;
         
-      } else if (MDecl->hasAttr<ObjCRequiresSuperAttr>())
-        getCurFunction()->ObjCShouldCallSuper = true;
-      else {
+      } else {
         const ObjCMethodDecl *SuperMethod =
           SuperClass->lookupMethod(MDecl->getSelector(),
                                    MDecl->isInstanceMethod());
@@ -3500,4 +3498,44 @@ void Sema::DiagnoseUseOfUnimplementedSelectors() {
       Diag((*S).second, diag::warn_unimplemented_selector) << Sel;
   }
   return;
+}
+
+ObjCIvarDecl *
+Sema::GetIvarBackingPropertyAccessor(const ObjCMethodDecl *Method,
+                                     const ObjCPropertyDecl *&PDecl) const {
+  
+  const ObjCInterfaceDecl *IDecl = Method->getClassInterface();
+  if (!IDecl)
+    return 0;
+  Method = IDecl->lookupMethod(Method->getSelector(), true);
+  if (!Method || !Method->isPropertyAccessor())
+    return 0;
+  if ((PDecl = Method->findPropertyDecl())) {
+    if (!PDecl->getDeclContext())
+      return 0;
+    // Make sure property belongs to accessor's class and not to
+    // one of its super classes.
+    if (const ObjCInterfaceDecl *CID =
+        dyn_cast<ObjCInterfaceDecl>(PDecl->getDeclContext()))
+      if (CID != IDecl)
+        return 0;
+    return PDecl->getPropertyIvarDecl();
+  }
+  return 0;
+}
+
+void Sema::DiagnoseUnusedBackingIvarInAccessor(Scope *S) {
+  if (S->hasUnrecoverableErrorOccurred() || !S->isInObjcMethodScope())
+    return;
+  
+  const ObjCMethodDecl *CurMethod = getCurMethodDecl();
+  if (!CurMethod)
+    return;
+  const ObjCPropertyDecl *PDecl;
+  const ObjCIvarDecl *IV = GetIvarBackingPropertyAccessor(CurMethod, PDecl);
+  if (IV && !IV->getBackingIvarReferencedInAccessor()) {
+    Diag(getCurMethodDecl()->getLocation(), diag::warn_unused_property_backing_ivar)
+    << IV->getDeclName();
+    Diag(PDecl->getLocation(), diag::note_property_declare);
+  }
 }
