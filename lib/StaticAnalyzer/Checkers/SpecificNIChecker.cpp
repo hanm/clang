@@ -48,7 +48,8 @@ static void emitInterferingEffects(const Stmt *S,
   StringRef BugName = "Interfering effects";
   std::string SBuf;
   llvm::raw_string_ostream OS(SBuf);
-  OS << "{" << ES1.toString() << "} # {" << ES2.toString() << "}";
+  OS << "{" << ES1.toString() << "} interferes with {" 
+     << ES2.toString() << "}";
   StringRef Str(OS.str());
   helperEmitStatementWarning(*SymbolTable::VB.BR,
                              SymbolTable::VB.AC,
