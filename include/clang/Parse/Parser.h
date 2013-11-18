@@ -102,6 +102,7 @@ class Parser : public CodeCompletionHandler {
 
   /// Contextual keywords for Microsoft extensions.
   IdentifierInfo *Ident__except;
+  mutable IdentifierInfo *Ident_sealed;
 
   /// Ident_super - IdentifierInfo for "super", to support fast
   /// comparison.
@@ -735,32 +736,45 @@ private:
   void CheckNestedObjCContexts(SourceLocation AtLoc);
 
 public:
+
+  /// \brief Control flags for SkipUntil functions.
+  enum SkipUntilFlags {
+    StopAtSemi = 1 << 0,  ///< Stop skipping at semicolon
+    /// \brief Stop skipping at specified token, but don't skip the token itself
+    StopBeforeMatch = 1 << 1,
+    StopAtCodeCompletion = 1 << 2 ///< Stop at code completion
+  };
+
+  friend LLVM_CONSTEXPR SkipUntilFlags operator|(SkipUntilFlags L,
+                                                 SkipUntilFlags R) {
+    return static_cast<SkipUntilFlags>(static_cast<unsigned>(L) |
+                                       static_cast<unsigned>(R));
+  }
+
   /// SkipUntil - Read tokens until we get to the specified token, then consume
-  /// it (unless DontConsume is true).  Because we cannot guarantee that the
-  /// token will ever occur, this skips to the next token, or to some likely
-  /// good stopping point.  If StopAtSemi is true, skipping will stop at a ';'
-  /// character.
+  /// it (unless StopBeforeMatch is specified).  Because we cannot guarantee
+  /// that the token will ever occur, this skips to the next token, or to some
+  /// likely good stopping point.  If Flags has StopAtSemi flag, skipping will
+  /// stop at a ';' character.
   ///
   /// If SkipUntil finds the specified token, it returns true, otherwise it
   /// returns false.
-  bool SkipUntil(tok::TokenKind T, bool StopAtSemi = true,
-                 bool DontConsume = false, bool StopAtCodeCompletion = false) {
-    return SkipUntil(llvm::makeArrayRef(T), StopAtSemi, DontConsume,
-                     StopAtCodeCompletion);
+  bool SkipUntil(tok::TokenKind T,
+                 SkipUntilFlags Flags = static_cast<SkipUntilFlags>(0)) {
+    return SkipUntil(llvm::makeArrayRef(T), Flags);
   }
-  bool SkipUntil(tok::TokenKind T1, tok::TokenKind T2, bool StopAtSemi = true,
-                 bool DontConsume = false, bool StopAtCodeCompletion = false) {
+  bool SkipUntil(tok::TokenKind T1, tok::TokenKind T2,
+                 SkipUntilFlags Flags = static_cast<SkipUntilFlags>(0)) {
     tok::TokenKind TokArray[] = {T1, T2};
-    return SkipUntil(TokArray, StopAtSemi, DontConsume,StopAtCodeCompletion);
+    return SkipUntil(TokArray, Flags);
   }
   bool SkipUntil(tok::TokenKind T1, tok::TokenKind T2, tok::TokenKind T3,
-                 bool StopAtSemi = true, bool DontConsume = false,
-                 bool StopAtCodeCompletion = false) {
+                 SkipUntilFlags Flags = static_cast<SkipUntilFlags>(0)) {
     tok::TokenKind TokArray[] = {T1, T2, T3};
-    return SkipUntil(TokArray, StopAtSemi, DontConsume,StopAtCodeCompletion);
+    return SkipUntil(TokArray, Flags);
   }
-  bool SkipUntil(ArrayRef<tok::TokenKind> Toks, bool StopAtSemi = true,
-                 bool DontConsume = false, bool StopAtCodeCompletion = false);
+  bool SkipUntil(ArrayRef<tok::TokenKind> Toks,
+                 SkipUntilFlags Flags = static_cast<SkipUntilFlags>(0));
 
   /// SkipMalformedDecl - Read tokens until we get to some likely good stopping
   /// point for skipping past a simple-declaration.
@@ -1469,10 +1483,7 @@ private:
   /// A SmallVector of types.
   typedef SmallVector<ParsedType, 12> TypeVector;
 
-  StmtResult ParseStatement(SourceLocation *TrailingElseLoc = 0) {
-    StmtVector Stmts;
-    return ParseStatementOrDeclaration(Stmts, true, TrailingElseLoc);
-  }
+  StmtResult ParseStatement(SourceLocation *TrailingElseLoc = 0);
   StmtResult ParseStatementOrDeclaration(StmtVector &Stmts,
                                          bool OnlyStatement,
                                          SourceLocation *TrailingElseLoc = 0);
@@ -1882,6 +1893,10 @@ private:
   // for example, attributes appertain to decl specifiers.
   void ProhibitCXX11Attributes(ParsedAttributesWithRange &attrs);
 
+  /// \brief Diagnose and skip C++11 attributes that appear in syntactic
+  /// locations where attributes are not allowed.
+  void DiagnoseAndSkipCXX11Attributes();
+
   void MaybeParseGNUAttributes(Declarator &D,
                                LateParsedAttrList *LateAttrs = 0) {
     if (Tok.is(tok::kw___attribute)) {
@@ -1977,6 +1992,11 @@ private:
                                         SourceLocation AttrNameLoc,
                                         ParsedAttributes &Attrs,
                                         SourceLocation *EndLoc);
+
+  void ParseAttributeWithTypeArg(IdentifierInfo &AttrName,
+                                 SourceLocation AttrNameLoc,
+                                 ParsedAttributes &Attrs,
+                                 SourceLocation *EndLoc);
 
   void ParseTypeofSpecifier(DeclSpec &DS);
   SourceLocation ParseDecltypeSpecifier(DeclSpec &DS);
@@ -2076,6 +2096,8 @@ private:
   CXX11AttributeKind
   isCXX11AttributeSpecifier(bool Disambiguate = false,
                             bool OuterMightBeMessageSend = false);
+
+  void DiagnoseUnexpectedNamespace(NamedDecl *Context);
 
   Decl *ParseNamespace(unsigned Context, SourceLocation &DeclEnd,
                        SourceLocation InlineLoc = SourceLocation());
