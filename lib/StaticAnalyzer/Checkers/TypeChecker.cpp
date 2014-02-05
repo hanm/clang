@@ -42,7 +42,7 @@ static void emitUnsafeExplicitCastWarning(Expr *Exp, StringRef FromTo) {
 }
 
 static void emitUnsafeImplicitCastWarning(Expr *Exp, StringRef FromTo) {
-  StringRef BugName = "unsafe explicit cast";
+  StringRef BugName = "unsafe implicit cast";
   helperEmitStatementWarning(*SymbolTable::VB.BR, SymbolTable::VB.AC,
                              Exp, 0, FromTo, BugName, false);
 }
@@ -1094,15 +1094,26 @@ void TypeBuilderVisitor::VisitExplicitCastExpr(ExplicitCastExpr *Exp) {
      << Exp->getSubExpr()->getType().getAsString()
      << "\n";
 
+  Visit(Exp->getSubExpr());
+  if (Type) {
+    QualType CastQT = Exp->getType();
 
-  clearType();
-  if (WarnUnsafeCasts) {
-    std::string FromTo;
-    llvm::raw_string_ostream FromToOS(FromTo);
-    FromToOS << "From Type: " << Exp->getSubExpr()->getType().getAsString()
-             << ", To Type: " << Exp->getType().getAsString()
-             << " [Kind: " << Exp->getCastKindName() << "]";
-    emitUnsafeExplicitCastWarning(Exp, FromToOS.str());
+    switch(Exp->getCastKind()) {
+    case CK_LValueToRValue:
+    case CK_NoOp:
+      // NoOp
+      break;
+    default:
+      clearType();
+      if (WarnUnsafeCasts) {
+        std::string FromTo;
+        llvm::raw_string_ostream FromToOS(FromTo);
+        FromToOS << "From Type: " << Exp->getSubExpr()->getType().getAsString()
+                << ", To Type: " << Exp->getType().getAsString()
+                << " [Kind: " << Exp->getCastKindName() << "]";
+        emitUnsafeExplicitCastWarning(Exp, FromToOS.str());
+      }
+    }
   }
   // do not visit sub-expression
 }
@@ -1160,16 +1171,21 @@ void TypeBuilderVisitor::VisitImplicitCastExpr(ImplicitCastExpr *Exp) {
       Type->dropArgV();
       OS << "DEBUG:: ImplicitCast: Setting QT to " << CastQT.getAsString() << "\n";
       OS << "DEBUG:: Type = " << Type->toString() << "\n";
+      break;
     case CK_BitCast:
-      // FIXME TODO
       // when casting to void*, we should drop the region args of the target type.
       if (CastQT->isVoidPointerType()) {
-        // FIXME: here we should alsto take care of void **, void ***, ...
+        // FIXME: here we should also take care of void **, void ***, ...
         Type->setQT(CastQT);
         Type->dropArgV();
         OS << "DEBUG:: ImplicitCast: Setting QT to " << CastQT.getAsString() << "\n";
         OS << "DEBUG:: Type = " << Type->toString() << "\n";
       }
+      break;
+    case CK_LValueToRValue:
+    case CK_NoOp:
+      // NoOp
+      break;
     default:
       // do nothing;
       if (WarnUnsafeCasts) {
