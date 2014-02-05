@@ -74,7 +74,6 @@ public:
 // The template parameter is the type of the default annotation scheme
 // used. This is a temporary solution since it is not easy to pass
 // command line arguments to checkers.
-template<typename AnnotationSchemeT>
 class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
 
@@ -82,7 +81,7 @@ public:
   void checkASTDecl(const TranslationUnitDecl *TUDeclConst,
                     AnalysisManager &Mgr,
                     BugReporter &BR) const {
-
+    bool Error = false;
     TranslationUnitDecl *TUDecl = const_cast<TranslationUnitDecl*>(TUDeclConst);
     ASTContext &Ctx = TUDecl->getASTContext();
     AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(TUDecl);
@@ -91,13 +90,33 @@ public:
 
     // initialize traverser
     SymbolTable &SymT = *SymbolTable::Table;
-    AnnotationSchemeT AnnotScheme(SymT);
-    SymT.setAnnotationScheme(&AnnotScheme);
 
+    // Choose default Annotation Scheme from command-line option
+    const StringRef OptionName("-asap-default-scheme");
+    StringRef SchemeStr(Mgr.getAnalyzerOptions().Config.GetOrCreateValue(OptionName, "simple").getValue());
+    os << "DEBUG:: asap-default-scheme = " << SchemeStr << "\n";
 
-    runCheckers(TUDecl);
+    AnnotationScheme *AnnotScheme = 0;
+    if (SchemeStr.compare("simple") == 0) {
+      AnnotScheme = new SimpleAnnotationScheme(SymT);
+    } else if (SchemeStr.compare("param") == 0) {
+      AnnotScheme = new ParametricAnnotationScheme(SymT);
+    } else if (SchemeStr.compare("global") == 0) {
+      AnnotScheme = new CheckGlobalsAnnotationScheme(SymT);
+    } else {
+      // ERROR TODO
+      llvm::errs() << "ERROR: Invalid argument to command-line option -asap-default-scheme\n";
+      Error = true;
+    }
+
+    if (!Error) {
+      SymT.setAnnotationScheme(AnnotScheme);
+      runCheckers(TUDecl);
+    }
+
 
     SymbolTable::Destroy();
+    delete AnnotScheme;
   }
 
   void runCheckers(TranslationUnitDecl *TUDecl) const {
@@ -174,13 +193,5 @@ public:
 } // end unnamed namespace
 
 void ento::registerSafeParallelismChecker(CheckerManager &mgr) {
-  mgr.registerChecker<SafeParallelismChecker<SimpleAnnotationScheme> >();
-}
-
-void ento::registerParametricSafeParallelismChecker(CheckerManager &mgr) {
-  mgr.registerChecker<SafeParallelismChecker<ParametricAnnotationScheme> >();
-}
-
-void ento::registerGlobalAccessChecker(CheckerManager &mgr) {
-  mgr.registerChecker<SafeParallelismChecker<CheckGlobalsAnnotationScheme> >();
+  mgr.registerChecker<SafeParallelismChecker>();
 }

@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.GlobalAccessChecker %s -verify
+// RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker -analyzer-config -asap-default-scheme=global %s -verify
 //
 
 template<typename T>

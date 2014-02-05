@@ -561,12 +561,5 @@ def SafeParallelismChecker : Checker<"SafeParallelismChecker">,
   HelpText<"Check if parallelism is Safe given region and effect annotations.">,
   DescFile<"SafeParallelismChecker.cpp">;
 
-def ParametricSafeParallelismChecker : Checker<"ParametricSafeParallelismChecker">,
-  HelpText<"Check if parallelism is Safe given region and effect annotations with Parametric Defaults.">,
-  DescFile<"SafeParallelismChecker.cpp">;
-
-def GlobalAccessChecker : Checker<"GlobalAccessChecker">,
-  HelpText<"Check that functions do not access globals unless properly annotated.">,
-  DescFile<"SafeParallelismChecker.cpp">;
 } // end "experimental"
 
