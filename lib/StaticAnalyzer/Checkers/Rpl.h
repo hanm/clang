@@ -34,7 +34,8 @@ public:
       RK_Star,
       RK_Named,
       RK_Parameter,
-      RK_Capture
+      RK_Capture,
+      RK_Var //Rpl variable
   };
 private:
   const RplElementKind Kind;
@@ -120,6 +121,25 @@ public:
     return R->getKind() == RK_Parameter;
   }
 };
+
+///-////////////////////////////////////////
+class VarRplElement : public RplElement {
+  ///Fields
+  StringRef name;
+
+public:
+  /// Constructor
+  VarRplElement(StringRef name) : RplElement(RK_Var), name(name) {}
+  virtual ~VarRplElement() {}
+
+  /// Methods
+  virtual StringRef getName() const { return name; }
+
+  static bool classof(const RplElement *R) {
+    return R->getKind() == RK_Var;
+  }
+};
+
 
 class Effect;
 
