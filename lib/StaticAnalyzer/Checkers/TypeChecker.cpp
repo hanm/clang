@@ -21,6 +21,8 @@
 #include "clang/AST/Expr.h"
 #include "clang/AST/Type.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
+
 #include "llvm/Support/SaveAndRestore.h"
 
 #include "ASaPUtil.h"
@@ -33,6 +35,17 @@
 namespace clang {
 namespace asap {
 
+static void emitUnsafeExplicitCastWarning(Expr *Exp, StringRef FromTo) {
+  StringRef BugName = "unsafe explicit cast";
+  helperEmitStatementWarning(*SymbolTable::VB.BR, SymbolTable::VB.AC,
+                             Exp, 0, FromTo, BugName, false);
+}
+
+static void emitUnsafeImplicitCastWarning(Expr *Exp, StringRef FromTo) {
+  StringRef BugName = "unsafe explicit cast";
+  helperEmitStatementWarning(*SymbolTable::VB.BR, SymbolTable::VB.AC,
+                             Exp, 0, FromTo, BugName, false);
+}
 
 AssignmentCheckerVisitor::AssignmentCheckerVisitor(
   const FunctionDecl *Def,
@@ -746,6 +759,9 @@ TypeBuilderVisitor::
 TypeBuilderVisitor (const FunctionDecl *Def, Expr *E)
   : BaseClass(Def), IsBase(false), DerefNum(0), Type(0) {
 
+  // Detecting options
+  WarnUnsafeCasts = Mgr.getAnalyzerOptions().getBooleanOption("-asap-warn-unsafe-casts", false);
+
   OS << "DEBUG:: ******** INVOKING TypeBuilderVisitor...(" << E << ")\n";
   E->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
@@ -1072,13 +1088,22 @@ void TypeBuilderVisitor::VisitExplicitCastExpr(ExplicitCastExpr *Exp) {
   OS << "\n";
   OS << "DEBUG<TypeBuilder>:: Cast Kind Name : " << Exp->getCastKindName()
      << "\n";
-  OS << "DEBUG<TypeBuilder>:: Cast Kind Type : " << Exp->getType().getAsString()
+  OS << "DEBUG<TypeBuilder>:: Cast To Type : " << Exp->getType().getAsString()
      << "\n";
   OS << "DEBUG<TypeBuilder>:: Cast From Type : "
      << Exp->getSubExpr()->getType().getAsString()
      << "\n";
 
+
   clearType();
+  if (WarnUnsafeCasts) {
+    std::string FromTo;
+    llvm::raw_string_ostream FromToOS(FromTo);
+    FromToOS << "From Type: " << Exp->getSubExpr()->getType().getAsString()
+             << ", To Type: " << Exp->getType().getAsString()
+             << " [Kind: " << Exp->getCastKindName() << "]";
+    emitUnsafeExplicitCastWarning(Exp, FromToOS.str());
+  }
   // do not visit sub-expression
 }
 
@@ -1147,6 +1172,14 @@ void TypeBuilderVisitor::VisitImplicitCastExpr(ImplicitCastExpr *Exp) {
       }
     default:
       // do nothing;
+      if (WarnUnsafeCasts) {
+        std::string FromTo;
+        llvm::raw_string_ostream FromToOS(FromTo);
+        FromToOS << "From Type: " << Exp->getSubExpr()->getType().getAsString()
+                 << ", To Type: " << Exp->getType().getAsString()
+                 << " [Kind: " << Exp->getCastKindName() << "]";
+        emitUnsafeImplicitCastWarning(Exp, FromToOS.str());
+  }
       break;
     } // end switch
   } // end if (Type)

@@ -123,6 +123,9 @@ class TypeBuilderVisitor
   ASaPType *Type;
   QualType RefQT;
 
+  bool WarnUnsafeCasts;
+
+
   /// \brief substitute region parameters in Type with arguments.
   void memberSubstitute(const ValueDecl *D);
   void memberSubstitute(const ASaPType *T);
