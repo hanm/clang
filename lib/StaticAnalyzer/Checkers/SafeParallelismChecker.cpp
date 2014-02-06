@@ -71,9 +71,6 @@ public:
 }; /// class StmtVisitorInvoker
 
 
-// The template parameter is the type of the default annotation scheme
-// used. This is a temporary solution since it is not easy to pass
-// command line arguments to checkers.
 class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
 

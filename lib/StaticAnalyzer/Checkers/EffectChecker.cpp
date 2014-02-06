@@ -147,8 +147,10 @@ void EffectCollectorVisitor::memberSubstitute(const ValueDecl *D) {
 }
 
 int EffectCollectorVisitor::collectEffects(const ValueDecl *D) {
+  // if it's an address, the region is Immutable and there is no effect
   if (DerefNum < 0)
     return 0;
+
   OS << "DEBUG:: in EffectChecker::collectEffects: ";
   D->print(OS, Ctx.getPrintingPolicy());
   OS << "\nDEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
