@@ -1,6 +1,6 @@
-// RUN: %clang -g -S -emit-llvm %s -o - | FileCheck %s
-// RUN: %clang -g -gline-tables-only -S -emit-llvm %s -o - | FileCheck -check-prefix=CHECK-GMLT %s
-// RUN: %clang -g -fno-limit-debug-info -S -emit-llvm %s -o - | FileCheck -check-prefix=CHECK-NOLIMIT %s
+// RUN: %clang -g -fno-standalone-debug -S -emit-llvm %s -o - | FileCheck %s
+// RUN: %clang -g -gline-tables-only    -S -emit-llvm %s -o - | FileCheck -check-prefix=CHECK-GMLT %s
+// RUN: %clang -g -fstandalone-debug    -S -emit-llvm %s -o - | FileCheck -check-prefix=CHECK-NOLIMIT %s
 
 namespace A {
 #line 1 "foo.cpp"
@@ -68,7 +68,7 @@ int func(bool b) {
 // CHECK: [[M12]] = metadata !{i32 {{[0-9]*}}, metadata [[FUNC]], metadata [[M11]], i32 {{[0-9]*}}, metadata !"Y"} ; [ DW_TAG_imported_module ]
 
 // CHECK-GMLT: [[CU:![0-9]*]] = {{.*}}[[MODULES:![0-9]*]], metadata !""} ; [ DW_TAG_compile_unit ]
-// CHECK-GMLT: [[MODULES]] = metadata !{i32 0}
+// CHECK-GMLT: [[MODULES]] = metadata !{}
 
 // CHECK-NOLIMIT: ; [ DW_TAG_structure_type ] [bar] [line 6, {{.*}}] [def] [from ]
 

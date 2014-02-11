@@ -265,11 +265,6 @@ output format of the diagnostics that it generates.
 
            t.c +3:11: warning: conversion specifies type 'char *' but the argument has type 'int'
 
-**-f[no-]diagnostics-show-name**
-   Enable the display of the diagnostic name.
-   This option, which defaults to off, controls whether or not Clang
-   prints the associated name.
-
 .. _opt_fdiagnostics-show-option:
 
 **-f[no-]diagnostics-show-option**
@@ -1066,6 +1061,13 @@ are listed below.
 
    CRC instructions are enabled by default on ARMv8.
 
+.. option:: -mgeneral-regs-only
+
+   Generate code which only uses the general purpose registers.
+
+   This option restricts the generated code to use general registers
+   only. This only applies to the AArch64 architecture.
+
 
 Controlling Size of Debug Information
 -------------------------------------
@@ -1238,23 +1240,23 @@ Microsoft extensions
 --------------------
 
 clang has some experimental support for extensions from Microsoft Visual
-C++; to enable it, use the -fms-extensions command-line option. This is
+C++; to enable it, use the ``-fms-extensions`` command-line option. This is
 the default for Windows targets. Note that the support is incomplete.
-Some constructs such as dllexport on classes are ignored with a warning,
+Some constructs such as ``dllexport`` on classes are ignored with a warning,
 and others such as `Microsoft IDL annotations
 <http://msdn.microsoft.com/en-us/library/8tesw2eh.aspx>`_ are silently
 ignored.
 
-clang has a -fms-compatibility flag that makes clang accept enough
+clang has a ``-fms-compatibility`` flag that makes clang accept enough
 invalid C++ to be able to parse most Microsoft headers. For example, it
 allows `unqualified lookup of dependent base class members
 <http://clang.llvm.org/compatibility.html#dep_lookup_bases>`_, which is
 a common compatibility issue with clang. This flag is enabled by default
 for Windows targets.
 
--fdelayed-template-parsing lets clang delay all template instantiation
-until the end of a translation unit. This flag is enabled by default for
-Windows targets.
+``-fdelayed-template-parsing`` lets clang delay parsing of function template
+definitions until the end of a translation unit. This flag is enabled by
+default for Windows targets.
 
 -  clang allows setting ``_MSC_VER`` with ``-fmsc-version=``. It defaults to
    1700 which is the same as Visual C/C++ 2012. Any number is supported
@@ -1280,8 +1282,8 @@ C++ Language Features
 =====================
 
 clang fully implements all of standard C++98 except for exported
-templates (which were removed in C++11), and `many C++11
-features <http://clang.llvm.org/cxx_status.html>`_ are also implemented.
+templates (which were removed in C++11), and all of standard C++11
+and the current draft standard for C++1y.
 
 Controlling implementation limits
 ---------------------------------
@@ -1333,9 +1335,16 @@ Darwin (Mac OS/X), Linux, FreeBSD, and Dragonfly BSD: it has been tested
 to correctly compile many large C, C++, Objective-C, and Objective-C++
 codebases.
 
-On ``x86_64-mingw32``, passing i128(by value) is incompatible to Microsoft
-x64 calling conversion. You might need to tweak
+On ``x86_64-mingw32``, passing i128(by value) is incompatible with the
+Microsoft x64 calling convention. You might need to tweak
 ``WinX86_64ABIInfo::classify()`` in lib/CodeGen/TargetInfo.cpp.
+
+For the X86 target, clang supports the :option:`-m16` command line
+argument which enables 16-bit code output. This is broadly similar to
+using ``asm(".code16gcc")`` with the GNU toolchain. The generated code
+and the ABI remains 32-bit but the assembler emits instructions
+appropriate for a CPU running in 16-bit mode, with address-size and
+operand-size prefixes to enable 32-bit addressing and operations.
 
 ARM
 ^^^
@@ -1385,7 +1394,8 @@ None
 Windows
 ^^^^^^^
 
-Experimental supports are on Cygming.
+Clang has experimental support for targeting "Cygming" (Cygwin / MinGW)
+platforms.
 
 See also :ref:`Microsoft Extensions <c_ms>`.
 

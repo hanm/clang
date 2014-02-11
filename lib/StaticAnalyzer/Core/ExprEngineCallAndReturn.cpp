@@ -49,7 +49,7 @@ void ExprEngine::processCallEnter(CallEnter CE, ExplodedNode *Pred) {
   assert(Entry->empty());
   assert(Entry->succ_size() == 1);
   
-  // Get the solitary sucessor.
+  // Get the solitary successor.
   const CFGBlock *Succ = *(Entry->succ_begin());
   
   // Construct an edge representing the starting location in the callee.
@@ -664,6 +664,8 @@ static CallInlinePolicy mayInlineCallKind(const CallEvent &Call,
     break;
   }
   case CE_CXXAllocator:
+    if (Opts.mayInlineCXXAllocator())
+      break;
     // Do not inline allocators until we model deallocators.
     // This is unfortunate, but basically necessary for smart pointers and such.
     return CIP_DisallowedAlways;

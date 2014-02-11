@@ -25,9 +25,9 @@
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
+#include "llvm/Option/OptSpecifier.h"
 #include "llvm/Option/OptTable.h"
 #include "llvm/Option/Option.h"
-#include "llvm/Option/OptSpecifier.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
@@ -159,15 +159,17 @@ const {
   Arg *PhaseArg = 0;
   phases::ID FinalPhase;
 
-  // -{E,M,MM} only run the preprocessor.
+  // -{E,M,MM} and /P only run the preprocessor.
   if (CCCIsCPP() ||
       (PhaseArg = DAL.getLastArg(options::OPT_E)) ||
-      (PhaseArg = DAL.getLastArg(options::OPT_M, options::OPT_MM))) {
+      (PhaseArg = DAL.getLastArg(options::OPT_M, options::OPT_MM)) ||
+      (PhaseArg = DAL.getLastArg(options::OPT__SLASH_P))) {
     FinalPhase = phases::Preprocess;
 
     // -{fsyntax-only,-analyze,emit-ast,S} only run up to the compiler.
   } else if ((PhaseArg = DAL.getLastArg(options::OPT_fsyntax_only)) ||
              (PhaseArg = DAL.getLastArg(options::OPT_module_file_info)) ||
+             (PhaseArg = DAL.getLastArg(options::OPT_verify_pch)) ||
              (PhaseArg = DAL.getLastArg(options::OPT_rewrite_objc)) ||
              (PhaseArg = DAL.getLastArg(options::OPT_rewrite_legacy_objc)) ||
              (PhaseArg = DAL.getLastArg(options::OPT__migrate)) ||
@@ -378,8 +380,8 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
   BuildInputs(C->getDefaultToolChain(), *TranslatedArgs, Inputs);
 
   // Construct the list of abstract actions to perform for this compilation. On
-  // Darwin target OSes this uses the driver-driver and universal actions.
-  if (TC.getTriple().isOSDarwin())
+  // MachO targets this uses the driver-driver and universal actions.
+  if (TC.getTriple().isOSBinFormatMachO())
     BuildUniversalActions(C->getDefaultToolChain(), C->getArgs(),
                           Inputs, C->getActions());
   else
@@ -491,7 +493,7 @@ void Driver::generateCompilationDiagnostics(Compilation &C,
   // Construct the list of abstract actions to perform for this compilation. On
   // Darwin OSes this uses the driver-driver and builds universal actions.
   const ToolChain &TC = C.getDefaultToolChain();
-  if (TC.getTriple().isOSDarwin())
+  if (TC.getTriple().isOSBinFormatMachO())
     BuildUniversalActions(TC, C.getArgs(), Inputs, C.getActions());
   else
     BuildActions(TC, C.getArgs(), Inputs, C.getActions());
@@ -867,7 +869,7 @@ void Driver::BuildUniversalActions(const ToolChain &TC,
       // Validate the option here; we don't save the type here because its
       // particular spelling may participate in other driver choices.
       llvm::Triple::ArchType Arch =
-        tools::darwin::getArchTypeForDarwinArchName(A->getValue());
+        tools::darwin::getArchTypeForMachOArchName(A->getValue());
       if (Arch == llvm::Triple::UnknownArch) {
         Diag(clang::diag::err_drv_invalid_arch_name)
           << A->getAsString(Args);
@@ -934,13 +936,12 @@ void Driver::BuildUniversalActions(const ToolChain &TC,
         Actions.push_back(new DsymutilJobAction(Inputs, types::TY_dSYM));
       }
 
-      // Verify the output (debug information only) if we passed '-verify'.
-      if (Args.hasArg(options::OPT_verify)) {
-        ActionList VerifyInputs;
-        VerifyInputs.push_back(Actions.back());
+      // Verify the debug info output.
+      if (Args.hasArg(options::OPT_verify_debug_info)) {
+        Action *VerifyInput = Actions.back();
         Actions.pop_back();
-        Actions.push_back(new VerifyJobAction(VerifyInputs,
-                                              types::TY_Nothing));
+        Actions.push_back(new VerifyDebugInfoJobAction(VerifyInput,
+                                                       types::TY_Nothing));
       }
     }
   }
@@ -948,7 +949,7 @@ void Driver::BuildUniversalActions(const ToolChain &TC,
 
 /// \brief Check that the file referenced by Value exists. If it doesn't,
 /// issue a diagnostic and return false.
-static bool DiagnoseInputExistance(const Driver &D, const DerivedArgList &Args,
+static bool DiagnoseInputExistence(const Driver &D, const DerivedArgList &Args,
                                    StringRef Value) {
   if (!D.getCheckInputsExist())
     return true;
@@ -1029,7 +1030,8 @@ void Driver::BuildInputs(const ToolChain &TC, const DerivedArgList &Args,
           // Otherwise emit an error but still use a valid type to avoid
           // spurious errors (e.g., no inputs).
           if (!Args.hasArgNoClaim(options::OPT_E) && !CCCIsCPP())
-            Diag(clang::diag::err_drv_unknown_stdin_type);
+            Diag(IsCLMode() ? clang::diag::err_drv_unknown_stdin_type_clang_cl
+                            : clang::diag::err_drv_unknown_stdin_type);
           Ty = types::TY_C;
         } else {
           // Otherwise lookup by extension.
@@ -1075,19 +1077,19 @@ void Driver::BuildInputs(const ToolChain &TC, const DerivedArgList &Args,
         Ty = InputType;
       }
 
-      if (DiagnoseInputExistance(*this, Args, Value))
+      if (DiagnoseInputExistence(*this, Args, Value))
         Inputs.push_back(std::make_pair(Ty, A));
 
     } else if (A->getOption().matches(options::OPT__SLASH_Tc)) {
       StringRef Value = A->getValue();
-      if (DiagnoseInputExistance(*this, Args, Value)) {
+      if (DiagnoseInputExistence(*this, Args, Value)) {
         Arg *InputArg = MakeInputArg(Args, Opts, A->getValue());
         Inputs.push_back(std::make_pair(types::TY_C, InputArg));
       }
       A->claim();
     } else if (A->getOption().matches(options::OPT__SLASH_Tp)) {
       StringRef Value = A->getValue();
-      if (DiagnoseInputExistance(*this, Args, Value)) {
+      if (DiagnoseInputExistence(*this, Args, Value)) {
         Arg *InputArg = MakeInputArg(Args, Opts, A->getValue());
         Inputs.push_back(std::make_pair(types::TY_CXX, InputArg));
       }
@@ -1177,7 +1179,7 @@ void Driver::BuildActions(const ToolChain &TC, DerivedArgList &Args,
 
   // Construct the actions to perform.
   ActionList LinkerInputs;
-  ActionList SplitInputs;
+
   llvm::SmallVector<phases::ID, phases::MaxNumberOfPhases> PL;
   for (unsigned i = 0, e = Inputs.size(); i != e; ++i) {
     types::ID InputType = Inputs[i].first;
@@ -1314,6 +1316,8 @@ Action *Driver::ConstructPhaseAction(const ArgList &Args, phases::ID Phase,
       return new CompileJobAction(Input, types::TY_AST);
     } else if (Args.hasArg(options::OPT_module_file_info)) {
       return new CompileJobAction(Input, types::TY_ModuleFile);
+    } else if (Args.hasArg(options::OPT_verify_pch)) {
+      return new VerifyPCHJobAction(Input, types::TY_Nothing);
     } else if (IsUsingLTO(Args)) {
       types::ID Output =
         Args.hasArg(options::OPT_S) ? types::TY_LTO_IR : types::TY_LTO_BC;
@@ -1362,7 +1366,7 @@ void Driver::BuildJobs(Compilation &C) const {
 
   // Collect the list of architectures.
   llvm::StringSet<> ArchNames;
-  if (C.getDefaultToolChain().getTriple().isOSDarwin()) {
+  if (C.getDefaultToolChain().getTriple().isOSBinFormatMachO()) {
     for (ArgList::const_iterator it = C.getArgs().begin(), ie = C.getArgs().end();
          it != ie; ++it) {
       Arg *A = *it;
@@ -1456,6 +1460,7 @@ static const Tool *SelectToolForJob(Compilation &C, const ToolChain *TC,
 
   if (TC->useIntegratedAs() &&
       !C.getArgs().hasArg(options::OPT_save_temps) &&
+      !C.getArgs().hasArg(options::OPT_via_file_asm) &&
       !C.getArgs().hasArg(options::OPT__SLASH_FA) &&
       !C.getArgs().hasArg(options::OPT__SLASH_Fa) &&
       isa<AssembleJobAction>(JA) &&
@@ -1624,6 +1629,14 @@ const char *Driver::GetNamedOutputPath(Compilation &C,
       !isa<VerifyJobAction>(JA)) {
     if (Arg *FinalOutput = C.getArgs().getLastArg(options::OPT_o))
       return C.addResultFile(FinalOutput->getValue(), &JA);
+  }
+
+  // For /P, preprocess to file named after BaseInput.
+  if (C.getArgs().hasArg(options::OPT__SLASH_P)) {
+    assert(AtTopLevel && isa<PreprocessJobAction>(JA));
+    StringRef BaseName = llvm::sys::path::filename(BaseInput);
+    return C.addResultFile(MakeCLOutputFilename(C.getArgs(), "", BaseName,
+                                                types::TY_PP_C), &JA);
   }
 
   // Default to writing to stdout?
@@ -1854,21 +1867,18 @@ static llvm::Triple computeTargetTriple(StringRef DefaultTargetTriple,
 
   llvm::Triple Target(llvm::Triple::normalize(DefaultTargetTriple));
 
-  // Handle Darwin-specific options available here.
-  if (Target.isOSDarwin()) {
+  // Handle Apple-specific options available here.
+  if (Target.isOSBinFormatMachO()) {
     // If an explict Darwin arch name is given, that trumps all.
     if (!DarwinArchName.empty()) {
-      Target.setArch(
-        tools::darwin::getArchTypeForDarwinArchName(DarwinArchName));
+      tools::darwin::setTripleTypeForMachOArchName(Target, DarwinArchName);
       return Target;
     }
 
     // Handle the Darwin '-arch' flag.
     if (Arg *A = Args.getLastArg(options::OPT_arch)) {
-      llvm::Triple::ArchType DarwinArch
-        = tools::darwin::getArchTypeForDarwinArchName(A->getValue());
-      if (DarwinArch != llvm::Triple::UnknownArch)
-        Target.setArch(DarwinArch);
+      StringRef ArchName = A->getValue();
+      tools::darwin::setTripleTypeForMachOArchName(Target, ArchName);
     }
   }
 
@@ -1893,20 +1903,23 @@ static llvm::Triple computeTargetTriple(StringRef DefaultTargetTriple,
       Target.getOS() == llvm::Triple::Minix)
     return Target;
 
-  // Handle pseudo-target flags '-m32' and '-m64'.
-  // FIXME: Should this information be in llvm::Triple?
-  if (Arg *A = Args.getLastArg(options::OPT_m32, options::OPT_m64)) {
-    if (A->getOption().matches(options::OPT_m32)) {
-      if (Target.getArch() == llvm::Triple::x86_64)
-        Target.setArch(llvm::Triple::x86);
-      if (Target.getArch() == llvm::Triple::ppc64)
-        Target.setArch(llvm::Triple::ppc);
-    } else {
-      if (Target.getArch() == llvm::Triple::x86)
-        Target.setArch(llvm::Triple::x86_64);
-      if (Target.getArch() == llvm::Triple::ppc)
-        Target.setArch(llvm::Triple::ppc64);
+  // Handle pseudo-target flags '-m64', '-m32' and '-m16'.
+  if (Arg *A = Args.getLastArg(options::OPT_m64, options::OPT_m32,
+                               options::OPT_m16)) {
+    llvm::Triple::ArchType AT = llvm::Triple::UnknownArch;
+
+    if (A->getOption().matches(options::OPT_m64))
+      AT = Target.get64BitArchVariant().getArch();
+    else if (A->getOption().matches(options::OPT_m32))
+      AT = Target.get32BitArchVariant().getArch();
+    else if (A->getOption().matches(options::OPT_m16) &&
+             Target.get32BitArchVariant().getArch() == llvm::Triple::x86) {
+      AT = llvm::Triple::x86;
+      Target.setEnvironment(llvm::Triple::CODE16);
     }
+
+    if (AT != llvm::Triple::UnknownArch)
+      Target.setArch(AT);
   }
 
   return Target;
@@ -1926,13 +1939,7 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
     case llvm::Triple::Darwin:
     case llvm::Triple::MacOSX:
     case llvm::Triple::IOS:
-      if (Target.getArch() == llvm::Triple::x86 ||
-          Target.getArch() == llvm::Triple::x86_64 ||
-          Target.getArch() == llvm::Triple::arm ||
-          Target.getArch() == llvm::Triple::thumb)
-        TC = new toolchains::DarwinClang(*this, Target, Args);
-      else
-        TC = new toolchains::Darwin_Generic_GCC(*this, Target, Args);
+      TC = new toolchains::DarwinClang(*this, Target, Args);
       break;
     case llvm::Triple::DragonFly:
       TC = new toolchains::DragonFly(*this, Target, Args);
@@ -1979,6 +1986,14 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
       }
       if (Target.getArch() == llvm::Triple::xcore) {
         TC = new toolchains::XCore(*this, Target, Args);
+        break;
+      }
+      if (Target.isOSBinFormatELF()) {
+        TC = new toolchains::Generic_ELF(*this, Target, Args);
+        break;
+      }
+      if (Target.getEnvironment() == llvm::Triple::MachO) {
+        TC = new toolchains::MachO(*this, Target, Args);
         break;
       }
       TC = new toolchains::Generic_GCC(*this, Target, Args);

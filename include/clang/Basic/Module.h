@@ -88,7 +88,19 @@ public:
   SmallVector<const FileEntry *, 2> ExcludedHeaders;
 
   /// \brief The headers that are private to this module.
-  llvm::SmallVector<const FileEntry *, 2> PrivateHeaders;
+  SmallVector<const FileEntry *, 2> PrivateHeaders;
+
+  /// \brief Information about a header directive as found in the module map
+  /// file.
+  struct HeaderDirective {
+    SourceLocation FileNameLoc;
+    std::string FileName;
+    bool IsUmbrella;
+  };
+
+  /// \brief Headers that are mentioned in the module map file but could not be
+  /// found on the file system.
+  SmallVector<HeaderDirective, 1> MissingHeaders;
 
   /// \brief An individual requirement: a feature name and a flag indicating
   /// the required state of that feature.
@@ -243,16 +255,6 @@ public:
   /// \brief The list of conflicts.
   std::vector<Conflict> Conflicts;
 
-  /// \brief Construct a top-level module.
-  explicit Module(StringRef Name, SourceLocation DefinitionLoc,
-                  bool IsFramework)
-    : Name(Name), DefinitionLoc(DefinitionLoc), Parent(0),Umbrella(),ASTFile(0),
-      IsAvailable(true), IsFromModuleFile(false), IsFramework(IsFramework), 
-      IsExplicit(false), IsSystem(false),
-      InferSubmodules(false), InferExplicitSubmodules(false),
-      InferExportWildcard(false), ConfigMacrosExhaustive(false),
-      NameVisibility(Hidden) { }
-  
   /// \brief Construct a new module or submodule.
   Module(StringRef Name, SourceLocation DefinitionLoc, Module *Parent, 
          bool IsFramework, bool IsExplicit);
@@ -276,7 +278,8 @@ public:
   /// this module.
   bool isAvailable(const LangOptions &LangOpts, 
                    const TargetInfo &Target,
-                   Requirement &Req) const;
+                   Requirement &Req,
+                   HeaderDirective &MissingHeader) const;
 
   /// \brief Determine whether this module is a submodule.
   bool isSubModule() const { return Parent != 0; }

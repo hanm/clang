@@ -113,6 +113,9 @@ public:
   StringRef getPlatform() const { return Triple.getVendorName(); }
   StringRef getOS() const { return Triple.getOSName(); }
 
+  /// \brief Returns true if the toolchain is targeting a non-native architecture.
+  bool isCrossCompiling() const;
+
   /// \brief Provide the default architecture name (as expected by -arch) for
   /// this toolchain. Note t
   std::string getDefaultUniversalArchName() const;
@@ -193,7 +196,7 @@ public:
   virtual bool UseObjCMixedDispatch() const { return false; }
 
   /// GetDefaultStackProtectorLevel - Get the default stack protector level for
-  /// this tool chain (0=off, 1=on, 2=all).
+  /// this tool chain (0=off, 1=on, 2=strong, 3=all).
   virtual unsigned GetDefaultStackProtectorLevel(bool KernelOrKext) const {
     return 0;
   }

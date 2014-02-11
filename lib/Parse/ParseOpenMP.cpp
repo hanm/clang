@@ -12,12 +12,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/AST/ASTConsumer.h"
+#include "RAIIObjectsForParser.h"
 #include "clang/AST/StmtOpenMP.h"
 #include "clang/Parse/ParseDiagnostic.h"
 #include "clang/Parse/Parser.h"
 #include "clang/Sema/Scope.h"
 #include "llvm/ADT/PointerIntPair.h"
-#include "RAIIObjectsForParser.h"
 using namespace clang;
 
 //===----------------------------------------------------------------------===//
@@ -225,8 +225,9 @@ bool Parser::ParseOpenMPSimpleVarList(OpenMPDirectiveKind Kind,
       IsCorrect = false;
       SkipUntil(tok::comma, tok::r_paren, tok::annot_pragma_openmp_end,
                 StopBeforeMatch);
-      Diag(PrevTok.getLocation(), diag::err_expected_ident)
-        << SourceRange(PrevTok.getLocation(), PrevTokLocation);
+      Diag(PrevTok.getLocation(), diag::err_expected)
+          << tok::identifier
+          << SourceRange(PrevTok.getLocation(), PrevTokLocation);
     } else {
       DeclarationNameInfo NameInfo = Actions.GetNameFromUnqualifiedId(Name);
       ExprResult Res = Actions.ActOnOpenMPIdExpression(getCurScope(), SS,
@@ -241,7 +242,7 @@ bool Parser::ParseOpenMPSimpleVarList(OpenMPDirectiveKind Kind,
   }
 
   if (NoIdentIsFound) {
-    Diag(Tok, diag::err_expected_ident);
+    Diag(Tok, diag::err_expected) << tok::identifier;
     IsCorrect = false;
   }
 
@@ -366,7 +367,7 @@ OMPClause *Parser::ParseOpenMPVarListClause(OpenMPClauseKind Kind) {
     } else if (Tok.isNot(tok::r_paren) &&
                Tok.isNot(tok::annot_pragma_openmp_end)) {
       Diag(Tok, diag::err_omp_expected_punc)
-        << 1 << getOpenMPClauseName(Kind);
+        << getOpenMPClauseName(Kind);
     }
   }
 
