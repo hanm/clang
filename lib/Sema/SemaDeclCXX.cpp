@@ -9329,21 +9329,12 @@ CXXMethodDecl *Sema::DeclareImplicitCopyAssignment(CXXRecordDecl *ClassDecl) {
   QualType T = Context.getFunctionType(RetType, ArgType, EPI);
   CopyAssignment->setType(T);
 
-  // PR16182. Build type source info for copy assignment operator. RAV relies on
-  // type source info to traverse parameter declaration of implicit
-  // declared copy assignment operator.
-  TypeSourceInfo *TSInfo = Context.getTrivialTypeSourceInfo(T, ClassLoc);
-  CopyAssignment->setTypeSourceInfo(TSInfo);
-  UnqualTypeLoc UnQualTL = TSInfo->getTypeLoc().getUnqualifiedLoc();
-  FunctionTypeLoc FTL = UnQualTL.getAs<FunctionTypeLoc>();
-
   // Add the parameter to the operator.
   ParmVarDecl *FromParam = ParmVarDecl::Create(Context, CopyAssignment,
                                                ClassLoc, ClassLoc, /*Id=*/0,
                                                ArgType, /*TInfo=*/0,
                                                SC_None, 0);
   CopyAssignment->setParams(FromParam);
-  //FTL.setArg(0, FromParam);
 
   AddOverriddenMethods(ClassDecl, CopyAssignment);
 
@@ -9726,21 +9717,12 @@ CXXMethodDecl *Sema::DeclareImplicitMoveAssignment(CXXRecordDecl *ClassDecl) {
   QualType T = Context.getFunctionType(RetType, ArgType, EPI);
   MoveAssignment->setType(T);
 
-  // PR16182. Build type source info for move assignment operator. RAV relies 
-  // on type source info to traverse parameter declaration of implicit
-  // declared copy assignment operator.
-  TypeSourceInfo *TSInfo = Context.getTrivialTypeSourceInfo(T, ClassLoc);
-  MoveAssignment->setTypeSourceInfo(TSInfo);
-  UnqualTypeLoc UnQualTL = TSInfo->getTypeLoc().getUnqualifiedLoc();
-  FunctionTypeLoc FTL = UnQualTL.getAs<FunctionTypeLoc>();
-
   // Add the parameter to the operator.
   ParmVarDecl *FromParam = ParmVarDecl::Create(Context, MoveAssignment,
                                                ClassLoc, ClassLoc, /*Id=*/0,
                                                ArgType, /*TInfo=*/0,
                                                SC_None, 0);
   MoveAssignment->setParams(FromParam);
-  //FTL.setArg(0, FromParam);
   
   AddOverriddenMethods(ClassDecl, MoveAssignment);
 
@@ -10170,14 +10152,6 @@ CXXConstructorDecl *Sema::DeclareImplicitCopyConstructor(
   QualType T = Context.getFunctionType(Context.VoidTy, ArgType, EPI);
   CopyConstructor->setType(T);
 
-  // PR16182. Build type source info for copy constructor operator. RAV relies 
-  // on type source info to traverse parameter declaration of implicit
-  // declared copy assignment operator.
-  TypeSourceInfo *TSInfo = Context.getTrivialTypeSourceInfo(T, ClassLoc);
-  CopyConstructor->setTypeSourceInfo(TSInfo);
-  UnqualTypeLoc UnQualTL = TSInfo->getTypeLoc().getUnqualifiedLoc();
-  FunctionTypeLoc FTL = UnQualTL.getAs<FunctionTypeLoc>();
-
   // Add the parameter to the constructor.
   ParmVarDecl *FromParam = ParmVarDecl::Create(Context, CopyConstructor,
                                                ClassLoc, ClassLoc,
@@ -10185,7 +10159,6 @@ CXXConstructorDecl *Sema::DeclareImplicitCopyConstructor(
                                                ArgType, /*TInfo=*/0,
                                                SC_None, 0);
   CopyConstructor->setParams(FromParam);
-  //FTL.setArg(0, FromParam);
 
   CopyConstructor->setTrivial(
     ClassDecl->needsOverloadResolutionForCopyConstructor()
@@ -10347,14 +10320,6 @@ CXXConstructorDecl *Sema::DeclareImplicitMoveConstructor(
   QualType T = Context.getFunctionType(Context.VoidTy, ArgType, EPI);
   MoveConstructor->setType(T);
   
-  // PR16182. Build type source info for copy move constructor. RAV relies on
-  // type source info to traverse parameter declaration of implicit
-  // declared copy assignment operator.
-  TypeSourceInfo *TSInfo = Context.getTrivialTypeSourceInfo(T, ClassLoc);
-  MoveConstructor->setTypeSourceInfo(TSInfo);
-  UnqualTypeLoc UnQualTL = TSInfo->getTypeLoc().getUnqualifiedLoc();
-  FunctionTypeLoc FTL = UnQualTL.getAs<FunctionTypeLoc>();
-
   // Add the parameter to the constructor.
   ParmVarDecl *FromParam = ParmVarDecl::Create(Context, MoveConstructor,
                                                ClassLoc, ClassLoc,
@@ -10362,7 +10327,6 @@ CXXConstructorDecl *Sema::DeclareImplicitMoveConstructor(
                                                ArgType, /*TInfo=*/0,
                                                SC_None, 0);
   MoveConstructor->setParams(FromParam);
-  //FTL.setArg(0, FromParam);
   
   MoveConstructor->setTrivial(
     ClassDecl->needsOverloadResolutionForMoveConstructor()
