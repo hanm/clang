@@ -6,6 +6,13 @@
 // CHECK-DAG: @_ZN5test11OD2Ev = alias {{.*}} @_ZN5test11AD2Ev
 // CHECK-DAG: @_ZN5test11SD2Ev = alias bitcast {{.*}} @_ZN5test11AD2Ev
 
+// WIN32-DAG: @_ZN5test01AD1Ev = alias {{.*}} @_ZN5test01AD2Ev
+// WIN32-DAG: @_ZN5test11MD2Ev = alias {{.*}} @_ZN5test11AD2Ev
+// WIN32-DAG: @_ZN5test11ND2Ev = alias {{.*}} @_ZN5test11AD2Ev
+// WIN32-DAG: @_ZN5test11OD2Ev = alias {{.*}} @_ZN5test11AD2Ev
+// WIN32-DAG: @_ZN5test11SD2Ev = alias bitcast {{.*}} @_ZN5test11AD2Ev
+
+
 struct A {
   int a;
   
@@ -102,6 +109,12 @@ namespace test0 {
   B::~B() try { } catch (int i) {}
   // It will suppress the delegation optimization here, though.
 
+// CHECK-LABEL: define void @_ZN5test01BD2Ev(%"struct.test0::B"* %this, i8** %vtt) unnamed_addr
+// CHECK: invoke void @_ZN5test06MemberD1Ev
+// CHECK:   unwind label [[MEM_UNWIND:%[a-zA-Z0-9.]+]]
+// CHECK: invoke void @_ZN5test04BaseD2Ev
+// CHECK:   unwind label [[BASE_UNWIND:%[a-zA-Z0-9.]+]]
+
 // CHECK-LABEL: define void @_ZN5test01BD1Ev(%"struct.test0::B"* %this) unnamed_addr
 // CHECK: invoke void @_ZN5test06MemberD1Ev
 // CHECK:   unwind label [[MEM_UNWIND:%[a-zA-Z0-9.]+]]
@@ -109,12 +122,6 @@ namespace test0 {
 // CHECK:   unwind label [[BASE_UNWIND:%[a-zA-Z0-9.]+]]
 // CHECK: invoke void @_ZN5test05VBaseD2Ev
 // CHECK:   unwind label [[VBASE_UNWIND:%[a-zA-Z0-9.]+]]
-
-// CHECK-LABEL: define void @_ZN5test01BD2Ev(%"struct.test0::B"* %this, i8** %vtt) unnamed_addr
-// CHECK: invoke void @_ZN5test06MemberD1Ev
-// CHECK:   unwind label [[MEM_UNWIND:%[a-zA-Z0-9.]+]]
-// CHECK: invoke void @_ZN5test04BaseD2Ev
-// CHECK:   unwind label [[BASE_UNWIND:%[a-zA-Z0-9.]+]]
 }
 
 // Test base-class aliasing.
@@ -272,14 +279,6 @@ namespace test6 {
   // FIXME: way too much EH cleanup code follows
 
   C::~C() { opaque(); }
-  // CHECK-LABEL: define void @_ZN5test61CD1Ev(%"struct.test6::C"* %this) unnamed_addr
-  // CHECK:   invoke void @_ZN5test61CD2Ev
-  // CHECK:   invoke void @_ZN5test61BILj3EED2Ev
-  // CHECK:   call void @_ZN5test61BILj2EED2Ev
-  // CHECK:   ret void
-  // CHECK:   invoke void @_ZN5test61BILj3EED2Ev
-  // CHECK:   invoke void @_ZN5test61BILj2EED2Ev
-
   // CHECK-LABEL: define void @_ZN5test61CD2Ev(%"struct.test6::C"* %this, i8** %vtt) unnamed_addr
   // CHECK:   invoke void @_ZN5test66opaqueEv
   // CHECK:   invoke void @_ZN5test61AD1Ev
@@ -293,6 +292,14 @@ namespace test6 {
   // CHECK:   invoke void @_ZN5test61AD1Ev
   // CHECK:   invoke void @_ZN5test61BILj1EED2Ev
   // CHECK:   invoke void @_ZN5test61BILj0EED2Ev
+
+  // CHECK-LABEL: define void @_ZN5test61CD1Ev(%"struct.test6::C"* %this) unnamed_addr
+  // CHECK:   invoke void @_ZN5test61CD2Ev
+  // CHECK:   invoke void @_ZN5test61BILj3EED2Ev
+  // CHECK:   call void @_ZN5test61BILj2EED2Ev
+  // CHECK:   ret void
+  // CHECK:   invoke void @_ZN5test61BILj3EED2Ev
+  // CHECK:   invoke void @_ZN5test61BILj2EED2Ev
 }
 
 // PR 9197

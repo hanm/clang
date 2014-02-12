@@ -356,11 +356,14 @@ void ASTDeclReader::Visit(Decl *D) {
 }
 
 void ASTDeclReader::VisitDecl(Decl *D) {
-  if (D->isTemplateParameter()) {
+  if (D->isTemplateParameter() || D->isTemplateParameterPack() ||
+      isa<ParmVarDecl>(D)) {
     // We don't want to deserialize the DeclContext of a template
-    // parameter immediately, because the template parameter might be
-    // used in the formulation of its DeclContext. Use the translation
-    // unit DeclContext as a placeholder.
+    // parameter or of a parameter of a function template immediately.   These
+    // entities might be used in the formulation of its DeclContext (for
+    // example, a function parameter can be used in decltype() in trailing
+    // return type of the function).  Use the translation unit DeclContext as a
+    // placeholder.
     GlobalDeclID SemaDCIDForTemplateParmDecl = ReadDeclID(Record, Idx);
     GlobalDeclID LexicalDCIDForTemplateParmDecl = ReadDeclID(Record, Idx);
     Reader.addPendingDeclContextInfo(D,
@@ -709,8 +712,8 @@ void ASTDeclReader::VisitObjCMethodDecl(ObjCMethodDecl *MD) {
   MD->setDeclImplementation((ObjCMethodDecl::ImplementationControl)Record[Idx++]);
   MD->setObjCDeclQualifier((Decl::ObjCDeclQualifier)Record[Idx++]);
   MD->SetRelatedResultType(Record[Idx++]);
-  MD->setResultType(Reader.readType(F, Record, Idx));
-  MD->setResultTypeSourceInfo(GetTypeSourceInfo(Record, Idx));
+  MD->setReturnType(Reader.readType(F, Record, Idx));
+  MD->setReturnTypeSourceInfo(GetTypeSourceInfo(Record, Idx));
   MD->DeclEndLoc = ReadSourceLocation(Record, Idx);
   unsigned NumParams = Record[Idx++];
   SmallVector<ParmVarDecl *, 16> Params;
@@ -755,6 +758,7 @@ void ASTDeclReader::VisitObjCInterfaceDecl(ObjCInterfaceDecl *ID) {
     Data.SuperClassLoc = ReadSourceLocation(Record, Idx);
 
     Data.EndLoc = ReadSourceLocation(Record, Idx);
+    Data.HasDesignatedInitializers = Record[Idx++];
     
     // Read the directly referenced protocols and their SourceLocations.
     unsigned NumProtocols = Record[Idx++];
@@ -798,8 +802,6 @@ void ASTDeclReader::VisitObjCIvarDecl(ObjCIvarDecl *IVD) {
   IVD->setNextIvar(0);
   bool synth = Record[Idx++];
   IVD->setSynthesize(synth);
-  bool backingIvarReferencedInAccessor = Record[Idx++];
-  IVD->setBackingIvarReferencedInAccessor(backingIvarReferencedInAccessor);
 }
 
 void ASTDeclReader::VisitObjCProtocolDecl(ObjCProtocolDecl *PD) {
@@ -971,7 +973,7 @@ ASTDeclReader::RedeclarableResult ASTDeclReader::VisitVarDeclImpl(VarDecl *VD) {
   VD->setCachedLinkage(VarLinkage);
 
   // Reconstruct the one piece of the IdentifierNamespace that we need.
-  if (VarLinkage != NoLinkage &&
+  if (VD->getStorageClass() == SC_Extern && VarLinkage != NoLinkage &&
       VD->getLexicalDeclContext()->isFunctionOrMethod())
     VD->setLocalExternDecl();
 
@@ -1186,6 +1188,7 @@ void ASTDeclReader::ReadCXXDefinitionData(
   Data.HasProtectedFields = Record[Idx++];
   Data.HasPublicFields = Record[Idx++];
   Data.HasMutableFields = Record[Idx++];
+  Data.HasVariantMembers = Record[Idx++];
   Data.HasOnlyCMembers = Record[Idx++];
   Data.HasInClassInitializer = Record[Idx++];
   Data.HasUninitializedReferenceMember = Record[Idx++];
@@ -1981,7 +1984,8 @@ static bool isConsumerInterestedIn(Decl *D, bool HasBody) {
 
   if (isa<FileScopeAsmDecl>(D) || 
       isa<ObjCProtocolDecl>(D) || 
-      isa<ObjCImplDecl>(D))
+      isa<ObjCImplDecl>(D) ||
+      isa<ImportDecl>(D))
     return true;
   if (VarDecl *Var = dyn_cast<VarDecl>(D))
     return Var->isFileVarDecl() &&

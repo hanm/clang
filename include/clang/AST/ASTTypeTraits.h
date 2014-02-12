@@ -57,10 +57,17 @@ public:
   bool isSame(ASTNodeKind Other) const;
 
   /// \brief Returns \c true if \c this is a base kind of (or same as) \c Other.
-  bool isBaseOf(ASTNodeKind Other) const;
+  /// \param Distance If non-null, used to return the distance between \c this
+  /// and \c Other in the class hierarchy.
+  bool isBaseOf(ASTNodeKind Other, unsigned *Distance = 0) const;
 
   /// \brief String representation of the kind.
   StringRef asStringRef() const;
+
+  /// \brief Strict weak ordering for ASTNodeKind.
+  bool operator<(const ASTNodeKind &Other) const {
+    return KindId < Other.KindId;
+  }
 
 private:
   /// \brief Kind ids.
@@ -91,7 +98,9 @@ private:
 
   /// \brief Returns \c true if \c Base is a base kind of (or same as) \c
   ///   Derived.
-  static bool isBaseOf(NodeKindId Base, NodeKindId Derived);
+  /// \param Distance If non-null, used to return the distance between \c Base
+  /// and \c Derived in the class hierarchy.
+  static bool isBaseOf(NodeKindId Base, NodeKindId Derived, unsigned *Distance);
 
   /// \brief Helper meta-function to convert a kind T to its enum value.
   ///
@@ -132,6 +141,11 @@ KIND_TO_KIND_ID(Type)
 #define TYPE(DERIVED, BASE) KIND_TO_KIND_ID(DERIVED##Type)
 #include "clang/AST/TypeNodes.def"
 #undef KIND_TO_KIND_ID
+
+inline raw_ostream &operator<<(raw_ostream &OS, ASTNodeKind K) {
+  OS << K.asStringRef();
+  return OS;
+}
 
 /// \brief A dynamically typed AST node container.
 ///

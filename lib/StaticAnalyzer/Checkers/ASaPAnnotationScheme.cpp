@@ -152,7 +152,7 @@ makeReturnType(const FunctionDecl *D, long ArgNum) {
   QualType QT = D->getType();
   assert(QT->isFunctionType());
   const FunctionType *FT = QT->getAs<FunctionType>();
-  QT = FT->getResultType();
+  QT = FT->getReturnType();
   return helperMakeParametricType(D, ArgNum, QT);
 }
 

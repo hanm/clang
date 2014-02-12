@@ -170,10 +170,13 @@ void NilArgChecker::warnIfNilArg(CheckerContext &C,
           assert(Arg == 1);
           os << "Key argument ";
         }
-        os << "to '" << msg.getSelector().getAsString() << "' cannot be nil";
+        os << "to '";
+        msg.getSelector().print(os);
+        os << "' cannot be nil";
       } else {
-        os << "Argument to '" << GetReceiverInterfaceName(msg) << "' method '"
-        << msg.getSelector().getAsString() << "' cannot be nil";
+        os << "Argument to '" << GetReceiverInterfaceName(msg) << "' method '";
+        msg.getSelector().print(os);
+        os << "' cannot be nil";
       }
     }
     
@@ -620,7 +623,9 @@ void ClassReleaseChecker::checkPreObjCMessage(const ObjCMethodCall &msg,
     SmallString<200> buf;
     llvm::raw_svector_ostream os(buf);
 
-    os << "The '" << S.getAsString() << "' message should be sent to instances "
+    os << "The '";
+    S.print(os);
+    os << "' message should be sent to instances "
           "of class '" << Class->getName()
        << "' and not the class directly";
   
@@ -733,8 +738,7 @@ void VariadicMethodTypeChecker::checkPreObjCMessage(const ObjCMethodCall &msg,
 
   // Verify that all arguments have Objective-C types.
   Optional<ExplodedNode*> errorNode;
-  ProgramStateRef state = C.getState();
-  
+
   for (unsigned I = variadicArgsBegin; I != variadicArgsEnd; ++I) {
     QualType ArgTy = msg.getArgExpr(I)->getType();
     if (ArgTy->isObjCObjectPointerType())
@@ -772,8 +776,8 @@ void VariadicMethodTypeChecker::checkPreObjCMessage(const ObjCMethodCall &msg,
     else
       os << "Argument to method '";
 
-    os << msg.getSelector().getAsString() 
-       << "' should be an Objective-C pointer type, not '";
+    msg.getSelector().print(os);
+    os << "' should be an Objective-C pointer type, not '";
     ArgTy.print(os, C.getLangOpts());
     os << "'";
 
@@ -1135,7 +1139,10 @@ namespace {
 /// \brief The checker restricts the return values of APIs known to
 /// never (or almost never) return 'nil'.
 class ObjCNonNilReturnValueChecker
-  : public Checker<check::PostObjCMessage> {
+  : public Checker<check::PostObjCMessage,
+                   check::PostStmt<ObjCArrayLiteral>,
+                   check::PostStmt<ObjCDictionaryLiteral>,
+                   check::PostStmt<ObjCBoxedExpr> > {
     mutable bool Initialized;
     mutable Selector ObjectAtIndex;
     mutable Selector ObjectAtIndexedSubscript;
@@ -1143,13 +1150,32 @@ class ObjCNonNilReturnValueChecker
 
 public:
   ObjCNonNilReturnValueChecker() : Initialized(false) {}
+
+  ProgramStateRef assumeExprIsNonNull(const Expr *NonNullExpr,
+                                      ProgramStateRef State,
+                                      CheckerContext &C) const;
+  void assumeExprIsNonNull(const Expr *E, CheckerContext &C) const {
+    C.addTransition(assumeExprIsNonNull(E, C.getState(), C));
+  }
+
+  void checkPostStmt(const ObjCArrayLiteral *E, CheckerContext &C) const {
+    assumeExprIsNonNull(E, C);
+  }
+  void checkPostStmt(const ObjCDictionaryLiteral *E, CheckerContext &C) const {
+    assumeExprIsNonNull(E, C);
+  }
+  void checkPostStmt(const ObjCBoxedExpr *E, CheckerContext &C) const {
+    assumeExprIsNonNull(E, C);
+  }
+
   void checkPostObjCMessage(const ObjCMethodCall &M, CheckerContext &C) const;
 };
 }
 
-static ProgramStateRef assumeExprIsNonNull(const Expr *NonNullExpr,
-                                           ProgramStateRef State,
-                                           CheckerContext &C) {
+ProgramStateRef
+ObjCNonNilReturnValueChecker::assumeExprIsNonNull(const Expr *NonNullExpr,
+                                                  ProgramStateRef State,
+                                                  CheckerContext &C) const {
   SVal Val = State->getSVal(NonNullExpr, C.getLocationContext());
   if (Optional<DefinedOrUnknownSVal> DV = Val.getAs<DefinedOrUnknownSVal>())
     return State->assume(*DV, true);

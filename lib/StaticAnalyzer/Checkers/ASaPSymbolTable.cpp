@@ -179,7 +179,7 @@ ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
     const FunctionType *FT = QT->getAs<FunctionType>();
     assert(FT);
 
-    QualType ResultQT = FT->getResultType();
+    QualType ResultQT = FT->getReturnType();
     return getRegionParamCount(ResultQT);
   } else if (QT->isVoidType()) {
     OSv2 << "DEBUG:: getRegionParamCount::isVoidType\n";

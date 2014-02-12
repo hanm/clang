@@ -321,6 +321,8 @@ CompilerInstance::createPCHExternalASTSource(StringRef Path,
                              Sysroot.empty() ? "" : Sysroot.c_str(),
                              DisablePCHValidation,
                              AllowPCHWithCompilerErrors,
+                             /*AllowConfigurationMismatch*/false,
+                             /*ValidateSystemInputs*/false,
                              UseGlobalModuleIndex));
 
   Reader->setDeserializationListener(
@@ -432,8 +434,7 @@ void CompilerInstance::clearOutputFiles(bool EraseFiles) {
     delete it->OS;
     if (!it->TempFilename.empty()) {
       if (EraseFiles) {
-        bool existed;
-        llvm::sys::fs::remove(it->TempFilename, existed);
+        llvm::sys::fs::remove(it->TempFilename);
       } else {
         SmallString<128> NewOutFile(it->Filename);
 
@@ -445,8 +446,7 @@ void CompilerInstance::clearOutputFiles(bool EraseFiles) {
           getDiagnostics().Report(diag::err_unable_to_rename_temp)
             << it->TempFilename << it->Filename << ec.message();
 
-          bool existed;
-          llvm::sys::fs::remove(it->TempFilename, existed);
+          llvm::sys::fs::remove(it->TempFilename);
         }
       }
     } else if (!it->Filename.empty() && EraseFiles)
@@ -1091,10 +1091,8 @@ static void pruneModuleCache(const HeaderSearchOptions &HSOpts) {
 
     // If we removed all of the files in the directory, remove the directory
     // itself.
-    if (RemovedAllFiles) {
-      bool Existed;
-      llvm::sys::fs::remove(Dir->path(), Existed);
-    }
+    if (RemovedAllFiles)
+      llvm::sys::fs::remove(Dir->path());
   }
 }
 
@@ -1133,11 +1131,15 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
   } else {
     // Search for a module with the given name.
     Module = PP->getHeaderSearchInfo().lookupModule(ModuleName);
-    std::string ModuleFileName;
-    if (Module) {
-      ModuleFileName = PP->getHeaderSearchInfo().getModuleFileName(Module);
-    } else
-      ModuleFileName = PP->getHeaderSearchInfo().getModuleFileName(ModuleName);
+    if (!Module) {
+      getDiagnostics().Report(ModuleNameLoc, diag::err_module_not_found)
+      << ModuleName
+      << SourceRange(ImportLoc, ModuleNameLoc);
+      ModuleBuildFailed = true;
+      return ModuleLoadResult();
+    }
+
+    std::string ModuleFileName = PP->getHeaderSearchInfo().getModuleFileName(Module);
 
     // If we don't already have an ASTReader, create one now.
     if (!ModuleManager) {
@@ -1158,6 +1160,8 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
                                     Sysroot.empty() ? "" : Sysroot.c_str(),
                                     PPOpts.DisablePCHValidation,
                                     /*AllowASTWithCompilerErrors=*/false,
+                                    /*AllowConfigurationMismatch=*/false,
+                                    /*ValidateSystemInputs=*/false,
                                     getFrontendOpts().UseGlobalModuleIndex);
       if (hasASTConsumer()) {
         ModuleManager->setDeserializationListener(
@@ -1184,17 +1188,7 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
     case ASTReader::OutOfDate:
     case ASTReader::Missing: {
       // The module file is missing or out-of-date. Build it.
-
-      // If we don't have a module, we don't know how to build the module file.
-      // Complain and return.
-      if (!Module) {
-        getDiagnostics().Report(ModuleNameLoc, diag::err_module_not_found)
-          << ModuleName
-          << SourceRange(ImportLoc, ModuleNameLoc);
-        ModuleBuildFailed = true;
-        return ModuleLoadResult();
-      }
-
+      assert(Module && "missing module file");
       // Check whether there is a cycle in the module graph.
       ModuleBuildStack ModPath = getSourceManager().getModuleBuildStack();
       ModuleBuildStack::iterator Pos = ModPath.begin(), PosEnd = ModPath.end();
@@ -1270,13 +1264,6 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
       KnownModules[Path[0].first] = 0;
       ModuleBuildFailed = true;
       return ModuleLoadResult();
-    }
-    
-    if (!Module) {
-      // If we loaded the module directly, without finding a module map first,
-      // we'll have loaded the module's information from the module itself.
-      Module = PP->getHeaderSearchInfo().getModuleMap()
-                 .findModule((Path[0].first->getName()));
     }
 
     // Cache the result of this top-level module lookup for later.
@@ -1360,11 +1347,19 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
 
     // Check whether this module is available.
     clang::Module::Requirement Requirement;
-    if (!Module->isAvailable(getLangOpts(), getTarget(), Requirement)) {
-      getDiagnostics().Report(ImportLoc, diag::err_module_unavailable)
-        << Module->getFullModuleName()
-        << Requirement.second << Requirement.first
-        << SourceRange(Path.front().second, Path.back().second);
+    clang::Module::HeaderDirective MissingHeader;
+    if (!Module->isAvailable(getLangOpts(), getTarget(), Requirement,
+                             MissingHeader)) {
+      if (MissingHeader.FileNameLoc.isValid()) {
+        getDiagnostics().Report(MissingHeader.FileNameLoc,
+                                diag::err_module_header_missing)
+          << MissingHeader.IsUmbrella << MissingHeader.FileName;
+      } else {
+        getDiagnostics().Report(ImportLoc, diag::err_module_unavailable)
+          << Module->getFullModuleName()
+          << Requirement.second << Requirement.first
+          << SourceRange(Path.front().second, Path.back().second);
+      }
       LastModuleImportLoc = ImportLoc;
       LastModuleImportResult = ModuleLoadResult();
       return ModuleLoadResult();

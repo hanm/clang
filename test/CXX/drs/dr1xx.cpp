@@ -9,7 +9,7 @@ namespace dr100 { // dr100: yes
   B<"bar"> b; // expected-error {{does not refer to any declaration}}
 }
 
-namespace dr101 { // dr101: yes
+namespace dr101 { // dr101: 3.5
   extern "C" void dr101_f();
   typedef unsigned size_t;
   namespace X {
@@ -18,6 +18,8 @@ namespace dr101 { // dr101: yes
   }
   using X::dr101_f;
   using X::size_t;
+  extern "C" void dr101_f();
+  typedef unsigned size_t;
 }
 
 namespace dr102 { // dr102: yes
@@ -592,11 +594,10 @@ namespace dr155 { // dr155: dup 632
   struct S { int n; } s = { { 1 } }; // expected-warning {{braces around scalar initializer}}
 }
 
-namespace dr159 { // dr159: no
+namespace dr159 { // dr159: 3.5
   namespace X { void f(); }
   void f();
-  // FIXME: This should be accepted.
-  void dr159::f() {} // expected-error {{extra qualification}}
+  void dr159::f() {} // expected-warning {{extra qualification}}
   void dr159::X::f() {}
 }
 

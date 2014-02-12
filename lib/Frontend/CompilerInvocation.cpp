@@ -28,6 +28,7 @@
 #include "llvm/Option/ArgList.h"
 #include "llvm/Option/OptTable.h"
 #include "llvm/Option/Option.h"
+#include "llvm/Support/Atomic.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Host.h"
@@ -295,7 +296,8 @@ static void ParseCommentArgs(CommentOptions &Opts, ArgList &Args) {
 }
 
 static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
-                             DiagnosticsEngine &Diags) {
+                             DiagnosticsEngine &Diags,
+                             const TargetOptions &TargetOpts) {
   using namespace options;
   bool Success = true;
 
@@ -322,10 +324,16 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
     Opts.setDebugInfo(CodeGenOptions::DebugLineTablesOnly);
   } else if (Args.hasArg(OPT_g_Flag) || Args.hasArg(OPT_gdwarf_2) ||
              Args.hasArg(OPT_gdwarf_3) || Args.hasArg(OPT_gdwarf_4)) {
-    if (Args.hasFlag(OPT_flimit_debug_info, OPT_fno_limit_debug_info, true))
-      Opts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
-    else
+    bool Default = false;
+    // Until dtrace (via CTF) can deal with distributed debug info,
+    // Darwin defaults to standalone/full debug info.
+    if (llvm::Triple(TargetOpts.Triple).isOSDarwin())
+      Default = true;
+
+    if (Args.hasFlag(OPT_fstandalone_debug, OPT_fno_standalone_debug, Default))
       Opts.setDebugInfo(CodeGenOptions::FullDebugInfo);
+    else
+      Opts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
   }
   Opts.DebugColumnInfo = Args.hasArg(OPT_dwarf_column_info);
   Opts.SplitDwarfFile = Args.getLastArgValue(OPT_split_dwarf_file);
@@ -360,6 +368,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
 
   Opts.Autolink = !Args.hasArg(OPT_fno_autolink);
   Opts.SampleProfileFile = Args.getLastArgValue(OPT_fprofile_sample_use_EQ);
+  Opts.ProfileInstrGenerate = Args.hasArg(OPT_fprofile_instr_generate);
+  Opts.InstrProfileInput = Args.getLastArgValue(OPT_fprofile_instr_use_EQ);
   Opts.AsmVerbose = Args.hasArg(OPT_masm_verbose);
   Opts.ObjCAutoRefCountExceptions = Args.hasArg(OPT_fobjc_arc_exceptions);
   Opts.CUDAIsDevice = Args.hasArg(OPT_fcuda_is_device);
@@ -371,7 +381,6 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DisableFree = Args.hasArg(OPT_disable_free);
   Opts.DisableTailCalls = Args.hasArg(OPT_mdisable_tail_calls);
   Opts.FloatABI = Args.getLastArgValue(OPT_mfloat_abi);
-  Opts.HiddenWeakVTables = Args.hasArg(OPT_fhidden_weak_vtables);
   Opts.LessPreciseFPMAD = Args.hasArg(OPT_cl_mad_enable);
   Opts.LimitFloatPrecision = Args.getLastArgValue(OPT_mlimit_float_precision);
   Opts.NoInfsFPMath = (Args.hasArg(OPT_menable_no_infinities) ||
@@ -442,8 +451,6 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.SanitizerBlacklistFile = Args.getLastArgValue(OPT_fsanitize_blacklist);
   Opts.SanitizeMemoryTrackOrigins =
     Args.hasArg(OPT_fsanitize_memory_track_origins);
-  Opts.SanitizeAddressZeroBaseShadow =
-    Args.hasArg(OPT_fsanitize_address_zero_base_shadow);
   Opts.SanitizeUndefinedTrapOnError =
     Args.hasArg(OPT_fsanitize_undefined_trap_on_error);
   Opts.SSPBufferSize =
@@ -692,6 +699,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       Opts.ProgramAction = frontend::ParseSyntaxOnly; break;
     case OPT_module_file_info:
       Opts.ProgramAction = frontend::ModuleFileInfo; break;
+    case OPT_verify_pch:
+      Opts.ProgramAction = frontend::VerifyPCH; break;
     case OPT_print_decl_contexts:
       Opts.ProgramAction = frontend::PrintDeclContext; break;
     case OPT_print_preamble:
@@ -820,10 +829,12 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
     Opts.ObjCMTAction |= FrontendOptions::ObjCMT_AtomicProperty;
   if (Args.hasArg(OPT_objcmt_ns_nonatomic_iosonly))
     Opts.ObjCMTAction |= FrontendOptions::ObjCMT_NsAtomicIOSOnlyProperty;
+  if (Args.hasArg(OPT_objcmt_migrate_designated_init))
+    Opts.ObjCMTAction |= FrontendOptions::ObjCMT_DesignatedInitializer;
   if (Args.hasArg(OPT_objcmt_migrate_all))
     Opts.ObjCMTAction |= FrontendOptions::ObjCMT_MigrateDecls;
 
-  Opts.ObjCMTWhiteListPath = Args.getLastArgValue(OPT_objcmt_white_list_dir_path);
+  Opts.ObjCMTWhiteListPath = Args.getLastArgValue(OPT_objcmt_whitelist_dir_path);
 
   if (Opts.ARCMTAction != FrontendOptions::ARCMT_None &&
       Opts.ObjCMTAction != FrontendOptions::ObjCMT_None) {
@@ -1139,7 +1150,8 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
       Diags.Report(diag::err_drv_invalid_value)
         << A->getAsString(Args) << A->getValue();
     else {
-      // Valid standard, check to make sure language and standard are compatable.    
+      // Valid standard, check to make sure language and standard are
+      // compatible.
       const LangStandard &Std = LangStandard::getLangStandardForKind(LangStd);
       switch (IK) {
       case IK_C:
@@ -1290,9 +1302,8 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
                                    OPT_fno_dollars_in_identifiers,
                                    Opts.DollarIdents);
   Opts.PascalStrings = Args.hasArg(OPT_fpascal_strings);
-  Opts.MicrosoftExt
-    = Args.hasArg(OPT_fms_extensions) || Args.hasArg(OPT_fms_compatibility);
-  Opts.MicrosoftMode = Args.hasArg(OPT_fms_compatibility);
+  Opts.MSVCCompat = Args.hasArg(OPT_fms_compatibility);
+  Opts.MicrosoftExt = Opts.MSVCCompat || Args.hasArg(OPT_fms_extensions);
   Opts.AsmBlocks = Args.hasArg(OPT_fasm_blocks) || Opts.MicrosoftExt;
   Opts.MSCVersion = getLastArgIntValue(Args, OPT_fmsc_version, 0, Diags);
   Opts.Borland = Args.hasArg(OPT_fborland_extensions);
@@ -1424,7 +1435,8 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
     break;
   case 0: Opts.setStackProtector(LangOptions::SSPOff); break;
   case 1: Opts.setStackProtector(LangOptions::SSPOn);  break;
-  case 2: Opts.setStackProtector(LangOptions::SSPReq); break;
+  case 2: Opts.setStackProtector(LangOptions::SSPStrong); break;
+  case 3: Opts.setStackProtector(LangOptions::SSPReq); break;
   }
 
   // Parse -fsanitize= arguments.
@@ -1575,6 +1587,7 @@ static void ParsePreprocessorOutputArgs(PreprocessorOutputOptions &Opts,
   case frontend::GeneratePTH:
   case frontend::ParseSyntaxOnly:
   case frontend::ModuleFileInfo:
+  case frontend::VerifyPCH:
   case frontend::PluginAction:
   case frontend::PrintDeclContext:
   case frontend::RewriteObjC:
@@ -1605,7 +1618,6 @@ static void ParsePreprocessorOutputArgs(PreprocessorOutputOptions &Opts,
 static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args) {
   using namespace options;
   Opts.ABI = Args.getLastArgValue(OPT_target_abi);
-  Opts.CXXABI = Args.getLastArgValue(OPT_cxx_abi);
   Opts.CPU = Args.getLastArgValue(OPT_target_cpu);
   Opts.FPMath = Args.getLastArgValue(OPT_mfpmath);
   Opts.FeaturesAsWritten = Args.getAllArgValues(OPT_target_feature);
@@ -1616,8 +1628,6 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args) {
   if (Opts.Triple.empty())
     Opts.Triple = llvm::sys::getDefaultTargetTriple();
 }
-
-//
 
 bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
                                         const char *const *ArgBegin,
@@ -1656,8 +1666,9 @@ bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
   ParseFileSystemArgs(Res.getFileSystemOpts(), *Args);
   // FIXME: We shouldn't have to pass the DashX option around here
   InputKind DashX = ParseFrontendArgs(Res.getFrontendOpts(), *Args, Diags);
-  Success = ParseCodeGenArgs(Res.getCodeGenOpts(), *Args, DashX, Diags)
-            && Success;
+  ParseTargetArgs(Res.getTargetOpts(), *Args);
+  Success = ParseCodeGenArgs(Res.getCodeGenOpts(), *Args, DashX, Diags,
+                             Res.getTargetOpts()) && Success;
   ParseHeaderSearchArgs(Res.getHeaderSearchOpts(), *Args);
   if (DashX != IK_AST && DashX != IK_LLVM_IR) {
     ParseLangArgs(*Res.getLangOpts(), *Args, DashX, Diags);
@@ -1672,8 +1683,6 @@ bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
   ParsePreprocessorArgs(Res.getPreprocessorOpts(), *Args, FileMgr, Diags);
   ParsePreprocessorOutputArgs(Res.getPreprocessorOutputOpts(), *Args,
                               Res.getFrontendOpts().ProgramAction);
-  ParseTargetArgs(Res.getTargetOpts(), *Args);
-
   return Success;
 }
 
@@ -1753,8 +1762,7 @@ std::string CompilerInvocation::getModuleHash() const {
   
   // Extend the signature with the target options.
   code = hash_combine(code, TargetOpts->Triple, TargetOpts->CPU,
-                      TargetOpts->ABI, TargetOpts->CXXABI,
-                      TargetOpts->LinkerVersion);
+                      TargetOpts->ABI, TargetOpts->LinkerVersion);
   for (unsigned i = 0, n = TargetOpts->FeaturesAsWritten.size(); i != n; ++i)
     code = hash_combine(code, TargetOpts->FeaturesAsWritten[i]);
 
@@ -1763,7 +1771,6 @@ std::string CompilerInvocation::getModuleHash() const {
   const HeaderSearchOptions &hsOpts = getHeaderSearchOpts();
   code = hash_combine(code, ppOpts.UsePredefines, ppOpts.DetailedRecord);
 
-  std::vector<StringRef> MacroDefs;
   for (std::vector<std::pair<std::string, bool/*isUndef*/> >::const_iterator 
             I = getPreprocessorOpts().Macros.begin(),
          IEnd = getPreprocessorOpts().Macros.end();
@@ -1824,5 +1831,20 @@ int getLastArgIntValue(const ArgList &Args, OptSpecifier Id, int Default,
     }
   }
   return Res;
+}
+
+void BuryPointer(const void *Ptr) {
+  // This function may be called only a small fixed amount of times per each
+  // invocation, otherwise we do actually have a leak which we want to report.
+  // If this function is called more than kGraveYardMaxSize times, the pointers
+  // will not be properly buried and a leak detector will report a leak, which
+  // is what we want in such case.
+  static const size_t kGraveYardMaxSize = 16;
+  LLVM_ATTRIBUTE_UNUSED static const void *GraveYard[kGraveYardMaxSize];
+  static llvm::sys::cas_flag GraveYardSize;
+  llvm::sys::cas_flag Idx = llvm::sys::AtomicIncrement(&GraveYardSize) - 1;
+  if (Idx >= kGraveYardMaxSize)
+    return;
+  GraveYard[Idx] = Ptr;
 }
 }

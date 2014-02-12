@@ -497,7 +497,7 @@ public:
 
       VariableGuard<QualType> CurrentFunctionReturnTypeGuard(
         CurrentFunctionReturnType,
-        D->getResultType() );
+        D->getReturnType() );
 
       return (this->*BaseClassTraverseFunctionDecl)(D);
   }
@@ -525,7 +525,7 @@ public:
   bool TraverseBlockExpr(BlockExpr* S) {
     VariableGuard<QualType> CurrentFunctionReturnTypeGuard(
       CurrentFunctionReturnType,
-      S->getFunctionType()->getResultType());
+      S->getFunctionType()->getReturnType());
 
     return BaseClass::TraverseBlockExpr(S);
   }
@@ -838,7 +838,7 @@ public:
     unsigned argIdx = 0;
 
     if (const FunctionProtoType* FTProto = FT->getAs<FunctionProtoType>()) {
-      const unsigned numParams = FTProto->getNumArgs();
+      const unsigned numParams = FTProto->getNumParams();
 
       unsigned paramIdx = 0;
       
@@ -880,7 +880,7 @@ public:
       
       for (; paramIdx<numParams; ++paramIdx, ++argIdx) {
         Expr* Arg = S->getArg(argIdx);
-        QualType ParamType = FTProto->getArgType(paramIdx);
+        QualType ParamType = FTProto->getParamType(paramIdx);
         if (!TraverseBindingHelper(ParamType, Arg)) return false;
       }
     }
@@ -905,10 +905,10 @@ public:
     unsigned argIdx = 0;
 
     if (const FunctionProtoType* FTProto = FT->getAs<FunctionProtoType>()) {
-      const unsigned numParams = FTProto->getNumArgs();
+      const unsigned numParams = FTProto->getNumParams();
       for (unsigned paramIdx = 0; paramIdx<numParams; ++paramIdx, ++argIdx) {
         Expr* Arg = S->getArg(argIdx);
-        QualType ParamType = FTProto->getArgType(paramIdx);
+        QualType ParamType = FTProto->getParamType(paramIdx);
         if (!TraverseBindingHelper(ParamType, Arg)) return false;
       }
     }

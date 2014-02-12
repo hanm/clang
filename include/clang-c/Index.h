@@ -30,7 +30,7 @@
  * compatible, thus CINDEX_VERSION_MAJOR is expected to remain stable.
  */
 #define CINDEX_VERSION_MAJOR 0
-#define CINDEX_VERSION_MINOR 20
+#define CINDEX_VERSION_MINOR 21
 
 #define CINDEX_VERSION_ENCODE(major, minor) ( \
       ((major) * 10000)                       \
@@ -597,6 +597,32 @@ CINDEX_LINKAGE CXSourceLocation clang_getRangeStart(CXSourceRange range);
  * source range.
  */
 CINDEX_LINKAGE CXSourceLocation clang_getRangeEnd(CXSourceRange range);
+
+/**
+ * \brief Identifies an array of ranges.
+ */
+typedef struct {
+  /** \brief The number of ranges in the \c ranges array. */
+  unsigned count;
+  /**
+   * \brief An array of \c CXSourceRanges.
+   */
+  CXSourceRange *ranges;
+} CXSourceRangeList;
+
+/**
+ * \brief Retrieve all ranges that were skipped by the preprocessor.
+ *
+ * The preprocessor will skip lines when they are surrounded by an
+ * if/ifdef/ifndef directive whose condition does not evaluate to true.
+ */
+CINDEX_LINKAGE CXSourceRangeList *clang_getSkippedRanges(CXTranslationUnit tu,
+                                                         CXFile file);
+
+/**
+ * \brief Destroy the given \c CXSourceRangeList.
+ */
+CINDEX_LINKAGE void clang_disposeSourceRangeList(CXSourceRangeList *ranges);
 
 /**
  * @}
@@ -2369,7 +2395,7 @@ clang_disposeCXPlatformAvailability(CXPlatformAvailability *availability);
 /**
  * \brief Describe the "language" of the entity referred to by a cursor.
  */
-CINDEX_LINKAGE enum CXLanguageKind {
+enum CXLanguageKind {
   CXLanguage_Invalid = 0,
   CXLanguage_C,
   CXLanguage_ObjC,
@@ -2854,14 +2880,14 @@ CINDEX_LINKAGE CXString clang_getTypeKindSpelling(enum CXTypeKind K);
 CINDEX_LINKAGE enum CXCallingConv clang_getFunctionTypeCallingConv(CXType T);
 
 /**
- * \brief Retrieve the result type associated with a function type.
+ * \brief Retrieve the return type associated with a function type.
  *
  * If a non-function type is passed in, an invalid type is returned.
  */
 CINDEX_LINKAGE CXType clang_getResultType(CXType T);
 
 /**
- * \brief Retrieve the number of non-variadic arguments associated with a
+ * \brief Retrieve the number of non-variadic parameters associated with a
  * function type.
  *
  * If a non-function type is passed in, -1 is returned.
@@ -2869,7 +2895,7 @@ CINDEX_LINKAGE CXType clang_getResultType(CXType T);
 CINDEX_LINKAGE int clang_getNumArgTypes(CXType T);
 
 /**
- * \brief Retrieve the type of an argument of a function type.
+ * \brief Retrieve the type of a parameter of a function type.
  *
  * If a non-function type is passed in or the function does not have enough
  * parameters, an invalid type is returned.
@@ -2882,7 +2908,7 @@ CINDEX_LINKAGE CXType clang_getArgType(CXType T, unsigned i);
 CINDEX_LINKAGE unsigned clang_isFunctionTypeVariadic(CXType T);
 
 /**
- * \brief Retrieve the result type associated with a given cursor.
+ * \brief Retrieve the return type associated with a given cursor.
  *
  * This only returns a valid type if the cursor refers to a function or method.
  */

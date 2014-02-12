@@ -93,7 +93,7 @@ ASaPType *AssignmentCheckerVisitor::stealType() {
 
 void AssignmentCheckerVisitor::
 VisitCallExpr(CallExpr *Exp) {
-  if (!Exp->isBuiltinCall()) {
+  if (!Exp->getBuiltinCallee()) {
     assert(!SubV);
     SubV = new SubstitutionVector();
     typecheckCallExpr(Exp, *SubV);

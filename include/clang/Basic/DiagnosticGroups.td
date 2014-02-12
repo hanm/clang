@@ -44,12 +44,14 @@ def NonLiteralNullConversion : DiagGroup<"non-literal-null-conversion">;
 def NullConversion : DiagGroup<"null-conversion">;
 def ImplicitConversionFloatingPointToBool :
   DiagGroup<"implicit-conversion-floating-point-to-bool">;
+def ObjCLiteralConversion : DiagGroup<"objc-literal-conversion">;
 def BadArrayNewLength : DiagGroup<"bad-array-new-length">;
 def BuiltinMacroRedefined : DiagGroup<"builtin-macro-redefined">;
 def BuiltinRequiresHeader : DiagGroup<"builtin-requires-header">;
 def C99Compat : DiagGroup<"c99-compat">;
 def CXXCompat: DiagGroup<"c++-compat">;
 def ExternCCompat : DiagGroup<"extern-c-compat">;
+def KeywordCompat : DiagGroup<"keyword-compat">;
 def GNUCaseRange : DiagGroup<"gnu-case-range">;
 def CastAlign : DiagGroup<"cast-align">;
 def : DiagGroup<"cast-qual">;
@@ -70,6 +72,7 @@ def CXX11CompatDeprecatedWritableStr :
   DiagGroup<"c++11-compat-deprecated-writable-strings">;
 
 def DeprecatedDeclarations : DiagGroup<"deprecated-declarations">;
+def UnavailableDeclarations : DiagGroup<"unavailable-declarations">;
 def DeprecatedImplementations :DiagGroup<"deprecated-implementations">;
 def DeprecatedIncrementBool : DiagGroup<"deprecated-increment-bool">;
 def DeprecatedRegister : DiagGroup<"deprecated-register">;
@@ -167,6 +170,7 @@ def OverloadedShiftOpParentheses: DiagGroup<"overloaded-shift-op-parentheses">;
 def DanglingElse: DiagGroup<"dangling-else">;
 def DanglingField : DiagGroup<"dangling-field">;
 def DistributedObjectModifiers : DiagGroup<"distributed-object-modifiers">;
+def InfiniteRecursion : DiagGroup<"infinite-recursion">;
 def GNUImaginaryConstant : DiagGroup<"gnu-imaginary-constant">;
 def IgnoredQualifiers : DiagGroup<"ignored-qualifiers">;
 def : DiagGroup<"import">;
@@ -216,13 +220,14 @@ def NonPODVarargs : DiagGroup<"non-pod-varargs">;
 def : DiagGroup<"nonportable-cfstrings">;
 def NonVirtualDtor : DiagGroup<"non-virtual-dtor">;
 def OveralignedType : DiagGroup<"over-aligned">;
-def : DiagGroup<"old-style-cast">;
+def OldStyleCast : DiagGroup<"old-style-cast">;
 def : DiagGroup<"old-style-definition">;
 def OutOfLineDeclaration : DiagGroup<"out-of-line-declaration">;
 def : DiagGroup<"overflow">;
 def ForwardClassReceiver : DiagGroup<"receiver-forward-class">;
 def MethodAccess : DiagGroup<"objc-method-access">;
 def ObjCReceiver : DiagGroup<"receiver-expr">;
+def OperatorNewReturnsNull : DiagGroup<"new-returns-null">;
 def OverlengthStrings : DiagGroup<"overlength-strings">;
 def OverloadedVirtual : DiagGroup<"overloaded-virtual">;
 def PrivateExtern : DiagGroup<"private-extern">;
@@ -231,6 +236,7 @@ def BadFunctionCast : DiagGroup<"bad-function-cast">;
 def ObjCPropertyImpl : DiagGroup<"objc-property-implementation">;
 def ObjCPropertyNoAttribute : DiagGroup<"objc-property-no-attribute">;
 def ObjCMissingSuperCalls : DiagGroup<"objc-missing-super-calls">;
+def ObjCDesignatedInit : DiagGroup<"objc-designated-initializers">;
 def ObjCRetainBlockProperty : DiagGroup<"objc-noncopy-retain-block-property">;
 def ObjCReadonlyPropertyHasSetter : DiagGroup<"objc-readonly-with-setter-property">;
 def ObjCInvalidIBOutletProperty : DiagGroup<"invalid-iboutlet">;
@@ -333,10 +339,14 @@ def UninitializedStaticSelfInit : DiagGroup<"static-self-init">;
 def Uninitialized  : DiagGroup<"uninitialized", [UninitializedSometimes,
                                                  UninitializedStaticSelfInit]>;
 def UnknownPragmas : DiagGroup<"unknown-pragmas">;
+def IgnoredPragmas : DiagGroup<"ignored-pragmas">;
+def Pragmas : DiagGroup<"pragmas", [UnknownPragmas, IgnoredPragmas]>;
 def UnknownWarningOption : DiagGroup<"unknown-warning-option">;
 def NSobjectAttribute : DiagGroup<"NSObject-attribute">;
-def UnknownAttributes : DiagGroup<"attributes">;
+def UnknownAttributes : DiagGroup<"unknown-attributes">;
 def IgnoredAttributes : DiagGroup<"ignored-attributes">;
+def Attributes : DiagGroup<"attributes", [UnknownAttributes,
+                                          IgnoredAttributes]>;
 def UnnamedTypeTemplateArgs : DiagGroup<"unnamed-type-template-args",
                                         [CXX98CompatUnnamedTypeTemplateArgs]>;
 def UnsupportedFriend : DiagGroup<"unsupported-friend">;
@@ -363,7 +373,6 @@ def UnusedVariable : DiagGroup<"unused-variable",
 def UnusedPropertyIvar :  DiagGroup<"unused-property-ivar">;
 def UsedButMarkedUnused : DiagGroup<"used-but-marked-unused">;
 def UserDefinedLiterals : DiagGroup<"user-defined-literals">;
-def ReadOnlySetterAttrs : DiagGroup<"readonly-setter-attrs">;
 def Reorder : DiagGroup<"reorder">;
 def UndeclaredSelector : DiagGroup<"undeclared-selector">;
 def ImplicitAtomic : DiagGroup<"implicit-atomic-properties">;
@@ -382,8 +391,9 @@ def AutomaticReferenceCounting : DiagGroup<"arc",
 def ARCRepeatedUseOfWeakMaybe : DiagGroup<"arc-maybe-repeated-use-of-weak">;
 def ARCRepeatedUseOfWeak : DiagGroup<"arc-repeated-use-of-weak",
                                      [ARCRepeatedUseOfWeakMaybe]>;
-def ObjCBridge : DiagGroup<"arc-bridge-cast">;
+def ObjCBridge : DiagGroup<"bridge-cast">;
 
+def DeallocInCategory:DiagGroup<"dealloc-in-category">;
 def SelectorTypeMismatch : DiagGroup<"selector-type-mismatch">;
 def Selector : DiagGroup<"selector", [SelectorTypeMismatch]>;
 def Protocol : DiagGroup<"protocol">;
@@ -439,6 +449,7 @@ def Conversion : DiagGroup<"conversion",
                             LiteralConversion,
                             NonLiteralNullConversion, // (1-1)->pointer (etc)
                             NullConversion, // NULL->non-pointer
+                            ObjCLiteralConversion,
                             SignConversion,
                             StringConversion]>,
                  DiagCategory<"Value Conversion Issue">;
@@ -501,6 +512,7 @@ def Most : DiagGroup<"most", [
     Unused,
     VolatileRegisterVar,
     ObjCMissingSuperCalls,
+    ObjCDesignatedInit,
     OverloadedVirtual,
     PrivateExtern,
     SelTypeCast,
@@ -611,8 +623,6 @@ def ObjCLiteralComparison : DiagGroup<"objc-literal-compare", [
     ObjCStringComparison
   ]>;
 
-def ObjCLiteralMissingAtSign : DiagGroup<"objc-literal-missing-atsign">;
-
 // Inline ASM warnings.
 def ASMOperandWidths : DiagGroup<"asm-operand-widths">;
 def ASM : DiagGroup<"asm", [
@@ -621,3 +631,8 @@ def ASM : DiagGroup<"asm", [
 
 // OpenMP warnings.
 def SourceUsesOpenMP : DiagGroup<"source-uses-openmp">;
+
+// Backend warnings.
+def BackendInlineAsm : DiagGroup<"inline-asm">;
+def BackendFrameLargerThan : DiagGroup<"frame-larger-than">;
+def BackendPlugin : DiagGroup<"backend-plugin">;

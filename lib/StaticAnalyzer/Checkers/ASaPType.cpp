@@ -188,7 +188,7 @@ QualType ASaPType::getQT(int DerefNum) const {
 ASaPType *ASaPType::getReturnType() {
   if (QT->isFunctionType()) {
     const FunctionType *FT = QT->getAs<FunctionType>();
-    QT = FT->getResultType();
+    QT = FT->getReturnType();
     InheritanceMap = SymbolTable::Table->getInheritanceMap(QT);
     adjust();
     return this;

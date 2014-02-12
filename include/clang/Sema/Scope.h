@@ -273,6 +273,18 @@ public:
     return false;
   }
 
+  /// isInObjcMethodOuterScope - Return true if this scope is an
+  /// Objective-C method outer most body.
+  bool isInObjcMethodOuterScope() const {
+    if (const Scope *S = this) {
+      // If this scope is an objc method scope, then we succeed.
+      if (S->getFlags() & ObjCMethodScope)
+        return true;
+    }
+    return false;
+  }
+
+  
   /// isTemplateParamScope - Return true if this scope is a C++
   /// template parameter scope.
   bool isTemplateParamScope() const {
@@ -342,6 +354,11 @@ public:
   /// Init - This is used by the parser to implement scope caching.
   ///
   void Init(Scope *parent, unsigned flags);
+
+  /// \brief Sets up the specified scope flags and adjusts the scope state
+  /// variables accordingly.
+  ///
+  void AddFlags(unsigned Flags);
 };
 
 }  // end namespace clang

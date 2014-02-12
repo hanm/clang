@@ -77,11 +77,11 @@ bool isParInvokOperator(QualType MethQT) {
   const FunctionProtoType *FT = MethQT->getAs<FunctionProtoType>();
   assert(FT);
   // Check that return type is void
-  QualType RetQT = FT->getResultType();
+  QualType RetQT = FT->getReturnType();
   if (!RetQT->isVoidType())
     return false; // Technically we could allow any return type
   // Check that it takes no arguments
-  if (FT->getNumArgs() != 0)
+  if (FT->getNumParams() != 0)
     return false;
 
   return true;
