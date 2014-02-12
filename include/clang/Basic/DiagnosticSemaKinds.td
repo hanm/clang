@@ -2127,18 +2127,6 @@ def warn_mismatched_availability_override_unavail : Warning<
 def note_overridden_method : Note<
   "overridden method is here">;
 
-// ASaP: Safe Parallelism Attributes
-def warn_safepar_attribute_wrong_decl_type : Warning<
-  "%0 attribute only applies to %select{"
-  "classes and structs and functions and empty declarations ([[attr]];)|"
-  "classes and structs and functions|"
-  "fields or function parameters or variables|"
-  "functions}1">,
-  InGroup<SafeParallelismAttributes>;
-def warn_safepar_attribute_duplicate_attribute: Warning<
-  "duplicate attribute not allowed: %0">,
-  InGroup<SafeParallelismAttributes>;
-
 // Thread Safety Attributes
 def warn_thread_attribute_ignored : Warning<
   "ignoring %0 attribute because its argument is invalid">,

@@ -543,14 +543,3 @@ def ExplodedGraphViewer : Checker<"ViewExplodedGraph">,
   DescFile<"DebugCheckers.cpp">;
 
 } // end "debug"
-
-//===----------------------------------------------------------------------===//
-// Experimental checkers.
-//===----------------------------------------------------------------------===//
-let ParentPackage = Alpha in {
-
-def StaticVariableAccessChecker : Checker<"StaticVariableAccessChecker">,
-  HelpText<"Check access of static variables.">,
-  DescFile<"StaticVariableAccessChecker.cpp">;
-} // end "experimental"
-
