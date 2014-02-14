@@ -90,6 +90,8 @@ class ASaPSemanticCheckerTraverser :
 
   void emitMissingBaseArgAttribute(const Decl *D, StringRef BaseClass);
   void emitEmptyStringRplDisallowed(const Decl *D, Attr *A);
+  void emitTemporaryObjectNeedsAnnotation(const CXXTemporaryObjectExpr *Exp,
+                                          const CXXRecordDecl *Class);
 
   /// \brief Print to the debug output stream (os) the attribute.
   template<typename AttrType> void helperPrintAttributes(Decl *D);
@@ -178,6 +180,7 @@ public:
   bool VisitCXXDestructorDecl(CXXDestructorDecl *D);
   bool VisitCXXConversionDecl(CXXConversionDecl *D);
   bool VisitFunctionTemplateDecl(FunctionTemplateDecl *D);
+  bool VisitCXXTemporaryObjectExpr(CXXTemporaryObjectExpr *Exp);
   // Traversers
   bool TraverseTypedefDecl(TypedefDecl *D);
 }; // End class ASaPSemanticCheckerTraverser.
