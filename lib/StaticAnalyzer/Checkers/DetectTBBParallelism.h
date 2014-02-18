@@ -33,6 +33,8 @@ class DetectTBBParallelism :
 
   bool FatalError;
 
+  void emitUnexpectedTBBParallelFor(const FunctionDecl *D);
+
 public:
   typedef RecursiveASTVisitor<DetectTBBParallelism> BaseClass;
 

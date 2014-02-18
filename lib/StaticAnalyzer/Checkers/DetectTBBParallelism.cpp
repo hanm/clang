@@ -23,6 +23,16 @@
 namespace clang {
 namespace asap {
 
+// Static
+
+void DetectTBBParallelism::
+emitUnexpectedTBBParallelFor(const FunctionDecl *D) {
+  StringRef Str = "";
+  StringRef BugName = "unexpected tbb::parallel_for method: parallelism"
+                      " invoked through it will not be checked";
+  helperEmitDeclarationWarning(BR, D, Str, BugName, false);
+}
+
 DetectTBBParallelism::
 DetectTBBParallelism()
   : BR(*SymbolTable::VB.BR),
@@ -31,7 +41,8 @@ DetectTBBParallelism()
     SymT(*SymbolTable::Table),
     FatalError(false) {}
 
-bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
+bool DetectTBBParallelism::
+VisitFunctionDecl(FunctionDecl *D) {
 
   std::string Str = D->getNameInfo().getAsString();
   StringRef Name(Str);
@@ -89,7 +100,7 @@ bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
         OS << "DEBUG:: 1st Param Type = " << ParmTypeStr << "\n";
         // Case 1. parallel_for(Range, Body, ...)
         //if (ParmTypeStr.startswith("const class tbb::blocked_range")) {
-        if (!ParmTypeStr.compare("Range")) {
+        if (!ParmTypeStr.compare("const Range &")) {
           ParmVarDecl *Body = D->getParamDecl(1);
           OS << "DEBUG:: 2nd parameter should be a Body: ";
           Body->print(OS, Ctx.getPrintingPolicy());
@@ -101,11 +112,14 @@ bool DetectTBBParallelism::VisitFunctionDecl(FunctionDecl *D) {
           //assert(Result && "failed adding SpecificNIChecker to ParTable");
         }
         // Case 2. parallel_for(Index, ..., Function, ...)
-        else {
+        else if (!ParmTypeStr.compare("Index")) {
           // Add to SymT
           OS << "DEBUG:: Adding a parallel_for<Index> to SymT (" << FunD << ")\n";
           SymT.addParallelFun(FunD, new TBBParallelForIndexNIChecker());
           //assert(Result && "failed adding SpecificNIChecker to ParTable");
+        }
+        else {
+          // TODO emit warning that we found an unexpected tbb::parallel_for
         }
       } else if (!Name.compare("parallel_invoke")) {
         // Add to SymT
