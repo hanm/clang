@@ -294,7 +294,8 @@ emitEmptyStringRplDisallowed(const Decl *D, Attr *A) {
 }
 
 void ASaPSemanticCheckerTraverser::
-emitTemporaryObjectNeedsAnnotation(const CXXTemporaryObjectExpr *Exp, const CXXRecordDecl *Class) {
+emitTemporaryObjectNeedsAnnotation(const CXXTemporaryObjectExpr *Exp,
+                                   const CXXRecordDecl *Class) {
   std::string BugString;
   llvm::raw_string_ostream BugStringOS(BugString);
   Exp->printPretty(BugStringOS, 0, Ctx.getPrintingPolicy());
@@ -1097,6 +1098,9 @@ VisitCXXTemporaryObjectExpr(CXXTemporaryObjectExpr *Exp) {
     OS << "DEBUG:: Class = ";
     Class->print(OS);
     OS << "\n";
+    // FIXME: we should try to apply the automatic annotation scheme,
+    // but there doesn't seem to be a declaration AST node and we have
+    // been attatching such information to declarations so far...
     emitTemporaryObjectNeedsAnnotation(Exp, Class);
   }
   return true;
