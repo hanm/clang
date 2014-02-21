@@ -84,12 +84,12 @@ int main [[asap::writes("Global")]] () {
  
     // warning if they are forked as different tasks
     // (we don't support tbb fork syntax yet.)
-    tbb::parallel_invoke(foo, bar); // expected-warning{{Interfering effects}}
+    tbb::parallel_invoke(foo, bar); // expected-warning{{interfering effects}}
     // no warning here as zoo has ready only effect
     tbb::parallel_invoke(zoo1, zoo2);
     // warning: the effects of Z2 and B2 are interferring 
     // (if we had "joined" Z2 above, it would be safe)
-    tbb::parallel_invoke(zoo1, callsBar); // expected-warning{{Interfering effects}}
+    tbb::parallel_invoke(zoo1, callsBar); // expected-warning{{interfering effects}}
 
     return 0;
 } //  end main
