@@ -254,9 +254,6 @@ namespace {
       llvm::raw_string_ostream os(sbuf);
 
       switch (ErrorKind) {
-      default: 
-        llvm_unreachable("unexpected autodesk attributes error kind!");
-        return "";
       case StaticVarDecl:
         os << "Declare the variable '"
           << Name << "' with static duration";
@@ -273,6 +270,8 @@ namespace {
         os << "Create a non-const alias to the variable '"
           << Name << "' with static duration";
         break;
+          llvm_unreachable("unexpected autodesk attributes error kind!");
+          return "";
       }
 
       return std::string(os.str());
