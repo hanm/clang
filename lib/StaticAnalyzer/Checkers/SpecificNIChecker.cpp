@@ -148,7 +148,7 @@ static const CXXMethodDecl
       //OS << "DEBUG:: Method Name: " << Name << "\n";
       //Method->dump(OS);
       //OS << "\n";
-      if (checkMethodType(MethQT, TakesParam, ParamTypeName) &&
+      if (checkMethodType(MethQT, TakesParam) &&
           !Name.compare(CXX_CALL_OPERATOR)) {
         Result = Method;
         break;
@@ -179,8 +179,7 @@ static const CXXMethodDecl
 }
 
 inline static const CXXMethodDecl
-*getOperatorMethod(const Expr *Arg, bool TakesParam = false,
-                   const std::string *ParamTypeName = 0) {
+*getOperatorMethod(const Expr *Arg, bool TakesParam = false) {
   const CXXMethodDecl *Result = tryGetOperatorMethod(Arg, TakesParam, true);
   return Result;
 }
@@ -309,7 +308,7 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   Expr *Arg = Exp->getArg(TBB_PARFOR_RANGE_BODY_POSITION)->IgnoreImplicit();
   raw_ostream &OS = *SymbolTable::VB.OS;
   //QualType QTArg = Arg->getType();
-  const CXXMethodDecl *Method = getOperatorMethod(Arg, true, &TBB_RANGE_TYPE_PARAMETER_NAME);
+  const CXXMethodDecl *Method = getOperatorMethod(Arg, true);
   std::auto_ptr<EffectSummary> ES = getInvokeEffectSummary(Arg, Method, Def);
 
   // 2. Detect induction variables
@@ -344,10 +343,10 @@ bool TBBParallelForIndexNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   raw_ostream &OS = *SymbolTable::VB.OS;
   // 1. Get the effect summary of the operator method of the 3rd or 4th argument
   Expr *Arg = Exp->getArg(TBB_PARFOR_INDEX2_FUNCTOR_POSITION)->IgnoreImplicit();
-  const CXXMethodDecl *Method = tryGetOperatorMethod(Arg, true, &TBB_INDEX_TYPE_PARAMETER_NAME);
+  const CXXMethodDecl *Method = tryGetOperatorMethod(Arg, true);
   if (!Method) {
     Arg = Exp->getArg(TBB_PARFOR_INDEX3_FUNCTOR_POSITION)->IgnoreImplicit();
-    Method = getOperatorMethod(Arg, true, &TBB_INDEX_TYPE_PARAMETER_NAME);
+    Method = getOperatorMethod(Arg, true);
   }
   std::auto_ptr<EffectSummary> ES = getInvokeEffectSummary(Arg, Method, Def);
 
