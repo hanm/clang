@@ -16,11 +16,11 @@
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
-
+#include "EffectConstraintGeneration.h"
 #include "ASaPSymbolTable.h"
 #include "CollectRegionNamesAndParameters.h"
 #include "DetectTBBParallelism.h"
-#include "EffectChecker.h"
+//#include "EffectChecker.h"
 #include "EffectSummaryNormalizer.h"
 #include "NonInterferenceChecker.h"
 #include "SemanticChecker.h"
@@ -117,7 +117,7 @@ public:
   }
 
   void runCheckers(TranslationUnitDecl *TUDecl) const {
-    os << "DEBUG:: starting ASaP TBB Parallelism Detection\n";
+    os << "DEBUG:: starting ASaP TBB Parallelism Detection!\n";
     DetectTBBParallelism DetectTBBPar;
     DetectTBBPar.TraverseDecl(TUDecl);
     os << "##############################################\n";
@@ -151,7 +151,7 @@ public:
     EffectSummaryNormalizerTraverser EffectNormalizerChecker;
     EffectNormalizerChecker.TraverseDecl(TUDecl);
     os << "##############################################\n";
-    os << "DEBUG:: done running ASaP Effect Coverage Checker\n\n";
+    os << "DEBUG:: done running ASaP Effect Normalizer Checker\n\n";
     if (EffectNormalizerChecker.encounteredFatalError()) {
       os << "DEBUG:: EFFECT NORMALIZER CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;
@@ -167,7 +167,8 @@ public:
       return;
     }
     // Check that Effect Summaries cover effects
-    StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker;
+    //StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker;
+    StmtVisitorInvoker<EffectConstraintVisitor> EffectChecker;
     EffectChecker.TraverseDecl(TUDecl);
     os << "##############################################\n";
     os << "DEBUG:: done running ASaP Effect Checker\n\n";

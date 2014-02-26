@@ -1,4 +1,4 @@
-//=== EffectConstraintGeneration.cpp - Safe Parallelism Constraint Generator * C++ -*===//
+//=== EffectConstraintGeneration.cpp - Effect Constraint Generator *- C++ -*===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -31,6 +31,15 @@
 namespace clang {
 namespace asap {
 
+EffectInclusionConstraint::EffectInclusionConstraint(const EffectSummary* Rhs){
+  LHS = new EffectVector();
+  RHS = Rhs;
+}
+    
+void EffectInclusionConstraint::addEffect(Effect* Eff){
+  LHS->push_back(Eff);
+}
+    
 EffectConstraintVisitor::EffectConstraintVisitor (
   const FunctionDecl* Def,
   Stmt *S,
@@ -42,8 +51,6 @@ EffectConstraintVisitor::EffectConstraintVisitor (
       EffectCount(0),
       DerefNum(0),
       IsCoveredBySummary(true) {
-
-  Num=0;
 
   OS << "DEBUG:: ******** INVOKING EffectConstraintGeneratorVisitor...\n";
 
@@ -62,7 +69,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   assert(EffSummary);
 
   //create a constraint object
-  ec=new EffectInclusionConstraint(EffSummary);
+  EC=new EffectInclusionConstraint(EffSummary);
 
   if (VisitCXXInitializer) {
     if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
@@ -119,7 +126,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   //delete EffectsTmp;
 }
 
-  void EffectConstraintVisitor::memberSubstitute(const ValueDecl *D) {
+void EffectConstraintVisitor::memberSubstitute(const ValueDecl *D) {
   assert(D && "D can't be null");
   const ASaPType *T0 = SymT.getType(D);
   if (!T0)
@@ -145,19 +152,19 @@ EffectConstraintVisitor::EffectConstraintVisitor (
  
  
   OS << "DEBUG:: before substitution on LHS\n";
-  ec->getLHS()->substitute(InheritanceSubV, EffectCount);
+  EC->getLHS()->substitute(InheritanceSubV, EffectCount);
 
   std::auto_ptr<SubstitutionVector> SubV = T1->getSubstitutionVector();
 
 
   OS << "DEBUG:: before second substitution on LHS\n";
-  ec->getLHS()->substitute(SubV.get(), EffectCount);
+  EC->getLHS()->substitute(SubV.get(), EffectCount);
 
   OS << "   DONE\n";
   delete T1;
 }
 
- int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp) {
+int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp) {
   
   if (DerefNum < 0)
     return 0;
@@ -194,9 +201,8 @@ EffectConstraintVisitor::EffectConstraintVisitor (
     if (InRpl) {
       // Arrays may not have an InRpl
       Effect E(Effect::EK_ReadsEffect, InRpl, exp);
-      OS << "DEBUG:: Adding Effect 1\n";
-      ec->addEffect(&E);
-      OS << "DEBUG:: After Adding Effect 1\n";
+      OS << "DEBUG:: Adding Effect\n";
+      EC->addEffect(&E);
       EffectNr++;
     }
     T1->deref();
@@ -208,9 +214,8 @@ EffectConstraintVisitor::EffectConstraintVisitor (
     const Rpl *InRpl = T1->getInRpl();
     if (InRpl) {
       Effect E(EK, InRpl, exp);
-      OS << "DEBUG:: Adding Effect 2\n";
-      ec->addEffect(&E);
-      OS << "DEBUG:: Adding Effect 2\n";
+      OS << "DEBUG:: Adding Effect\n";
+      EC->addEffect(&E);
       EffectNr++;
     }
   }
@@ -247,9 +252,9 @@ emitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
 
 bool EffectConstraintVisitor::
 checkEffectCoverage() {
-  EffectVector* LHS=ec->getLHS();
-  const EffectSummary* RHS=ec->getRHS();
-  const int N=ec->getN();
+  EffectVector* LHS=EC->getLHS();
+  const EffectSummary* RHS=EC->getRHS();
+  const int N=LHS->size();
   if (N<=0)
     return true;
   bool Result = true;
@@ -263,45 +268,34 @@ checkEffectCoverage() {
     
     if (E->getEffectKind()!=Effect::EK_InvocEffect) {
       OS << "==== not EK_InvocEffect"<<E->getEffectKind() <<"\n"; 
-      // if(E->getRpl()==NULL)
-      // 	OS << "RPl is NULL \n";
-      // else
-      // 	OS << "Rpl is NOT NULL \n";
-      if(!E->isCoveredBy(*RHS)) {
-     
+      if(!E->isCoveredBy(*RHS)) {     
 	const Expr* Exp=E->getExp();
-       
-      
-      const Decl* D;
-      const MemberExpr *me=dyn_cast<const MemberExpr>(Exp);
-      if (me)
-	D = me->getMemberDecl();
-      else {
-	const DeclRefExpr *dre=dyn_cast<const DeclRefExpr>(Exp);
-	D =dre->getDecl();
+	const Decl* D;
+	const MemberExpr *me=dyn_cast<const MemberExpr>(Exp);
+	if (me)
+	  D = me->getMemberDecl();
+	else {
+	  const DeclRefExpr *dre=dyn_cast<const DeclRefExpr>(Exp);
+	  D =dre->getDecl();
+	}      
+	OS << "DEBUG:: effect not covered: Expr = ";
+	Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+	OS << "\n";
+	if (D) {
+	  OS << "\tDecl = ";
+	  D->print(OS, Ctx.getPrintingPolicy());
+	  OS << "\n";
+	} else {
+	  OS << "\tDecl = NULL\n";
+	}
+	std::string Str = E->toString();
+	emitEffectNotCoveredWarning(Exp, D, Str);
+	Result = false;
       }
-      
-      
-      OS << "DEBUG:: effect not covered: Expr = ";
-      Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
-      OS << "\n";
-      if (D) {
-        OS << "\tDecl = ";
-        D->print(OS, Ctx.getPrintingPolicy());
-        OS << "\n";
-      } else {
-        OS << "\tDecl = NULL\n";
-      }
-      std::string Str = E->toString();
-      emitEffectNotCoveredWarning(Exp, D, Str);
-      Result = false;
-    }
     }
     
     else if (E->getEffectKind()==Effect::EK_InvocEffect){
-       const Expr* Exp=E->getExp();      
-      
-	  
+      const Expr* Exp=E->getExp();       
       OS << "====== EK_InvocEffect \n";
       FunctionDecl* FunD=E->getDecl();
       SubstitutionVector* SubV=E->getSubV();
@@ -319,11 +313,9 @@ checkEffectCoverage() {
 	  I != End; ++I) {
 	Effect Eff(*(*I));
 	OS << "======= EK_InvocEffect -before call to applyTo()\n";
-	 SubV->applyTo(&Eff);
+	SubV->applyTo(&Eff);
 	OS << "======= EK_InvocEffect -before call to isCovered by\n";
-	if(!Eff.isCoveredBy(*RHS)){
-	  
-      
+	if(!Eff.isCoveredBy(*RHS)){      
 	  OS << "DEBUG:: effect not covered: Expr = ";
 	  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
 	  OS << "\n";
@@ -406,12 +398,9 @@ void EffectConstraintVisitor::VisitMemberExpr(MemberExpr *Exp) {
 
   if (IsBase){
     memberSubstitute(VD);
-    //    Num=0;
   }
 
-  int EffectNr = collectEffects(VD, Exp);
-
-  //Num=EffectNr;
+  int EffectNr=collectEffects(VD, Exp);
 
   /// 2.3. Visit Base with read semantics, then restore write semantics
   SaveAndRestore<bool> VisitBase(IsBase, true);
@@ -499,13 +488,9 @@ void EffectConstraintVisitor::VisitDeclRefExpr(DeclRefExpr *Exp) {
 
   if (IsBase){
     memberSubstitute(VD);
-    //Num=0;
   }
-  int EffectNr = collectEffects(VD, Exp);
- 
-  //  Num=EffectNr;
+  collectEffects(VD, Exp);
   
-
   //should be done later
   // checkEffectCoverage(Exp, VD, EffectNr);
 
@@ -534,9 +519,7 @@ void EffectConstraintVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
       SymT.getInheritanceSubVec(E->getType()->getPointeeType());
   if(InheritanceSubV) {
     OS << "DEBUG:: InheritanceSubV.size = " << InheritanceSubV->size() << "\n";
-
-    ec->getLHS()->substitute(InheritanceSubV, EffectCount);
-   
+    EC->getLHS()->substitute(InheritanceSubV, EffectCount);
   }
 
 }
@@ -593,9 +576,9 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
 
       /// 2. Add effects to tmp effects
 
-      Effect ie(Effect::EK_InvocEffect, Exp, FunD, &SubV);
+      Effect IE(Effect::EK_InvocEffect, Exp, FunD, &SubV);
       OS << "DEBUG:: Adding invocation Effect\n";
-      ec->addEffect(&ie);
+      EC->addEffect(&IE);
       OS << "DEBUG:: After Adding invocation Effect\n";
       SaveAndRestore<int> EffectAccumulator(EffectCount, EffectCount+1);
       /// 3. Visit base if it exists

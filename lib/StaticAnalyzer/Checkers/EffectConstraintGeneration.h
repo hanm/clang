@@ -1,4 +1,4 @@
-//=== EffectConstraintGeneration.h - Safe Parallelism constraint Generator * C++ -*===//
+//=== EffectConstraintGeneration.h - Effect Constraint Generator *- C++ -*===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -21,42 +21,28 @@
 #include "ASaPGenericStmtVisitor.h"
 #include "Effect.h"
 
-
 namespace clang {
 namespace asap {
 
-  //class that represents an effect inclusion constraint
-  class EffectInclusionConstraint {
-    EffectVector *LHS;
-    const EffectSummary *RHS;
-    int N; //just call size()
- 
+//class that represents an effect inclusion constraint
+class EffectInclusionConstraint {
+  EffectVector *LHS;
+  const EffectSummary *RHS;
     
-  public:
-    EffectInclusionConstraint(const EffectSummary* rhs){
-      LHS = new EffectVector();
-      RHS = rhs;
-      N = 0;
-    }
-    
-    void addEffect(Effect* eff){
-      LHS->push_back(eff);
-      N++;
-    }
-    
-    EffectVector* getLHS()  {return LHS;}
-    const EffectSummary* getRHS() const {return RHS;}
-    int getN() const {return N;}
-  };
+ public:
+  EffectInclusionConstraint(const EffectSummary* Rhs);
+  void addEffect(Effect* Eff);
+  EffectVector* getLHS()  {return LHS;}
+  const EffectSummary* getRHS() const {return RHS;}
+};
 
 
 class EffectConstraintVisitor
     : public ASaPStmtVisitor<EffectConstraintVisitor> {
   typedef ASaPStmtVisitor<EffectConstraintVisitor> BaseClass;
 
-  int Num;
   EffectVector *EffectsTmp;
-  EffectInclusionConstraint* ec;
+  EffectInclusionConstraint* EC;
 
   /// True when visiting an expression that is being written to.
   bool HasWriteSemantics;
@@ -73,7 +59,8 @@ class EffectConstraintVisitor
   void memberSubstitute(const ValueDecl *D);
   /// \brief Adds effects to TmpEffects and returns the number of effects added.
   int collectEffects(const ValueDecl *D, const Expr *exp);
-
+    //checks that the effects in LHS are covered by RHS
+  bool checkEffectCoverage();
   void emitEffectNotCoveredWarning(const Stmt *S,
                                          const Decl *D,
                                          const StringRef &Str);
@@ -85,9 +72,6 @@ class EffectConstraintVisitor
   /// \brief Copy the effect summary of FunD and push it to the TmpEffects.
   int copyAndPushFunctionEffects(const FunctionDecl *FunD,
                                  const SubstitutionVector &SubV);
-  /// \brief Check that the 'N' last effects are covered by the summary.
-  //bool checkEffectCoverage(const Expr *Exp, const Decl *D, int N);
-  bool checkEffectCoverage();
 
   void helperVisitAssignment(BinaryOperator *E);
   void helperVisitCXXConstructorDecl(const CXXConstructorDecl *D);

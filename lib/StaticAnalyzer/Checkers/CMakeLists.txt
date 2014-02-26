@@ -16,6 +16,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   Effect.cpp
   EffectChecker.cpp
   EffectSummaryNormalizer.cpp
+  EffectConstraintGeneration.cpp
   Rpl.cpp
   TypeChecker.cpp
   SemanticChecker.cpp

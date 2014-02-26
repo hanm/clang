@@ -15,7 +15,6 @@
 
 #include "Effect.h"
 #include "ASaPUtil.h"
-
 #include "Rpl.h"
 #include "ASaPSymbolTable.h"
 #include "Substitution.h"
@@ -26,10 +25,31 @@ namespace asap {
 Effect::Effect(EffectKind EK, const Rpl* R, const Attr* A)
   : Kind(EK), Attribute(A) {
   this->R = (R) ? new Rpl(*R) : 0;
+  Exp=NULL;
+  decl=NULL;
+  SubV=NULL;
 }
 
-Effect::Effect(const Effect &E): Kind(E.Kind), Attribute(E.Attribute) {
-  R = (E.R) ? new Rpl(*E.R) : 0;
+Effect::Effect(EffectKind EK, const Rpl* R,  const Expr* E)
+  : Kind(EK), Exp(E) {
+  this->R = (R) ? new Rpl(*R) : 0;
+  decl=NULL;
+  SubV=NULL;
+}
+
+
+Effect::Effect(const Effect &E)
+  : Kind(E.Kind), Attribute(E.Attribute), Exp(E.Exp), decl(E.decl) { 
+  R = (E.R) ? new Rpl(*E.R) : 0; 
+  SubV=new SubstitutionVector();
+  SubV->push_back_vec(E.SubV); 
+}
+
+Effect::Effect(EffectKind EK, const Expr* E, FunctionDecl* FunD, const
+	       SubstitutionVector* SV) : Kind(EK), Exp(E), decl(FunD) {
+  R=NULL;
+  SubV=new SubstitutionVector();
+  SubV->push_back_vec(SV);
 }
 
 Effect::~Effect() {
@@ -37,18 +57,25 @@ Effect::~Effect() {
 }
 
 void Effect::substitute(const Substitution *S) {
-  if (S && R)
+  if(Kind == EK_InvocEffect && S){
+    SubV->push_back(S);
+  }
+  else if (S && R)
     S->applyTo(R);
 }
 
 void Effect::substitute(const SubstitutionVector *S) {
-  if (S && R)
+  if(Kind == EK_InvocEffect && S){
+    SubV->push_back_vec(S);
+  }
+  else if (S && R)
     S->applyTo(R);
 }
 
 bool Effect::isSubEffectOf(const Effect &That) const {
-  bool Result = (isNoEffect() ||
-                 (isSubEffectKindOf(That) && R->isIncludedIn(*(That.R))));
+  bool Result;
+  Result= (isNoEffect() || (isSubEffectKindOf(That) &&
+                 R->isIncludedIn(*(That.R)))); 
   OSv2  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
     << That.toString() << ")=" << (Result ? "true" : "false") << "\n";
   return Result;
@@ -58,6 +85,8 @@ bool Effect::isSubEffectKindOf(const Effect &E) const {
   if (Kind == EK_NoEffect) return true; // optimization
 
   bool Result = false;
+  if(Kind==EK_InvocEffect)
+    return false;
   if (!E.isAtomic() || this->isAtomic()) {
     /// if e.isAtomic ==> this->isAtomic [[else return false]]
     switch(E.getEffectKind()) {
@@ -74,7 +103,7 @@ bool Effect::isSubEffectKindOf(const Effect &E) const {
       if (Kind == EK_AtomicReadsEffect) Result = true;
       // intentional fall through (lack of 'break')
     case EK_NoEffect:
-      if (Kind == EK_NoEffect) Result = true;
+      if (Kind == EK_NoEffect) Result = true;      
     }
   }
   return Result;
@@ -91,6 +120,7 @@ bool Effect::isNonInterfering(const Effect &That) const {
     case EK_NoEffect:
     case EK_ReadsEffect:
     case EK_AtomicReadsEffect:
+    case EK_InvocEffect:
       return true;
       break;
     case EK_AtomicWritesEffect:
@@ -121,6 +151,7 @@ bool Effect::printEffectKind(raw_ostream &OS) const {
     case EK_WritesEffect: OS << "Writes Effect"; break;
     case EK_AtomicReadsEffect: OS << "Atomic Reads Effect"; break;
     case EK_AtomicWritesEffect: OS << "Atomic Writes Effect"; break;
+    case EK_InvocEffect: OS << "Invocation Effect"; HasRpl =false; break;
   }
   return HasRpl;
 }
@@ -141,9 +172,17 @@ std::string Effect::toString() const {
   return std::string(OS.str());
 }
 
-const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
+  const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
   if (this->isSubEffectOf(*SymbolTable::WritesLocal))
     return SymbolTable::WritesLocal;
+  else   if(this->Kind == EK_InvocEffect){
+    SymbolTable* SymT=SymbolTable::Table;
+    if(ES.covers(SymT->getEffectSummary(this->getDecl()->getCanonicalDecl())))
+      return this;
+    return 0;
+    
+  }
+
   else
     return ES.covers(this);
 }
@@ -156,7 +195,6 @@ const Effect *EffectSummary::covers(const Effect *Eff) const {
   assert(Eff);
   if (Eff->isNoEffect())
     return Eff;
-
   // if the Eff pointer is included in the set, return it
   if (count(const_cast<Effect*>(Eff))) {
     return Eff;
