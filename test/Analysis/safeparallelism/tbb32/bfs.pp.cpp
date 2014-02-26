@@ -54693,7 +54693,7 @@ public:
         tbb::auto_partitioner partitioner;
         for (i=range.begin(); i<range.end(); i++) {
 # 122 "bfs.cpp"
-            tbb::parallel_for (tbb::blocked_range<int>(0,degrees[currentLevelSet[i]],1), innerLoopBody(i), partitioner); // expected-warning{{Non-interference check not implemented}}
+            tbb::parallel_for (tbb::blocked_range<int>(0,degrees[currentLevelSet[i]],1), innerLoopBody(i), partitioner); // expected-warning{{interfering effects}}
 
         }
     }

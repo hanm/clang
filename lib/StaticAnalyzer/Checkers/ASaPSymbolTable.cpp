@@ -524,7 +524,7 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
   } else if (/*ImplicitParamDecl *ImplParamD = */dyn_cast<ImplicitParamDecl>(ValD)) {
     assert(false && "Implement ME! :)");
   } else if (ParmVarDecl *ParamD = dyn_cast<ParmVarDecl>(ValD)) {
-    OSv2 << "DEBUG::         case ParmVarDecl (ParamCount = " << ParamCount << "\n";
+    OSv2 << "DEBUG::         case ParmVarDecl (ParamCount = " << ParamCount << ")\n";
     AnnotationSet AnSe = AnnotScheme->makeParamType(ParamD, ParamCount);
     if (AnSe.ParamVec) {
       DeclContext *DC = ParamD->getDeclContext();

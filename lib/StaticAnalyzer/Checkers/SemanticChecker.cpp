@@ -293,6 +293,18 @@ emitEmptyStringRplDisallowed(const Decl *D, Attr *A) {
   helperEmitAttributeWarning(BR, D, A, "", BugName);
 }
 
+void ASaPSemanticCheckerTraverser::
+emitTemporaryObjectNeedsAnnotation(const CXXTemporaryObjectExpr *Exp,
+                                   const CXXRecordDecl *Class) {
+  std::string BugString;
+  llvm::raw_string_ostream BugStringOS(BugString);
+  Exp->printPretty(BugStringOS, 0, Ctx.getPrintingPolicy());
+
+  StringRef BugName = "region argument required but not yet supported in this syntax";
+  helperEmitStatementWarning(BR, SymT.VB.AC, Exp, 0,
+                             BugStringOS.str(),
+                             BugName, false);
+}
 // End Emit Functions
 //////////////////////////////////////////////////////////////////////////
 
@@ -1069,6 +1081,30 @@ VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
   OS << "DEBUG:: it is " << (D->isTemplateParameter() ? "" : "NOT ")
     << "a template PARAMETER\n";
   return true;
+}
+
+bool ASaPSemanticCheckerTraverser::
+VisitCXXTemporaryObjectExpr(CXXTemporaryObjectExpr *Exp) {
+  OS << "DEBUG:: VisitCXXTemporaryObjectExpr:";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
+  // Check that the type doesn't a param because there is no way to provide it yet
+  // using our current syntax.
+  // FIXME: one exception is when this not is encountered in a return expression
+  CXXRecordDecl *Class = Exp->getConstructor()->getParent();
+  const ParameterVector *PVec =SymT.getParameterVector(Class);
+  if ( PVec && PVec->size()>0 ) {
+    OS << "DEBUG:: ParVec(size) = " << PVec->size() << "\n";
+    OS << "DEBUG:: Class = ";
+    Class->print(OS);
+    OS << "\n";
+    // FIXME: we should try to apply the automatic annotation scheme,
+    // but there doesn't seem to be a declaration AST node and we have
+    // been attatching such information to declarations so far...
+    emitTemporaryObjectNeedsAnnotation(Exp, Class);
+  }
+  return true;
+
 }
 
 bool ASaPSemanticCheckerTraverser::

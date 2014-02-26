@@ -54337,7 +54337,7 @@ public:
     }
 };
 
-int main [[asap::reads("Global")]] (int argc, char* argv[])
+int main [[asap::writes("Global")]] (int argc, char* argv[])
 {
     int nth=-1;
     if (argc > 1) {
@@ -54358,7 +54358,7 @@ int main [[asap::reads("Global")]] (int argc, char* argv[])
     tbb::auto_partitioner partitioner;
     tbb::tick_count t0 = tbb::tick_count::now();
 
-    tbb::parallel_for (tbb::blocked_range2d<int,int>(0,1024,1,0,1024,1), matmultBody2D(), partitioner); //  expected-warning{{Non-interference check not implemented}}
+    tbb::parallel_for (tbb::blocked_range2d<int,int>(0,1024,1,0,1024,1), matmultBody2D(), partitioner); //  expected-warning{{interfering effects}}
 
     tbb::tick_count t1 = tbb::tick_count::now();
     printf("Ticks = %f\n", (t1-t0).seconds());

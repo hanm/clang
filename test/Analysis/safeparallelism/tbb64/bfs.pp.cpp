@@ -54679,12 +54679,12 @@ public:
 
 class outerLoopBody {
 public:
-    void operator () (const tbb::blocked_range<int> &range) const {
+    void operator () [[asap::writes("Global")]] (const tbb::blocked_range<int> &range) const {
         int i;
         tbb::auto_partitioner partitioner;
         for (i=range.begin(); i<range.end(); i++) {
 # 123 "bfs.cpp"
-            tbb::parallel_for (tbb::blocked_range<int>(0,degrees[currentLevelSet[i]],1), innerLoopBody(i), partitioner); // expected-warning{{Non-interference check not implemented}}
+            tbb::parallel_for (tbb::blocked_range<int>(0,degrees[currentLevelSet[i]],1), innerLoopBody(i), partitioner); // expected-warning{{interfering effects}}
 
         }
     }
@@ -54727,7 +54727,7 @@ int main [[asap::writes("Global")]] (int argc, char* argv[])
 
             newLevelIndex = 0;
 
-            tbb::parallel_for (tbb::blocked_range<int>(0, currentLevelSize, 1), outerLoopBody(), partitioner); // expected-warning{{Non-interference check not implemented}}
+            tbb::parallel_for (tbb::blocked_range<int>(0, currentLevelSize, 1), outerLoopBody(), partitioner); // expected-warning{{interfering effects}}
 
 
             currentLevel++;

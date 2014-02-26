@@ -16,9 +16,11 @@
 // including TypeBuilder, AssignmentChecker, EffectCollector, and more.
 //
 //===----------------------------------------------------------------===//
+#include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/Expr.h"
+#include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 
 #include "ASaPSymbolTable.h"
 #include "ASaPType.h"
@@ -28,7 +30,20 @@
 namespace clang {
 namespace asap {
 
-static void emitNICheckNotImplemented(const Stmt *S, const FunctionDecl *FunD) {
+const static std::string CXX_CALL_OPERATOR = "operator()";
+
+/// \brief The position of the Body for tbb::parallel_for with a Range argument.
+/// Note Positions are numbered starting from 0
+const static int TBB_PARFOR_RANGE_BODY_POSITION = 1;
+/// \brief The position of the functor for tbb::parallel_for with indices
+/// but without a step argument
+const static int TBB_PARFOR_INDEX2_FUNCTOR_POSITION = 2;
+/// \brief The position of the functor for tbb::parallel_for with indices and with a step argument
+const static int TBB_PARFOR_INDEX3_FUNCTOR_POSITION = 3;
+
+
+static void emitNICheckNotImplemented(const Stmt *S,
+                                      const FunctionDecl *FunD) {
   StringRef BugName = "Non-interference check not implemented";
   std::string Name;
   if (FunD)
@@ -39,16 +54,29 @@ static void emitNICheckNotImplemented(const Stmt *S, const FunctionDecl *FunD) {
   helperEmitStatementWarning(*SymbolTable::VB.BR,
                              SymbolTable::VB.AC,
                              S, FunD, Str, BugName, false);
+}
 
+static void emitUnexpectedTypeOfArgumentPassed(const Stmt *S,
+                                               const FunctionDecl *FunD) {
+  StringRef BugName = "unexpected type of argument passed to TBB method";
+  std::string Name;
+  if (FunD)
+    Name = FunD->getNameInfo().getAsString();
+  else
+    Name = "";
+  StringRef Str(Name);
+  helperEmitStatementWarning(*SymbolTable::VB.BR,
+                             SymbolTable::VB.AC,
+                             S, FunD, Str, BugName, false);
 }
 
 static void emitInterferingEffects(const Stmt *S,
                                    const EffectSummary &ES1,
                                    const EffectSummary &ES2) {
-  StringRef BugName = "Interfering effects";
+  StringRef BugName = "interfering effects";
   std::string SBuf;
   llvm::raw_string_ostream OS(SBuf);
-  OS << "{" << ES1.toString() << "} interferes with {" 
+  OS << "{" << ES1.toString() << "} interferes with {"
      << ES2.toString() << "}";
   StringRef Str(OS.str());
   helperEmitStatementWarning(*SymbolTable::VB.BR,
@@ -59,7 +87,14 @@ static void emitInterferingEffects(const Stmt *S,
 static void emitEffectsNotCoveredWarning(const Stmt *S,
                                         const Decl *D,
                                         const StringRef &Str) {
-  StringRef BugName = "effects not covered by effect summary";
+  std::string SBuf;
+  llvm::raw_string_ostream OS(SBuf);
+  OS << "effects not covered by effect summary";
+  const EffectSummary *DefES = SymbolTable::Table->getEffectSummary(D);
+  if (DefES) {
+    OS << ": " << DefES->toString();
+  }
+  StringRef BugName(OS.str());
   helperEmitStatementWarning(*SymbolTable::VB.BR,
                              SymbolTable::VB.AC,
                              S, D, Str, BugName);
@@ -70,8 +105,8 @@ bool TBBSpecificNIChecker::check(CallExpr *E, const FunctionDecl *Def) const {
   return false;
 }
 
-// detect 'void (void) const' type
-bool isParInvokOperator(QualType MethQT) {
+
+static bool checkMethodType(QualType MethQT, bool TakesParam) {
   if (!MethQT->isFunctionType())
     return false;
   const FunctionProtoType *FT = MethQT->getAs<FunctionProtoType>();
@@ -80,60 +115,127 @@ bool isParInvokOperator(QualType MethQT) {
   QualType RetQT = FT->getReturnType();
   if (!RetQT->isVoidType())
     return false; // Technically we could allow any return type
-  // Check that it takes no arguments
-  if (FT->getNumParams() != 0)
-    return false;
 
+  const unsigned int NumParams = TakesParam ? 1 :0;
+  if (FT->getNumParams() != NumParams) {
+    return false;
+  }
   return true;
 }
 
-std::auto_ptr<EffectSummary> getInvokeEffectSummary(Expr *Arg) {
-  raw_ostream &OS = *SymbolTable::VB.OS;
+static const CXXMethodDecl
+*tryGetOperatorMethod(const Expr *Arg,
+                      bool TakesParam = false, bool Force = false) {
+  const CXXMethodDecl *Result = 0;
+
+  //raw_ostream &OS = *SymbolTable::VB.OS;
+  //OS << "DEBUG:: getOperatorMethod : Arg :";
+  //Arg->dump(OS, SymbolTable::Table->VB.BR->getSourceManager());
+
   QualType QTArg = Arg->getType();
   if (QTArg->isRecordType()) {
     CXXRecordDecl *RecDecl = QTArg->getAsCXXRecordDecl()->getCanonicalDecl();
-    EffectSummary *ES;
+    assert(RecDecl);
 
+    // Iterate over the methods of the class, searching for the overloaded
+    // call operator [operator ()].
     for(CXXRecordDecl::method_iterator I = RecDecl->method_begin(),
                                         E = RecDecl->method_end();
         I != E; ++I) {
-      CXXMethodDecl *Method = *I;
+      const CXXMethodDecl *Method = *I;
       QualType MethQT = Method->getType();
       std::string Name = Method->getNameInfo().getAsString();
-      OS << "DEBUG:: Method Name: " << Name << "\n";
-      if (isParInvokOperator(MethQT) &&
-          !Name.compare("operator()")) {
-        ES = new EffectSummary(*SymbolTable::Table->getEffectSummary(Method));
-        if (ES) {
-          OS << "DEBUG:: ES0 EffectSummary:" << ES->toString() << "\n";
-        } else {
-          OS << "DEBUG:: ES0 : No EffectSummary...\n";
-        }
+      //OS << "DEBUG:: Method Name: " << Name << "\n";
+      //Method->dump(OS);
+      //OS << "\n";
+      if (checkMethodType(MethQT, TakesParam) &&
+          !Name.compare(CXX_CALL_OPERATOR)) {
+        Result = Method;
         break;
       }
     } // end for
+    if (Force) {
+      assert(Result && "could not find overridden operator() "
+                       "method to check parallel safety");
+    }
+    return Result;
 
-    // perform substitution on EffectSummaries (from the implicit call
-    // to operator () and the argument to parallel_invoke )
-    const SubstitutionVector *SubVec = SymbolTable::Table->getInheritanceSubVec(RecDecl);
+  // fn-pointer style and lambda style parallel_invoke not supported yet
+  /* FIXME: the Lambda case falls under the RecordDecl case but the call operator method is
+     accessible through the function getLambdaCallOperator() which returns a CXXMethod*
+     but only if isLambda() is true. All these are methods of the subtype CXXRecordDecl.
+  } else if (QTArg->isLambdaType()) {
+    //TODO
+    emitNICheckNotImplemented(Arg, 0);
+    return Result;*/
+  } else {
+    //TODO
+    if (Force) { // when force = true we are not trying, we must succeed!
+      emitNICheckNotImplemented(Arg, 0);
+    }
+    return Result;
+  }
+
+}
+
+inline static const CXXMethodDecl
+*getOperatorMethod(const Expr *Arg, bool TakesParam = false) {
+  const CXXMethodDecl *Result = tryGetOperatorMethod(Arg, TakesParam, true);
+  return Result;
+}
+
+static std::auto_ptr<EffectSummary>
+getInvokeEffectSummary(const Expr *Arg,
+                       const CXXMethodDecl *Method, const FunctionDecl *Def) {
+  EffectSummary *ES = 0;
+  //raw_ostream &OS = *SymbolTable::VB.OS;
+
+  if (SymbolTable::Table->getEffectSummary(Method)) {
+    ES = new EffectSummary(*SymbolTable::Table->getEffectSummary(Method));
+    //OS << "DEBUG:: ES0 EffectSummary:" << ES->toString() << "\n";
+    const SubstitutionVector *SubVec = SymbolTable::Table->getInheritanceSubVec(Method->getParent());
     ES->substitute(SubVec);
     // perform 'this' substitution
-    assert(isa<DeclRefExpr>(Arg));
-    DeclRefExpr *DeclRef = dyn_cast<DeclRefExpr>(Arg);
-    ValueDecl *ValD = DeclRef->getDecl();
-    const ASaPType *T = SymbolTable::Table->getType(ValD);
-    assert(T);
-    std::auto_ptr<SubstitutionVector> SubV = T->getSubstitutionVector();
-    ES->substitute(SubV.get());
-    return std::auto_ptr<EffectSummary>(ES);
-  //} else if (QTArg->isLambdaType()) {
-    //TODO
+    const NamedDecl *NamD = 0;
+    if (isa<DeclRefExpr>(Arg)) {
+      const DeclRefExpr *DeclRef = dyn_cast<DeclRefExpr>(Arg);
+      NamD = DeclRef->getDecl();
+    } else if (isa<MaterializeTemporaryExpr>(Arg)) {
+      const MaterializeTemporaryExpr *MEx = dyn_cast<MaterializeTemporaryExpr>(Arg);
+      Expr *Exp = MEx->GetTemporaryExpr();
+      assert(Exp);
+      Exp = Exp->IgnoreImplicit();
+      if (isa<CXXFunctionalCastExpr>(Exp)) {
+        Exp = dyn_cast<CXXFunctionalCastExpr>(Exp)->getSubExpr();
+      }
+      assert(Exp && isa<CXXConstructExpr>(Exp));
+      CXXConstructExpr *CXXC = dyn_cast<CXXConstructExpr>(Exp);
+      NamD = CXXC->getConstructor()->getParent();
+      assert(NamD && "Internal Error: ValD should have been initialized");
+    } else {
+      emitUnexpectedTypeOfArgumentPassed(Arg, Def);
+      return std::auto_ptr<EffectSummary>(0);
+    }
+    assert(NamD && "Internal Error: ValD should have been initialized");
+    //OS << "DEBUG:: ValD = ";
+    //NamD->print(OS);
+    //OS << "\n";
+    const ASaPType *T = SymbolTable::Table->getType(NamD);
+    if (T) {
+      //OS << "DEBUG: T= " << T->toString() << "\n";
+      std::auto_ptr<SubstitutionVector> SubV = T->getSubstitutionVector();
+      ES->substitute(SubV.get());
+    }
   } else {
-    // fn-pointer style and lambda style parallel_invoke not supported yet
-    emitNICheckNotImplemented(Arg, 0);
-    return std::auto_ptr<EffectSummary>(0);
+    // No effect summary recorded for this method, means we don't want/need
+    // to check it. Nothing to do.
   }
+
+  return std::auto_ptr<EffectSummary>(ES);
 }
+
+/////////////////////////////////////////////////////////////////////////////
+// tbb::parallel_invoke
 
 bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) const {
   // for each of the arguments to this call (except the last which may be a
@@ -152,7 +254,8 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
 
   for(unsigned int I = 0; I < NumArgs; ++I) {
     Expr *Arg = Exp->getArg(I)->IgnoreImplicit();
-    std::auto_ptr<EffectSummary> ES = getInvokeEffectSummary(Arg);
+    std::auto_ptr<EffectSummary> ES =
+        getInvokeEffectSummary(Arg,getOperatorMethod(Arg), Def);
     ESVec.push_back(ES.release());
   }
 
@@ -193,6 +296,84 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
       I != E; ++I) {
     delete (*I);
   }
+  return Result;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// tbb::parallel_for
+
+bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) const {
+  bool Result = true;
+  // 1. Get the effect summary of the operator method of the 2nd argument
+  Expr *Arg = Exp->getArg(TBB_PARFOR_RANGE_BODY_POSITION)->IgnoreImplicit();
+  raw_ostream &OS = *SymbolTable::VB.OS;
+  //QualType QTArg = Arg->getType();
+  const CXXMethodDecl *Method = getOperatorMethod(Arg, true);
+  std::auto_ptr<EffectSummary> ES = getInvokeEffectSummary(Arg, Method, Def);
+
+  // 2. Detect induction variables
+  // TODO InductionVarVector IVV = detectInductionVariablesVector
+
+  // 3. Check non-interference
+  if (!ES->isNonInterfering(ES.get())) {
+    emitInterferingEffects(Exp, *ES, *ES);
+    Result = false;
+  }
+  // 4. Check effect coverage
+  const EffectSummary *DefES = SymbolTable::Table->getEffectSummary(Def);
+  assert(DefES);
+  OS << "DEBUG:: Checking if the effects of the calls through parallel_for "
+     << "are covered by the effect summary of the enclosing function, which is:\n"
+     << DefES->toString() << "\n";
+  // 4.1. TODO For each induction variable substitute it with [?] in ES
+  // 4.2 check
+  if (!DefES->covers(ES.get())) {
+    std::string Str = ES->toString();
+    emitEffectsNotCoveredWarning(Arg, Def, Str);
+    Result = false;
+  }
+
+  // 5. Cleanup
+  //delete(ES);
+  return Result;
+}
+
+bool TBBParallelForIndexNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) const {
+  bool Result = true;
+  raw_ostream &OS = *SymbolTable::VB.OS;
+  // 1. Get the effect summary of the operator method of the 3rd or 4th argument
+  Expr *Arg = Exp->getArg(TBB_PARFOR_INDEX2_FUNCTOR_POSITION)->IgnoreImplicit();
+  const CXXMethodDecl *Method = tryGetOperatorMethod(Arg, true);
+  if (!Method) {
+    Arg = Exp->getArg(TBB_PARFOR_INDEX3_FUNCTOR_POSITION)->IgnoreImplicit();
+    Method = getOperatorMethod(Arg, true);
+  }
+  std::auto_ptr<EffectSummary> ES = getInvokeEffectSummary(Arg, Method, Def);
+
+  // 2. Detect induction variables
+  // TODO InductionVarVector IVV = detectInductionVariablesVector
+
+  // 3. Check non-interference
+  if (!ES->isNonInterfering(ES.get())) {
+    emitInterferingEffects(Exp, *ES, *ES);
+    Result = false;
+  }
+  // 4. Check effect coverage
+  const EffectSummary *DefES = SymbolTable::Table->getEffectSummary(Def);
+  assert(DefES);
+  OS << "DEBUG:: Checking if the effects of the calls through parallel_for "
+     << "are covered by the effect summary of the enclosing function, which is:\n"
+     << DefES->toString() << "\n";
+  // 4.1. TODO For each induction variable substitute it with [?] in ES
+  // 4.2 check
+  if (!DefES->covers(ES.get())) {
+    std::string Str = ES->toString();
+    emitEffectsNotCoveredWarning(Arg, Def, Str);
+    Result = false;
+  }
+
+  // 5. Cleanup
+  //delete(ES);
   return Result;
 }
 

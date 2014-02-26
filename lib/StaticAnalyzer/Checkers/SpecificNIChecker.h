@@ -45,10 +45,14 @@ class TBBParallelForNIChecker : public TBBSpecificNIChecker {
 
 /// \brief class for checking TBB parallel_for with Range iterator
 class TBBParallelForRangeNIChecker : public TBBParallelForNIChecker {
+public:
+  virtual bool check(CallExpr *E, const FunctionDecl *Def) const;
 }; // end class TBBParallelForRangeChecker
 
 /// \brief class for checking TBB parallel_for with Iterator
 class TBBParallelForIndexNIChecker : public TBBParallelForNIChecker {
+public:
+  virtual bool check(CallExpr *E, const FunctionDecl *Def) const;
 }; // end class TBBParallelForRangeChecker
 
 /// \brief class for checking TBB parallel_invoke

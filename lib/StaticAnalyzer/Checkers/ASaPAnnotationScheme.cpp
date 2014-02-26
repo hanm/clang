@@ -81,7 +81,7 @@ helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT) {
   }
   for (; I < ArgNum; ++I) {
     std::stringstream ss;
-    ss << D->getNameAsString() << "_" << I;
+    ss << "P_" << D->getNameAsString() << "_" << I;
     StringRef ParamName = SymT.addFreshName(ss.str());
     ParamRplElement Param(ParamName);
     Result.ParamVec->push_back(Param); // makes a (persistent) copy of Param

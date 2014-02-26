@@ -5966,7 +5966,7 @@ public:
 # 95 "tree.cpp"
     GrowTreeLeft Left [[asap::arg("P")]] (this, depth);
     GrowTreeRight Right [[asap::arg("P")]] (this, depth);
-    tbb::parallel_invoke(Left, Right); // expected-warning{{Interfering effects}}
+    tbb::parallel_invoke(Left, Right); // expected-warning{{interfering effects}}
 
   }
 

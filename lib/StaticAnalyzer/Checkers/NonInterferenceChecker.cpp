@@ -68,6 +68,8 @@ void NonInterferenceChecker::VisitCallExpr(CallExpr *Exp) {
     const VarDecl *VarD = dyn_cast<VarDecl>(D);
     assert(VarD || FunD); // The callee should be a function or a fn-pointer
     if (FunD) {
+      // if it is a template, we want to get its generic form,
+      // not the specialized form at the call-site.
       if(FunD->getTemplatedKind() ==
          FunctionDecl::TK_FunctionTemplateSpecialization) {
         FunD = FunD->getPrimaryTemplate()->getTemplatedDecl();
