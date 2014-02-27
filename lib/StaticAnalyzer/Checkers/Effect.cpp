@@ -82,14 +82,19 @@ bool Effect::isSubEffectOf(const Effect &That) const {
 }
 
 bool Effect::isSubEffectKindOf(const Effect &E) const {
-  if (Kind == EK_NoEffect) return true; // optimization
+  if (Kind == EK_NoEffect) 
+    return true; // optimization
+
+  if (Kind == EK_InvocEffect || E.Kind == EK_InvocEffect)
+    return false;
 
   bool Result = false;
-  if(Kind==EK_InvocEffect)
-    return false;
   if (!E.isAtomic() || this->isAtomic()) {
     /// if e.isAtomic ==> this->isAtomic [[else return false]]
     switch(E.getEffectKind()) {
+    case EK_InvocEffect:
+      Result = false;
+      break;
     case EK_WritesEffect:
       if (Kind == EK_WritesEffect) Result = true;
       // intentional fall through (lack of 'break')
@@ -120,7 +125,6 @@ bool Effect::isNonInterfering(const Effect &That) const {
     case EK_NoEffect:
     case EK_ReadsEffect:
     case EK_AtomicReadsEffect:
-    case EK_InvocEffect:
       return true;
       break;
     case EK_AtomicWritesEffect:
@@ -128,18 +132,28 @@ bool Effect::isNonInterfering(const Effect &That) const {
       assert(R && "Internal ERROR: missing Rpl in non-pure Effect");
       assert(That.R && "Internal ERROR: missing Rpl in non-pure Effect");
       return R->isDisjoint(*That.R);
+    case EK_InvocEffect:
+      // TODO
+      return false;
     }
+    break;
   case EK_WritesEffect:
   case EK_AtomicWritesEffect:
     if (That.Kind == EK_NoEffect)
       return true;
     else {
       assert(R && "Internal ERROR: missing Rpl in non-pure Effect");
+      // FIXME That.R might be null if it is an invocation effect
       assert(That.R && "Internal ERROR: missing Rpl in non-pure Effect");
       return R->isDisjoint(*That.R);
     }
-  default:
-    return false; // control should never reach here
+  case EK_InvocEffect:
+    if (That.Kind == EK_NoEffect)
+      return true;
+    else {
+      // TODO
+      return false;
+    }
   }
 }
 
@@ -151,7 +165,7 @@ bool Effect::printEffectKind(raw_ostream &OS) const {
     case EK_WritesEffect: OS << "Writes Effect"; break;
     case EK_AtomicReadsEffect: OS << "Atomic Reads Effect"; break;
     case EK_AtomicWritesEffect: OS << "Atomic Writes Effect"; break;
-    case EK_InvocEffect: OS << "Invocation Effect"; HasRpl =false; break;
+    case EK_InvocEffect: OS << "Invocation Effect"; HasRpl = false; break;
   }
   return HasRpl;
 }
