@@ -26,7 +26,7 @@
 namespace clang {
 namespace asap {
 
-   
+
 class Effect{
 public:
   enum EffectKind {
@@ -45,16 +45,16 @@ public:
   };
 
 private:
-  
+
   /// Fields
   EffectKind Kind;
-  Rpl* R;
-  const Attr* Attribute; // used to get SourceLocation information
-  const Expr* Exp;
+  Rpl *R;
+  const Attr *Attribute; // used to get SourceLocation information
+  const Expr *Exp;
 
   //Fiels needed by invocation effects
-  SubstitutionVector* SubV;
-  FunctionDecl* decl;
+  SubstitutionVector *SubV;
+  FunctionDecl *decl;
 
 
   /// \brief returns true if this is a subeffect kind of E.
@@ -66,10 +66,10 @@ private:
 
 public:
   /// Constructors
-  Effect(EffectKind EK, const Rpl* R, const Attr* A = 0);
-  Effect(EffectKind EK, const Rpl* R, const Expr* e);
+  Effect(EffectKind EK, const Rpl *R, const Attr *A = 0);
+  Effect(EffectKind EK, const Rpl *R, const Expr *E);
   Effect(const Effect &E);
-  Effect(EffectKind EK, const Expr* e, FunctionDecl* FunD, const SubstitutionVector* sv);
+  Effect(EffectKind EK, const Expr *E, FunctionDecl *FunD, const SubstitutionVector *SV);
 
   /// Destructors
   ~Effect();
@@ -109,11 +109,11 @@ public:
   inline SourceLocation getLocation() const {
     return Attribute->getLocation();
   }
-  inline const Expr* getExp() const {return Exp; }
+  inline const Expr *getExp() const {return Exp; }
 
-  
-  inline SubstitutionVector* getSubV() const { return SubV; }
-  inline FunctionDecl* getDecl() const { return decl; }
+
+  inline SubstitutionVector *getSubV() const { return SubV; }
+  inline FunctionDecl *getDecl() const { return decl; }
 
 
   /// \brief substitute (Effect)
@@ -136,7 +136,7 @@ public:
 }; // end class Effect
 
 
- 
+
 
 /////////////////////////////////////////////////////////////////////////////
 
@@ -175,36 +175,30 @@ public:
   void substitute(const Substitution *S, int N) {
     if (!S)
       return; // Nothing to do.
-    unsigned long i=0;
-    for (VectorT::const_iterator
-	   I = begin(),
-	   E = end();
-         I != E; ++I) {
-      i++;
-      if(i>(this->size()-N)){
-	Effect *Eff = *I;
-	Eff->substitute(S);
-      }
-      
+    int i=0;    
+    for (VectorT::const_reverse_iterator
+	   I = rbegin(),
+	   E = rend();
+         I != E && i<N; ++I, ++i) {
+      Effect *Eff = *I;
+      Eff->substitute(S);
     }
+    
   }
-  
+
   void substitute(const SubstitutionVector *SubV, int N) {
     if (!SubV)
       return; // Nothing to do.
-    unsigned long i=0;
-    for (VectorT::const_iterator
-	   I = begin(),
-	   E = end();
-         I != E; ++I) {
-      i++;
-      if(i>(this->size()-N)){
-	Effect *Eff = *I;
-	Eff->substitute(SubV);
-      }
+    int i=0;
+    for (VectorT::const_reverse_iterator
+	   I = rbegin(),
+	   E = rend();
+         I != E && i<N; ++I, ++i) {
+      Effect *Eff = *I;
+      Eff->substitute(SubV);
     }
   }
-  
+
 
 }; // end class EffectVector
 

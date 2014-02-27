@@ -28,7 +28,7 @@ namespace asap {
 class EffectInclusionConstraint {
   EffectVector *LHS;
   const EffectSummary *RHS;
-    
+
  public:
   EffectInclusionConstraint(const EffectSummary* Rhs);
   void addEffect(Effect* Eff);

@@ -35,11 +35,11 @@ EffectInclusionConstraint::EffectInclusionConstraint(const EffectSummary* Rhs){
   LHS = new EffectVector();
   RHS = Rhs;
 }
-    
+
 void EffectInclusionConstraint::addEffect(Effect* Eff){
   LHS->push_back(Eff);
 }
-    
+
 EffectConstraintVisitor::EffectConstraintVisitor (
   const FunctionDecl* Def,
   Stmt *S,
@@ -149,8 +149,8 @@ void EffectConstraintVisitor::memberSubstitute(const ValueDecl *D) {
   // First, compute inheritance induced substitutions
   const SubstitutionVector *InheritanceSubV = // memory leak?
       SymT.getInheritanceSubVec(T1->getQT());
- 
- 
+
+
   OS << "DEBUG:: before substitution on LHS\n";
   EC->getLHS()->substitute(InheritanceSubV, EffectCount);
 
@@ -165,7 +165,7 @@ void EffectConstraintVisitor::memberSubstitute(const ValueDecl *D) {
 }
 
 int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp) {
-  
+
   if (DerefNum < 0)
     return 0;
   OS << "DEBUG:: in EffectChecker::collectEffects: ";
@@ -260,15 +260,15 @@ checkEffectCoverage() {
   bool Result = true;
   OS << "DEBUG:: In checkEffectCoverage() \n";
   OS << "DEBUG:: LHS empty? "<< LHS->empty() <<"\n";
-  
+
   OS << "DEBUG:: N is "<< N <<"\n";
   for (int I=0; I<N; ++I){
     std::auto_ptr<Effect> E = LHS->pop_back_val();
     OS << "### "; E->print(OS); OS << "\n";
-    
+
     if (E->getEffectKind()!=Effect::EK_InvocEffect) {
-      OS << "==== not EK_InvocEffect"<<E->getEffectKind() <<"\n"; 
-      if(!E->isCoveredBy(*RHS)) {     
+      OS << "==== not EK_InvocEffect"<<E->getEffectKind() <<"\n";
+      if(!E->isCoveredBy(*RHS)) {
 	const Expr* Exp=E->getExp();
 	const Decl* D;
 	const MemberExpr *me=dyn_cast<const MemberExpr>(Exp);
@@ -277,7 +277,7 @@ checkEffectCoverage() {
 	else {
 	  const DeclRefExpr *dre=dyn_cast<const DeclRefExpr>(Exp);
 	  D =dre->getDecl();
-	}      
+	}
 	OS << "DEBUG:: effect not covered: Expr = ";
 	Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
 	OS << "\n";
@@ -293,20 +293,20 @@ checkEffectCoverage() {
 	Result = false;
       }
     }
-    
+
     else if (E->getEffectKind()==Effect::EK_InvocEffect){
-      const Expr* Exp=E->getExp();       
+      const Expr* Exp=E->getExp();
       OS << "====== EK_InvocEffect \n";
       FunctionDecl* FunD=E->getDecl();
       SubstitutionVector* SubV=E->getSubV();
-      
+
       OS << "======= EK_InvocEffect -before call to getEffectSummary()\n";
       if(!FunD)
 	OS << "FunD is NULL\n";
       const EffectSummary *FunEffects =
 	SymT.getEffectSummary(FunD->getCanonicalDecl());
       assert(FunEffects);
-     
+
       for(EffectSummary::const_iterator
 	    I = FunEffects->begin(),
 	    End = FunEffects->end();
@@ -315,7 +315,7 @@ checkEffectCoverage() {
 	OS << "======= EK_InvocEffect -before call to applyTo()\n";
 	SubV->applyTo(&Eff);
 	OS << "======= EK_InvocEffect -before call to isCovered by\n";
-	if(!Eff.isCoveredBy(*RHS)){      
+	if(!Eff.isCoveredBy(*RHS)){
 	  OS << "DEBUG:: effect not covered: Expr = ";
 	  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
 	  OS << "\n";
@@ -331,11 +331,11 @@ checkEffectCoverage() {
 	  Result = false;
 
 	}
-	
+
       }
-      
+
     }
-    
+
   }
   OS << "DEBUG:: effect covered (OK)\n";
   IsCoveredBySummary &= Result;
@@ -490,7 +490,7 @@ void EffectConstraintVisitor::VisitDeclRefExpr(DeclRefExpr *Exp) {
     memberSubstitute(VD);
   }
   collectEffects(VD, Exp);
-  
+
   //should be done later
   // checkEffectCoverage(Exp, VD, EffectNr);
 
@@ -583,9 +583,9 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
       SaveAndRestore<int> EffectAccumulator(EffectCount, EffectCount+1);
       /// 3. Visit base if it exists
       Visit(Exp->getCallee());
-   
+
       /// 4. Check coverage
-     
+
       //should be done later
       //checkEffectCoverage(Exp, D, EffectCount);
 
