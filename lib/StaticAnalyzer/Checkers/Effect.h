@@ -52,9 +52,9 @@ private:
   const Attr *Attribute; // used to get SourceLocation information
   const Expr *Exp;
 
-  //Fiels needed by invocation effects
+  //Fields needed by invocation effects
   SubstitutionVector *SubV;
-  FunctionDecl *decl;
+  const FunctionDecl *FunD;
 
 
   /// \brief returns true if this is a subeffect kind of E.
@@ -69,7 +69,8 @@ public:
   Effect(EffectKind EK, const Rpl *R, const Attr *A = 0);
   Effect(EffectKind EK, const Rpl *R, const Expr *E);
   Effect(const Effect &E);
-  Effect(EffectKind EK, const Expr *E, FunctionDecl *FunD, const SubstitutionVector *SV);
+  Effect(EffectKind EK, const Expr *E, const FunctionDecl *FunD,
+         const SubstitutionVector *SV);
 
   /// Destructors
   ~Effect();
@@ -113,7 +114,7 @@ public:
 
 
   inline SubstitutionVector *getSubV() const { return SubV; }
-  inline FunctionDecl *getDecl() const { return decl; }
+  inline const FunctionDecl *getDecl() const { return FunD; }
 
 
   /// \brief substitute (Effect)
@@ -175,7 +176,7 @@ public:
   void substitute(const Substitution *S, int N) {
     if (!S)
       return; // Nothing to do.
-    int i=0;    
+    int i=0;
     for (VectorT::const_reverse_iterator
 	   I = rbegin(),
 	   E = rend();
@@ -183,7 +184,7 @@ public:
       Effect *Eff = *I;
       Eff->substitute(S);
     }
-    
+
   }
 
   void substitute(const SubstitutionVector *SubV, int N) {
