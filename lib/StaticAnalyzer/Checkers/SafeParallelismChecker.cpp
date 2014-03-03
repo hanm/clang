@@ -100,6 +100,8 @@ public:
       AnnotScheme = new ParametricAnnotationScheme(SymT);
     } else if (SchemeStr.compare("global") == 0) {
       AnnotScheme = new CheckGlobalsAnnotationScheme(SymT);
+    } else if (SchemeStr.compare("inference") == 0) {
+      AnnotScheme = new InferenceAnnotationScheme(SymT);
     } else {
       // ERROR TODO
       llvm::errs() << "ERROR: Invalid argument to command-line option -asap-default-scheme\n";

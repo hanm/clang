@@ -52,6 +52,21 @@ helperMakeLocalType(const ValueDecl *D, long ArgNum) {
   return Result;
 }
 
+inline AnnotationSet AnnotationScheme::
+helperVarType(const ValueDecl *D, long ArgNum) {
+  AnnotationSet Result;
+  assert(false && "method not implemented yet");
+  RplVector RplVec;
+  for (int I = 0; I < ArgNum; ++I) {
+    // TODO
+    // 1. Create new RplVarElement
+    // RplVar RplVar = SymT.createFreshRplVar(...);
+    // 2. Push it back
+    //RplVec.push_back(Rpl(RplVar));
+  }
+  Result.T = new ASaPType(D->getType(), SymT.getInheritanceMap(D), &RplVec);
+  return Result;
+}
 
 inline AnnotationSet AnnotationScheme::
 helperMakeWritesLocalEffectSummary(const FunctionDecl *D) {
@@ -199,6 +214,7 @@ AnnotationSet SimpleAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
   return helperMakeWritesLocalEffectSummary(D);
 }
+
 ///////////////////////////////////////////////////////////////////////////////
 
 AnnotationSet CheckGlobalsAnnotationScheme::
@@ -245,6 +261,53 @@ makeEffectSummary(const FunctionDecl *D) {
   Rpl GlobalRpl(*SymbolTable::GLOBAL_RplElmt);
   Effect ReadsGlobal(Effect::EK_ReadsEffect, &GlobalRpl);
   Result.EffSum->insert(ReadsGlobal);
+
+  return Result;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+AnnotationSet InferenceAnnotationScheme::
+makeClassParams(const RecordDecl *D) {
+  AnnotationSet Result;
+  Result.ParamVec = 0; // Expecting region parameters to be given for now.
+  return Result;
+}
+
+AnnotationSet InferenceAnnotationScheme::
+makeGlobalType(const VarDecl *D, long ArgNum) {
+  return helperVarType(D, ArgNum);
+}
+
+AnnotationSet InferenceAnnotationScheme::
+makeStackType(const VarDecl *D, long ArgNum) {
+  return helperVarType(D, ArgNum);
+}
+
+AnnotationSet InferenceAnnotationScheme::
+makeFieldType(const FieldDecl *D, long ArgNum) {
+  return helperVarType(D, ArgNum);
+}
+
+AnnotationSet InferenceAnnotationScheme::
+makeParamType(const ParmVarDecl *D, long ArgNum) {
+  return helperVarType(D, ArgNum);
+}
+
+AnnotationSet InferenceAnnotationScheme::
+makeReturnType(const FunctionDecl *D, long ArgNum) {
+  return helperVarType(D, ArgNum);
+}
+
+AnnotationSet InferenceAnnotationScheme::
+makeEffectSummary(const FunctionDecl *D) {
+  AnnotationSet Result;
+  // TODO create a new effect Summary Variable
+  // We may want to keep track of the in the Symbol Table in which case you
+  // may want to add a method createFreshEffectSummaryVariable in the
+  // SymbolTable
+  assert(false && "method not implemented");
+  Result.EffSum = new EffectSummary();
 
   return Result;
 }
