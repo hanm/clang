@@ -186,78 +186,106 @@ std::string Effect::toString() const {
   return std::string(OS.str());
 }
 
-const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
-  if (this->isSubEffectOf(*SymbolTable::WritesLocal))
-    return SymbolTable::WritesLocal;
-  else   if(this->Kind == EK_InvocEffect){
-    SymbolTable* SymT=SymbolTable::Table;
-    if(ES.covers(SymT->getEffectSummary(this->getDecl()->getCanonicalDecl())))
-      return this;
-    return 0;
+// const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
+//   if (this->isSubEffectOf(*SymbolTable::WritesLocal))
+//     return SymbolTable::WritesLocal;
+//   else   if(this->Kind == EK_InvocEffect){
+//     SymbolTable* SymT=SymbolTable::Table;
+//     if(ES.covers(SymT->getEffectSummary(this->getDecl()->getCanonicalDecl())))
+//       return this;
+//     return 0;
 
-  }
+//   }
 
-  else
-    return ES.covers(this);
-}
+//   else
+//     return ES.covers(this);
+// }
+
 
 
 //////////////////////////////////////////////////////////////////////////
 // EffectSummary
 
-const Effect *EffectSummary::covers(const Effect *Eff) const {
+// const Effect *EffectSummary::covers(const Effect *Eff) const {
+//   assert(Eff);
+//   if (Eff->isNoEffect())
+//     return Eff;
+//   // if the Eff pointer is included in the set, return it
+//   if (count(const_cast<Effect*>(Eff))) {
+//     return Eff;
+//   }
+
+//   SetT::const_iterator I = begin(), E = end();
+//   for(; I != E; ++I) {
+//     if (Eff->isSubEffectOf(*(*I)))
+//       return *I;
+//   }
+//   return 0;
+// }
+
+BaseEffectSummary::ResultKind EffectSummary::covers(const Effect *Eff) const {
   assert(Eff);
+  if (Eff->isSubEffectOf(*SymbolTable::WritesLocal))
+    return RK_TRUE; 
   if (Eff->isNoEffect())
-    return Eff;
+    return RK_TRUE;
   // if the Eff pointer is included in the set, return it
   if (count(const_cast<Effect*>(Eff))) {
-    return Eff;
+    return RK_TRUE;
   }
 
   SetT::const_iterator I = begin(), E = end();
   for(; I != E; ++I) {
     if (Eff->isSubEffectOf(*(*I)))
-      return *I;
+      return RK_TRUE;
   }
-  return 0;
+  return RK_FALSE;
 }
 
-bool EffectSummary::covers(const EffectSummary *Sum) const {
-  if (!Sum)
-    return true;
 
+BaseEffectSummary::ResultKind EffectSummary::covers(const EffectSummary *Sum) const {
+  if (!Sum)
+    return RK_TRUE;
+  bool Dunno=false;
   SetT::const_iterator I = Sum->begin(), E = Sum->end();
   for(; I != E; ++I) {
-    if (!this->covers(*I))
-      return false;
+    if (this->covers(*I)==RK_FALSE)
+      return RK_FALSE;
+    else if(this->covers(*I)==RK_DUNNO)
+      Dunno=true;
   }
-  return true;
+  if(Dunno)
+    return RK_DUNNO;
+  return RK_TRUE;
 }
 
 
-bool EffectSummary::isNonInterfering(const Effect *Eff) const {
+BaseEffectSummary::ResultKind EffectSummary::isNonInterfering(const Effect *Eff) const {
   if (!Eff || Eff->isNoEffect())
-    return true;
-
+    return RK_TRUE;
   SetT::const_iterator I = begin(), E = end();
   for(; I != E; ++I) {
     if (!Eff->isNonInterfering(*(*I)))
-      return false;
+      return RK_FALSE;
   }
-  return true;
+  return RK_TRUE;
 
 }
 
-bool EffectSummary::isNonInterfering(const EffectSummary *Sum) const {
+BaseEffectSummary::ResultKind EffectSummary::isNonInterfering(const EffectSummary *Sum) const {
   if (!Sum)
-    return true;
-
+    return RK_TRUE;
+  bool Dunno=false;
   SetT::const_iterator I = Sum->begin(), E = Sum->end();
   for(; I != E; ++I) {
-    if (!this->isNonInterfering(*I))
-      return false;
+    if (this->isNonInterfering(*I)==RK_FALSE)
+      return RK_FALSE;
+    else if (this->isNonInterfering(*I)==RK_DUNNO)
+      Dunno=true;
   }
-  return true;
+  if(Dunno)
+    return RK_DUNNO;
+  return RK_TRUE;
 }
 
 void EffectSummary::makeMinimal(EffectCoverageVector &ECV) {

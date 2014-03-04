@@ -132,7 +132,8 @@ public:
   bool isNonInterfering(const Effect &That) const;
 
   /// \brief Returns covering effect in effect summary or null.
-  const Effect *isCoveredBy(const EffectSummary &ES);
+  //const Effect *isCoveredBy(const EffectSummary &ES);
+  //  BaseEffectSummary::ResultKind isCoveredBy(const EffectSummary &ES);
 }; // end class Effect
 
 
@@ -206,28 +207,54 @@ public:
 
 /////////////////////////////////////////////////////////////////////////////
 /// \brief Implements a Set of Effects
+class BaseEffectSummary {
+public:
+  enum ResultKind{
+    //True
+    RK_TRUE,
+    //False
+    RK_FALSE,
+    //Don't know
+    RK_DUNNO
+  };
+  ResultKind covers(const Effect *Eff) const {return RK_DUNNO;};
+  /// \brief Returns true iff 'this' covers 'Sum'
+  ResultKind covers(const EffectSummary *Sum) const {return RK_DUNNO;};
+  /// \brief Returns true iff 'this' is non-interfering with 'Eff'
+  ResultKind isNonInterfering(const Effect *Eff) const {return RK_DUNNO;};
+  /// \brief Returns true iff 'this' is non-interfering with 'Sum'
+  ResultKind isNonInterfering(const EffectSummary *Sum) const {return RK_DUNNO;};
+
+};
+
+class VarEffectSummary : public BaseEffectSummary {
+  EffectSummary* Concrete;
+  
+};
+
 #ifndef EFFECT_SUMMARY_SIZE
   #define EFFECT_SUMMARY_SIZE 8
 #endif
-class EffectSummary : public OwningPtrSet<Effect, EFFECT_SUMMARY_SIZE> {
+class EffectSummary : public OwningPtrSet<Effect, EFFECT_SUMMARY_SIZE>, public BaseEffectSummary {
 public:
   typedef OwningPtrSet<Effect, EFFECT_SUMMARY_SIZE> BaseClass;
   EffectSummary() : BaseClass() {}
   EffectSummary(Effect &E) : BaseClass(E) {}
 
   /// \brief Returns the effect that covers Eff or null otherwise.
-  const Effect *covers(const Effect *Eff) const;
+  // const Effect *covers(const Effect *Eff) const;
+  BaseEffectSummary::ResultKind covers(const Effect *Eff) const;
   /// \brief Returns true iff 'this' covers 'Sum'
-  bool covers(const EffectSummary *Sum) const;
+  BaseEffectSummary::ResultKind covers(const EffectSummary *Sum) const;
   /// \brief Returns true iff 'this' is non-interfering with 'Eff'
-  bool isNonInterfering(const Effect *Eff) const;
+  BaseEffectSummary::ResultKind isNonInterfering(const Effect *Eff) const;
   /// \brief Returns true iff 'this' is non-interfering with 'Sum'
-  bool isNonInterfering(const EffectSummary *Sum) const;
+  BaseEffectSummary::ResultKind isNonInterfering(const EffectSummary *Sum) const;
 
 
   // contains effect pairs (E1, E2) such that E1 is covered by E2.
   typedef llvm::SmallVector<std::pair<const Effect*, const Effect*> *, 8>
-    EffectCoverageVector;
+  EffectCoverageVector;
 
   /// \brief Makes effect summary minimal by removing covered effects.
   /// The caller is responsible for deallocating the EffectCoverageVector.
@@ -235,11 +262,11 @@ public:
 
   /// \brief Prints effect summary to raw output stream.
   void print(raw_ostream &OS, std::string Separator="\n",
-                              bool PrintLastSeparator=true) const;
+	     bool PrintLastSeparator=true) const;
 
   /// \brief Returns a string with the effect summary.
   std::string toString(std::string Separator=", ",
-                       bool PrintLastSeparator=false) const;
+		       bool PrintLastSeparator=false) const;
 
   void substitute(const Substitution *Sub);
   void substitute(const SubstitutionVector *SubV);

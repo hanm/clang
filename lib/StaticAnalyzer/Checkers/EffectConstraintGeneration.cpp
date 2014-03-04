@@ -117,9 +117,13 @@ EffectConstraintVisitor::EffectConstraintVisitor (
         SubVec->print(OS);
       OS << " \n";
 
-      if ( ! SubstOVRDSum.covers(DerivedSum) ) {
+      if ( SubstOVRDSum.covers(DerivedSum)==BaseEffectSummary::RK_FALSE ) {
         emitOverridenVirtualFunctionMustCoverEffectsOfChildren(OverriddenMethod, CXXD);
       }
+      else if (SubstOVRDSum.covers(DerivedSum)==BaseEffectSummary::RK_DUNNO){//TODO
+	assert(false && "found a variable effect summary"); 
+      }
+	
     } // end forall method declarations
   }
   OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
@@ -268,7 +272,8 @@ checkEffectCoverage() {
 
     if (E->getEffectKind()!=Effect::EK_InvocEffect) {
       OS << "==== not EK_InvocEffect"<<E->getEffectKind() <<"\n";
-      if(!E->isCoveredBy(*RHS)) {
+      BaseEffectSummary::ResultKind RK=RHS->covers(E.get());
+      if(RK==BaseEffectSummary::RK_FALSE) {
 	const Expr* Exp=E->getExp();
 	const Decl* D;
 	const MemberExpr *me=dyn_cast<const MemberExpr>(Exp);
@@ -292,8 +297,11 @@ checkEffectCoverage() {
 	emitEffectNotCoveredWarning(Exp, D, Str);
 	Result = false;
       }
+      else if (RK==BaseEffectSummary::RK_DUNNO){
+	assert(false && "Variable summary"); 
+      }
     }
-
+    
     else if (E->getEffectKind()==Effect::EK_InvocEffect){
       const Expr* Exp=E->getExp();
       OS << "====== EK_InvocEffect \n";
@@ -315,7 +323,8 @@ checkEffectCoverage() {
 	OS << "======= EK_InvocEffect -before call to applyTo()\n";
 	SubV->applyTo(&Eff);
 	OS << "======= EK_InvocEffect -before call to isCovered by\n";
-	if(!Eff.isCoveredBy(*RHS)){
+	BaseEffectSummary::ResultKind RK=RHS->covers(&Eff);
+	if(RK==BaseEffectSummary::RK_FALSE){
 	  OS << "DEBUG:: effect not covered: Expr = ";
 	  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
 	  OS << "\n";
@@ -330,6 +339,9 @@ checkEffectCoverage() {
 	  emitEffectNotCoveredWarning(Exp, FunD, Str);
 	  Result = false;
 
+	}
+	else if(RK==BaseEffectSummary::RK_DUNNO){
+	  assert(false && "Variable summary"); 
 	}
 
       }
