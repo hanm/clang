@@ -54,13 +54,11 @@ public:
 
 protected:
   AnnotationSet helperMakeClassParams(const RecordDecl *D);
-
   AnnotationSet helperMakeGlobalType(const VarDecl *D, long ArgNum);
   AnnotationSet helperMakeLocalType(const ValueDecl *D, long ArgNum);
-
   AnnotationSet helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT);
-
   AnnotationSet helperMakeWritesLocalEffectSummary(const FunctionDecl *D);
+  AnnotationSet helperVarType(const ValueDecl *D, long ArgNum);
 
 };
 
@@ -82,7 +80,7 @@ public:
 
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
 
-}; // end class DefaultAnnotationScheme
+}; // end class ParametricAnnotationScheme
 
 class SimpleAnnotationScheme : public AnnotationScheme {
 public:
@@ -102,7 +100,7 @@ public:
 
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
 
-}; // end class DefaultAnnotationScheme
+}; // end class SimpleAnnotationScheme
 
 class CheckGlobalsAnnotationScheme : public AnnotationScheme {
 public:
@@ -110,6 +108,27 @@ public:
   CheckGlobalsAnnotationScheme(SymbolTable &SymT) :AnnotationScheme(SymT) {}
   // Destructor
   virtual ~CheckGlobalsAnnotationScheme() {}
+
+  // Methods
+  virtual AnnotationSet makeClassParams(const RecordDecl *D);
+
+  virtual AnnotationSet makeGlobalType(const VarDecl *D, long ArgNum);
+  virtual AnnotationSet makeStackType(const VarDecl *D, long ArgNum);
+  virtual AnnotationSet makeFieldType(const FieldDecl *D, long ArgNum);
+  virtual AnnotationSet makeParamType(const ParmVarDecl *D, long ArgNum);
+  virtual AnnotationSet makeReturnType(const FunctionDecl *D, long ArgNum);
+
+  virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
+
+}; // end class CheckGlobalsAnnotationScheme
+
+// Insert effect summary variables and rpl variables wherever they are missing.
+class InferenceAnnotationScheme : public AnnotationScheme {
+public:
+  // Constructor
+  InferenceAnnotationScheme(SymbolTable &SymT) :AnnotationScheme(SymT) {}
+  // Destructor
+  virtual ~InferenceAnnotationScheme() {}
 
   // Methods
   virtual AnnotationSet makeClassParams(const RecordDecl *D);

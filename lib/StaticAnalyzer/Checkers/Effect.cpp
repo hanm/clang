@@ -23,31 +23,27 @@ namespace clang {
 namespace asap {
 
 Effect::Effect(EffectKind EK, const Rpl* R, const Attr* A)
-  : Kind(EK), Attribute(A) {
+  : Kind(EK), Attribute(A), Exp(0), SubV(0), FunD(0) {
   this->R = (R) ? new Rpl(*R) : 0;
-  Exp=0;
-  decl=0;
-  SubV=0;
 }
 
 Effect::Effect(EffectKind EK, const Rpl* R,  const Expr* E)
-  : Kind(EK), Exp(E) {
+  : Kind(EK), Exp(E), SubV(0), FunD(0) {
   this->R = (R) ? new Rpl(*R) : 0;
-  decl=0;
-  SubV=0;
 }
 
 
 Effect::Effect(const Effect &E)
-  : Kind(E.Kind), Attribute(E.Attribute), Exp(E.Exp), decl(E.decl) {
+  : Kind(E.Kind), Attribute(E.Attribute), Exp(E.Exp), FunD(E.FunD) {
   R = (E.R) ? new Rpl(*E.R) : 0;
   SubV=new SubstitutionVector();
   SubV->push_back_vec(E.SubV);
 }
 
-Effect::Effect(EffectKind EK, const Expr* E, FunctionDecl* FunD, const
-	       SubstitutionVector* SV) : Kind(EK), Exp(E), decl(FunD) {
-  R=0;
+Effect::Effect(EffectKind EK, const Expr* E,
+               const FunctionDecl* FunD,
+               const SubstitutionVector* SV)
+              : Kind(EK), R(0), Exp(E), FunD(FunD) {
   SubV=new SubstitutionVector();
   SubV->push_back_vec(SV);
 }

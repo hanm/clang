@@ -305,7 +305,7 @@ checkEffectCoverage() {
     else if (E->getEffectKind()==Effect::EK_InvocEffect){
       const Expr* Exp=E->getExp();
       OS << "====== EK_InvocEffect \n";
-      FunctionDecl* FunD=E->getDecl();
+      const FunctionDecl* FunD=E->getDecl();
       SubstitutionVector* SubV=E->getSubV();
 
       OS << "======= EK_InvocEffect -before call to getEffectSummary()\n";
