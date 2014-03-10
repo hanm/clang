@@ -95,10 +95,11 @@ bool EffectSummaryNormalizerTraverser::VisitFunctionDecl(FunctionDecl *D) {
 
       const EffectSummary *CanES = SymT.getEffectSummary(CanFD);
       assert(CanES && "Function missing effect summary");
-      if (CanES->covers(ES) == EffectSummary::RK_FALSE) {
+      EffectSummary::ResultKind RK=CanES->covers(ES);
+      if (RK == EffectSummary::RK_FALSE) {
         std::string Name = D->getNameInfo().getAsString();
         emitCanonicalDeclHasSmallerEffectSummary(D, Name);
-      } else if (CanES->covers(ES) == EffectSummary::RK_DUNNO){
+      } else if (RK == EffectSummary::RK_DUNNO){
 	assert(false && "Found variable effect summary");
       }else { // The effect summary of the canonical decl covers this.
 

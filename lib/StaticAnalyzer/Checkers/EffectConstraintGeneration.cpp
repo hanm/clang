@@ -125,21 +125,14 @@ EffectConstraintVisitor::EffectConstraintVisitor (
         SubVec->print(OS);
       OS << " \n";
 
-      if (ConcreteSubstOVRDSum && ConcreteSubstOVRDSum->covers(DerivedSum)==EffectSummary::RK_FALSE ) {
+      EffectSummary::ResultKind RK=SubstOVRDSum->covers(DerivedSum);
+      if(RK==EffectSummary::RK_FALSE) {
         emitOverridenVirtualFunctionMustCoverEffectsOfChildren(OverriddenMethod, CXXD);
       }
-      else if (ConcreteSubstOVRDSum && ConcreteSubstOVRDSum->covers(DerivedSum)==EffectSummary::RK_DUNNO){//TODO
-        const ConcreteEffectSummary *CDerivedSum=dyn_cast<ConcreteEffectSummary>(DerivedSum);
-	if(CDerivedSum){
-	  OS<<"DerivedSum is concrete "<<CDerivedSum->size()<<"\n";
-	  EffectSummary::ResultKind RK=ConcreteSubstOVRDSum->covers(*CDerivedSum->begin());
-	  OS << RK <<"\n";
-	}
-	else
-	  OS<<"DerivedSum is var\n";
-	assert(false && "found a variable effect summary"); 
+      else if (RK==EffectSummary::RK_DUNNO){//TODO
+	assert(false && "found a variable effect summary");
       }
-	
+
     } // end forall method declarations
   }
   OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
@@ -314,10 +307,10 @@ checkEffectCoverage() {
 	Result = false;
       }
       else if (RK==EffectSummary::RK_DUNNO){
-	assert(false && "Variable summary"); 
+	assert(false && "Variable summary");
       }
     }
-    
+
     else if (E->getEffectKind()==Effect::EK_InvocEffect){
       const Expr* Exp=E->getExp();
       OS << "====== EK_InvocEffect \n";
@@ -358,7 +351,7 @@ checkEffectCoverage() {
 
 	}
 	else if(RK==EffectSummary::RK_DUNNO){
-	  assert(false && "Variable summary"); 
+	  assert(false && "Variable summary");
 	}
 
       }

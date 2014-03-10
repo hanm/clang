@@ -221,10 +221,8 @@ std::string Effect::toString() const {
 
 EffectSummary::ResultKind ConcreteEffectSummary::covers(const Effect *Eff) const {
   assert(Eff);
-  llvm::raw_ostream &OS = *SymbolTable::VB.OS;
-  OS << "calling the concrete covers effect\n";
   if (Eff->isSubEffectOf(*SymbolTable::WritesLocal))
-    return RK_TRUE; 
+    return RK_TRUE;
   if (Eff->isNoEffect())
     return RK_TRUE;
   // if the Eff pointer is included in the set, return it
@@ -248,19 +246,14 @@ EffectSummary::ResultKind ConcreteEffectSummary::covers(const EffectSummary *Sum
   if(!CES)
     return RK_DUNNO;
   bool Dunno=false;
-  llvm::raw_ostream &OS = *SymbolTable::VB.OS;
-  OS << "before iterating\n";
   SetT::const_iterator I = CES->begin(), E = CES->end();
   for(; I != E; ++I) {
-    OS <<"before calling covers\n";
     EffectSummary::ResultKind RK=this->covers(*I);
-    OS<<"after calling covers\n";
     if (RK==RK_FALSE)
       return RK_FALSE;
     else if(RK==RK_DUNNO)
       Dunno=true;
   }
-  OS << "after iterating\n";
   if(Dunno)
     return RK_DUNNO;
   return RK_TRUE;

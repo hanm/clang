@@ -91,7 +91,7 @@ EffectCollectorVisitor::EffectCollectorVisitor (
 	SubstOVRDSum=new ConcreteEffectSummary(*COverriddenSum);
       else
 	SubstOVRDSum=new VarEffectSummary(*dyn_cast<VarEffectSummary>(OverriddenSum));
-   
+
       ConcreteEffectSummary *ConcreteSubstOVRDSum=dyn_cast<ConcreteEffectSummary>(SubstOVRDSum);
       if (SubVec && ConcreteSubstOVRDSum)
         //SubVec->reverseApplyTo(&SubstOVRDSum);
@@ -111,9 +111,12 @@ EffectCollectorVisitor::EffectCollectorVisitor (
       if (SubVec)
         SubVec->print(OS);
       OS << " \n";
-
-      if ( ! SubstOVRDSum->covers(DerivedSum) ) {
+      EffectSummary::ResultKind RK=SubstOVRDSum->covers(DerivedSum);
+      if (RK == EffectSummary::RK_FALSE) {
         emitOverridenVirtualFunctionMustCoverEffectsOfChildren(OverriddenMethod, CXXD);
+      }
+      else if(RK == EffectSummary::RK_DUNNO) {
+	assert(false && "Found EffectSummary variable");
       }
     } // end forall method declarations
   }
@@ -270,7 +273,8 @@ checkEffectCoverage(const Expr *Exp, const Decl *D, int N) {
   for (int I=0; I<N; ++I){
     std::auto_ptr<Effect> E = EffectsTmp->pop_back_val();
     OS << "### "; E->print(OS); OS << "\n";
-    if (EffSummary->covers(E.get())) {
+    EffectSummary::ResultKind RK=EffSummary->covers(E.get());
+    if (RK == EffectSummary::RK_FALSE) {
       OS << "DEBUG:: effect not covered: Expr = ";
       Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
       OS << "\n";
@@ -284,6 +288,9 @@ checkEffectCoverage(const Expr *Exp, const Decl *D, int N) {
       std::string Str = E->toString();
       emitEffectNotCoveredWarning(Exp, D, Str);
       Result = false;
+    }
+    else if (RK == EffectSummary::RK_FALSE) {
+      assert(false && "Found EffectSummary variable");
     }
   }
   OS << "DEBUG:: effect covered (OK)\n";

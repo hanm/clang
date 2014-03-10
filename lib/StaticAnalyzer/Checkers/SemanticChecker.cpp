@@ -918,9 +918,8 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
     buildEffectSummary(D, *ES);
     OS << "Effect Summary from source file:\n";
     ES->print(OS);
-
+    ConcreteEffectSummary* CES=dyn_cast<ConcreteEffectSummary>(ES);
     const FunctionDecl *CanFD = D->getCanonicalDecl();
-    ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(ES);
     if (!CES || CES->size()==0) {
       AnnotationSet AnSe = SymT.makeDefaultEffectSummary(CanFD);
       delete ES;
@@ -930,7 +929,7 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
     } else {
       /// C.2. Check Effect Summary is minimal
       ConcreteEffectSummary::EffectCoverageVector ECV;
-      CES->makeMinimal(ECV);
+      ES->makeMinimal(ECV);
       // Emit "effect not minimal" errors only on canonical declarations
       // because other (re)declarations get attributes copied from the
       // canonical declaration, which would lead to too many false positive

@@ -226,21 +226,31 @@ private:
   SummaryKind Kind;
 public:
   void setSummaryKind(SummaryKind SK) {Kind=SK;}
-  const SummaryKind getSummaryKind() const {return Kind;}
-    virtual  ResultKind covers(const Effect *Eff) const {return RK_DUNNO;}
+  SummaryKind getSummaryKind() const {return Kind;}
+  virtual  ResultKind covers(const Effect *Eff) const {return RK_DUNNO;}
   /// \brief Returns true iff 'this' covers 'Sum'
   virtual  ResultKind covers(const EffectSummary *Sum) const {return RK_DUNNO;}
   /// \brief Returns true iff 'this' is non-interfering with 'Eff'
   virtual  ResultKind isNonInterfering(const Effect *Eff) const {return RK_DUNNO;}
   /// \brief Returns true iff 'this' is non-interfering with 'Sum'
   virtual  ResultKind isNonInterfering(const EffectSummary *Sum) const {return RK_DUNNO;}
+  typedef llvm::SmallVector<std::pair<const Effect*, const Effect*> *, 8>
+  EffectCoverageVector;
+
+  /// \brief Makes effect summary minimal by removing covered effects.
+  /// The caller is responsible for deallocating the EffectCoverageVector.
+  virtual void makeMinimal(EffectCoverageVector &ECV)=0;
+
+  virtual void substitute(const Substitution *Sub)=0;
+  virtual void substitute(const SubstitutionVector *SubV)=0;
+
   virtual void print(raw_ostream &OS, std::string Separator="\n",
 	     bool PrintLastSeparator=true) const=0;
 
- std::string toString(std::string Separator=", ",
+  std::string toString(std::string Separator=", ",
 		       bool PrintLastSeparator=false) const;
 
-
+  virtual ~EffectSummary() {};
 };
 
 #ifndef EFFECT_SUMMARY_SIZE
@@ -268,14 +278,9 @@ public:
   /// \brief Returns true iff 'this' is non-interfering with 'Sum'
   virtual ResultKind isNonInterfering(const EffectSummary *Sum) const;
 
-
-  // contains effect pairs (E1, E2) such that E1 is covered by E2.
-  typedef llvm::SmallVector<std::pair<const Effect*, const Effect*> *, 8>
-  EffectCoverageVector;
-
   /// \brief Makes effect summary minimal by removing covered effects.
   /// The caller is responsible for deallocating the EffectCoverageVector.
-  void makeMinimal(EffectCoverageVector &ECV);
+  virtual void makeMinimal(EffectCoverageVector &ECV);
 
   /// \brief Prints effect summary to raw output stream.
   virtual void print(raw_ostream &OS, std::string Separator="\n",
@@ -284,9 +289,10 @@ public:
   // 		       bool PrintLastSeparator=false) const;
 
 
-  void substitute(const Substitution *Sub);
-  void substitute(const SubstitutionVector *SubV);
+  virtual void substitute(const Substitution *Sub);
+  virtual void substitute(const SubstitutionVector *SubV);
 
+  virtual ~ConcreteEffectSummary() {};
 }; // end class EffectSummary
 
 class VarEffectSummary : public EffectSummary {
@@ -298,11 +304,22 @@ public:
   static bool classof(const EffectSummary *ES) {
     return ES->getSummaryKind() == VAR;
   }
-    virtual void print(raw_ostream &OS, std::string Separator="\n",
-	     bool PrintLastSeparator=true) const;
-    // virtual std::string toString(std::string Separator=", ",
-    // 		       bool PrintLastSeparator=false) const;
+  virtual void print(raw_ostream &OS, std::string Separator="\n",
+		     bool PrintLastSeparator=true) const;
+  virtual void makeMinimal(EffectCoverageVector &ECV){
+    //nothing to do
+  }
 
+  virtual void substitute(const Substitution *Sub){
+     //TODO
+     //Store these subtitutions?
+  }
+  virtual void substitute(const SubstitutionVector *SubV){
+     //TODO
+     //Store these subtitutions?
+  }
+
+  virtual ~VarEffectSummary() {};
 };
 
 

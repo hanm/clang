@@ -389,7 +389,7 @@ bool SymbolTable::setEffectSummary(const Decl *D, const Decl *Dfrom) {
   else {
     const EffectSummary *From = SymTable[Dfrom]->getEffectSummary();
     const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(From);
-    
+
     EffectSummary *ES;
     if(CES)
       ES=new ConcreteEffectSummary(*CES);
@@ -407,13 +407,13 @@ void SymbolTable::resetEffectSummary(const Decl *D, const EffectSummary *ES) {
   if (SymTable[D]->hasEffectSummary())
     SymTable[D]->deleteEffectSummary();
 
-   const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(ES);
-    
-    EffectSummary* Sum;
-    if(CES)
-      Sum=new ConcreteEffectSummary(*CES);
-    else
-      Sum=new VarEffectSummary(*dyn_cast<VarEffectSummary>(ES));
+  const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(ES);
+
+  EffectSummary* Sum;
+  if(CES)
+    Sum=new ConcreteEffectSummary(*CES);
+  else
+    Sum=new VarEffectSummary(*dyn_cast<VarEffectSummary>(ES));
 
   SymTable[D]->setEffectSummary(Sum);
 }
