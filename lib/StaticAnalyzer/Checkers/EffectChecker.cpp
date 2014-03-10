@@ -84,10 +84,18 @@ EffectCollectorVisitor::EffectCollectorVisitor (
       assert(OverriddenSum);
 
       const SubstitutionVector *SubVec =SymT.getInheritanceSubVec(DerivedClass);
-      EffectSummary SubstOVRDSum(*OverriddenSum);
-      if (SubVec)
+      //  EffectSummary SubstOVRDSum(*OverriddenSum);
+      EffectSummary *SubstOVRDSum;
+      const ConcreteEffectSummary *COverriddenSum=dyn_cast<ConcreteEffectSummary>(OverriddenSum);
+      if(COverriddenSum)
+	SubstOVRDSum=new ConcreteEffectSummary(*COverriddenSum);
+      else
+	SubstOVRDSum=new VarEffectSummary(*dyn_cast<VarEffectSummary>(OverriddenSum));
+   
+      ConcreteEffectSummary *ConcreteSubstOVRDSum=dyn_cast<ConcreteEffectSummary>(SubstOVRDSum);
+      if (SubVec && ConcreteSubstOVRDSum)
         //SubVec->reverseApplyTo(&SubstOVRDSum);
-        SubVec->applyTo(&SubstOVRDSum);
+        SubVec->applyTo(ConcreteSubstOVRDSum);
       //SubstBaseSum.substitute(SubVec);
       OS << "DEBUG:: overidden summary error:\n";
       OS << "   DerivedSum: " << DerivedSum->toString() << "\n";
@@ -104,7 +112,7 @@ EffectCollectorVisitor::EffectCollectorVisitor (
         SubVec->print(OS);
       OS << " \n";
 
-      if ( ! SubstOVRDSum.covers(DerivedSum) ) {
+      if ( ! SubstOVRDSum->covers(DerivedSum) ) {
         emitOverridenVirtualFunctionMustCoverEffectsOfChildren(OverriddenMethod, CXXD);
       }
     } // end forall method declarations
@@ -236,12 +244,14 @@ copyAndPushFunctionEffects(const FunctionDecl *FunD,
                            const SubstitutionVector &SubV) {
   if (!FunD)
     return 0;
-  const EffectSummary *FunEffects =
+  const EffectSummary *Effects =
     SymT.getEffectSummary(FunD->getCanonicalDecl());
-  assert(FunEffects);
+  assert(Effects);
   // Must make copies because we will substitute, cannot use append:
-  //EffectsTmp->append(EV->size(), (*EV->begin()));
-  for(EffectSummary::const_iterator
+  // EffectsTmp->append(EV->size(), (*EV->begin()));
+  const ConcreteEffectSummary *FunEffects = dyn_cast<ConcreteEffectSummary>(Effects);
+  assert(FunEffects && "Found Variable effect summary");
+  for(ConcreteEffectSummary::const_iterator
     I = FunEffects->begin(),
     E = FunEffects->end();
   I != E; ++I) {

@@ -74,7 +74,7 @@ helperMakeWritesLocalEffectSummary(const FunctionDecl *D) {
   // Writes Local
   Rpl LocalRpl(*SymbolTable::LOCAL_RplElmt);
   Effect WritesLocal(Effect::EK_WritesEffect, &LocalRpl);
-  Result.EffSum = new EffectSummary(WritesLocal);
+  Result.EffSum = new ConcreteEffectSummary(WritesLocal);
 
   return Result;
 }
@@ -255,13 +255,15 @@ makeEffectSummary(const FunctionDecl *D) {
   // Writes Local
   Rpl LocalRpl(*SymbolTable::LOCAL_RplElmt);
   Effect WritesLocal(Effect::EK_WritesEffect, &LocalRpl);
-  Result.EffSum = new EffectSummary(WritesLocal);
+  Result.EffSum = new ConcreteEffectSummary(WritesLocal);
 
   // Reads Global
   Rpl GlobalRpl(*SymbolTable::GLOBAL_RplElmt);
   Effect ReadsGlobal(Effect::EK_ReadsEffect, &GlobalRpl);
-  Result.EffSum->insert(ReadsGlobal);
-
+  ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Result.EffSum);
+  if(CES){
+    CES->insert(ReadsGlobal);
+  }
   return Result;
 }
 
@@ -307,7 +309,7 @@ makeEffectSummary(const FunctionDecl *D) {
   // may want to add a method createFreshEffectSummaryVariable in the
   // SymbolTable
   assert(false && "method not implemented");
-  Result.EffSum = new EffectSummary();
+  Result.EffSum = new VarEffectSummary();
 
   return Result;
 }

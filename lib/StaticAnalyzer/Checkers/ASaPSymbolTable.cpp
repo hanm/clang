@@ -388,7 +388,14 @@ bool SymbolTable::setEffectSummary(const Decl *D, const Decl *Dfrom) {
     return false;
   else {
     const EffectSummary *From = SymTable[Dfrom]->getEffectSummary();
-    SymTable[D]->setEffectSummary(new EffectSummary(*From));
+    const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(From);
+    
+    EffectSummary *ES;
+    if(CES)
+      ES=new ConcreteEffectSummary(*CES);
+    else
+      ES=new VarEffectSummary(*dyn_cast<VarEffectSummary>(From));
+    SymTable[D]->setEffectSummary(ES);
     return true;
   }
 }
@@ -399,7 +406,16 @@ void SymbolTable::resetEffectSummary(const Decl *D, const EffectSummary *ES) {
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasEffectSummary())
     SymTable[D]->deleteEffectSummary();
-  SymTable[D]->setEffectSummary(new EffectSummary(*ES));
+
+   const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(ES);
+    
+    EffectSummary* Sum;
+    if(CES)
+      Sum=new ConcreteEffectSummary(*CES);
+    else
+      Sum=new VarEffectSummary(*dyn_cast<VarEffectSummary>(ES));
+
+  SymTable[D]->setEffectSummary(Sum);
 }
 
 const NamedRplElement *SymbolTable::

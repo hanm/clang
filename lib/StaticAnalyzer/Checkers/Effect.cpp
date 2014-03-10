@@ -219,8 +219,10 @@ std::string Effect::toString() const {
 //   return 0;
 // }
 
-BaseEffectSummary::ResultKind EffectSummary::covers(const Effect *Eff) const {
+EffectSummary::ResultKind ConcreteEffectSummary::covers(const Effect *Eff) const {
   assert(Eff);
+  llvm::raw_ostream &OS = *SymbolTable::VB.OS;
+  OS << "calling the concrete covers effect\n";
   if (Eff->isSubEffectOf(*SymbolTable::WritesLocal))
     return RK_TRUE; 
   if (Eff->isNoEffect())
@@ -239,24 +241,33 @@ BaseEffectSummary::ResultKind EffectSummary::covers(const Effect *Eff) const {
 }
 
 
-BaseEffectSummary::ResultKind EffectSummary::covers(const EffectSummary *Sum) const {
+EffectSummary::ResultKind ConcreteEffectSummary::covers(const EffectSummary *Sum) const {
   if (!Sum)
     return RK_TRUE;
+  const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);
+  if(!CES)
+    return RK_DUNNO;
   bool Dunno=false;
-  SetT::const_iterator I = Sum->begin(), E = Sum->end();
+  llvm::raw_ostream &OS = *SymbolTable::VB.OS;
+  OS << "before iterating\n";
+  SetT::const_iterator I = CES->begin(), E = CES->end();
   for(; I != E; ++I) {
-    if (this->covers(*I)==RK_FALSE)
+    OS <<"before calling covers\n";
+    EffectSummary::ResultKind RK=this->covers(*I);
+    OS<<"after calling covers\n";
+    if (RK==RK_FALSE)
       return RK_FALSE;
-    else if(this->covers(*I)==RK_DUNNO)
+    else if(RK==RK_DUNNO)
       Dunno=true;
   }
+  OS << "after iterating\n";
   if(Dunno)
     return RK_DUNNO;
   return RK_TRUE;
 }
 
 
-BaseEffectSummary::ResultKind EffectSummary::isNonInterfering(const Effect *Eff) const {
+EffectSummary::ResultKind ConcreteEffectSummary::isNonInterfering(const Effect *Eff) const {
   if (!Eff || Eff->isNoEffect())
     return RK_TRUE;
   SetT::const_iterator I = begin(), E = end();
@@ -268,11 +279,14 @@ BaseEffectSummary::ResultKind EffectSummary::isNonInterfering(const Effect *Eff)
 
 }
 
-BaseEffectSummary::ResultKind EffectSummary::isNonInterfering(const EffectSummary *Sum) const {
+EffectSummary::ResultKind ConcreteEffectSummary::isNonInterfering(const EffectSummary *Sum) const {
   if (!Sum)
     return RK_TRUE;
+  const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);
+  if(!CES)
+    return RK_DUNNO;
   bool Dunno=false;
-  SetT::const_iterator I = Sum->begin(), E = Sum->end();
+  SetT::const_iterator I = CES->begin(), E = CES->end();
   for(; I != E; ++I) {
     if (this->isNonInterfering(*I)==RK_FALSE)
       return RK_FALSE;
@@ -284,7 +298,7 @@ BaseEffectSummary::ResultKind EffectSummary::isNonInterfering(const EffectSummar
   return RK_TRUE;
 }
 
-void EffectSummary::makeMinimal(EffectCoverageVector &ECV) {
+void ConcreteEffectSummary::makeMinimal(EffectCoverageVector &ECV) {
   SetT::iterator I = begin(); // not a const iterator
   while (I != end()) { // EffectSum.end() is not loop invariant
     bool found = false;
@@ -309,7 +323,7 @@ void EffectSummary::makeMinimal(EffectCoverageVector &ECV) {
   } // end while loop
 }
 
-void EffectSummary::print(raw_ostream &OS,
+void ConcreteEffectSummary::print(raw_ostream &OS,
                           std::string Separator,
                           bool PrintLastSeparator) const {
   SetT::const_iterator I = begin(), E = end(), Ip1 = begin();
@@ -328,6 +342,13 @@ void EffectSummary::print(raw_ostream &OS,
   }
 }
 
+void VarEffectSummary::print(raw_ostream &OS,
+                          std::string Separator,
+                          bool PrintLastSeparator) const {
+  OS << "Var Effect Summary";
+}
+
+
 std::string EffectSummary::toString(std::string Separator,
                                     bool PrintLastSeparator) const {
   std::string SBuf;
@@ -336,8 +357,8 @@ std::string EffectSummary::toString(std::string Separator,
   return std::string(OS.str());
 }
 
-void EffectSummary::substitute(const Substitution *Sub) {
-  if (!Sub)
+void ConcreteEffectSummary::substitute(const Substitution *Sub) {
+  if (!Sub || size()<=0)
     return;
   for(SetT::iterator I = begin(), E = end(); I != E; ++I) {
     Effect *Eff = *I;
@@ -345,13 +366,18 @@ void EffectSummary::substitute(const Substitution *Sub) {
   }
 }
 
-void EffectSummary::substitute(const SubstitutionVector *SubV) {
-  if (!SubV)
+void ConcreteEffectSummary::substitute(const SubstitutionVector *SubV) {
+  if (!SubV || size()<=0)
     return;
+  llvm::raw_ostream &OS = *SymbolTable::VB.OS;
+  OS << "before iterating\n";
   for(SetT::iterator I = begin(), E = end(); I != E; ++I) {
+    OS << "before dereference\n";
     Effect *Eff = *I;
+    OS << "before substituting\n";
     Eff->substitute(SubV);
   }
+  OS << "after iterating\n";
 }
 
 } // end namespace clang

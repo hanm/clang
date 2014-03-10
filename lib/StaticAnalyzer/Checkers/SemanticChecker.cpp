@@ -72,8 +72,12 @@ buildPartialEffectSummary(FunctionDecl *D, EffectSummary &ES) {
                /// undeclared RPL elements).
       for (size_t Idx = 0; Idx < Tmp->size(); ++Idx) {
         const Effect E(EK, Tmp->getRplAt(Idx), *I);
-        bool Success = ES.insert(E);
-        assert(Success);
+	bool Success=false;
+	ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(&ES);
+	if(CES){
+	  Success = CES->insert(E);
+	}
+	assert(Success);
       }
     }
   }
@@ -647,12 +651,16 @@ void ASaPSemanticCheckerTraverser::buildEffectSummary(FunctionDecl *D,
   buildPartialEffectSummary<AtomicReadsEffectAttr>(D, ES);
   buildPartialEffectSummary<AtomicWritesEffectAttr>(D, ES);
   if (const NoEffectAttr* Attr = D->getAttr<NoEffectAttr>()) {
-    if (ES.size() > 0) {
+    ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(&ES);
+    if (CES && CES->size() > 0) {
       // "no effect" not compatible with other effects
       emitNoEffectInNonEmptyEffectSummary(D, Attr);
     } else {
       Effect E(Effect::EK_NoEffect, 0, Attr);
-      bool Success = ES.insert(E);
+      bool Success = false;
+      if(CES){
+	Success=CES->insert(E);
+      }
       assert(Success);
     }
   }
@@ -906,14 +914,14 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
   if (Success) {
     /// C. Check effect summary
     /// C.1. Build Effect Summary
-    EffectSummary *ES = new EffectSummary();
+    EffectSummary *ES = new ConcreteEffectSummary();
     buildEffectSummary(D, *ES);
     OS << "Effect Summary from source file:\n";
     ES->print(OS);
 
     const FunctionDecl *CanFD = D->getCanonicalDecl();
-
-    if (ES->size()==0) {
+    ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(ES);
+    if (!CES || CES->size()==0) {
       AnnotationSet AnSe = SymT.makeDefaultEffectSummary(CanFD);
       delete ES;
       ES = AnSe.EffSum;
@@ -921,8 +929,8 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
       ES->print(OS);
     } else {
       /// C.2. Check Effect Summary is minimal
-      EffectSummary::EffectCoverageVector ECV;
-      ES->makeMinimal(ECV);
+      ConcreteEffectSummary::EffectCoverageVector ECV;
+      CES->makeMinimal(ECV);
       // Emit "effect not minimal" errors only on canonical declarations
       // because other (re)declarations get attributes copied from the
       // canonical declaration, which would lead to too many false positive
@@ -942,6 +950,12 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
     }
     bool Success = SymT.setEffectSummary(D, ES);
     assert(Success);
+
+    const EffectSummary *ES2 = SymT.getEffectSummary(D);
+    assert(ES2);
+    OS << "DEBUG:: checking we can retrieve Effect Summary we just added: ";
+    ES2->print(OS);
+    OS << "\n";
 
     /// Note: Check Effects covered by canonical Declaration in
     /// subsequent pass because canonical Declaration may not have

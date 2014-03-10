@@ -134,7 +134,7 @@ public:
 
   /// \brief Returns covering effect in effect summary or null.
   //const Effect *isCoveredBy(const EffectSummary &ES);
-  //  BaseEffectSummary::ResultKind isCoveredBy(const EffectSummary &ES);
+  //  EffectSummary::ResultKind isCoveredBy(const EffectSummary &ES);
 }; // end class Effect
 
 
@@ -208,7 +208,7 @@ public:
 
 /////////////////////////////////////////////////////////////////////////////
 /// \brief Implements a Set of Effects
-class BaseEffectSummary {
+class EffectSummary {
 public:
   enum ResultKind{
     //True
@@ -218,39 +218,55 @@ public:
     //Don't know
     RK_DUNNO
   };
-  ResultKind covers(const Effect *Eff) const {return RK_DUNNO;};
+  enum SummaryKind{
+    CONCRETE,
+    VAR
+  };
+private:
+  SummaryKind Kind;
+public:
+  void setSummaryKind(SummaryKind SK) {Kind=SK;}
+  const SummaryKind getSummaryKind() const {return Kind;}
+    virtual  ResultKind covers(const Effect *Eff) const {return RK_DUNNO;}
   /// \brief Returns true iff 'this' covers 'Sum'
-  ResultKind covers(const EffectSummary *Sum) const {return RK_DUNNO;};
+  virtual  ResultKind covers(const EffectSummary *Sum) const {return RK_DUNNO;}
   /// \brief Returns true iff 'this' is non-interfering with 'Eff'
-  ResultKind isNonInterfering(const Effect *Eff) const {return RK_DUNNO;};
+  virtual  ResultKind isNonInterfering(const Effect *Eff) const {return RK_DUNNO;}
   /// \brief Returns true iff 'this' is non-interfering with 'Sum'
-  ResultKind isNonInterfering(const EffectSummary *Sum) const {return RK_DUNNO;};
+  virtual  ResultKind isNonInterfering(const EffectSummary *Sum) const {return RK_DUNNO;}
+  virtual void print(raw_ostream &OS, std::string Separator="\n",
+	     bool PrintLastSeparator=true) const=0;
 
-};
+ std::string toString(std::string Separator=", ",
+		       bool PrintLastSeparator=false) const;
 
-class VarEffectSummary : public BaseEffectSummary {
-  EffectSummary* Concrete;
-  
+
 };
 
 #ifndef EFFECT_SUMMARY_SIZE
   #define EFFECT_SUMMARY_SIZE 8
 #endif
-class EffectSummary : public OwningPtrSet<Effect, EFFECT_SUMMARY_SIZE>, public BaseEffectSummary {
+class ConcreteEffectSummary : public OwningPtrSet<Effect, EFFECT_SUMMARY_SIZE>, public EffectSummary {
 public:
   typedef OwningPtrSet<Effect, EFFECT_SUMMARY_SIZE> BaseClass;
-  EffectSummary() : BaseClass() {}
-  EffectSummary(Effect &E) : BaseClass(E) {}
-
+  ConcreteEffectSummary() : BaseClass(){
+     setSummaryKind(EffectSummary::CONCRETE);
+  }
+  ConcreteEffectSummary(Effect &E) : BaseClass(E) {
+     setSummaryKind(EffectSummary::CONCRETE);
+  }
+  static bool classof(const EffectSummary *ES) {
+    return ES->getSummaryKind() == CONCRETE;
+  }
   /// \brief Returns the effect that covers Eff or null otherwise.
   // const Effect *covers(const Effect *Eff) const;
-  BaseEffectSummary::ResultKind covers(const Effect *Eff) const;
+  virtual ResultKind covers(const Effect *Eff) const;
   /// \brief Returns true iff 'this' covers 'Sum'
-  BaseEffectSummary::ResultKind covers(const EffectSummary *Sum) const;
+  virtual ResultKind covers(const EffectSummary *Sum) const;
   /// \brief Returns true iff 'this' is non-interfering with 'Eff'
-  BaseEffectSummary::ResultKind isNonInterfering(const Effect *Eff) const;
+  virtual ResultKind isNonInterfering(const Effect *Eff) const;
   /// \brief Returns true iff 'this' is non-interfering with 'Sum'
-  BaseEffectSummary::ResultKind isNonInterfering(const EffectSummary *Sum) const;
+  virtual ResultKind isNonInterfering(const EffectSummary *Sum) const;
 
 
   // contains effect pairs (E1, E2) such that E1 is covered by E2.
@@ -262,17 +278,32 @@ public:
   void makeMinimal(EffectCoverageVector &ECV);
 
   /// \brief Prints effect summary to raw output stream.
-  void print(raw_ostream &OS, std::string Separator="\n",
+  virtual void print(raw_ostream &OS, std::string Separator="\n",
 	     bool PrintLastSeparator=true) const;
+  // virtual std::string toString(std::string Separator=", ",
+  // 		       bool PrintLastSeparator=false) const;
 
-  /// \brief Returns a string with the effect summary.
-  std::string toString(std::string Separator=", ",
-		       bool PrintLastSeparator=false) const;
 
   void substitute(const Substitution *Sub);
   void substitute(const SubstitutionVector *SubV);
 
 }; // end class EffectSummary
+
+class VarEffectSummary : public EffectSummary {
+  ConcreteEffectSummary* Concrete;
+public:
+  VarEffectSummary(){
+    setSummaryKind(EffectSummary::VAR);
+  }
+  static bool classof(const EffectSummary *ES) {
+    return ES->getSummaryKind() == VAR;
+  }
+    virtual void print(raw_ostream &OS, std::string Separator="\n",
+	     bool PrintLastSeparator=true) const;
+    // virtual std::string toString(std::string Separator=", ",
+    // 		       bool PrintLastSeparator=false) const;
+
+};
 
 
 } // end namespace asap

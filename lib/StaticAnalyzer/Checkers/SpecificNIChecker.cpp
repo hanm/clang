@@ -188,13 +188,40 @@ static std::auto_ptr<EffectSummary>
 getInvokeEffectSummary(const Expr *Arg,
                        const CXXMethodDecl *Method, const FunctionDecl *Def) {
   EffectSummary *ES = 0;
-  //raw_ostream &OS = *SymbolTable::VB.OS;
+  raw_ostream &OS = *SymbolTable::VB.OS;
 
   if (SymbolTable::Table->getEffectSummary(Method)) {
-    ES = new EffectSummary(*SymbolTable::Table->getEffectSummary(Method));
+    const EffectSummary *Sum=SymbolTable::Table->getEffectSummary(Method);
+    OS << "DEBUG::getInvokeEffectSummary: Method = ";
+    Method->print(OS);
+    OS << "\n";
+    OS << "DEBUG::effect summary: ";
+    Sum->print(OS);
+    OS << "\n";
+    OS << "after getEffectSummary\n";
+    const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);
+    OS << "after dyn_cast\n";
+    if(CES){
+      OS << "concrete "<<CES->size()<<"\n";
+      CES->print(OS);
+      OS << "\n";
+      ES = new ConcreteEffectSummary(*CES);
+    }
+    else{
+      OS << "var\n";
+      ES = new VarEffectSummary(*dyn_cast<VarEffectSummary>(Sum));
+    }
+    OS << "after creating ES\n";
     //OS << "DEBUG:: ES0 EffectSummary:" << ES->toString() << "\n";
     const SubstitutionVector *SubVec = SymbolTable::Table->getInheritanceSubVec(Method->getParent());
-    ES->substitute(SubVec);
+    ConcreteEffectSummary *CES2 = dyn_cast<ConcreteEffectSummary>(ES);
+    //  llvm::raw_ostream &OS = *SymbolTable::VB.OS;
+    OS << "before first substitute\n";
+    if(CES2){
+      OS << "In if "<<CES2->size()<<"\n";
+      CES2->substitute(SubVec);
+    }
+    OS << "after first substitute\n";
     // perform 'this' substitution
     const NamedDecl *NamD = 0;
     if (isa<DeclRefExpr>(Arg)) {
@@ -221,10 +248,14 @@ getInvokeEffectSummary(const Expr *Arg,
     //NamD->print(OS);
     //OS << "\n";
     const ASaPType *T = SymbolTable::Table->getType(NamD);
-    if (T) {
+    CES2=dyn_cast<ConcreteEffectSummary>(ES);
+    if (T && CES2 && CES2->size()>0) {
+      OS << "In if\n";
       //OS << "DEBUG: T= " << T->toString() << "\n";
       std::auto_ptr<SubstitutionVector> SubV = T->getSubstitutionVector();
-      ES->substitute(SubV.get());
+      OS << "before second substitute "<<CES2->size()<<"\n";
+      CES2->substitute(SubV.get());
+      OS << "after substitute\n";
     }
   } else {
     // No effect summary recorded for this method, means we don't want/need
@@ -251,51 +282,62 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
   typedef llvm::SmallVector<EffectSummary*, EFFECT_SUMMARY_VECTOR_SIZE>
           EffectSummaryVector;
   EffectSummaryVector ESVec;
-
+  llvm::raw_ostream &OS = *SymbolTable::VB.OS;
+  OS << "*********before loop*********\n";
   for(unsigned int I = 0; I < NumArgs; ++I) {
     Expr *Arg = Exp->getArg(I)->IgnoreImplicit();
+    OS << "         before getInvokeES*********\n";
     std::auto_ptr<EffectSummary> ES =
         getInvokeEffectSummary(Arg,getOperatorMethod(Arg), Def);
+    OS << "         after getInvokeES*********\n";
     ESVec.push_back(ES.release());
   }
-
+  OS << "*********after loop*********\n";
   // check non-interference of all pairs
+  OS << "*********before iterating over ES*********\n";
   for(EffectSummaryVector::iterator I = ESVec.begin(), E = ESVec.end();
       I != E; ++I) {
     EffectSummaryVector::iterator J = I; ++J;
     while (J != E) {
-      if ((*I) && (*I)->isNonInterfering(*J)==BaseEffectSummary::RK_FALSE) {
-        assert(*J);
-        emitInterferingEffects(Exp, *(*I), *(*J));
-        Result = false;
-      }
-      else if ((*I) && (*I)->isNonInterfering(*J)==BaseEffectSummary::RK_DUNNO){
-	assert(false && "Found variable effect summary");
+      if((*I)){
+	EffectSummary::ResultKind RK=(*I)->isNonInterfering(*J);
+	if (RK==EffectSummary::RK_FALSE) {
+	  assert(*J);
+	  emitInterferingEffects(Exp, *(*I), *(*J));
+	  Result = false;
+	}
+	else if (RK==EffectSummary::RK_DUNNO){
+	  assert(false && "Found variable effect summary");
+	}
       }
       ++J;
     }
   }
+  OS << "*********after iterating over ES*********\n";
   // check effect coverage
   const EffectSummary *DefES = SymbolTable::Table->getEffectSummary(Def);
   assert(DefES);
-  llvm::raw_ostream &OS = *SymbolTable::VB.OS;
+  //  llvm::raw_ostream &OS = *SymbolTable::VB.OS;
   OS << "DEBUG:: Checking if the effects of the calls through parallel_invoke "
      << "are covered by the effect summary of the enclosing function, which is:\n"
      << DefES->toString() << "\n";
   {
     unsigned int Idx = 0;
+    OS << "*********before check loop*********\n";
     EffectSummaryVector::iterator I = ESVec.begin(), E = ESVec.end();
     for(; I != E; ++I, ++Idx) {
       assert(Idx<NumArgs && "Internal Error: Unexpected number of Effect Summaries");
-      if (DefES->covers(*I)==BaseEffectSummary::RK_FALSE) {
+      EffectSummary::ResultKind RK=DefES->covers(*I);
+      if (RK==EffectSummary::RK_FALSE) {
         std::string Str = (*I)->toString();
         emitEffectsNotCoveredWarning(Exp->getArg(Idx), Def, Str);
         Result = false;
       }
-      else if (DefES->covers(*I)==BaseEffectSummary::RK_DUNNO) {
+      else if (RK==EffectSummary::RK_DUNNO) {
 	assert(false && "Found variable effect summary");
       }
     }
+    OS << "*********after check loop*********\n";
   }
   // delete effect summaries
   for(EffectSummaryVector::iterator I = ESVec.begin(), E = ESVec.end();
@@ -315,20 +357,23 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   raw_ostream &OS = *SymbolTable::VB.OS;
   //QualType QTArg = Arg->getType();
   const CXXMethodDecl *Method = getOperatorMethod(Arg, true);
+  OS << "*********before getInvokeEffectSummary***********\n";
   std::auto_ptr<EffectSummary> ES = getInvokeEffectSummary(Arg, Method, Def);
-
+  OS << "*********after getInvokeEffectSummary***********\n";
   // 2. Detect induction variables
   // TODO InductionVarVector IVV = detectInductionVariablesVector
 
   // 3. Check non-interference
-  if (ES->isNonInterfering(ES.get())==BaseEffectSummary::RK_FALSE) {
+  EffectSummary::ResultKind RK=ES->isNonInterfering(ES.get());
+  if (RK==EffectSummary::RK_FALSE) {
     emitInterferingEffects(Exp, *ES, *ES);
     Result = false;
   }
-  else if (ES->isNonInterfering(ES.get())==BaseEffectSummary::RK_DUNNO) {
+  else if (RK==EffectSummary::RK_DUNNO) {
     assert(false && "Found variable effect summary");
   }
   // 4. Check effect coverage
+  OS << "*********before getEffectSummary***********\n";
   const EffectSummary *DefES = SymbolTable::Table->getEffectSummary(Def);
   assert(DefES);
   OS << "DEBUG:: Checking if the effects of the calls through parallel_for "
@@ -336,12 +381,14 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
      << DefES->toString() << "\n";
   // 4.1. TODO For each induction variable substitute it with [?] in ES
   // 4.2 check
-  if (DefES->covers(ES.get())==BaseEffectSummary::RK_FALSE) {
+  OS << "*********before covers***********\n";
+  RK=DefES->covers(ES.get());
+  if (RK==EffectSummary::RK_FALSE) {
     std::string Str = ES->toString();
     emitEffectsNotCoveredWarning(Arg, Def, Str);
     Result = false;
   }
-  else if (DefES->covers(ES.get())==BaseEffectSummary::RK_DUNNO){
+  else if (RK==EffectSummary::RK_DUNNO){
     assert(false && "Found variable effect summary");
   }
   // 5. Cleanup
@@ -365,11 +412,12 @@ bool TBBParallelForIndexNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   // TODO InductionVarVector IVV = detectInductionVariablesVector
 
   // 3. Check non-interference
-  if (ES->isNonInterfering(ES.get())==BaseEffectSummary::RK_FALSE) {
+  EffectSummary::ResultKind RK=ES->isNonInterfering(ES.get());
+  if (RK==EffectSummary::RK_FALSE) {
     emitInterferingEffects(Exp, *ES, *ES);
     Result = false;
   }
-  else if (ES->isNonInterfering(ES.get())==BaseEffectSummary::RK_DUNNO) {
+  else if (RK==EffectSummary::RK_DUNNO) {
     assert(false && "Found variable effect summary");
   }
   // 4. Check effect coverage
@@ -380,12 +428,13 @@ bool TBBParallelForIndexNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
      << DefES->toString() << "\n";
   // 4.1. TODO For each induction variable substitute it with [?] in ES
   // 4.2 check
-  if (DefES->covers(ES.get())==BaseEffectSummary::RK_FALSE) {
+  RK=DefES->covers(ES.get());
+  if (RK==EffectSummary::RK_FALSE) {
     std::string Str = ES->toString();
     emitEffectsNotCoveredWarning(Arg, Def, Str);
     Result = false;
   }
-  else if (DefES->covers(ES.get())==BaseEffectSummary::RK_FALSE) {
+  else if (RK==EffectSummary::RK_FALSE) {
     assert(false && "Found variable effect summary");
   }
   // 5. Cleanup
