@@ -210,7 +210,7 @@ public:
 /// \brief Implements a Set of Effects
 class EffectSummary {
 public:
-  enum ResultKind{
+  enum ResultKind {
     //True
     RK_TRUE,
     //False
@@ -218,15 +218,21 @@ public:
     //Don't know
     RK_DUNNO
   };
-  enum SummaryKind{
-    CONCRETE,
-    VAR
+
+  /// Discriminator for LLVM-style RTTI (dyn_cast<> et al.)
+  enum SummaryKind {
+    ESK_Concrete,
+    ESK_Var
   };
+
 private:
+  /// \brief Stores the LLVM-style RTTI discriminator
   SummaryKind Kind;
+
 public:
-  void setSummaryKind(SummaryKind SK) {Kind=SK;}
+  void setSummaryKind(SummaryKind SK) {Kind = SK;}
   SummaryKind getSummaryKind() const {return Kind;}
+
   virtual  ResultKind covers(const Effect *Eff) const {return RK_DUNNO;}
   /// \brief Returns true iff 'this' covers 'Sum'
   virtual  ResultKind covers(const EffectSummary *Sum) const {return RK_DUNNO;}
@@ -239,13 +245,13 @@ public:
 
   /// \brief Makes effect summary minimal by removing covered effects.
   /// The caller is responsible for deallocating the EffectCoverageVector.
-  virtual void makeMinimal(EffectCoverageVector &ECV)=0;
+  virtual void makeMinimal(EffectCoverageVector &ECV) = 0;
 
-  virtual void substitute(const Substitution *Sub)=0;
-  virtual void substitute(const SubstitutionVector *SubV)=0;
+  virtual void substitute(const Substitution *Sub) = 0;
+  virtual void substitute(const SubstitutionVector *SubV) = 0;
 
   virtual void print(raw_ostream &OS, std::string Separator="\n",
-	     bool PrintLastSeparator=true) const=0;
+	     bool PrintLastSeparator=true) const = 0;
 
   std::string toString(std::string Separator=", ",
 		       bool PrintLastSeparator=false) const;
@@ -259,14 +265,16 @@ public:
 class ConcreteEffectSummary : public OwningPtrSet<Effect, EFFECT_SUMMARY_SIZE>, public EffectSummary {
 public:
   typedef OwningPtrSet<Effect, EFFECT_SUMMARY_SIZE> BaseClass;
-  ConcreteEffectSummary() : BaseClass(){
-     setSummaryKind(EffectSummary::CONCRETE);
+  /// Constructors
+  ConcreteEffectSummary() : BaseClass() {
+     setSummaryKind(ESK_Concrete);
   }
   ConcreteEffectSummary(Effect &E) : BaseClass(E) {
-     setSummaryKind(EffectSummary::CONCRETE);
+     setSummaryKind(ESK_Concrete);
   }
+  ///
   static bool classof(const EffectSummary *ES) {
-    return ES->getSummaryKind() == CONCRETE;
+    return ES->getSummaryKind() == ESK_Concrete;
   }
   /// \brief Returns the effect that covers Eff or null otherwise.
   // const Effect *covers(const Effect *Eff) const;
@@ -285,42 +293,40 @@ public:
   /// \brief Prints effect summary to raw output stream.
   virtual void print(raw_ostream &OS, std::string Separator="\n",
 	     bool PrintLastSeparator=true) const;
-  // virtual std::string toString(std::string Separator=", ",
-  // 		       bool PrintLastSeparator=false) const;
-
 
   virtual void substitute(const Substitution *Sub);
   virtual void substitute(const SubstitutionVector *SubV);
 
   virtual ~ConcreteEffectSummary() {};
-}; // end class EffectSummary
+}; // end class ConcreteEffectSummary
 
 class VarEffectSummary : public EffectSummary {
-  ConcreteEffectSummary* Concrete;
+  // TODO: add field to store solution of inference
+  // ConcreteEffectSummary* Concrete;  // Commented out to remove warning.
 public:
-  VarEffectSummary(){
-    setSummaryKind(EffectSummary::VAR);
+  VarEffectSummary() {
+    setSummaryKind(ESK_Var);
   }
   static bool classof(const EffectSummary *ES) {
-    return ES->getSummaryKind() == VAR;
+    return ES->getSummaryKind() == ESK_Var;
   }
   virtual void print(raw_ostream &OS, std::string Separator="\n",
 		     bool PrintLastSeparator=true) const;
-  virtual void makeMinimal(EffectCoverageVector &ECV){
+  virtual void makeMinimal(EffectCoverageVector &ECV) {
     //nothing to do
   }
 
-  virtual void substitute(const Substitution *Sub){
+  virtual void substitute(const Substitution *Sub) {
      //TODO
      //Store these subtitutions?
   }
-  virtual void substitute(const SubstitutionVector *SubV){
+  virtual void substitute(const SubstitutionVector *SubV) {
      //TODO
      //Store these subtitutions?
   }
 
   virtual ~VarEffectSummary() {};
-};
+}; // end class VarEffectSummary
 
 
 } // end namespace asap

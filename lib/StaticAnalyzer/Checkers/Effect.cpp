@@ -182,42 +182,8 @@ std::string Effect::toString() const {
   return std::string(OS.str());
 }
 
-// const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
-//   if (this->isSubEffectOf(*SymbolTable::WritesLocal))
-//     return SymbolTable::WritesLocal;
-//   else   if(this->Kind == EK_InvocEffect){
-//     SymbolTable* SymT=SymbolTable::Table;
-//     if(ES.covers(SymT->getEffectSummary(this->getDecl()->getCanonicalDecl())))
-//       return this;
-//     return 0;
-
-//   }
-
-//   else
-//     return ES.covers(this);
-// }
-
-
-
 //////////////////////////////////////////////////////////////////////////
 // EffectSummary
-
-// const Effect *EffectSummary::covers(const Effect *Eff) const {
-//   assert(Eff);
-//   if (Eff->isNoEffect())
-//     return Eff;
-//   // if the Eff pointer is included in the set, return it
-//   if (count(const_cast<Effect*>(Eff))) {
-//     return Eff;
-//   }
-
-//   SetT::const_iterator I = begin(), E = end();
-//   for(; I != E; ++I) {
-//     if (Eff->isSubEffectOf(*(*I)))
-//       return *I;
-//   }
-//   return 0;
-// }
 
 EffectSummary::ResultKind ConcreteEffectSummary::covers(const Effect *Eff) const {
   assert(Eff);
@@ -317,8 +283,8 @@ void ConcreteEffectSummary::makeMinimal(EffectCoverageVector &ECV) {
 }
 
 void ConcreteEffectSummary::print(raw_ostream &OS,
-                          std::string Separator,
-                          bool PrintLastSeparator) const {
+                                   std::string Separator,
+                                   bool PrintLastSeparator) const {
   SetT::const_iterator I = begin(), E = end(), Ip1 = begin();
   if (Ip1 != E)
     ++Ip1;

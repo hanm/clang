@@ -1096,7 +1096,7 @@ void TypeBuilderVisitor::VisitExplicitCastExpr(ExplicitCastExpr *Exp) {
 
   Visit(Exp->getSubExpr());
   if (Type) {
-    QualType CastQT = Exp->getType();
+    //QualType CastQT = Exp->getType();
 
     switch(Exp->getCastKind()) {
     case CK_LValueToRValue:
