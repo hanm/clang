@@ -9,20 +9,13 @@ set(LLVM_LINK_COMPONENTS
 
 add_clang_library(clangStaticAnalyzerCheckers
   AnalyzerStatsChecker.cpp
+  AllocationDiagnostics.cpp
+  ArrayBoundChecker.cpp
+  ArrayBoundCheckerV2.cpp
   ASaPAnnotationScheme.cpp
   ASaPSymbolTable.cpp
   ASaPType.cpp
   ASaPUtil.cpp
-  Effect.cpp
-  EffectChecker.cpp
-  EffectSummaryNormalizer.cpp
-  EffectConstraintGeneration.cpp
-  Rpl.cpp
-  TypeChecker.cpp
-  SemanticChecker.cpp
-  AllocationDiagnostics.cpp
-  ArrayBoundChecker.cpp
-  ArrayBoundCheckerV2.cpp
   BasicObjCFoundationChecks.cpp
   BoolAssignmentChecker.cpp
   BuiltinFunctionChecker.cpp
@@ -46,6 +39,9 @@ add_clang_library(clangStaticAnalyzerCheckers
   DirectIvarAssignment.cpp
   DivZeroChecker.cpp
   DynamicTypePropagation.cpp
+  Effect.cpp
+  EffectSummaryNormalizer.cpp
+  EffectConstraintGeneration.cpp
   ExprInspectionChecker.cpp
   FixedAddressChecker.cpp
   GenericTaintChecker.cpp
@@ -74,7 +70,9 @@ add_clang_library(clangStaticAnalyzerCheckers
   RetainCountChecker.cpp
   ReturnPointerRangeChecker.cpp
   ReturnUndefChecker.cpp
+  Rpl.cpp
   SafeParallelismChecker.cpp
+  SemanticChecker.cpp
   SimpleStreamChecker.cpp
   SpecificNIChecker.cpp
   StackAddrEscapeChecker.cpp
@@ -83,6 +81,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   Substitution.cpp
   TaintTesterChecker.cpp
   TraversalChecker.cpp
+  TypeChecker.cpp
   UndefBranchChecker.cpp
   UndefCapturedBlockVarChecker.cpp
   UndefResultChecker.cpp
