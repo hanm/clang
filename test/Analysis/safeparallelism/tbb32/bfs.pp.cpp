@@ -54736,7 +54736,7 @@ int main [[asap::writes("Global")]] (int argc, char* argv[])
 
             newLevelIndex = 0;
 
-            tbb::parallel_for (tbb::blocked_range<int>(0, currentLevelSize, 1), outerLoopBody(), partitioner); // expected-warning{{Non-interference check not implemented}}
+            tbb::parallel_for (tbb::blocked_range<int>(0, currentLevelSize, 1), outerLoopBody(), partitioner); // expected-warning{{interfering effects}}
 
 
             currentLevel++;
