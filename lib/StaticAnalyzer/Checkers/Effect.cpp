@@ -182,43 +182,18 @@ std::string Effect::toString() const {
   return std::string(OS.str());
 }
 
-// const Effect *Effect::isCoveredBy(const EffectSummary &ES) {
-//   if (this->isSubEffectOf(*SymbolTable::WritesLocal))
-//     return SymbolTable::WritesLocal;
-//   else   if(this->Kind == EK_InvocEffect){
-//     SymbolTable* SymT=SymbolTable::Table;
-//     if(ES.covers(SymT->getEffectSummary(this->getDecl()->getCanonicalDecl())))
-//       return this;
-//     return 0;
-
-//   }
-
-//   else
-//     return ES.covers(this);
-// }
-
-
-
 //////////////////////////////////////////////////////////////////////////
 // EffectSummary
 
-// const Effect *EffectSummary::covers(const Effect *Eff) const {
-//   assert(Eff);
-//   if (Eff->isNoEffect())
-//     return Eff;
-//   // if the Eff pointer is included in the set, return it
-//   if (count(const_cast<Effect*>(Eff))) {
-//     return Eff;
-//   }
+std::string EffectSummary::toString(std::string Separator,
+                                    bool PrintLastSeparator) const {
+  std::string SBuf;
+  llvm::raw_string_ostream OS(SBuf);
+  print(OS, Separator, PrintLastSeparator);
+  return std::string(OS.str());
+}
 
-//   SetT::const_iterator I = begin(), E = end();
-//   for(; I != E; ++I) {
-//     if (Eff->isSubEffectOf(*(*I)))
-//       return *I;
-//   }
-//   return 0;
-// }
-
+//ConcreteEffectSummary
 EffectSummary::ResultKind ConcreteEffectSummary::covers(const Effect *Eff) const {
   assert(Eff);
   if (Eff->isSubEffectOf(*SymbolTable::WritesLocal))
@@ -239,7 +214,8 @@ EffectSummary::ResultKind ConcreteEffectSummary::covers(const Effect *Eff) const
 }
 
 
-EffectSummary::ResultKind ConcreteEffectSummary::covers(const EffectSummary *Sum) const {
+EffectSummary::ResultKind ConcreteEffectSummary::covers(const
+EffectSummary *Sum) const {
   if (!Sum)
     return RK_TRUE;
   const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);
@@ -260,7 +236,8 @@ EffectSummary::ResultKind ConcreteEffectSummary::covers(const EffectSummary *Sum
 }
 
 
-EffectSummary::ResultKind ConcreteEffectSummary::isNonInterfering(const Effect *Eff) const {
+EffectSummary::ResultKind
+ConcreteEffectSummary::isNonInterfering(const Effect *Eff) const {
   if (!Eff || Eff->isNoEffect())
     return RK_TRUE;
   SetT::const_iterator I = begin(), E = end();
@@ -272,7 +249,9 @@ EffectSummary::ResultKind ConcreteEffectSummary::isNonInterfering(const Effect *
 
 }
 
-EffectSummary::ResultKind ConcreteEffectSummary::isNonInterfering(const EffectSummary *Sum) const {
+EffectSummary::ResultKind
+ConcreteEffectSummary::isNonInterfering(const EffectSummary *Sum)
+const {
   if (!Sum)
     return RK_TRUE;
   const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);
@@ -335,21 +314,6 @@ void ConcreteEffectSummary::print(raw_ostream &OS,
   }
 }
 
-void VarEffectSummary::print(raw_ostream &OS,
-                          std::string Separator,
-                          bool PrintLastSeparator) const {
-  OS << "Var Effect Summary";
-}
-
-
-std::string EffectSummary::toString(std::string Separator,
-                                    bool PrintLastSeparator) const {
-  std::string SBuf;
-  llvm::raw_string_ostream OS(SBuf);
-  print(OS, Separator, PrintLastSeparator);
-  return std::string(OS.str());
-}
-
 void ConcreteEffectSummary::substitute(const Substitution *Sub) {
   if (!Sub || size()<=0)
     return;
@@ -372,6 +336,14 @@ void ConcreteEffectSummary::substitute(const SubstitutionVector *SubV) {
   }
   OS << "after iterating\n";
 }
+
+//VarEffectSummary
+void VarEffectSummary::print(raw_ostream &OS,
+                          std::string Separator,
+                          bool PrintLastSeparator) const {
+  OS << "Var Effect Summary";
+}
+
 
 } // end namespace clang
 } // end namespace asap

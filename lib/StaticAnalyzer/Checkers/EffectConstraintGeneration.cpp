@@ -100,12 +100,12 @@ EffectConstraintVisitor::EffectConstraintVisitor (
       EffectSummary *SubstOVRDSum;
       const ConcreteEffectSummary *COverriddenSum=dyn_cast<ConcreteEffectSummary>(OverriddenSum);
       if(COverriddenSum)
-	SubstOVRDSum=new ConcreteEffectSummary(*COverriddenSum);
+        SubstOVRDSum=new ConcreteEffectSummary(*COverriddenSum);
       else
-	SubstOVRDSum=new VarEffectSummary(*dyn_cast<VarEffectSummary>(OverriddenSum));
+        SubstOVRDSum=new VarEffectSummary(*dyn_cast<VarEffectSummary>(OverriddenSum));
       ConcreteEffectSummary *ConcreteSubstOVRDSum=dyn_cast<ConcreteEffectSummary>(SubstOVRDSum);
       if (SubVec && ConcreteSubstOVRDSum){
-	OS << "concrete "<<ConcreteSubstOVRDSum->size()<<"\n";
+        OS << "concrete "<<ConcreteSubstOVRDSum->size()<<"\n";
         //SubVec->reverseApplyTo(&SubstOVRDSum);
         SubVec->applyTo(ConcreteSubstOVRDSum);
       }
@@ -130,7 +130,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
         emitOverridenVirtualFunctionMustCoverEffectsOfChildren(OverriddenMethod, CXXD);
       }
       else if (RK==EffectSummary::RK_DUNNO){//TODO
-	assert(false && "found a variable effect summary");
+        assert(false && "found a variable effect summary");
       }
 
     } // end forall method declarations
@@ -283,31 +283,31 @@ checkEffectCoverage() {
       OS << "==== not EK_InvocEffect"<<E->getEffectKind() <<"\n";
       EffectSummary::ResultKind RK=RHS->covers(E.get());
       if(RK==EffectSummary::RK_FALSE) {
-	const Expr* Exp=E->getExp();
-	const Decl* D;
-	const MemberExpr *me=dyn_cast<const MemberExpr>(Exp);
-	if (me)
-	  D = me->getMemberDecl();
-	else {
-	  const DeclRefExpr *dre=dyn_cast<const DeclRefExpr>(Exp);
-	  D =dre->getDecl();
-	}
-	OS << "DEBUG:: effect not covered: Expr = ";
-	Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
-	OS << "\n";
-	if (D) {
-	  OS << "\tDecl = ";
-	  D->print(OS, Ctx.getPrintingPolicy());
-	  OS << "\n";
-	} else {
-	  OS << "\tDecl = NULL\n";
-	}
-	std::string Str = E->toString();
-	emitEffectNotCoveredWarning(Exp, D, Str);
-	Result = false;
+        const Expr* Exp=E->getExp();
+        const Decl* D;
+        const MemberExpr *me=dyn_cast<const MemberExpr>(Exp);
+        if (me)
+          D = me->getMemberDecl();
+        else {
+          const DeclRefExpr *dre=dyn_cast<const DeclRefExpr>(Exp);
+          D =dre->getDecl();
+        }
+        OS << "DEBUG:: effect not covered: Expr = ";
+        Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+        OS << "\n";
+        if (D) {
+          OS << "\tDecl = ";
+          D->print(OS, Ctx.getPrintingPolicy());
+          OS << "\n";
+        } else {
+          OS << "\tDecl = NULL\n";
+        }
+        std::string Str = E->toString();
+        emitEffectNotCoveredWarning(Exp, D, Str);
+        Result = false;
       }
       else if (RK==EffectSummary::RK_DUNNO){
-	assert(false && "Variable summary");
+        assert(false && "Variable summary");
       }
     }
 
@@ -319,40 +319,40 @@ checkEffectCoverage() {
 
       OS << "======= EK_InvocEffect -before call to getEffectSummary()\n";
       if(!FunD)
-	OS << "FunD is NULL\n";
+        OS << "FunD is NULL\n";
       const EffectSummary *Effects =
-	SymT.getEffectSummary(FunD->getCanonicalDecl());
+        SymT.getEffectSummary(FunD->getCanonicalDecl());
       const ConcreteEffectSummary *FunEffects = dyn_cast<ConcreteEffectSummary>(Effects);
       assert(FunEffects && "Found variable effect summary");
 
       for(ConcreteEffectSummary::const_iterator
-	    I = FunEffects->begin(),
-	    End = FunEffects->end();
-	  I != End; ++I) {
-	Effect Eff(*(*I));
-	OS << "======= EK_InvocEffect -before call to applyTo()\n";
-	SubV->applyTo(&Eff);
-	OS << "======= EK_InvocEffect -before call to isCovered by\n";
-	EffectSummary::ResultKind RK=RHS->covers(&Eff);
-	if(RK==EffectSummary::RK_FALSE){
-	  OS << "DEBUG:: effect not covered: Expr = ";
-	  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
-	  OS << "\n";
-	  if (FunD) {
-	    OS << "\tDecl = ";
-	    FunD->print(OS, Ctx.getPrintingPolicy());
-	    OS << "\n";
-	  } else {
-	    OS << "\tDecl = NULL\n";
-	  }
-	  std::string Str = Eff.toString();
-	  emitEffectNotCoveredWarning(Exp, FunD, Str);
-	  Result = false;
+            I = FunEffects->begin(),
+            End = FunEffects->end();
+          I != End; ++I) {
+        Effect Eff(*(*I));
+        OS << "======= EK_InvocEffect -before call to applyTo()\n";
+        SubV->applyTo(&Eff);
+        OS << "======= EK_InvocEffect -before call to isCovered by\n";
+        EffectSummary::ResultKind RK=RHS->covers(&Eff);
+        if(RK==EffectSummary::RK_FALSE){
+          OS << "DEBUG:: effect not covered: Expr = ";
+          Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+          OS << "\n";
+          if (FunD) {
+            OS << "\tDecl = ";
+            FunD->print(OS, Ctx.getPrintingPolicy());
+            OS << "\n";
+          } else {
+            OS << "\tDecl = NULL\n";
+          }
+          std::string Str = Eff.toString();
+          emitEffectNotCoveredWarning(Exp, FunD, Str);
+          Result = false;
 
-	}
-	else if(RK==EffectSummary::RK_DUNNO){
-	  assert(false && "Variable summary");
-	}
+        }
+        else if(RK==EffectSummary::RK_DUNNO){
+          assert(false && "Variable summary");
+        }
 
       }
 
