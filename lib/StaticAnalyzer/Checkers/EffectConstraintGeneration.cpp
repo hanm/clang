@@ -125,11 +125,11 @@ EffectConstraintVisitor::EffectConstraintVisitor (
         SubVec->print(OS);
       OS << " \n";
 
-      EffectSummary::ResultKind RK=SubstOVRDSum->covers(DerivedSum);
-      if(RK==EffectSummary::RK_FALSE) {
+      Trivalent RK=SubstOVRDSum->covers(DerivedSum);
+      if(RK==RK_FALSE) {
         emitOverridenVirtualFunctionMustCoverEffectsOfChildren(OverriddenMethod, CXXD);
       }
-      else if (RK==EffectSummary::RK_DUNNO){//TODO
+      else if (RK==RK_DUNNO){//TODO
         assert(false && "found a variable effect summary");
       }
 
@@ -281,8 +281,8 @@ checkEffectCoverage() {
 
     if (E->getEffectKind()!=Effect::EK_InvocEffect) {
       OS << "==== not EK_InvocEffect"<<E->getEffectKind() <<"\n";
-      EffectSummary::ResultKind RK=RHS->covers(E.get());
-      if(RK==EffectSummary::RK_FALSE) {
+      Trivalent RK=RHS->covers(E.get());
+      if(RK==RK_FALSE) {
         const Expr* Exp=E->getExp();
         const Decl* D;
         const MemberExpr *me=dyn_cast<const MemberExpr>(Exp);
@@ -306,7 +306,7 @@ checkEffectCoverage() {
         emitEffectNotCoveredWarning(Exp, D, Str);
         Result = false;
       }
-      else if (RK==EffectSummary::RK_DUNNO){
+      else if (RK==RK_DUNNO){
         assert(false && "Variable summary");
       }
     }
@@ -333,8 +333,8 @@ checkEffectCoverage() {
         OS << "======= EK_InvocEffect -before call to applyTo()\n";
         SubV->applyTo(&Eff);
         OS << "======= EK_InvocEffect -before call to isCovered by\n";
-        EffectSummary::ResultKind RK=RHS->covers(&Eff);
-        if(RK==EffectSummary::RK_FALSE){
+        Trivalent RK=RHS->covers(&Eff);
+        if(RK==RK_FALSE){
           OS << "DEBUG:: effect not covered: Expr = ";
           Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
           OS << "\n";
@@ -350,7 +350,7 @@ checkEffectCoverage() {
           Result = false;
 
         }
-        else if(RK==EffectSummary::RK_DUNNO){
+        else if(RK==RK_DUNNO){
           assert(false && "Variable summary");
         }
 

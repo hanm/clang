@@ -194,7 +194,7 @@ std::string EffectSummary::toString(std::string Separator,
 }
 
 //ConcreteEffectSummary
-EffectSummary::ResultKind ConcreteEffectSummary::covers(const Effect *Eff) const {
+Trivalent ConcreteEffectSummary::covers(const Effect *Eff) const {
   assert(Eff);
   if (Eff->isSubEffectOf(*SymbolTable::WritesLocal))
     return RK_TRUE;
@@ -214,7 +214,7 @@ EffectSummary::ResultKind ConcreteEffectSummary::covers(const Effect *Eff) const
 }
 
 
-EffectSummary::ResultKind ConcreteEffectSummary::covers(const
+Trivalent ConcreteEffectSummary::covers(const
 EffectSummary *Sum) const {
   if (!Sum)
     return RK_TRUE;
@@ -224,7 +224,7 @@ EffectSummary *Sum) const {
   bool Dunno=false;
   SetT::const_iterator I = CES->begin(), E = CES->end();
   for(; I != E; ++I) {
-    EffectSummary::ResultKind RK=this->covers(*I);
+    Trivalent RK=this->covers(*I);
     if (RK==RK_FALSE)
       return RK_FALSE;
     else if(RK==RK_DUNNO)
@@ -236,8 +236,8 @@ EffectSummary *Sum) const {
 }
 
 
-EffectSummary::ResultKind
-ConcreteEffectSummary::isNonInterfering(const Effect *Eff) const {
+Trivalent ConcreteEffectSummary::isNonInterfering(const Effect *Eff)
+const {
   if (!Eff || Eff->isNoEffect())
     return RK_TRUE;
   SetT::const_iterator I = begin(), E = end();
@@ -249,9 +249,8 @@ ConcreteEffectSummary::isNonInterfering(const Effect *Eff) const {
 
 }
 
-EffectSummary::ResultKind
-ConcreteEffectSummary::isNonInterfering(const EffectSummary *Sum)
-const {
+Trivalent ConcreteEffectSummary::isNonInterfering(const EffectSummary
+*Sum) const {
   if (!Sum)
     return RK_TRUE;
   const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);

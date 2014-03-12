@@ -37,6 +37,15 @@ struct VisitorBundle {
   raw_ostream *OS;
 };
 
+enum Trivalent{
+  //True
+  RK_TRUE,
+  //False
+  RK_FALSE,
+  //Don't know
+  RK_DUNNO
+};
+
 /// \brief Issues Warning: '<str>': <bugName> on Declaration.
 void helperEmitDeclarationWarning(BugReporter &BR,
                                   const Decl *D,

@@ -20,6 +20,7 @@
 #include "clang/AST/Attr.h"
 
 #include "ASaPFwdDecl.h"
+#include "ASaPUtil.h"
 #include "OwningPtrSet.h"
 #include "OwningVector.h"
 
@@ -134,7 +135,7 @@ public:
 
   /// \brief Returns covering effect in effect summary or null.
   //const Effect *isCoveredBy(const EffectSummary &ES);
-  //  EffectSummary::ResultKind isCoveredBy(const EffectSummary &ES);
+  //  EffectSummary::Trivalent isCoveredBy(const EffectSummary &ES);
 }; // end class Effect
 
 
@@ -210,14 +211,6 @@ public:
 /// \brief Implements a Set of Effects
 class EffectSummary {
 public:
-  enum ResultKind{
-    //True
-    RK_TRUE,
-    //False
-    RK_FALSE,
-    //Don't know
-    RK_DUNNO
-  };
   enum SummaryKind{
     CONCRETE,
     VAR
@@ -227,13 +220,13 @@ private:
 public:
   void setSummaryKind(SummaryKind SK) {Kind=SK;}
   SummaryKind getSummaryKind() const {return Kind;}
-  virtual  ResultKind covers(const Effect *Eff) const {return RK_DUNNO;}
+  virtual  Trivalent covers(const Effect *Eff) const {return RK_DUNNO;}
   /// \brief Returns true iff 'this' covers 'Sum'
-  virtual  ResultKind covers(const EffectSummary *Sum) const {return RK_DUNNO;}
+  virtual  Trivalent covers(const EffectSummary *Sum) const {return RK_DUNNO;}
   /// \brief Returns true iff 'this' is non-interfering with 'Eff'
-  virtual  ResultKind isNonInterfering(const Effect *Eff) const {return RK_DUNNO;}
+  virtual  Trivalent isNonInterfering(const Effect *Eff) const {return RK_DUNNO;}
   /// \brief Returns true iff 'this' is non-interfering with 'Sum'
-  virtual  ResultKind isNonInterfering(const EffectSummary *Sum) const {return RK_DUNNO;}
+  virtual  Trivalent isNonInterfering(const EffectSummary *Sum) const {return RK_DUNNO;}
   typedef llvm::SmallVector<std::pair<const Effect*, const Effect*> *, 8>
   EffectCoverageVector;
 
@@ -270,13 +263,13 @@ public:
   }
   /// \brief Returns the effect that covers Eff or null otherwise.
   // const Effect *covers(const Effect *Eff) const;
-  virtual ResultKind covers(const Effect *Eff) const;
+  virtual Trivalent covers(const Effect *Eff) const;
   /// \brief Returns true iff 'this' covers 'Sum'
-  virtual ResultKind covers(const EffectSummary *Sum) const;
+  virtual Trivalent covers(const EffectSummary *Sum) const;
   /// \brief Returns true iff 'this' is non-interfering with 'Eff'
-  virtual ResultKind isNonInterfering(const Effect *Eff) const;
+  virtual Trivalent isNonInterfering(const Effect *Eff) const;
   /// \brief Returns true iff 'this' is non-interfering with 'Sum'
-  virtual ResultKind isNonInterfering(const EffectSummary *Sum) const;
+  virtual Trivalent isNonInterfering(const EffectSummary *Sum) const;
 
   /// \brief Makes effect summary minimal by removing covered effects.
   /// The caller is responsible for deallocating the EffectCoverageVector.

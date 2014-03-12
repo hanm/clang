@@ -281,13 +281,13 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
     EffectSummaryVector::iterator J = I; ++J;
     while (J != E) {
       if((*I)){
-	EffectSummary::ResultKind RK=(*I)->isNonInterfering(*J);
-	if (RK==EffectSummary::RK_FALSE) {
+	Trivalent RK=(*I)->isNonInterfering(*J);
+	if (RK==RK_FALSE) {
 	  assert(*J);
 	  emitInterferingEffects(Exp, *(*I), *(*J));
 	  Result = false;
 	}
-	else if (RK==EffectSummary::RK_DUNNO){
+	else if (RK==RK_DUNNO){
 	  assert(false && "Found variable effect summary");
 	}
       }
@@ -306,13 +306,13 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
     EffectSummaryVector::iterator I = ESVec.begin(), E = ESVec.end();
     for(; I != E; ++I, ++Idx) {
       assert(Idx<NumArgs && "Internal Error: Unexpected number of Effect Summaries");
-      EffectSummary::ResultKind RK=DefES->covers(*I);
-      if (RK==EffectSummary::RK_FALSE) {
+      Trivalent RK=DefES->covers(*I);
+      if (RK==RK_FALSE) {
         std::string Str = (*I)->toString();
         emitEffectsNotCoveredWarning(Exp->getArg(Idx), Def, Str);
         Result = false;
       }
-      else if (RK==EffectSummary::RK_DUNNO) {
+      else if (RK==RK_DUNNO) {
 	assert(false && "Found variable effect summary");
       }
     }
@@ -340,12 +340,12 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   // TODO InductionVarVector IVV = detectInductionVariablesVector
 
   // 3. Check non-interference
-  EffectSummary::ResultKind RK=ES->isNonInterfering(ES.get());
-  if (RK==EffectSummary::RK_FALSE) {
+  Trivalent RK=ES->isNonInterfering(ES.get());
+  if (RK==RK_FALSE) {
     emitInterferingEffects(Exp, *ES, *ES);
     Result = false;
   }
-  else if (RK==EffectSummary::RK_DUNNO) {
+  else if (RK==RK_DUNNO) {
     assert(false && "Found variable effect summary");
   }
   // 4. Check effect coverage
@@ -357,12 +357,12 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   // 4.1. TODO For each induction variable substitute it with [?] in ES
   // 4.2 check
   RK=DefES->covers(ES.get());
-  if (RK==EffectSummary::RK_FALSE) {
+  if (RK==RK_FALSE) {
     std::string Str = ES->toString();
     emitEffectsNotCoveredWarning(Arg, Def, Str);
     Result = false;
   }
-  else if (RK==EffectSummary::RK_DUNNO){
+  else if (RK==RK_DUNNO){
     assert(false && "Found variable effect summary");
   }
   // 5. Cleanup
@@ -386,12 +386,12 @@ bool TBBParallelForIndexNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   // TODO InductionVarVector IVV = detectInductionVariablesVector
 
   // 3. Check non-interference
-  EffectSummary::ResultKind RK=ES->isNonInterfering(ES.get());
-  if (RK==EffectSummary::RK_FALSE) {
+  Trivalent RK=ES->isNonInterfering(ES.get());
+  if (RK==RK_FALSE) {
     emitInterferingEffects(Exp, *ES, *ES);
     Result = false;
   }
-  else if (RK==EffectSummary::RK_DUNNO) {
+  else if (RK==RK_DUNNO) {
     assert(false && "Found variable effect summary");
   }
   // 4. Check effect coverage
@@ -403,12 +403,12 @@ bool TBBParallelForIndexNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   // 4.1. TODO For each induction variable substitute it with [?] in ES
   // 4.2 check
   RK=DefES->covers(ES.get());
-  if (RK==EffectSummary::RK_FALSE) {
+  if (RK==RK_FALSE) {
     std::string Str = ES->toString();
     emitEffectsNotCoveredWarning(Arg, Def, Str);
     Result = false;
   }
-  else if (RK==EffectSummary::RK_FALSE) {
+  else if (RK==RK_FALSE) {
     assert(false && "Found variable effect summary");
   }
   // 5. Cleanup
