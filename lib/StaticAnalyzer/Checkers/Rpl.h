@@ -28,7 +28,7 @@ namespace asap {
 
 class RplElement {
 public:
-  /// Type
+  /// Discriminator for LLVM-style RTTI (dyn_cast<> et al.)
   enum RplElementKind {
       RK_Special,
       RK_Star,
@@ -37,7 +37,9 @@ public:
       RK_Capture,
       RK_Var //Rpl variable
   };
+
 private:
+  /// \brief Stores the LLVM-style RTTI discriminator
   const RplElementKind Kind;
 
 public:

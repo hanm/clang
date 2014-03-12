@@ -295,8 +295,8 @@ void ConcreteEffectSummary::makeMinimal(EffectCoverageVector &ECV) {
 }
 
 void ConcreteEffectSummary::print(raw_ostream &OS,
-                          std::string Separator,
-                          bool PrintLastSeparator) const {
+                                   std::string Separator,
+                                   bool PrintLastSeparator) const {
   SetT::const_iterator I = begin(), E = end(), Ip1 = begin();
   if (Ip1 != E)
     ++Ip1;
