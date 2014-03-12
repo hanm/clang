@@ -294,6 +294,7 @@ makeFieldType(const FieldDecl *D, long ArgNum) {
 AnnotationSet InferenceAnnotationScheme::
 makeParamType(const ParmVarDecl *D, long ArgNum) {
   return helperVarType(D, ArgNum);
+
 }
 
 AnnotationSet InferenceAnnotationScheme::
@@ -304,13 +305,7 @@ makeReturnType(const FunctionDecl *D, long ArgNum) {
 AnnotationSet InferenceAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
   AnnotationSet Result;
-  // TODO create a new effect Summary Variable
-  // We may want to keep track of the in the Symbol Table in which case you
-  // may want to add a method createFreshEffectSummaryVariable in the
-  // SymbolTable
-  assert(false && "method not implemented");
   Result.EffSum = new VarEffectSummary();
-
   return Result;
 }
 

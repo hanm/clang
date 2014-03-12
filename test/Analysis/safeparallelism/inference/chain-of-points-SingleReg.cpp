@@ -39,11 +39,15 @@ struct [[asap::param("P")]] link {
     point pos [[asap::arg("P")]];
     link *next [[asap::arg("P, P")]];
 
-    [[asap::param("Q"), asap::reads("Q")]]
-    link(const point &pos_in[[asap::arg("Q")]])
+    //[[asap::param("Q"), asap::reads("Q")]]
+    link(const point &pos_in[[asap::arg("P")]])
         :
         pos(pos_in),
         next(nullptr) {}
+    // copy constructor
+    link(link &l[[asap::arg("P")]]) : pos(l.pos), next(l.next) {}
+    // move "constructor"
+    link &operator = [[asap::arg("P")]] (link && l[[asap::arg("P")]]) { return l; }
     };
 
 void delete_all[[asap::param("Q"), asap::writes("Q")]]
