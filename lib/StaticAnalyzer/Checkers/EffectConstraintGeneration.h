@@ -62,12 +62,12 @@ class EffectConstraintVisitor
     //checks that the effects in LHS are covered by RHS
   bool checkEffectCoverage();
   void emitEffectNotCoveredWarning(const Stmt *S,
-                                         const Decl *D,
-                                         const StringRef &Str);
+                                    const Decl *D,
+                                    const StringRef &Str);
 
   void emitOverridenVirtualFunctionMustCoverEffectsOfChildren(
                                               const CXXMethodDecl *Parent,
-                                                const CXXMethodDecl *Child);
+                                              const CXXMethodDecl *Child);
   void emitUnsupportedConstructorInitializer(const CXXConstructorDecl *D);
   /// \brief Copy the effect summary of FunD and push it to the TmpEffects.
   int copyAndPushFunctionEffects(const FunctionDecl *FunD,
@@ -80,18 +80,18 @@ class EffectConstraintVisitor
                                     const ParameterVector &ParamV,
                                     SubstitutionVector &SubV);
   void buildParamSubstitutions(const FunctionDecl *CalleeDecl,
-                               ExprIterator ArgI, ExprIterator ArgE,
-                               const ParameterVector &ParamV,
-                               SubstitutionVector &SubV);
+                                ExprIterator ArgI, ExprIterator ArgE,
+                                const ParameterVector &ParamV,
+                                SubstitutionVector &SubV);
 
 public:
   // Constructor
   EffectConstraintVisitor (const FunctionDecl* Def,
-                          Stmt *S,
-                          bool VisitCXXInitializer = false,
-                          bool HasWriteSemantics = false );
+                           Stmt *S,
+                           bool VisitCXXInitializer = false,
+                           bool HasWriteSemantics = false );
 
-  //~EffectCollectorVisitor();
+  //~EffectConstraintVisitor();
 
   // Getters
   inline bool getIsCoveredBySummary() { return IsCoveredBySummary; }
@@ -115,7 +115,7 @@ public:
   void VisitArraySubscriptExpr(ArraySubscriptExpr *E);
   void VisitCXXDeleteExpr(CXXDeleteExpr *E);
   void VisitCXXNewExpr(CXXNewExpr *E);
-}; // End class EffectCollectorVisitor.
+}; // End class EffectConstraintVisitor.
 } // End namespace asap.
 } // End namespace clang.
 

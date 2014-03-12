@@ -31,9 +31,9 @@
 namespace clang {
 namespace asap {
 
-EffectInclusionConstraint::EffectInclusionConstraint(const EffectSummary* Rhs){
+EffectInclusionConstraint::EffectInclusionConstraint(const EffectSummary* Rhs)
+                                                    : RHS(Rhs) {
   LHS = new EffectVector();
-  RHS = Rhs;
 }
 
 void EffectInclusionConstraint::addEffect(Effect* Eff){
