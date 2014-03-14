@@ -23,6 +23,7 @@
 #include "ASaPType.h"
 #include "ASaPUtil.h"
 #include "Effect.h"
+#include "EffectInclusionConstraint.h"
 #include "EffectConstraintGeneration.h"
 #include "Rpl.h"
 #include "Substitution.h"
@@ -31,14 +32,6 @@
 namespace clang {
 namespace asap {
 
-EffectInclusionConstraint::EffectInclusionConstraint(const EffectSummary* Rhs)
-                                                    : RHS(Rhs) {
-  LHS = new EffectVector();
-}
-
-void EffectInclusionConstraint::addEffect(Effect* Eff){
-  LHS->push_back(Eff);
-}
 
 EffectConstraintVisitor::EffectConstraintVisitor (
   const FunctionDecl* Def,
@@ -263,13 +256,13 @@ emitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
   helperEmitStatementWarning(BR, AC, S, D, Str, BugName);
 }
 
-bool EffectConstraintVisitor::
+void EffectConstraintVisitor::
 checkEffectCoverage() {
   EffectVector* LHS=EC->getLHS();
   const EffectSummary* RHS=EC->getRHS();
   const int N=LHS->size();
   if (N<=0)
-    return true;
+    return;
   bool Result = true;
   OS << "DEBUG:: In checkEffectCoverage() \n";
   OS << "DEBUG:: LHS empty? "<< LHS->empty() <<"\n";
@@ -307,7 +300,10 @@ checkEffectCoverage() {
         Result = false;
       }
       else if (RK==RK_DUNNO){
-        assert(false && "Variable summary");
+        //assert(false && "Variable summary");
+        SymT.addInclusionConstraint(EC);
+        return;
+        
       }
     }
 
@@ -351,7 +347,9 @@ checkEffectCoverage() {
 
         }
         else if(RK==RK_DUNNO){
-          assert(false && "Variable summary");
+          //assert(false && "Variable summary");
+          SymT.addInclusionConstraint(EC);
+          return;
         }
 
       }
@@ -361,7 +359,7 @@ checkEffectCoverage() {
   }
   OS << "DEBUG:: effect covered (OK)\n";
   IsCoveredBySummary &= Result;
-  return Result;
+  return;
 }
 
 

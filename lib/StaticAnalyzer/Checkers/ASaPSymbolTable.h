@@ -29,6 +29,7 @@
 #include "ASaPUtil.h"
 #include "ASaPFwdDecl.h"
 #include "ASaPInheritanceMap.h"
+#include "EffectInclusionConstraint.h"
 #include "OwningPtrSet.h"
 
 namespace clang {
@@ -53,12 +54,15 @@ public:
   ResultTriplet(ResultKind ReKi, long NumA, RecordDecl *D) :
     ResKin(ReKi), NumArgs(NumA), DeclNotVis(D) {}
 };
-
+#ifndef NUM_OF_CONSTRAINTS
+  #define NUM_OF_CONSTRAINTS 10
+#endif
 class SymbolTable {
   typedef llvm::DenseMap<const Decl*, SymbolTableEntry*>  SymbolTableMapT;
   typedef llvm::DenseMap<const FunctionDecl*,
                           const SpecificNIChecker*> ParallelismMapT;
   typedef OwningPtrSet<std::string, 1024> FreshNamesSetT;
+  typedef OwningPtrSet<clang::asap::EffectInclusionConstraint*, NUM_OF_CONSTRAINTS> InclusionConstraintsSetT;
 
   /// \brief Symbol Table Map
   SymbolTableMapT SymTable;
@@ -72,6 +76,9 @@ class SymbolTable {
   ParallelismMapT ParTable;
 
   FreshNamesSetT FreshNames;
+
+  //Set of all effect inclusion constraints generated
+  InclusionConstraintsSetT InclusionConstraints;
 
   AnnotationScheme *AnnotScheme;
   static int Initialized;
@@ -200,6 +207,10 @@ public:
     StringRef Result(*S);
     FreshNames.insert(S);
     return Result;
+  }
+
+  inline void addInclusionConstraint(EffectInclusionConstraint* EIC){
+    InclusionConstraints.insert(EIC);
   }
   // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);

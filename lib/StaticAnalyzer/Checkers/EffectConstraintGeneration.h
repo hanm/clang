@@ -19,23 +19,11 @@
 
 #include "ASaPFwdDecl.h"
 #include "ASaPGenericStmtVisitor.h"
+#include "EffectInclusionConstraint.h"
 #include "Effect.h"
 
 namespace clang {
 namespace asap {
-
-//class that represents an effect inclusion constraint
-class EffectInclusionConstraint {
-  EffectVector *LHS;
-  const EffectSummary *RHS;
-
- public:
-  EffectInclusionConstraint(const EffectSummary* Rhs);
-  void addEffect(Effect* Eff);
-  EffectVector* getLHS()  {return LHS;}
-  const EffectSummary* getRHS() const {return RHS;}
-};
-
 
 class EffectConstraintVisitor
     : public ASaPStmtVisitor<EffectConstraintVisitor> {
@@ -60,7 +48,7 @@ class EffectConstraintVisitor
   /// \brief Adds effects to TmpEffects and returns the number of effects added.
   int collectEffects(const ValueDecl *D, const Expr *exp);
     //checks that the effects in LHS are covered by RHS
-  bool checkEffectCoverage();
+  void checkEffectCoverage();
   void emitEffectNotCoveredWarning(const Stmt *S,
                                     const Decl *D,
                                     const StringRef &Str);
