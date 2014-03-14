@@ -319,7 +319,11 @@ checkEffectCoverage() {
       const EffectSummary *Effects =
         SymT.getEffectSummary(FunD->getCanonicalDecl());
       const ConcreteEffectSummary *FunEffects = dyn_cast<ConcreteEffectSummary>(Effects);
-      assert(FunEffects && "Found variable effect summary");
+      //assert(FunEffects && "Found variable effect summary");
+      if(!FunEffects){
+        SymT.addInclusionConstraint(EC);
+        return;
+      }
 
       for(ConcreteEffectSummary::const_iterator
             I = FunEffects->begin(),

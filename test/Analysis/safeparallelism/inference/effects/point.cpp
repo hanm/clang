@@ -1,5 +1,6 @@
 // RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker -analyzer-config -asap-default-scheme=inference %s -verify
-
+//
+// expected-no-diagnostics
 
 class [[asap::param("P"), asap::region("Rx,Ry")]] Point  {
     double x [[asap::arg("P:Rx")]];
