@@ -125,7 +125,8 @@ EffectConstraintVisitor::EffectConstraintVisitor (
       else if (RK==RK_DUNNO){//TODO
         assert(false && "found a variable effect summary");
       }
-
+      //deallocate SubstOVRDSum
+      delete(SubstOVRDSum);
     } // end forall method declarations
   }
   OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
@@ -261,8 +262,10 @@ checkEffectCoverage() {
   EffectVector* LHS=EC->getLHS();
   const EffectSummary* RHS=EC->getRHS();
   const int N=LHS->size();
-  if (N<=0)
+  if (N<=0){
+    delete(EC);
     return;
+  }
   bool Result = true;
   OS << "DEBUG:: In checkEffectCoverage() \n";
   OS << "DEBUG:: LHS empty? "<< LHS->empty() <<"\n";
@@ -363,6 +366,7 @@ checkEffectCoverage() {
   }
   OS << "DEBUG:: effect covered (OK)\n";
   IsCoveredBySummary &= Result;
+  delete(EC);
   return;
 }
 
