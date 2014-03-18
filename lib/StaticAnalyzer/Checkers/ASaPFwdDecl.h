@@ -59,6 +59,7 @@ class Effect;
 class EffectVector;
 class EffectSummary;
 class NamedRplElement;
+class ParameterSet;
 class ParameterVector;
 class ParamRplElement;
 class RegionNameSet;

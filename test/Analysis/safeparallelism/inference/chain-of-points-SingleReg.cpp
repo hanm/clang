@@ -35,19 +35,19 @@ public:
     };
 
 // helper class for chain. (Could be moved inside chain.)
-struct [[asap::param("P")]] link {
-    point pos [[asap::arg("P")]];
-    link *next [[asap::arg("P, P")]];
+struct [[asap::param("Pl")]] link {
+    point pos [[asap::arg("Pl")]];
+    link *next [[asap::arg("Pl, Pl")]];
 
     //[[asap::param("Q"), asap::reads("Q")]]
-    link(const point &pos_in[[asap::arg("P")]])
+    link(const point &pos_in[[asap::arg("Pl")]])
         :
         pos(pos_in),
         next(nullptr) {}
     // copy constructor
-    link(link &l[[asap::arg("P")]]) : pos(l.pos), next(l.next) {}
+    link(link &l[[asap::arg("Pl")]]) : pos(l.pos), next(l.next) {}
     // move "constructor"
-    link &operator = [[asap::arg("P")]] (link && l[[asap::arg("P")]]) { return l; }
+    link &operator = [[asap::arg("Pl")]] (link && l[[asap::arg("Pl")]]) { return l; }
     };
 
 void delete_all[[asap::param("Q"), asap::writes("Q")]]

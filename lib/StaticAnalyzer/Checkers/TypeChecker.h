@@ -82,11 +82,11 @@ private:
                                  SubstitutionVector &SubV);
 
   void buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
-                                    const ParameterVector &ParamV,
+                                    const ParameterSet &ParamSet,
                                     SubstitutionVector &SubV);
   void buildParamSubstitutions(const FunctionDecl *CalleeDecl,
                                ExprIterator ArgI, ExprIterator ArgE,
-                               const ParameterVector &ParamV,
+                               const ParameterSet &ParamSet,
                                SubstitutionVector &SubV);
 
   void helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init);
