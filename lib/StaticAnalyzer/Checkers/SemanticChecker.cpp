@@ -60,7 +60,7 @@ bool ASaPSemanticCheckerTraverser::checkRpls(Decl* D) {
 
 template<typename AttrType>
 void ASaPSemanticCheckerTraverser::
-buildPartialEffectSummary(FunctionDecl *D, EffectSummary &ES) {
+buildPartialEffectSummary(FunctionDecl *D, ConcreteEffectSummary &ES) {
   for (specific_attr_iterator<AttrType>
        I = D->specific_attr_begin<AttrType>(),
        E = D->specific_attr_end<AttrType>();
@@ -72,12 +72,8 @@ buildPartialEffectSummary(FunctionDecl *D, EffectSummary &ES) {
                /// undeclared RPL elements).
       for (size_t Idx = 0; Idx < Tmp->size(); ++Idx) {
         const Effect E(EK, Tmp->getRplAt(Idx), *I);
-	bool Success=false;
-	ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(&ES);
-	if(CES){
-	  Success = CES->insert(E);
-	}
-	assert(Success);
+        bool Success = ES.insert(E);
+        assert(Success && "Internal Error: failed adding effect to summary");
       }
     }
   }
@@ -415,7 +411,7 @@ addToMap(Decl *D, RplVector *RplVec, QualType QT) {
     //if (CXXRD->isUnion())
     //  addASaPTypeToMap(CXXRD, RplVec, 0);
     //else
-      addASaPBaseTypeToMap(CXXRD, QT, RplVec);
+    addASaPBaseTypeToMap(CXXRD, QT, RplVec);
   } else {
     assert(false && "Called 'checkParamAndArgCounts' with invalid Decl type.");
   }
@@ -644,23 +640,19 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *Att,
   return R;
 }
 
-void ASaPSemanticCheckerTraverser::buildEffectSummary(FunctionDecl *D,
-                                                      EffectSummary &ES) {
+void ASaPSemanticCheckerTraverser::
+buildEffectSummary(FunctionDecl *D, ConcreteEffectSummary &ES) {
   buildPartialEffectSummary<ReadsEffectAttr>(D, ES);
   buildPartialEffectSummary<WritesEffectAttr>(D, ES);
   buildPartialEffectSummary<AtomicReadsEffectAttr>(D, ES);
   buildPartialEffectSummary<AtomicWritesEffectAttr>(D, ES);
   if (const NoEffectAttr* Attr = D->getAttr<NoEffectAttr>()) {
-    ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(&ES);
-    if (CES && CES->size() > 0) {
+    if (ES.size() > 0) {
       // "no effect" not compatible with other effects
       emitNoEffectInNonEmptyEffectSummary(D, Attr);
     } else {
       Effect E(Effect::EK_NoEffect, 0, Attr);
-      bool Success = false;
-      if(CES){
-	Success=CES->insert(E);
-      }
+      bool Success = ES.insert(E);
       assert(Success);
     }
   }
@@ -914,22 +906,23 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
   if (Success) {
     /// C. Check effect summary
     /// C.1. Build Effect Summary
-    EffectSummary *ES = new ConcreteEffectSummary();
-    buildEffectSummary(D, *ES);
+    ConcreteEffectSummary *CES = new ConcreteEffectSummary();
+    EffectSummary *ES = CES;
+    buildEffectSummary(D, *CES);
     OS << "Effect Summary from source file:\n";
-    ES->print(OS);
-    ConcreteEffectSummary* CES=dyn_cast<ConcreteEffectSummary>(ES);
+    CES->print(OS);
     const FunctionDecl *CanFD = D->getCanonicalDecl();
     if (!CES || CES->size()==0) {
       AnnotationSet AnSe = SymT.makeDefaultEffectSummary(CanFD);
-      delete ES;
+      delete CES;
+      CES = 0;
       ES = AnSe.EffSum;
       OS << "Implicit Effect Summary:\n";
       ES->print(OS);
     } else {
       /// C.2. Check Effect Summary is minimal
       ConcreteEffectSummary::EffectCoverageVector ECV;
-      ES->makeMinimal(ECV);
+      CES->makeMinimal(ECV);
       // Emit "effect not minimal" errors only on canonical declarations
       // because other (re)declarations get attributes copied from the
       // canonical declaration, which would lead to too many false positive
@@ -945,16 +938,10 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
         delete PairPtr;
       }
       OS << "Minimal Effect Summary:\n";
-      ES->print(OS);
+      CES->print(OS);
     }
     bool Success = SymT.setEffectSummary(D, ES);
     assert(Success);
-
-    const EffectSummary *ES2 = SymT.getEffectSummary(D);
-    assert(ES2);
-    OS << "DEBUG:: checking we can retrieve Effect Summary we just added: ";
-    ES2->print(OS);
-    OS << "\n";
 
     /// Note: Check Effects covered by canonical Declaration in
     /// subsequent pass because canonical Declaration may not have
@@ -964,15 +951,6 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
 }
 
 bool ASaPSemanticCheckerTraverser::VisitRecordDecl (RecordDecl *D) {
-  /*if (SymT.hasDecl(D)) {
-    // TODO remove this check once we remove the recursion by spliting this
-    // visitor into two passes.
-
-    // in case we have already visited this don't re-visit.
-    OS << "DEBUG:: D " << (SymT.hasParameterVector(D)? "HAS " : "has NOT ")
-       << "a parameter vector!! (but has its decl in the Symbol Table)\n";
-    return true;
-  }*/
   OS << "DEBUG:: VisitRecordDecl (" << D << ") : ";
   OS << D->getDeclName();
   OS << "':\n";

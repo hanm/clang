@@ -255,15 +255,13 @@ makeEffectSummary(const FunctionDecl *D) {
   // Writes Local
   Rpl LocalRpl(*SymbolTable::LOCAL_RplElmt);
   Effect WritesLocal(Effect::EK_WritesEffect, &LocalRpl);
-  Result.EffSum = new ConcreteEffectSummary(WritesLocal);
+  ConcreteEffectSummary *CES = new ConcreteEffectSummary(WritesLocal);
+  Result.EffSum = CES;
 
   // Reads Global
   Rpl GlobalRpl(*SymbolTable::GLOBAL_RplElmt);
   Effect ReadsGlobal(Effect::EK_ReadsEffect, &GlobalRpl);
-  ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Result.EffSum);
-  if(CES){
-    CES->insert(ReadsGlobal);
-  }
+  CES->insert(ReadsGlobal);
   return Result;
 }
 

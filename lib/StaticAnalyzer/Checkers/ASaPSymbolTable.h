@@ -77,7 +77,7 @@ class SymbolTable {
 
   FreshNamesSetT FreshNames;
 
-  //Set of all effect inclusion constraints generated
+  /// \brief Set of all effect inclusion constraints generated
   InclusionConstraintsSetT InclusionConstraints;
 
   AnnotationScheme *AnnotScheme;

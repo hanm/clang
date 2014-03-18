@@ -62,7 +62,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   assert(EffSummary);
 
   //create a constraint object
-  EC=new EffectInclusionConstraint(EffSummary);
+  EC = new EffectInclusionConstraint(EffSummary);
 
   if (VisitCXXInitializer) {
     if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
@@ -90,19 +90,9 @@ EffectConstraintVisitor::EffectConstraintVisitor (
       assert(OverriddenSum);
 
       const SubstitutionVector *SubVec =SymT.getInheritanceSubVec(DerivedClass);
-      EffectSummary *SubstOVRDSum;
-      const ConcreteEffectSummary *COverriddenSum=dyn_cast<ConcreteEffectSummary>(OverriddenSum);
-      if(COverriddenSum)
-        SubstOVRDSum=new ConcreteEffectSummary(*COverriddenSum);
-      else
-        SubstOVRDSum=new VarEffectSummary(*dyn_cast<VarEffectSummary>(OverriddenSum));
-      ConcreteEffectSummary *ConcreteSubstOVRDSum=dyn_cast<ConcreteEffectSummary>(SubstOVRDSum);
-      if (SubVec && ConcreteSubstOVRDSum){
-        OS << "concrete "<<ConcreteSubstOVRDSum->size()<<"\n";
-        //SubVec->reverseApplyTo(&SubstOVRDSum);
-        SubVec->applyTo(ConcreteSubstOVRDSum);
-      }
-      //SubstBaseSum.substitute(SubVec);
+      EffectSummary *SubstOVRDSum = OverriddenSum->clone();
+      SubVec->applyTo(SubstOVRDSum);
+
       OS << "DEBUG:: overidden summary error:\n";
       OS << "   DerivedSum: " << DerivedSum->toString() << "\n";
       OS << "   OverriddenSum: " << OverriddenSum->toString() << "\n";
@@ -306,7 +296,7 @@ checkEffectCoverage() {
         //assert(false && "Variable summary");
         SymT.addInclusionConstraint(EC);
         return;
-        
+
       }
     }
 
@@ -320,13 +310,14 @@ checkEffectCoverage() {
       if(!FunD)
         OS << "FunD is NULL\n";
       const EffectSummary *Effects =
-        SymT.getEffectSummary(FunD->getCanonicalDecl());
-      const ConcreteEffectSummary *FunEffects = dyn_cast<ConcreteEffectSummary>(Effects);
-      //assert(FunEffects && "Found variable effect summary");
-      if(!FunEffects){
+          SymT.getEffectSummary(FunD->getCanonicalDecl());
+      if (isa<VarEffectSummary>(Effects)) {
         SymT.addInclusionConstraint(EC);
         return;
       }
+      const ConcreteEffectSummary *FunEffects =
+          dyn_cast<ConcreteEffectSummary>(Effects);
+      assert(FunEffects && "Expected either Var or Concrete Summary");
 
       for(ConcreteEffectSummary::const_iterator
             I = FunEffects->begin(),
@@ -351,10 +342,8 @@ checkEffectCoverage() {
           std::string Str = Eff.toString();
           emitEffectNotCoveredWarning(Exp, FunD, Str);
           Result = false;
-
         }
-        else if(RK==RK_DUNNO){
-          //assert(false && "Variable summary");
+        else if (RK==RK_DUNNO) {
           SymT.addInclusionConstraint(EC);
           return;
         }
@@ -437,14 +426,7 @@ void EffectConstraintVisitor::VisitMemberExpr(MemberExpr *Exp) {
   SaveAndRestore<int> ResetDerefNum(DerefNum, (Exp->isArrow() ? 1 : 0));
 
   Visit(Exp->getBase());
-
-  /// Post-Visit Actions: check that effects (after substitutions)
-  /// are covered by effect summary
-
-  //should be done later
-  // checkEffectCoverage(Exp, VD, EffectNr);
-
-} // end VisitMemberExpr
+}
 
 void EffectConstraintVisitor::VisitUnaryAddrOf(UnaryOperator *E)  {
   assert(DerefNum>=0);
@@ -518,24 +500,6 @@ void EffectConstraintVisitor::VisitDeclRefExpr(DeclRefExpr *Exp) {
     memberSubstitute(VD);
   }
   collectEffects(VD, Exp);
-
-  //should be done later
-  // checkEffectCoverage(Exp, VD, EffectNr);
-
-  //TODO Collect effects
-  /*OS << "Rvalue=" << E->isRValue()
-  << ", Lvalue=" << E->isLValue()
-  << ", Xvalue=" << E->isGLValue()
-  << ", GLvalue=" << E->isGLValue() << "\n";
-  Expr::LValueClassification lvc = E->ClassifyLValue(Ctx);
-  if (lvc==Expr::LV_Valid)
-  OS << "LV_Valid\n";
-  else
-  OS << "not LV_Valid\n";
-  ValueDecl* vd = E->getDecl();
-  vd->print(OS, Ctx.getPrintingPolicy());
-  OS << "\n";*/
-  //DerefNum = 0;
 }
 
 void EffectConstraintVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
@@ -611,12 +575,6 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
       SaveAndRestore<int> EffectAccumulator(EffectCount, EffectCount+1);
       /// 3. Visit base if it exists
       Visit(Exp->getCallee());
-
-      /// 4. Check coverage
-
-      //should be done later
-      //checkEffectCoverage(Exp, D, EffectCount);
-
     // end if (FunD)
     } else { // VarD != null (call through function pointer)
     // TODO

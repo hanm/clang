@@ -143,9 +143,9 @@ class ASaPSemanticCheckerTraverser :
   /// Called with AttrType being one of ReadsEffectAttr, WritesEffectAttr,
   /// ΑtomicReadsEffectAttr, or AtomicWritesEffectAttr.
   template<typename AttrType>
-  void buildPartialEffectSummary(FunctionDecl *D, EffectSummary &ES);
+  void buildPartialEffectSummary(FunctionDecl *D, ConcreteEffectSummary &ES);
 
-  void buildEffectSummary(FunctionDecl* D, EffectSummary &ES);
+  void buildEffectSummary(FunctionDecl* D, ConcreteEffectSummary &ES);
 
   void checkBaseSpecifierArgs(CXXRecordDecl *D);
 
