@@ -218,9 +218,10 @@ Trivalent ConcreteEffectSummary::covers(const
 EffectSummary *Sum) const {
   if (!Sum)
     return RK_TRUE;
-  const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);
-  if(!CES)
+  if (isa<VarEffectSummary>(Sum))
     return RK_DUNNO;
+  const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);
+  assert(CES && "Expected Sum would either be Var or Concrete");
   bool Dunno=false;
   SetT::const_iterator I = CES->begin(), E = CES->end();
   for(; I != E; ++I) {
@@ -249,13 +250,14 @@ const {
 
 }
 
-Trivalent ConcreteEffectSummary::isNonInterfering(const EffectSummary
-*Sum) const {
+Trivalent ConcreteEffectSummary::
+isNonInterfering(const EffectSummary *Sum) const {
   if (!Sum)
     return RK_TRUE;
-  const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);
-  if(!CES)
+  if (isa<VarEffectSummary>(Sum))
     return RK_DUNNO;
+  const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);
+  assert(CES && "Expected Sum would either be Var or Concrete");
   bool Dunno=false;
   SetT::const_iterator I = CES->begin(), E = CES->end();
   for(; I != E; ++I) {

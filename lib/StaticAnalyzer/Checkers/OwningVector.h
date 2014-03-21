@@ -95,6 +95,7 @@ public:
     }
   }
 
+  /// \brief Merge @param OwV into @this. Leaves @param OwV empty.
   void take(OwningVector<ElmtTyp, SIZE> *OwV) {
     if (!OwV)
       return; // nothing to take, all done

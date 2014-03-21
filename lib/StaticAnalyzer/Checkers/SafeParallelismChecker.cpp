@@ -20,7 +20,6 @@
 #include "ASaPSymbolTable.h"
 #include "CollectRegionNamesAndParameters.h"
 #include "DetectTBBParallelism.h"
-//#include "EffectChecker.h"
 #include "EffectSummaryNormalizer.h"
 #include "NonInterferenceChecker.h"
 #include "SemanticChecker.h"

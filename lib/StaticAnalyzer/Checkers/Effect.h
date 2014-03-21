@@ -234,7 +234,7 @@ public:
   /// \brief Returns true iff 'this' is non-interfering with 'Sum'
   virtual  Trivalent isNonInterfering(const EffectSummary *Sum) const {return RK_DUNNO;}
   typedef llvm::SmallVector<std::pair<const Effect*, const Effect*> *, 8>
-  EffectCoverageVector;
+      EffectCoverageVector;
 
   /// \brief Makes effect summary minimal by removing covered effects.
   /// The caller is responsible for deallocating the EffectCoverageVector.
@@ -244,26 +244,31 @@ public:
   virtual void substitute(const SubstitutionVector *SubV) = 0;
 
   virtual void print(raw_ostream &OS, std::string Separator="\n",
-	     bool PrintLastSeparator=true) const = 0;
+                       bool PrintLastSeparator=true) const = 0;
 
   std::string toString(std::string Separator=", ",
-		       bool PrintLastSeparator=false) const;
+                       bool PrintLastSeparator=false) const;
 
+  EffectSummary(SummaryKind SK) : Kind(SK) {}
+  virtual EffectSummary *clone() const = 0;
   virtual ~EffectSummary() {};
 };
 
 #ifndef EFFECT_SUMMARY_SIZE
   #define EFFECT_SUMMARY_SIZE 8
 #endif
-class ConcreteEffectSummary : public OwningPtrSet<Effect, EFFECT_SUMMARY_SIZE>, public EffectSummary {
+class ConcreteEffectSummary : public OwningPtrSet<Effect, EFFECT_SUMMARY_SIZE>,
+                              public EffectSummary {
 public:
   typedef OwningPtrSet<Effect, EFFECT_SUMMARY_SIZE> BaseClass;
   /// Constructors
-  ConcreteEffectSummary() : BaseClass() {
-     setSummaryKind(ESK_Concrete);
-  }
-  ConcreteEffectSummary(Effect &E) : BaseClass(E) {
-     setSummaryKind(ESK_Concrete);
+  ConcreteEffectSummary() : BaseClass(), EffectSummary(ESK_Concrete) {}
+  ConcreteEffectSummary(Effect &E)
+                       : BaseClass(E), EffectSummary(ESK_Concrete) {}
+  ConcreteEffectSummary(const ConcreteEffectSummary &CES)
+                       : BaseClass(CES), EffectSummary(ESK_Concrete) {}
+  virtual ConcreteEffectSummary *clone() const {
+    return new ConcreteEffectSummary(*this);
   }
   ///
   static bool classof(const EffectSummary *ES) {
@@ -297,9 +302,16 @@ class VarEffectSummary : public EffectSummary {
   // TODO: add field to store solution of inference
   // ConcreteEffectSummary* Concrete;  // Commented out to remove warning.
 public:
-  VarEffectSummary() {
-    setSummaryKind(ESK_Var);
+  // Constructors
+  VarEffectSummary() : EffectSummary(ESK_Var) {}
+
+  VarEffectSummary(const VarEffectSummary &VES)
+                  : EffectSummary(ESK_Var) {}
+
+  virtual VarEffectSummary *clone() const {
+    return new VarEffectSummary(*this);
   }
+
   static bool classof(const EffectSummary *ES) {
     return ES->getSummaryKind() == ESK_Var;
   }

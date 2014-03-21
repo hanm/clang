@@ -41,6 +41,8 @@ public:
 private:
   /// \brief Stores the LLVM-style RTTI discriminator
   const RplElementKind Kind;
+  /// FIXME: protect copy constructor
+  //RplElement(RplElement &Elmt);
 
 public:
   /// API
@@ -354,8 +356,26 @@ public:
   #define PARAM_VECTOR_SIZE 8
 #endif
 
+class ParameterSet:
+  public llvm::SmallPtrSet<const ParamRplElement*, PARAM_VECTOR_SIZE> {
+public:
+  //typedef llvm::SmallPtrSet<const ParamRplElement*, PARAM_VECTOR_SIZE> BaseClass;
+
+  bool hasElement(const RplElement *Elmt) const {
+    for(const_iterator I = begin(), E = end();
+        I != E; ++I) {
+      if (Elmt == *I)
+        return true;
+    }
+    return false;
+  }
+}; // end class TempParamVector
+
 class ParameterVector :
   public OwningVector<ParamRplElement, PARAM_VECTOR_SIZE> {
+private:
+  // protect copy constructor by making it private.
+  ParameterVector(const ParameterVector &From);
 public:
   typedef OwningVector<ParamRplElement, PARAM_VECTOR_SIZE> BaseClass;
   // Constructor
@@ -363,11 +383,20 @@ public:
 
   ParameterVector(ParamRplElement &P) : BaseClass(P) {}
 
+  void addToParamSet(ParameterSet *PSet) const {
+    for(VectorT::const_iterator I = begin(), E = end();
+        I != E; ++I) {
+      const ParamRplElement *El = *I;
+      PSet->insert(El);
+    }
+  }
+
   /// \brief Returns the Parameter at position Idx
   const ParamRplElement *getParamAt(size_t Idx) const {
     assert(Idx < size());
     return (*this)[Idx];
   }
+
   /// \brief Returns the ParamRplElement with name=Name or null.
   const ParamRplElement *lookup(StringRef Name) const {
     for(VectorT::const_iterator I = begin(), E = end();
@@ -378,6 +407,7 @@ public:
     }
     return 0;
   }
+
   /// \brief Returns true if the argument RplElement is contained.
   bool hasElement(const RplElement *Elmt) const {
     for(VectorT::const_iterator I = begin(), E = end();

@@ -187,29 +187,21 @@ inline static const CXXMethodDecl
 static std::auto_ptr<EffectSummary>
 getInvokeEffectSummary(const Expr *Arg,
                        const CXXMethodDecl *Method, const FunctionDecl *Def) {
-  EffectSummary *ES = 0;
   raw_ostream &OS = *SymbolTable::VB.OS;
+  const EffectSummary *Sum=SymbolTable::Table->getEffectSummary(Method);
+  EffectSummary *ES = 0;
 
-  if (SymbolTable::Table->getEffectSummary(Method)) {
-    const EffectSummary *Sum=SymbolTable::Table->getEffectSummary(Method);
+  if (Sum) {
     OS << "DEBUG::getInvokeEffectSummary: Method = ";
     Method->print(OS);
     OS << "\n";
     OS << "DEBUG::effect summary: ";
     Sum->print(OS);
     OS << "\n";
-    const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);
-    if(CES){
-      CES->print(OS);
-      OS << "\n";
-      ES = new ConcreteEffectSummary(*CES);
-    }
-    else{
-      ES = new VarEffectSummary(*dyn_cast<VarEffectSummary>(Sum));
-    }
-    //OS << "DEBUG:: ES0 EffectSummary:" << ES->toString() << "\n";
-    const SubstitutionVector *SubVec = SymbolTable::Table->getInheritanceSubVec(Method->getParent());
-    //  llvm::raw_ostream &OS = *SymbolTable::VB.OS;
+
+    ES = Sum->clone();
+    const SubstitutionVector *SubVec =
+        SymbolTable::Table->getInheritanceSubVec(Method->getParent());
     ES->substitute(SubVec);
     // perform 'this' substitution
     const NamedDecl *NamD = 0;
@@ -217,7 +209,8 @@ getInvokeEffectSummary(const Expr *Arg,
       const DeclRefExpr *DeclRef = dyn_cast<DeclRefExpr>(Arg);
       NamD = DeclRef->getDecl();
     } else if (isa<MaterializeTemporaryExpr>(Arg)) {
-      const MaterializeTemporaryExpr *MEx = dyn_cast<MaterializeTemporaryExpr>(Arg);
+      const MaterializeTemporaryExpr *MEx =
+          dyn_cast<MaterializeTemporaryExpr>(Arg);
       Expr *Exp = MEx->GetTemporaryExpr();
       assert(Exp);
       Exp = Exp->IgnoreImplicit();

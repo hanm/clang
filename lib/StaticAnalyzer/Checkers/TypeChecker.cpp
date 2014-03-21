@@ -396,11 +396,25 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
                           ExprIterator ArgE,
                           SubstitutionVector &SubV) {
   assert(CalleeDecl);
+  ParameterSet *ParamSet = new ParameterSet();
+  assert(ParamSet);
   // Build SubV for function region params
   const ParameterVector *ParamV = SymT.getParameterVector(CalleeDecl);
+  // FIXME: if isa<CXXMethodDecl>CalleeDecl -> add Class parameters to vector
   if (ParamV && ParamV->size() > 0) {
-    buildParamSubstitutions(CalleeDecl, ArgI, ArgE, *ParamV, SubV);
+    ParamV->addToParamSet(ParamSet);
   }
+  if (CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(CalleeDecl)) {
+    CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
+    ParamV = SymT.getParameterVector(Rec);
+    if (ParamV && ParamV->size() > 0) {
+      ParamV->addToParamSet(ParamSet);
+    }
+  }
+  if (ParamSet->size() > 0) {
+    buildParamSubstitutions(CalleeDecl, ArgI, ArgE, *ParamSet, SubV);
+  }
+  delete ParamSet;
 
   OS << "DEBUG:: CALLING typecheckParamAssignments\n";
   FunctionDecl::param_iterator
@@ -514,8 +528,11 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
     // Set up Substitution Vector
     const ParameterVector *FD_ParamV = SymT.getParameterVector(FunD);
     if (FD_ParamV && FD_ParamV->size() > 0) {
+      ParameterSet *ParamS = new ParameterSet();
+      FD_ParamV->addToParamSet(ParamS);
       buildParamSubstitutions(FunD, Exp->arg_begin(),
-                              Exp->arg_end(), *FD_ParamV, SubV);
+                              Exp->arg_end(), *ParamS, SubV);
+      delete ParamS;
     }
 
     DeclContext *DC = FunD->getDeclContext();
@@ -575,7 +592,7 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
 void AssignmentCheckerVisitor::
 buildParamSubstitutions(const FunctionDecl *CalleeDecl,
                         ExprIterator ArgI, ExprIterator ArgE,
-                        const ParameterVector &ParamV,
+                        const ParameterSet &ParamSet,
                         SubstitutionVector &SubV) {
   assert(CalleeDecl);
   FunctionDecl::param_const_iterator ParamI, ParamE;
@@ -583,14 +600,14 @@ buildParamSubstitutions(const FunctionDecl *CalleeDecl,
       ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
     Expr *ArgExpr = *ArgI;
     ParmVarDecl *ParamDecl = *ParamI;
-    buildSingleParamSubstitution(ParamDecl, ArgExpr, ParamV, SubV);
+    buildSingleParamSubstitution(ParamDecl, ArgExpr, ParamSet, SubV);
   }
 }
 
 void AssignmentCheckerVisitor::
 buildSingleParamSubstitution(
     ParmVarDecl *Param, Expr *Arg,
-    const ParameterVector &ParamV, // Vector of fn region params
+    const ParameterSet &ParamSet, // Set of fn & class region params
     SubstitutionVector &SubV) {
   // if the function parameter has region argument that is a region
   // parameter, infer a substitution based on the type of the function argument
@@ -617,9 +634,14 @@ buildSingleParamSubstitution(
     assert(ParamR && "RplVector should not contain null Rpl pointer");
     if (ParamR->length() < 1)
       continue;
+    if (ParamR->length() > 1)
+      // In this case, we need to implement type unification
+      // of ParamR and ArgR = *ArgI or allow explicitly giving
+      // the substitution in an annotation at the call-site
+      continue;
     const RplElement *Elmt = ParamR->getFirstElement();
     assert(Elmt && "Rpl should not contain null RplElement pointer");
-    if (! ParamV.hasElement(Elmt))
+    if (! ParamSet.hasElement(Elmt))
       continue;
     // Ok find the argument
     Substitution Sub(Elmt, *ArgI);
@@ -1219,21 +1241,10 @@ void TypeBuilderVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
   if (Exp->isArray()) {
     AssignmentCheckerVisitor ACV(Def, Exp->getArraySize());
   }
-  if (Exp->hasInitializer()) {
-    AssignmentCheckerVisitor ACV(Def, Exp->getInitializer());
-  }
-  for(CXXNewExpr::arg_iterator I = Exp->placement_arg_begin(),
-                          E = Exp->placement_arg_end();
-       I != E; ++I) {
-    AssignmentCheckerVisitor ACV(Def, *I);
-  }
-  /*{
-    SaveAndRestore<int> VisitWithZeroDeref(DerefNum, 0);
-    VisitChildren(Exp);
-  }
-
-  // FIXME: Set up Type properly and use it for typechecking
-  clearType();*/
+  // invoke the assignment checker on the (implicit) constructor call
+  AssignmentCheckerVisitor(Def,
+                           const_cast<CXXConstructExpr*>
+                                       (Exp->getConstructExpr()));
 }
 
 void TypeBuilderVisitor::VisitAtomicExpr(AtomicExpr *Exp) {
