@@ -53,6 +53,14 @@ endif
 
 # Set common Clang build flags.
 CPP.Flags += -I$(PROJ_SRC_DIR)/$(CLANG_LEVEL)/include -I$(PROJ_OBJ_DIR)/$(CLANG_LEVEL)/include
+
+# Prolog Libraries (for some reason adding the LDFLAGS to the 
+# lib/StaticAnalyzer/Checkers/Makefile does not work, so we kept it here)
+#PROLOG_LIB_INCLUDE='/usr/lib/swi-prolog/include'
+PROLOG_LIB_LINK='/usr/lib'
+#CPP.Flags += -I$(PROLOG_LIB_INCLUDE)
+LDFLAGS += -L$(PROLOG_LIB_LINK) -lswipl
+
 ifdef CLANG_VENDOR
 CPP.Flags += -DCLANG_VENDOR='"$(CLANG_VENDOR) "'
 endif
