@@ -11,7 +11,7 @@
 // Parallelism checker, which tries to generate effect constraints.
 //
 //===----------------------------------------------------------------===//
-#include </usr/lib/swi-prolog/include/SWI-Prolog.h>
+// #include </usr/lib/swi-prolog/include/SWI-Prolog.h>
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/Stmt.h"
@@ -74,6 +74,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   OS << "DEBUG:: checking effect coverage NEW!!!!!!!\n";
   checkEffectCoverage();
 
+#if 0
 	static char * av[] = {"/home/lamyaa/annotationinference/tests/point.pl", NULL};
 	if( ! PL_initialise(1,av)){
 		OS<<"error initializing\n";
@@ -81,7 +82,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
 	}else {
 		OS<<"success initializing!\n";
 	}
-
+#endif
 
   OS << "DEBUG:: done running Visit\n";
   if (const CXXMethodDecl *CXXD = dyn_cast<CXXMethodDecl>(Def)) {
