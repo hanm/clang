@@ -12,9 +12,27 @@
 ##===----------------------------------------------------------------------===##
 
 CLANG_LEVEL := ../../..
+
+ASAP_SOURCES :=  ASaP/ASaPAnnotationScheme.cpp \
+                 ASaP/ASaPSymbolTable.cpp \
+                 ASaP/ASaPType.cpp \
+                 ASaP/ASaPUtil.cpp \
+                 ASaP/CollectRegionNamesAndParameters.cpp \
+                 ASaP/DetectTBBParallelism.cpp \
+                 ASaP/EffectConstraintGeneration.cpp \
+                 ASaP/Effect.cpp \
+                 ASaP/EffectInclusionConstraint.cpp \
+                 ASaP/EffectSummaryNormalizer.cpp \
+                 ASaP/NonInterferenceChecker.cpp \
+                 ASaP/Rpl.cpp \
+                 ASaP/SemanticChecker.cpp \
+                 ASaP/SpecificNIChecker.cpp \
+                 ASaP/Substitution.cpp \
+                 ASaP/TypeChecker.cpp
+
 LIBRARYNAME := clangStaticAnalyzerCheckers
 
-BUILT_SOURCES = Checkers.inc
+BUILT_SOURCES = Checkers.inc $(ASAP_SOURCES)
 TABLEGEN_INC_FILES_COMMON = 1
 
 include $(CLANG_LEVEL)/Makefile
