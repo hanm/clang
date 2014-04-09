@@ -27,7 +27,7 @@ SOURCES = $(BASE_SOURCES) $(ASAP_SOURCES)
 
 LIBRARYNAME := clangStaticAnalyzerCheckers
 
-BUILT_SOURCES = Checkers.inc $(ASAP_SOURCES)
+BUILT_SOURCES = Checkers.inc
 TABLEGEN_INC_FILES_COMMON = 1
 
 include $(CLANG_LEVEL)/Makefile
