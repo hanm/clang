@@ -8,14 +8,26 @@ set(LLVM_LINK_COMPONENTS
   )
 
 add_clang_library(clangStaticAnalyzerCheckers
+  ASaP/ASaPAnnotationScheme.cpp
+  ASaP/ASaPSymbolTable.cpp
+  ASaP/ASaPType.cpp
+  ASaP/ASaPUtil.cpp
+  ASaP/CollectRegionNamesAndParameters.cpp
+  ASaP/DetectTBBPArallelism.cpp
+  ASaP/Effect.cpp
+  ASaP/EffectInclusionConstraint.cpp
+  ASaP/EffectSummaryNormalizer.cpp
+  ASaP/EffectConstraintGeneration.cpp
+  ASaP/NonInterferenceChecker.cpp
+  ASaP/Rpl.cpp
+  ASaP/SemanticChecker.cpp
+  ASaP/SpecificNIChecker.cpp
+  ASaP/Substitution.cpp
+  ASaP/TypeChecker.cpp
   AnalyzerStatsChecker.cpp
   AllocationDiagnostics.cpp
   ArrayBoundChecker.cpp
   ArrayBoundCheckerV2.cpp
-  ASaPAnnotationScheme.cpp
-  ASaPSymbolTable.cpp
-  ASaPType.cpp
-  ASaPUtil.cpp
   BasicObjCFoundationChecks.cpp
   BoolAssignmentChecker.cpp
   BuiltinFunctionChecker.cpp
@@ -31,17 +43,12 @@ add_clang_library(clangStaticAnalyzerCheckers
   CheckerDocumentation.cpp
   ChrootChecker.cpp
   ClangCheckers.cpp
-  CollectRegionNamesAndParameters.cpp
   DeadStoresChecker.cpp
   DebugCheckers.cpp
   DereferenceChecker.cpp
-  DetectTBBPArallelism.cpp
   DirectIvarAssignment.cpp
   DivZeroChecker.cpp
   DynamicTypePropagation.cpp
-  Effect.cpp
-  EffectSummaryNormalizer.cpp
-  EffectConstraintGeneration.cpp
   ExprInspectionChecker.cpp
   FixedAddressChecker.cpp
   GenericTaintChecker.cpp
@@ -56,7 +63,6 @@ add_clang_library(clangStaticAnalyzerCheckers
   NSAutoreleasePoolChecker.cpp
   NSErrorChecker.cpp
   NoReturnFunctionChecker.cpp
-  NonInterferenceChecker.cpp
   NonNullParamChecker.cpp
   ObjCAtSyncChecker.cpp
   ObjCContainersASTChecker.cpp
@@ -70,18 +76,13 @@ add_clang_library(clangStaticAnalyzerCheckers
   RetainCountChecker.cpp
   ReturnPointerRangeChecker.cpp
   ReturnUndefChecker.cpp
-  Rpl.cpp
   SafeParallelismChecker.cpp
-  SemanticChecker.cpp
   SimpleStreamChecker.cpp
-  SpecificNIChecker.cpp
   StackAddrEscapeChecker.cpp
   StaticVariableAccessChecker.cpp
   StreamChecker.cpp
-  Substitution.cpp
   TaintTesterChecker.cpp
   TraversalChecker.cpp
-  TypeChecker.cpp
   UndefBranchChecker.cpp
   UndefCapturedBlockVarChecker.cpp
   UndefResultChecker.cpp
