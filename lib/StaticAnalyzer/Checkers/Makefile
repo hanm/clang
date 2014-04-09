@@ -13,22 +13,17 @@
 
 CLANG_LEVEL := ../../..
 
-ASAP_SOURCES :=  ASaP/ASaPAnnotationScheme.cpp \
-                 ASaP/ASaPSymbolTable.cpp \
-                 ASaP/ASaPType.cpp \
-                 ASaP/ASaPUtil.cpp \
-                 ASaP/CollectRegionNamesAndParameters.cpp \
-                 ASaP/DetectTBBParallelism.cpp \
-                 ASaP/EffectConstraintGeneration.cpp \
-                 ASaP/Effect.cpp \
-                 ASaP/EffectInclusionConstraint.cpp \
-                 ASaP/EffectSummaryNormalizer.cpp \
-                 ASaP/NonInterferenceChecker.cpp \
-                 ASaP/Rpl.cpp \
-                 ASaP/SemanticChecker.cpp \
-                 ASaP/SpecificNIChecker.cpp \
-                 ASaP/Substitution.cpp \
-                 ASaP/TypeChecker.cpp
+# BASE_SOURCES: Source files of Clang checkers. We use PROJ_SRC_DIR because the
+#   makefile will be invoked in the build tree (where the source isn't).
+BASE_SOURCES = $(notdir $(wildcard $(PROJ_SRC_DIR)/*.cpp)) 
+# ASAP_DIR: Directory where most of the ASaP code lives
+ASAP_DIR = ASaP
+# ASAP_NAMES: The names of the .cpp files under ASAP_DIR
+ASAP_NAMES = $(notdir $(wildcard $(PROJ_SRC_DIR)/$(ASAP_DIR)/*.cpp))
+# ASAP_SOURCES: Computed by prepending ASAP_DIR to ASAP_NAMES
+ASAP_SOURCES = $(ASAP_NAMES:%=$(ASAP_DIR)/%)
+# SOURCES: Override the default to add the ASAP_SOURCES
+SOURCES = $(BASE_SOURCES) $(ASAP_SOURCES)
 
 LIBRARYNAME := clangStaticAnalyzerCheckers
 
