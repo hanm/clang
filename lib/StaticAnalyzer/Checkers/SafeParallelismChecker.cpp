@@ -16,14 +16,15 @@
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
-#include "EffectConstraintGeneration.h"
-#include "ASaPSymbolTable.h"
-#include "CollectRegionNamesAndParameters.h"
-#include "DetectTBBParallelism.h"
-#include "EffectSummaryNormalizer.h"
-#include "NonInterferenceChecker.h"
-#include "SemanticChecker.h"
-#include "TypeChecker.h"
+
+#include "ASaP/ASaPSymbolTable.h"
+#include "ASaP/CollectRegionNamesAndParameters.h"
+#include "ASaP/DetectTBBParallelism.h"
+#include "ASaP/EffectConstraintGeneration.h"
+#include "ASaP/EffectSummaryNormalizer.h"
+#include "ASaP/NonInterferenceChecker.h"
+#include "ASaP/SemanticChecker.h"
+#include "ASaP/TypeChecker.h"
 
 
 using namespace clang;
