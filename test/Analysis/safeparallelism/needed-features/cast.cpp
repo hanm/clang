@@ -17,7 +17,8 @@ struct B2 : B {
   char cB2;
 };
 
-B *foo(A *a, B2 *b2) {
+B *foo [[asap::writes("Global")]]
+       (A *a, B2 *b2) {
   B* tmp0 = b2;
   B* tmp1 = (B*)a;
   //tmp1->fieldB = static_cast<B*>(a)->fieldB;

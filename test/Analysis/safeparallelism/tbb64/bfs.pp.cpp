@@ -54646,7 +54646,7 @@ public:
         int j;
         for(j=range.begin(); j<range.end(); j++) {
 
-     int oldGatek;
+            int oldGatek;
             int freshNode,currentEdge;
 
             currentEdge = vertices[currentLevelSet[i]]+j;
@@ -54659,19 +54659,19 @@ public:
             oldGatek = -1;
 
             oldGatek = gatekeeper[freshNode].fetch_and_increment();
-     if (oldGatek == 0) {
+            if (oldGatek == 0) {
 
                 int myIndex = newLevelIndex.fetch_and_increment();
 
-         newLevelSet[myIndex] = freshNode;
+                newLevelSet[myIndex] = freshNode;
 
-         level[freshNode] = currentLevel + 1;
-     }
+                level[freshNode] = currentLevel + 1;
+            }
         }
     }
 
 
-    innerLoopBody (int i) {
+    [[asap::writes("Global")]] innerLoopBody (int i) {
         this->i = i;
     }
 };

@@ -32,8 +32,8 @@ public:
 
   int getValue1() { return value1; }  
   int getValue2() { return value2; }  
-  void setValue1(int v) { value1 = v; }
-  void setValue2(int v) { value2 = v; }
+  void setValue1 [[asap::writes("Global")]] (int v) { value1 = v; }
+  void setValue2 [[asap::writes("Global")]] (int v) { value2 = v; }
   // this class is not overloading the + operator
   // but it has Add
   CustomType add (CustomType &c2) {

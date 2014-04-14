@@ -525,7 +525,7 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
                                  "region parameter in method makeDefaultType");
     return AnSe;
   } else if (/*ImplicitParamDecl *ImplParamD = */dyn_cast<ImplicitParamDecl>(ValD)) {
-    assert(false && "Implement ME! :)");
+    assert(false && "ImplicitParamDecl case not implemented!");
   } else if (ParmVarDecl *ParamD = dyn_cast<ParmVarDecl>(ValD)) {
     OSv2 << "DEBUG::         case ParmVarDecl (ParamCount = " << ParamCount << ")\n";
     AnnotationSet AnSe = AnnotScheme->makeParamType(ParamD, ParamCount);
