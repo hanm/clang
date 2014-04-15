@@ -11,7 +11,7 @@
 // safety of parallelism given region and effect annotations.
 //
 //===--------------------------------------------------------------------===//
-
+#include <SWI-Prolog.h>
 #include "ClangSACheckers.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
@@ -173,11 +173,33 @@ public:
     StmtVisitorInvoker<EffectConstraintVisitor> EffectChecker;
     EffectChecker.TraverseDecl(TUDecl);
     os << "##############################################\n";
-    os << "DEBUG:: done running ASaP Effect Checker\n\n";
+    os << "DEBUG:: done running ASaP Constraint Generator\n\n";
     if (EffectChecker.encounteredFatalError()) {
       os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;
     }
+    SymbolTable &SymT = *SymbolTable::Table;
+
+    int Argc; 
+    
+    char Libpl[] = "libpl.dll";
+    char G32[] = "-G32m";
+    char L32[] = "-L32m";
+    char T32[] = "-T32m";
+
+    char* Argv[4] = {Libpl, G32, L32, T32};
+    Argc = 4; 
+
+    PL_initialise(Argc, Argv); 
+    predicate_t Consult = PL_predicate("consult",1,"user");
+    term_t Plfile=PL_new_term_ref();
+    PL_put_atom_chars(Plfile, "/opt/lib/asap.pl");
+    PL_call_predicate(NULL, PL_Q_NORMAL, Consult, Plfile); 
+
+    SymT.solveInclusionConstraints();
+
+    PL_cleanup(0);
+
     os << "DEBUG:: starting ASaP Non-Interference Checking\n";
     StmtVisitorInvoker<NonInterferenceChecker> NonIChecker;
     NonIChecker.TraverseDecl(TUDecl);

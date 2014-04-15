@@ -20,6 +20,7 @@
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 
 #include "ASaPType.h"
+#include "ASaPSymbolTable.h"
 #include "ASaPUtil.h"
 
 namespace clang {

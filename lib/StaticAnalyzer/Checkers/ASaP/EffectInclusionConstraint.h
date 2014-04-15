@@ -26,12 +26,19 @@ namespace asap {
 class EffectInclusionConstraint {
   EffectVector *LHS;
   const EffectSummary *RHS;
+  const FunctionDecl *Def;
+  const Stmt *S;
 
  public:
-  EffectInclusionConstraint(const EffectSummary* Rhs);
+  EffectInclusionConstraint(const EffectSummary* Rhs,
+                            const FunctionDecl* Def,
+                            const Stmt* S);
   void addEffect(Effect* Eff);
   EffectVector* getLHS()  {return LHS;}
   const EffectSummary* getRHS() const {return RHS;}
+  const FunctionDecl* getDef() const {return Def;}
+  const Stmt* getS() const {return S;}
+  void print();
 };
 
 } // End namespace asap.

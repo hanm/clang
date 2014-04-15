@@ -11,7 +11,6 @@
 // Parallelism checker, which tries to generate effect constraints.
 //
 //===----------------------------------------------------------------===//
-#include </usr/lib/swi-prolog/include/SWI-Prolog.h>
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/Stmt.h"
@@ -62,7 +61,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   assert(EffSummary);
 
   //create a constraint object
-  EC = new EffectInclusionConstraint(EffSummary);
+  EC = new EffectInclusionConstraint(EffSummary, Def, S);
 
   if (VisitCXXInitializer) {
     if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
@@ -73,16 +72,6 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   //check constraints
   OS << "DEBUG:: checking effect coverage NEW!!!!!!!\n";
   checkEffectCoverage();
-
-	static char * av[] = {"/home/lamyaa/annotationinference/tests/point.pl", NULL};
-	if( ! PL_initialise(1,av)){
-		OS<<"error initializing\n";
-		PL_halt(1);
-	}else {
-		OS<<"success initializing!\n";
-	}
-
-
   OS << "DEBUG:: done running Visit\n";
   if (const CXXMethodDecl *CXXD = dyn_cast<CXXMethodDecl>(Def)) {
     // check overidden methods have an effect summary that covers this one
@@ -208,8 +197,10 @@ int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp)
     if (InRpl) {
       // Arrays may not have an InRpl
       Effect E(Effect::EK_ReadsEffect, InRpl, exp);
-      OS << "DEBUG:: Adding Effect\n";
+      OS << "DEBUG:: Adding Effect "<< E.toString() << "to " << 
+        EC->getDef()->getNameAsString() << "\n";
       EC->addEffect(&E);
+      EC->print();
       EffectNr++;
     }
     T1->deref();
@@ -221,8 +212,10 @@ int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp)
     const Rpl *InRpl = T1->getInRpl();
     if (InRpl) {
       Effect E(EK, InRpl, exp);
-      OS << "DEBUG:: Adding Effect\n";
+      OS << "DEBUG:: Adding Effect "<< E.toString() << "to " <<
+        EC->getDef()->getNameAsString() << "\n";
       EC->addEffect(&E);
+      EC->print();
       EffectNr++;
     }
   }
@@ -272,12 +265,14 @@ checkEffectCoverage() {
 
   OS << "DEBUG:: N is "<< N <<"\n";
   for (int I=0; I<N; ++I){
-    std::auto_ptr<Effect> E = LHS->pop_back_val();
+    //std::auto_ptr<Effect> E = LHS->pop_back_val();
+    Effect* E = LHS->back();
     OS << "### "; E->print(OS); OS << "\n";
 
     if (E->getEffectKind()!=Effect::EK_InvocEffect) {
       OS << "==== not EK_InvocEffect"<<E->getEffectKind() <<"\n";
-      Trivalent RK=RHS->covers(E.get());
+      // Trivalent RK=RHS->covers(E.get());
+      Trivalent RK=RHS->covers(E);
       if(RK==RK_FALSE) {
         const Expr* Exp=E->getExp();
         const Decl* D;
@@ -579,8 +574,10 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
       /// 2. Add effects to tmp effects
 
       Effect IE(Effect::EK_InvocEffect, Exp, FunD, &SubV);
-      OS << "DEBUG:: Adding invocation Effect\n";
+      OS << "DEBUG:: Adding invocation Effect "<< IE.toString() << 
+        "to " << EC->getDef()->getNameAsString() << "\n";
       EC->addEffect(&IE);
+      EC->print();
       OS << "DEBUG:: After Adding invocation Effect\n";
       SaveAndRestore<int> EffectAccumulator(EffectCount, EffectCount+1);
       /// 3. Visit base if it exists

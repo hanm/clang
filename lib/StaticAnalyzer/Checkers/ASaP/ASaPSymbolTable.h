@@ -212,6 +212,7 @@ public:
   inline void addInclusionConstraint(EffectInclusionConstraint* EIC){
     InclusionConstraints.insert(EIC);
   }
+  void solveInclusionConstraints();
   // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
 

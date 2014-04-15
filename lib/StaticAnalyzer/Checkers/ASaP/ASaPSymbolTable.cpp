@@ -16,6 +16,7 @@
 /// Maps AST Decl* nodes to ASaP info that appertains to the node
 /// such information includes ASaPType*, ParamVector, RegionNameSet,
 /// and EffectSummary
+#include <SWI-Prolog.h>
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 
@@ -27,6 +28,7 @@
 #include "Rpl.h"
 #include "SpecificNIChecker.h"
 #include "Substitution.h"
+#include "ASaPUtil.h"
 
 namespace clang {
 namespace asap {
@@ -515,6 +517,104 @@ getInheritanceSubVec(QualType QT) {
     SubV = 0;
   } /// else result = NULL;
   return SubV;
+}
+
+void SymbolTable::solveInclusionConstraints(){
+  unsigned Num=1;
+
+  for (InclusionConstraintsSetT::iterator I=InclusionConstraints.begin(); I!=InclusionConstraints.end(); ++I)
+    {
+      std::string FName=(**I)->getDef()->getNameAsString();
+      OSv2 << "****" << FName << "*****"<< "\n";
+      (**I)->print();
+      //The effect variable  
+      term_t A = PL_new_term_ref();
+      term_t T2  = PL_new_term_ref();
+      functor_t EVFunctor;
+      EVFunctor = PL_new_functor(PL_new_atom("effect_var"), 1);
+      
+      std::string EVstr;
+      llvm::raw_string_ostream EV(EVstr);
+ 
+      EV << "ev" << Num;
+
+      PL_put_atom_chars(A, EV.str().c_str()); // variable name needs to be fresh
+      int Res=PL_cons_functor(T2, EVFunctor, A);
+      assert(Res);
+
+      term_t A1 = PL_new_term_ref();
+      term_t A2 = PL_new_term_ref();
+      term_t A3 = PL_new_term_ref();
+      term_t A4 = PL_new_term_ref();
+      term_t T  = PL_new_term_ref();
+
+      functor_t ESIFunctor;
+      ESIFunctor = PL_new_functor(PL_new_atom("esi_constraint"), 4);
+      
+ 
+      std::string ESIstr;
+      llvm::raw_string_ostream ESI(ESIstr);
+ 
+      ESI << "esi" << Num;
+      PL_put_atom_chars(A1, ESI.str().c_str()); // fresh constraint name
+      PL_put_atom_chars(A2, FName.c_str());
+      std::string List = "[";
+      EffectVector* Lhs=(**I)->getLHS();
+      for (EffectVector::iterator It=Lhs->begin(); It!=Lhs->end(); ++It){
+        if(It!=Lhs->begin())
+          List += ",";
+        List +=  (*It)->toString();
+      }
+      List += "]";
+      OSv2 << "LHS is "<< List << "\n";
+      Res=PL_put_list_chars(A3, List.c_str());
+      assert(Res);
+
+      PL_put_term(A4, T2);
+      Res=PL_cons_functor(T, ESIFunctor, A1, A2, A3, A4);
+      assert(Res);
+      
+      predicate_t ESIpred1 = PL_predicate("assertz",1,"user");
+      int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, ESIpred1, T);
+      
+      assert(Rval && "first rval is false");
+
+      predicate_t ESI1 = PL_predicate("esi_collect",4,"user");
+      term_t H0 = PL_new_term_refs(4);
+      term_t H1 = H0 + 1;
+      term_t H2 = H0 + 2;
+      term_t H3 = H0 + 3;
+      PL_put_atom_chars(H0,EV.str().c_str());
+      PL_put_atom_chars(H1,FName.c_str());
+      Res=PL_put_list_chars(H2,List.c_str());
+      assert(Res);
+      
+      PL_put_variable(H3);
+
+      Rval = PL_call_predicate(NULL, PL_Q_NORMAL, ESI1, H0);
+
+      assert(Rval && "rval is false");
+
+      char* Solution;
+      Res=PL_get_list_chars(H3, &Solution, 0);
+      assert(Res);
+      OSv2 << "result is "<< Solution << "\n";
+
+      const FunctionDecl *Func=(**I)->getDef();
+      const Stmt  *S=(**I)->getS();
+      StringRef BugName = "Effect Inclusion Constraint Solution";
+  
+      std::string BugStr;
+      llvm::raw_string_ostream StrOS(BugStr);
+      StrOS << "Solution for " << Func->getNameAsString() << ": " << 
+        Solution << "\n";
+      
+      StringRef Str(StrOS.str());
+      helperEmitStatementWarning(*VB.BR, VB.AC, S, Func, Str, BugName, false);
+      
+      OSv2 << "After call\n";
+      ++Num;
+    }
 }
 
 AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
