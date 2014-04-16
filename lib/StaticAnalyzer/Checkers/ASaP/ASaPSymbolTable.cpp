@@ -531,6 +531,7 @@ getInheritanceSubVec(QualType QT) {
 
 void SymbolTable::solveInclusionConstraints(){
   //iterate through symbol table entries
+  int Ind=1;
   for (SymbolTableMapT::iterator MI=SymTable.begin(); MI!=SymTable.end(); ++MI){
     //iterate through paramters and add facts
     OSv2 << "iterating over map"<< "\n";
@@ -544,14 +545,19 @@ void SymbolTable::solveInclusionConstraints(){
          ++PI){
       OSv2 << "iterating over ParamVec"<< "\n";
       StringRef Name=(*PI)->getName();
-   
+      std::string Param;
+      llvm::raw_string_ostream RP(Param);
+ 
+      RP << Name.str() << Ind;
+      Ind++;
+
       term_t A = PL_new_term_ref();
       term_t T  = PL_new_term_ref();
 
       functor_t RPFunctor;
       RPFunctor = PL_new_functor(PL_new_atom("rgn_param"), 1);
       
-      PL_put_atom_chars(A, Name.str().c_str()); // param name
+      PL_put_atom_chars(A, RP.str().c_str()); // param name
 
       int Res=PL_cons_functor(T, RPFunctor, A);
       assert(Res);
@@ -642,21 +648,26 @@ void SymbolTable::solveInclusionConstraints(){
       assert(Res);
       OSv2 << "result is "<< Solution << "\n";
 
-      const FunctionDecl *Func=(**I)->getDef();
-      const Stmt  *S=(**I)->getS();
-      StringRef BugName = "Effect Inclusion Constraint Solution";
-  
-      std::string BugStr;
-      llvm::raw_string_ostream StrOS(BugStr);
-      StrOS << "Solution for " << Func->getNameAsString() << ": " << 
-        Solution << "\n";
-      
-      StringRef Str(StrOS.str());
-      helperEmitStatementWarning(*VB.BR, VB.AC, S, Func, Str, BugName, false);
-      
-      OSv2 << "After call\n";
+      emitConstraintSolution(**I, Solution);
+
       ++Num;
     }
+}
+
+void SymbolTable::emitConstraintSolution(EffectInclusionConstraint *EC, 
+                                         char* Solution){
+  const FunctionDecl *Func=EC->getDef();
+  const Stmt  *S=EC->getS();
+  StringRef BugName = "Effect Inclusion Constraint Solution";
+  
+  std::string BugStr;
+  llvm::raw_string_ostream StrOS(BugStr);
+  StrOS << "Solution for " << Func->getNameAsString() << ": " << 
+    Solution << "\n";
+      
+  StringRef Str(StrOS.str());
+  helperEmitStatementWarning(*VB.BR, VB.AC, S, Func, Str, BugName, false);
+
 }
 
 AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
