@@ -520,6 +520,38 @@ getInheritanceSubVec(QualType QT) {
 }
 
 void SymbolTable::solveInclusionConstraints(){
+  //iterate through symbol table entries
+  for (SymbolTableMapT::iterator MI=SymTable.begin(); MI!=SymTable.end(); ++MI){
+    //iterate through paramters and add facts
+    OSv2 << "iterating over map"<< "\n";
+    const ParameterVector* ParamVec=(*MI).second->getParameterVector();
+    OSv2 << "got ParamVec"<< "\n";
+    if (!ParamVec){
+       OSv2 << "ParamVec is NULL"<< "\n";
+       continue;
+    }
+    for (ParameterVector::const_iterator PI=ParamVec->begin(); PI!=ParamVec->end();
+         ++PI){
+      OSv2 << "iterating over ParamVec"<< "\n";
+      StringRef Name=(*PI)->getName();
+   
+      term_t A = PL_new_term_ref();
+      term_t T  = PL_new_term_ref();
+
+      functor_t RPFunctor;
+      RPFunctor = PL_new_functor(PL_new_atom("rgn_param"), 1);
+      
+      PL_put_atom_chars(A, Name.str().c_str()); // param name
+
+      int Res=PL_cons_functor(T, RPFunctor, A);
+      assert(Res);
+
+      predicate_t RPpred = PL_predicate("assertz",1,"user");
+      int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, RPpred, T);
+      
+      assert(Rval && "Param rval is false");
+    }
+  }
   unsigned Num=1;
 
   for (InclusionConstraintsSetT::iterator I=InclusionConstraints.begin(); I!=InclusionConstraints.end(); ++I)

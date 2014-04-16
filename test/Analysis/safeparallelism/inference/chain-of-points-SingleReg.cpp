@@ -1,5 +1,5 @@
 // RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker -analyzer-config -asap-default-scheme=inference %s -verify
-// expected-no-diagnostics
+//
 
 class [[asap::param("class")]] point  {
     double m_x [[asap::arg("class")]];
@@ -7,7 +7,7 @@ class [[asap::param("class")]] point  {
 
 public:
     point() {}
-    point(double x, double y) : m_x(x), m_y(y) {}
+    point(double x, double y) : m_x(x), m_y(y) {} //expected-warning{{Solution for point: [Reads Effect on Local,Reads Effect on Local]}}
  
     [[asap::param("Q"), asap::reads("Q")]] point(
         const point &p [[asap::arg("Q")]]
@@ -45,7 +45,7 @@ struct [[asap::param("Pl")]] link {
         pos(pos_in),
         next(nullptr) {}
     // copy constructor
-    link(link &l[[asap::arg("Pl")]]) : pos(l.pos), next(l.next) {}
+    link(link &l[[asap::arg("Pl")]]) : pos(l.pos), next(l.next) {} //expected-warning{{Solution for link: [Reads Effect on Pl]}}
     // move "constructor"
     link &operator = [[asap::arg("Pl")]] (link && l[[asap::arg("Pl")]]) { return l; }
     };
