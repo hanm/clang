@@ -213,6 +213,7 @@ public:
     InclusionConstraints.insert(EIC);
   }
   void solveInclusionConstraints();
+  void emitConstraintSolution(EffectInclusionConstraint *EC, char* Solution);
   // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
 
