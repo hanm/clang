@@ -64,54 +64,50 @@ bool EffectSummaryNormalizerTraverser::VisitFunctionDecl(FunctionDecl *D) {
   D->print(OS, Ctx.getPrintingPolicy());
   OS << "':\n";
 
-    /// C. Check effect summary
-    /// C.1. Build Effect Summary
-    const EffectSummary *ES = SymT.getEffectSummary(D);
-    assert(ES && "Function missing effect summary");
-    /// C.2. Check Effects covered by canonical Declaration
-    const FunctionDecl *CanFD = D->getCanonicalDecl();
-    if (CanFD && CanFD != D && !D->isFunctionTemplateSpecialization()) {
-      // Case 1: We are not visiting the canonical Decl
-      OS << "DEBUG:: CanFD != D\n";
-      OS << "DEBUG:: D="; D->print(OS); OS << "\n";
-      OS << "DEBUG:: CanFD="; CanFD->print(OS); OS << "\n";
+  const EffectSummary *ES = SymT.getEffectSummary(D);
+  assert(ES && "Function missing effect summary");
+  const FunctionDecl *CanFD = D->getCanonicalDecl();
+  if (CanFD && CanFD != D && !D->isFunctionTemplateSpecialization()) {
+    OS << "DEBUG:: CanFD != D\n";
+    OS << "DEBUG:: D="; D->print(OS); OS << "\n";
+    OS << "DEBUG:: CanFD="; CanFD->print(OS); OS << "\n";
 
-      OS << "DEBUG:: D " << (D->isTemplateDecl() ? "IS " : "is NOT ")
-         << "a template\n";
-      OS << "DEBUG:: D " << (D->isTemplateParameter() ? "IS " : "is NOT ")
-         << "a template PARAMETER\n";
-      OS << "DEBUG:: D " << (D->isFunctionTemplateSpecialization() ? "IS " : "is NOT ")
-         << "a function template SPECIALIZATION\n";
+    OS << "DEBUG:: D " << (D->isTemplateDecl() ? "IS " : "is NOT ")
+       << "a template\n";
+    OS << "DEBUG:: D " << (D->isTemplateParameter() ? "IS " : "is NOT ")
+       << "a template PARAMETER\n";
+    OS << "DEBUG:: D " << (D->isFunctionTemplateSpecialization() ? "IS " : "is NOT ")
+       << "a function template SPECIALIZATION\n";
 
-      OS << "DEBUG:: CanFD " << (CanFD->isTemplateDecl() ? "IS" : "is NOT ")
-         << "a template\n";
-      OS << "DEBUG:: CanFD " << (CanFD->isTemplateParameter() ? "IS " : "is NOT ")
-         << "a template PARAMETER\n";
-      OS << "DEBUG:: CanFD " << (CanFD->isFunctionTemplateSpecialization() ? "IS " : "is NOT ")
-         << "a function template SPECIALIZATION\n";
+    OS << "DEBUG:: CanFD " << (CanFD->isTemplateDecl() ? "IS" : "is NOT ")
+       << "a template\n";
+    OS << "DEBUG:: CanFD " << (CanFD->isTemplateParameter() ? "IS " : "is NOT ")
+       << "a template PARAMETER\n";
+    OS << "DEBUG:: CanFD " << (CanFD->isFunctionTemplateSpecialization() ? "IS " : "is NOT ")
+       << "a function template SPECIALIZATION\n";
 
-      OS << "DEBUG:: D="; D->dump(OS); OS << "\n";
-      OS << "DEBUG:: CanFD="; CanFD->dump(OS); OS << "\n";
+    OS << "DEBUG:: D="; D->dump(OS); OS << "\n";
+    OS << "DEBUG:: CanFD="; CanFD->dump(OS); OS << "\n";
 
-      const EffectSummary *CanES = SymT.getEffectSummary(CanFD);
-      assert(CanES && "Function missing effect summary");
-      Trivalent RK=CanES->covers(ES);
-      if (RK == RK_FALSE) {
-        std::string Name = D->getNameInfo().getAsString();
-        emitCanonicalDeclHasSmallerEffectSummary(D, Name);
-      } else if (RK == RK_DUNNO){
-	assert(false && "Found variable effect summary");
-      }else { // The effect summary of the canonical decl covers this.
+    const EffectSummary *CanES = SymT.getEffectSummary(CanFD);
+    assert(CanES && "Function missing effect summary");
+    Trivalent RK=CanES->covers(ES);
+    if (RK == RK_FALSE) {
+      std::string Name = D->getNameInfo().getAsString();
+      emitCanonicalDeclHasSmallerEffectSummary(D, Name);
+    } else if (RK == RK_DUNNO){
+	    assert(false && "Found variable effect summary");
+    } else { // The effect summary of the canonical decl covers this.
 
-        // Set the Effect summary of this declaration to be the same
-        // as that of the canonical declaration.
-        // (Makes a copy of the effect summary).
+      // Set the Effect summary of this declaration to be the same
+      // as that of the canonical declaration.
+      // (Makes a copy of the effect summary).
 
-        // Actually why not keep the original effect summary?
-        // -> commenting out the next line.
-        //SymT.resetEffectSummary(D, CanFD);
-      }
+      // Actually why not keep the original effect summary?
+      // -> commenting out the next line.
+      //SymT.resetEffectSummary(D, CanFD);
     }
+  }
   return true;
 }
 

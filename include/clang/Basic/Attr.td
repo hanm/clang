@@ -830,7 +830,7 @@ def Overloadable : Attr {
   let Subjects = SubjectList<[Function], ErrorDiag>;
 }
 
-def Override : InheritableAttr { 
+def Override : InheritableAttr {
   let Spellings = [Keyword<"override">];
   let SemaHandler = 0;
 }
@@ -910,7 +910,7 @@ def InitPriority : InheritableAttr {
 def Section : InheritableAttr {
   let Spellings = [GCC<"section">];
   let Args = [StringArgument<"Name">];
-  let Subjects = SubjectList<[Function, GlobalVar, 
+  let Subjects = SubjectList<[Function, GlobalVar,
                               ObjCMethod, ObjCProperty], ErrorDiag,
                              "ExpectedFunctionGlobalVarMethodOrProperty">;
 }
@@ -1441,13 +1441,13 @@ def Unaligned : IgnoredAttr {
 
 /// REGIONS
 
-def Region : InheritableAttr {
+def Region : Attr {
   let Spellings = [GNU<"region">,  CXX11<"asap", "region">];
   let Args = [StringArgument<"Name">];
 }
 
 // TODO: Create ExpectedStructOrUnionOrClassOrFunction error/warning diagnostic
-def RegionParam : InheritableAttr {
+def RegionParam : Attr {
   let Spellings = [GNU<"param">, CXX11<"asap", "param">];
   let Subjects = SubjectList<[Record, Function], WarnDiag, "ExpectedStructOrUnionOrClass">;
   let Args = [StringArgument<"Name">];
