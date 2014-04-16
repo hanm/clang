@@ -11,7 +11,7 @@ struct C {
   }; 
 };
 
-void foo() {
+void foo [[asap::writes("Global")]] () {
   C x;
   x.xyz[0] = x.x;
   x.y = x.xyz[1];

@@ -54680,7 +54680,7 @@ public:
     }
 
 
-    innerLoopBody (int i) {
+    [[asap::writes("Global")]] innerLoopBody (int i) {
         this->i = i;
     }
 };

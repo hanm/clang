@@ -28,7 +28,7 @@ void funk [[asap::writes("Global")]] ()
 {
   static int x = 0;
   ++x; 
-  int &c=C::getCount();
+  int &c=C::getCount2();
   c++;
   global = 100.0;
 }

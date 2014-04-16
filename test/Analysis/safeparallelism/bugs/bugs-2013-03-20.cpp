@@ -8,7 +8,8 @@ class [[asap::param("P")]] point  {
 public:
   point() {}
   point(double x, double y) : m_x(x), m_y(y) {}
-  point(const point &p)
+  [[asap::param("Q"), asap::reads("Q")]]
+  point(const point &p[[asap::arg("Q")]])
       : m_x(p.m_x), m_y(p.m_y)
       {}
 
@@ -26,7 +27,7 @@ public:
     }
 };
 
-double simple(const double &d) {
+double simple [[asap::reads("Global")]] (const double &d) {
   return d;
 }
 

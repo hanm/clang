@@ -54,7 +54,7 @@ public:
 
 protected:
   AnnotationSet helperMakeClassParams(const RecordDecl *D);
-  AnnotationSet helperMakeGlobalType(const VarDecl *D, long ArgNum);
+  AnnotationSet helperMakeGlobalType(const ValueDecl *D, long ArgNum);
   AnnotationSet helperMakeLocalType(const ValueDecl *D, long ArgNum);
   AnnotationSet helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT);
   AnnotationSet helperMakeWritesLocalEffectSummary(const FunctionDecl *D);
