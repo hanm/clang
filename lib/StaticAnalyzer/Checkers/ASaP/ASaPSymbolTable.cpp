@@ -519,6 +519,22 @@ getInheritanceSubVec(QualType QT) {
   return SubV;
 }
 
+static void emitConstraintSolution(EffectInclusionConstraint *EC, 
+                                         char* Solution){
+  const FunctionDecl *Func=EC->getDef();
+  const Stmt  *S=EC->getS();
+  StringRef BugName = "Effect Inclusion Constraint Solution";
+  
+  std::string BugStr;
+  llvm::raw_string_ostream StrOS(BugStr);
+  StrOS << "Solution for " << Func->getNameAsString() << ": " << 
+    Solution << "\n";
+      
+  StringRef Str(StrOS.str());
+  helperEmitStatementWarning(*SymbolTable::VB.BR, SymbolTable::VB.AC, S, Func, Str, BugName, false);
+
+}
+
 void SymbolTable::solveInclusionConstraints(){
   //iterate through symbol table entries
   int Ind=1;
@@ -642,22 +658,6 @@ void SymbolTable::solveInclusionConstraints(){
 
       ++Num;
     }
-}
-
-void SymbolTable::emitConstraintSolution(EffectInclusionConstraint *EC, 
-                                         char* Solution){
-  const FunctionDecl *Func=EC->getDef();
-  const Stmt  *S=EC->getS();
-  StringRef BugName = "Effect Inclusion Constraint Solution";
-  
-  std::string BugStr;
-  llvm::raw_string_ostream StrOS(BugStr);
-  StrOS << "Solution for " << Func->getNameAsString() << ": " << 
-    Solution << "\n";
-      
-  StringRef Str(StrOS.str());
-  helperEmitStatementWarning(*VB.BR, VB.AC, S, Func, Str, BugName, false);
-
 }
 
 AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
