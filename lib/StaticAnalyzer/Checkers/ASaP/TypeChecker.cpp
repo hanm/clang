@@ -753,7 +753,7 @@ void TypeBuilderVisitor::helperBinAddSub(BinaryOperator* Exp) {
   if (QT->isDependentType()){
     clearType();
     return; // do nothing
-  } else if(QT->isPointerType()) {
+  } else if (QT->isPointerType()) {
     // find which of the two sides is a pointer type and use that
     const ASaPType *LHSType = ASVL.getType();
     if (LHSType && LHSType->getQT()->isPointerType()) {
@@ -768,8 +768,10 @@ void TypeBuilderVisitor::helperBinAddSub(BinaryOperator* Exp) {
       Type = ASVR.stealType();
       return;
     } //else
-    assert(false && "expression evaluates to pointer but neither "
-           "side (LHS or RHS) returned a valid pointer type");
+    // Nothing, the pointer type subexpression may have an explicit cast
+    // resulting in the TypeBuilder Visitor's 'Type' to be erased.
+    //assert(false && "expression evaluates to pointer but neither "
+    //       "side (LHS or RHS) returned a valid pointer type");
   } else if (QT->isScalarType()) { // but isn't pointer type
     return; // do nothing (we could also build a default Type in Local)
   }

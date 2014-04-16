@@ -11,7 +11,7 @@ inline ptrdiff_t __distance(T *_first, T *_last) {
 
 void foo() {
   int x;
-  char c = 'a';
+  char c [[asap::arg("Global")]] = 'a';
 
   char *a = 0;
 
@@ -19,7 +19,7 @@ void foo() {
 
   x = __distance(a, b);
 
-  int A[10];
+  int A [[asap::arg("Global")]] [10]; 
   int *pi;
   pi = A;
   pi = &A[3];

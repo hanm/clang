@@ -29,7 +29,7 @@ namespace clang {
 namespace asap {
 
 inline AnnotationSet AnnotationScheme::
-helperMakeGlobalType(const VarDecl *D, long ArgNum) {
+helperMakeGlobalType(const ValueDecl *D, long ArgNum) {
   AnnotationSet Result;
 
   RplVector RplV;
@@ -43,10 +43,14 @@ helperMakeGlobalType(const VarDecl *D, long ArgNum) {
 inline AnnotationSet AnnotationScheme::
 helperMakeLocalType(const ValueDecl *D, long ArgNum) {
   AnnotationSet Result;
-
+  int I = 0;
   RplVector RplV;
-  for (int I = 0; I < ArgNum; ++I) {
+  if (!D->getType()->isReferenceType()) {
     RplV.push_back(Rpl(*SymbolTable::LOCAL_RplElmt));
+    I++;
+  }
+  for (; I < ArgNum; ++I) {
+    RplV.push_back(Rpl(*SymbolTable::GLOBAL_RplElmt));
   }
   Result.T = new ASaPType(D->getType(), SymT.getInheritanceMap(D), &RplV);
   return Result;
@@ -197,7 +201,7 @@ makeStackType(const VarDecl *D, long ArgNum) {
 
 AnnotationSet SimpleAnnotationScheme::
 makeFieldType(const FieldDecl *D, long ArgNum) {
-  return helperMakeLocalType(D, ArgNum);
+  return helperMakeGlobalType(D, ArgNum);
 }
 
 AnnotationSet SimpleAnnotationScheme::
@@ -236,7 +240,7 @@ makeStackType(const VarDecl *D, long ArgNum) {
 
 AnnotationSet CheckGlobalsAnnotationScheme::
 makeFieldType(const FieldDecl *D, long ArgNum) {
-  return helperMakeLocalType(D, ArgNum);
+  return helperMakeGlobalType(D, ArgNum);
 }
 
 AnnotationSet CheckGlobalsAnnotationScheme::

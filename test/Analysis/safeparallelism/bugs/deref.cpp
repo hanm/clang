@@ -10,13 +10,13 @@ public:
   T _M_x[10];
   size_t _M_p;
   
-  T foo() {
+  T foo [[asap::writes("Global")]] () {
     T __z = this->_M_x[this->_M_p++];
     return __z;
   }
 };
 
-int main (void) {
+int main [[asap::writes("Global")]] (void) {
   C<unsigned int> c;
   unsigned int x = c.foo();
   return 0;
