@@ -339,13 +339,17 @@ isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const {
               ((ThisCopy.InRpl == 0 && ThatCopy.InRpl == 0)
                || (ThisCopy.InRpl && ThatCopy.InRpl &&
                    ThisCopy.InRpl->isIncludedIn(*ThatCopy.InRpl)));
-    } else {
-      assert(isDerivedFrom(QT, That.QT));
+    } else if (isDerivedFrom(QT, That.QT)) {
+      //assert(isDerivedFrom(QT, That.QT));
       ASaPType ThisCopy(*this);
       if (!ThisCopy.implicitCastToBase(That.QT, SymT))
         return false;
       else
         return ThisCopy.ArgV->isIncludedIn(*That.ArgV);
+    } else {
+      // this may happen in the case of an unsafe implicit cast,
+      // in particular casting from function to function pointer.
+      return false;
     }
   }
   /// Note that we're ignoring InRpl on purpose.
