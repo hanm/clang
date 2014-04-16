@@ -313,9 +313,15 @@ findRegionOrParamName(const Decl *D, StringRef Name) {
   if (!D)
     return 0;
   /// 1. try to find among regions or region parameters
-  const RplElement *Result = SymT.lookupParameterName(D, Name);
-  if (!Result)
-    Result = SymT.lookupRegionName(D, Name);
+  const RplElement *Result = SymT.lookupRegionOrParameterName(D, Name);
+  if (!Result) {
+    if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+      const FunctionDecl *CanD = FD->getCanonicalDecl();
+      if (CanD && FD != CanD) {
+        Result = SymT.lookupRegionOrParameterName(CanD, Name);
+      }
+    }
+  }
   return Result;
 }
 
@@ -570,7 +576,7 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *Att,
        << ", Vec.back() = " << Vec.back() <<"\n";
 
     if (Vec.size() > 1) {
-      // Find the specified declaration
+      // Find the specified context
       DeclContext *DC = D->getDeclContext();
       DeclContextLookupResult Res;
       IdentifierInfo &II = Ctx.Idents.get(Vec[0]);
@@ -608,7 +614,7 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *Att,
         assert(DC);
       }
       RplEl = findRegionOrParamName(Res[0], Vec.back());
-    } else {
+    } else { // Vec.size() <= 1 : There was no Context specifier ('::').
       assert(Vec.size() == 1);
       Head = Vec.back();
       /// head: is it a special RPL element? if not, is it declared?
