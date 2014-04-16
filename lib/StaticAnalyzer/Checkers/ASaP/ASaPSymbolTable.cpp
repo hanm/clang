@@ -421,6 +421,16 @@ lookupParameterName(const Decl *D, StringRef Name) const {
   return SymTable.lookup(D)->lookupParameterName(Name);
 }
 
+const RplElement *SymbolTable::
+lookupRegionOrParameterName(const Decl *D, StringRef Name) const {
+  if (!SymTable.lookup(D))
+    return 0;
+  const RplElement *Result =  SymTable.lookup(D)->lookupParameterName(Name);
+  if (!Result)
+    Result = SymTable.lookup(D)->lookupRegionName(Name);
+  return Result;
+}
+
 bool SymbolTable::
 hasRegionName(const Decl *D, StringRef Name) const {
   return lookupRegionName(D, Name) ? true : false;

@@ -172,12 +172,16 @@ public:
   void resetEffectSummary(const Decl *D, const EffectSummary *ES);
 
   // Lookup
-  /// \brief Returns a named RPL element of the same name or null.
+  /// \brief Returns a region-name RPL element of the requested Name or null.
   const NamedRplElement *lookupRegionName(const Decl *D,
                                           llvm::StringRef Name) const;
-  /// \brief Returns a parameter RPL element of the same name or null.
+  /// \brief Returns a parameter RPL element of the requested Name or null.
   const ParamRplElement *lookupParameterName(const Decl *D,
                                              llvm::StringRef Name) const;
+  /// \brief Returns an RPL element (region-name or parameter) of the
+  /// requested Name or null.
+  const RplElement *lookupRegionOrParameterName(const Decl *D,
+                                                StringRef Name) const;
   // Others
   /// \brief Returns true iff D has a declared region-name Name.
   bool hasRegionName(const Decl *D, llvm::StringRef Name) const;
