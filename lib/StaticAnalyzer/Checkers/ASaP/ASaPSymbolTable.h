@@ -30,6 +30,7 @@
 #include "ASaPFwdDecl.h"
 #include "ASaPInheritanceMap.h"
 #include "EffectInclusionConstraint.h"
+#include "EffectNIConstraint.h"
 #include "OwningPtrSet.h"
 
 namespace clang {
@@ -63,6 +64,7 @@ class SymbolTable {
                           const SpecificNIChecker*> ParallelismMapT;
   typedef OwningPtrSet<std::string, 1024> FreshNamesSetT;
   typedef OwningPtrSet<clang::asap::EffectInclusionConstraint*, NUM_OF_CONSTRAINTS> InclusionConstraintsSetT;
+  typedef OwningPtrSet<clang::asap::EffectNIConstraint*, NUM_OF_CONSTRAINTS> NIConstraintsSetT;
 
   /// \brief Symbol Table Map
   SymbolTableMapT SymTable;
@@ -79,6 +81,9 @@ class SymbolTable {
 
   /// \brief Set of all effect inclusion constraints generated
   InclusionConstraintsSetT InclusionConstraints;
+
+  /// \brief Set of all non-interference constraints generated
+  NIConstraintsSetT NIConstraints;
 
   AnnotationScheme *AnnotScheme;
   static int Initialized;
@@ -216,6 +221,11 @@ public:
   inline void addInclusionConstraint(EffectInclusionConstraint* EIC){
     InclusionConstraints.insert(EIC);
   }
+
+  inline void addNIConstraint(EffectNIConstraint* NIC){
+    NIConstraints.insert(NIC);
+  }
+
   void solveInclusionConstraints();
   // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
