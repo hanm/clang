@@ -357,7 +357,7 @@ typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
   Param->print(OS, Ctx.getPrintingPolicy());
   OS << "'\n";
   OS << "SubstitutionVector Size = " << SubV.size() << "\n";
-  OS << "SubVec: " << SubV.toString();
+  OS << "SubVec: " << SubV.toString() << "\n";
 
   TypeBuilderVisitor TBVR(Def, Arg);
   const ASaPType *LHSType = SymT.getType(Param);
@@ -525,22 +525,13 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   VarDecl *VarD = dyn_cast<VarDecl>(D); // Non-null if calling through fn-ptr
   assert(FunD || VarD);
   if (FunD) {
-    // Set up Substitution Vector
-    const ParameterVector *FD_ParamV = SymT.getParameterVector(FunD);
-    if (FD_ParamV && FD_ParamV->size() > 0) {
-      ParameterSet *ParamS = new ParameterSet();
-      FD_ParamV->addToParamSet(ParamS);
-      buildParamSubstitutions(FunD, Exp->arg_begin(),
-                              Exp->arg_end(), *ParamS, SubV);
-      delete ParamS;
-    }
 
     DeclContext *DC = FunD->getDeclContext();
     assert(DC);
     RecordDecl *ClassDecl = dyn_cast<RecordDecl>(DC);
     // ClassDecl is allowed to be null
 
-    // Build substitution
+    // Build substitution for class region parameter(s)
     const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
     if (ParamV && ParamV->size() > 0) {
       assert(ParamV->size() == 1); // until we support multiple region params
@@ -554,6 +545,7 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
         OS << "DEBUG:: typecheckCallExpr Substitution = "
            << Sub.toString() << "\n";
         SubV.push_back(&Sub);
+        OS << "DEBUG:: SubVec: " << SubV.toString() << "\n";
       }
     }
     unsigned NumArgs = Exp->getNumArgs();
