@@ -1,4 +1,6 @@
 // RUN: %clang_cc1 -std=c++11  -fcxx-exceptions -analyze -analyzer-checker=alpha.SafeParallelismChecker -analyzer-config -asap-default-scheme=global %s -verify
+// XPASS: x86_64
+// END.
 
 # 1 "bfs.cpp"
 # 1 "<built-in>" 1

@@ -1,5 +1,7 @@
 // RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker -analyzer-config -asap-default-scheme=param %s -verify
+// XPASS: x86_64
 // expected-no-diagnostics
+// END.
 
 # 1 "tree-NI.cpp"
 # 1 "<built-in>" 1
