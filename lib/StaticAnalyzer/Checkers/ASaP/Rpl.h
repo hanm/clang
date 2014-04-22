@@ -26,6 +26,20 @@
 namespace clang {
 namespace asap {
 
+class RegionNameVector;
+
+class RplDomain {
+  RegionNameVector *Regions;
+  const ParameterVector *Params;
+  RplDomain *Parent;
+
+public:
+  RplDomain(RegionNameVector *RV, const ParameterVector *PV, RplDomain *Parent);
+  void addRegion(NamedRplElement *R);
+
+  void print (llvm::raw_ostream& OS);
+};
+
 class RplElement {
 public:
   /// Discriminator for LLVM-style RTTI (dyn_cast<> et al.)
@@ -34,8 +48,7 @@ public:
       RK_Star,
       RK_Named,
       RK_Parameter,
-      RK_Capture,
-      RK_Var //Rpl variable
+      RK_Capture
   };
 
 private:
@@ -43,7 +56,8 @@ private:
   const RplElementKind Kind;
   /// FIXME: protect copy constructor
   //RplElement(RplElement &Elmt);
-
+  
+  
 public:
   /// API
   RplElementKind getKind() const { return Kind; }
@@ -127,29 +141,17 @@ public:
 };
 
 ///-////////////////////////////////////////
-class VarRplElement : public RplElement {
-  ///Fields
-  StringRef name;
-
-public:
-  /// Constructor
-  VarRplElement(StringRef name) : RplElement(RK_Var), name(name) {}
-  virtual ~VarRplElement() {}
-
-  /// Methods
-  virtual StringRef getName() const { return name; }
-
-  static bool classof(const RplElement *R) {
-    return R->getKind() == RK_Var;
-  }
-};
-
 
 class Effect;
 
 
 class Rpl {
 public:
+
+  enum RplKind {
+    RPL_CONCRETE,
+    RPL_VAR
+  };
   /// Static Constants
   static const char RPL_SPLIT_CHARACTER = ':';
   static const StringRef RPL_LIST_SEPARATOR;
@@ -166,6 +168,10 @@ private:
 #endif
 typedef llvm::SmallVector<const RplElement*,
                           RPL_ELEMENT_VECTOR_SIZE> RplElementVectorTy;
+
+  const RplKind Kind;
+  RplDomain *Domain;
+
   /// Fields
   /// Note: RplElements are not owned by Rpl class.
   /// They are *NOT* destroyed with the Rpl.
@@ -186,6 +192,7 @@ typedef llvm::SmallVector<const RplElement*,
       firstIdx = 0;
       lastIdx = rpl.RplElements.size()-1;
     }
+
     /// Printing (Rpl Ref)
     void print(llvm::raw_ostream& OS) const {
       int I = firstIdx;
@@ -241,15 +248,19 @@ typedef llvm::SmallVector<const RplElement*,
   ///////////////////////////////////////////////////////////////////////////
   public:
   /// Constructors
-  Rpl() : FullySpecified(true) {}
+  Rpl() :  Kind(RPL_CONCRETE), FullySpecified(true) {}
+
+  Rpl(int dummy) : Kind(RPL_VAR) {//making an Rpl var
+  }
 
   Rpl(const RplElement &Elm) :
-    FullySpecified(Elm.isFullySpecified()) {
+  Kind(RPL_CONCRETE), FullySpecified(Elm.isFullySpecified()){
     RplElements.push_back(&Elm);
   }
 
   /// Copy Constructor
   Rpl(const Rpl &That) :
+      Kind(That.Kind),
       RplElements(That.RplElements),
       FullySpecified(That.FullySpecified)
   {}
@@ -257,6 +268,13 @@ typedef llvm::SmallVector<const RplElement*,
   static std::pair<StringRef, StringRef> splitRpl(StringRef &String);
   void print(llvm::raw_ostream &OS) const;
   std::string toString() const;
+
+  RplKind getKind() const { return Kind; }
+
+  inline void setDomain(RplDomain *D) { Domain = D;}
+  inline RplDomain* getDomain() { return Domain;}
+
+
 
   // Getters
   /// \brief Returns the last of the RPL elements of this RPL.
@@ -427,6 +445,19 @@ public:
     delete PV;
     PV = 0;
   }
+
+  void print (llvm::raw_ostream& OS) const {
+    OS << "Printing Params vector..."<< size() <<"\n";
+    if(!size())
+      return;
+    for(VectorT::const_iterator I = begin(), E = end();
+        I != E; ++I) {
+      const ParamRplElement *El = *I;
+      OS << ", " << El->getName();
+    }
+    OS << "\n";
+  }
+
 
 }; // end class ParameterVector
 
@@ -622,6 +653,35 @@ public:
     return 0;
   }
 }; // End class RegionNameSet.
+
+
+
+class RegionNameVector
+: public OwningVector<NamedRplElement, REGION_NAME_SET_SIZE> {
+
+public:
+  /// \brief Returns the NamedRplElement with name=Name or null.
+  const NamedRplElement *lookup (StringRef Name) {
+    for (VectorT::iterator I = begin(), E = end();
+         I != E; ++I) {
+      const NamedRplElement *El = *I;
+      if (El->getName().compare(Name) == 0)
+        return El;
+    }
+    return 0;
+  }
+  
+  void print (llvm::raw_ostream& OS) {
+    OS << "Printing Regions vector...\n";
+     for (VectorT::iterator I = begin(), E = end();
+          I != E; ++I) {
+       OS << "in loop\n";
+       const NamedRplElement *El = *I;
+       OS << ", " << El->getName();
+     }
+     OS << "after loop\n";
+  }
+}; // End class RegionNameVector.
 
 } // End namespace asap.
 } // End namespace clang.

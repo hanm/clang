@@ -274,15 +274,17 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
     EffectSummaryVector::iterator J = I; ++J;
     while (J != E) {
       if((*I)){
-	Trivalent RK=(*I)->isNonInterfering(*J);
-	if (RK==RK_FALSE) {
-	  assert(*J);
-	  emitInterferingEffects(Exp, *(*I), *(*J));
-	  Result = false;
-	}
-	else if (RK==RK_DUNNO){
-	  assert(false && "Found variable effect summary");
-	}
+        Trivalent RK=(*I)->isNonInterfering(*J);
+        if (RK==RK_FALSE) {
+          assert(*J);
+          emitInterferingEffects(Exp, *(*I), *(*J));
+          Result = false;
+        }
+        else if (RK==RK_DUNNO){
+          //assert(false && "Found variable effect summary");
+          EffectNIConstraint* NIC = new EffectNIConstraint(*I, *J);
+          SymbolTable::Table->addNIConstraint(NIC);
+        }
       }
       ++J;
     }
@@ -306,7 +308,8 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
         Result = false;
       }
       else if (RK==RK_DUNNO) {
-	assert(false && "Found variable effect summary");
+        assert(false && "Found variable effect summary");
+        //TODO: This should be an inclusion constraint, right?
       }
     }
   }
@@ -333,13 +336,16 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   // TODO InductionVarVector IVV = detectInductionVariablesVector
 
   // 3. Check non-interference
-  Trivalent RK=ES->isNonInterfering(ES.get());
+  EffectSummary* ESptr=ES.get();
+  Trivalent RK=ES->isNonInterfering(ESptr);
   if (RK==RK_FALSE) {
     emitInterferingEffects(Exp, *ES, *ES);
     Result = false;
   }
   else if (RK==RK_DUNNO) {
-    assert(false && "Found variable effect summary");
+    //    assert(false && "Found variable effect summary");
+    EffectNIConstraint* NIC = new EffectNIConstraint(ESptr, ESptr);
+    SymbolTable::Table->addNIConstraint(NIC);
   }
   // 4. Check effect coverage
   const EffectSummary *DefES = SymbolTable::Table->getEffectSummary(Def);
@@ -357,6 +363,7 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   }
   else if (RK==RK_DUNNO){
     assert(false && "Found variable effect summary");
+    //TODO: inclusion constraint?
   }
   // 5. Cleanup
   //delete(ES);
@@ -379,13 +386,16 @@ bool TBBParallelForIndexNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   // TODO InductionVarVector IVV = detectInductionVariablesVector
 
   // 3. Check non-interference
-  Trivalent RK=ES->isNonInterfering(ES.get());
+  EffectSummary* ESptr=ES.get();
+  Trivalent RK=ES->isNonInterfering(ESptr);
   if (RK==RK_FALSE) {
     emitInterferingEffects(Exp, *ES, *ES);
     Result = false;
   }
   else if (RK==RK_DUNNO) {
-    assert(false && "Found variable effect summary");
+    //assert(false && "Found variable effect summary");
+    EffectNIConstraint* NIC = new EffectNIConstraint(ESptr, ESptr);
+    SymbolTable::Table->addNIConstraint(NIC);
   }
   // 4. Check effect coverage
   const EffectSummary *DefES = SymbolTable::Table->getEffectSummary(Def);
@@ -401,8 +411,9 @@ bool TBBParallelForIndexNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
     emitEffectsNotCoveredWarning(Arg, Def, Str);
     Result = false;
   }
-  else if (RK==RK_FALSE) {
+  else if (RK==RK_DUNNO) {
     assert(false && "Found variable effect summary");
+    //TODO: inclusion constraint
   }
   // 5. Cleanup
   //delete(ES);

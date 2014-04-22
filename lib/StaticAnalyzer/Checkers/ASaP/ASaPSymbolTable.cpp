@@ -304,6 +304,42 @@ const RegionNameSet *SymbolTable::getRegionNameSet(const Decl *D) const {
     return SymTable.lookup(D)->getRegionNameSet();
 }
 
+RegionNameVector *SymbolTable::getRegionNameVector(const Decl *D) const {
+  if (!SymTable.lookup(D))
+    return 0;
+  else{
+    // This is bad. We are still assuming some order!!
+    const RegionNameSet *RNS=SymTable.lookup(D)->getRegionNameSet();;
+    RegionNameVector *RNV = new RegionNameVector();
+    for (RegionNameSet::iterator It=RNS->begin(); It!=RNS->end(); ++It){
+      RNV->push_back(*It);
+    }
+    return RNV;
+  }
+}
+
+RplDomain *SymbolTable::buildDomain(const Decl *D) const {
+  //add region names from D to RNV
+  RegionNameVector *RNV = getRegionNameVector(D);
+  const ParameterVector *PV = getParameterVector(D);
+  const DeclContext *DC = D->getDeclContext();
+  while (DC){
+    const Decl *EnclosingDecl = getDeclFromContext(DC);
+    if (EnclosingDecl){
+      RplDomain *Parent = buildDomain(EnclosingDecl);
+      if(PV)
+        PV->print(OSv2);
+      if(RNV)
+        RNV->print(OSv2);
+      return new RplDomain(RNV, PV, Parent);
+    }
+    else
+      DC = DC->getParent();
+  }
+
+  return 0;
+}
+
 const EffectSummary *SymbolTable::getEffectSummary(const Decl *D) const {
   if (!SymTable.lookup(D))
     return 0;

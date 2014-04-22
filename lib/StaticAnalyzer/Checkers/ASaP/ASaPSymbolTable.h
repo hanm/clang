@@ -32,6 +32,7 @@
 #include "EffectInclusionConstraint.h"
 #include "EffectNIConstraint.h"
 #include "OwningPtrSet.h"
+#include "Rpl.h"
 
 namespace clang {
 namespace asap {
@@ -147,6 +148,9 @@ public:
 
   /// \brief Returns the region names declarations for D or null.
   const RegionNameSet *getRegionNameSet(const Decl *D) const;
+  RegionNameVector *getRegionNameVector(const Decl *D) const;
+  RplDomain *buildDomain(const Decl *D) const;
+
   /// \brief Returns the effect summmary for D or null.
   const EffectSummary *getEffectSummary(const Decl *D) const;
   const InheritanceMapT *getInheritanceMap(const ValueDecl *D) const;
@@ -229,6 +233,10 @@ public:
   void solveInclusionConstraints();
   // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
+
+  Rpl* createFreshRplVar(){
+    return new Rpl(0);
+  }
 
   inline AnnotationSet makeDefaultClassParams(RecordDecl *RecD) {
     return AnnotScheme->makeClassParams(RecD);

@@ -59,14 +59,19 @@ helperMakeLocalType(const ValueDecl *D, long ArgNum) {
 inline AnnotationSet AnnotationScheme::
 helperVarType(const ValueDecl *D, long ArgNum) {
   AnnotationSet Result;
-  assert(false && "method not implemented yet");
+  //assert(false && "method not implemented yet");
   RplVector RplVec;
   for (int I = 0; I < ArgNum; ++I) {
     // TODO
     // 1. Create new RplVarElement
-    // RplVar RplVar = SymT.createFreshRplVar(...);
+    Rpl* RplVar = SymT.createFreshRplVar();
+    RplDomain *Dm = SymT.buildDomain(D);
+    OSv2 << "Printing domain ....\n";
+    Dm->print(OSv2);
+    RplVar->setDomain(Dm);
+    
     // 2. Push it back
-    //RplVec.push_back(Rpl(RplVar));
+    RplVec.push_back(Rpl(*RplVar));
   }
   Result.T = new ASaPType(D->getType(), SymT.getInheritanceMap(D), &RplVec);
   return Result;

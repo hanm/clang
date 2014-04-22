@@ -49,6 +49,31 @@ const StringRef Rpl::RPL_LIST_SEPARATOR = ",";
 const StringRef Rpl::RPL_NAME_SPEC = "::";
 
 
+RplDomain::RplDomain(RegionNameVector *RV, const ParameterVector *PV, RplDomain *P){
+  Regions = RV;
+  Params = PV;
+  Parent = P;
+}
+
+void RplDomain::addRegion(NamedRplElement *R){
+  Regions->push_back(R);
+}
+
+
+void RplDomain::print (llvm::raw_ostream& OS) {
+  OS << "----------------------------";
+  OS << "Params: ";
+  if(Params)
+    Params->print(OS);
+  OS << "Regions: ";
+  if(Regions)
+    Regions->print(OS);
+  OS << "**Parent**\n";
+  if (Parent)
+    Parent->print(OS);
+  OS << "----------------------------";
+}
+
 bool Rpl::isValidRegionName(const llvm::StringRef& Str) {
   // false if it is one of the Special Rpl Elements
   // => it is not allowed to redeclare them
