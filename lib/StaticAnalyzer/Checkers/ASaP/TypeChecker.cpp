@@ -525,6 +525,10 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
   VarDecl *VarD = dyn_cast<VarDecl>(D); // Non-null if calling through fn-ptr
   assert(FunD || VarD);
   if (FunD) {
+    // Use the cannonical decl for annotations
+    FunctionDecl *CanD = FunD->getCanonicalDecl();
+    if (CanD)
+      FunD = CanD;
 
     DeclContext *DC = FunD->getDeclContext();
     assert(DC);
