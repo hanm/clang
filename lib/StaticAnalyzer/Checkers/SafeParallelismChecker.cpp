@@ -191,6 +191,8 @@ public:
     Argc = 4; 
 
     PL_initialise(Argc, Argv); 
+    //PL_action(PL_ACTION_DEBUG);
+    //PL_action(PL_ACTION_TRACE);
     predicate_t Consult = PL_predicate("consult",1,"user");
     term_t Plfile=PL_new_term_ref();
     PL_put_atom_chars(Plfile, "/opt/lib/asap.pl");
