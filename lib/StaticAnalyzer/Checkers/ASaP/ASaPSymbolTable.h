@@ -20,7 +20,9 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_SYMBOL_TABLE_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_SYMBOL_TABLE_H
 
-//#include "llvm/ADT/DenseMap.h"
+#include <sstream>
+
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
 
 #include "clang/AST/Type.h"
@@ -78,6 +80,8 @@ class SymbolTable {
   /// parallel_for with iterators, parallel_reduce, parallel_invoke, etc).
   ParallelismMapT ParTable;
 
+  /// \brief A set keeping track of fresh names created (strings)
+  /// so that they are properly deallocated by the symbol table destructor
   FreshNamesSetT FreshNames;
 
   /// \brief Set of all effect inclusion constraints generated
@@ -96,6 +100,24 @@ class SymbolTable {
   /// \brief The implicit region parameter "P" of implicitly boxed types
   /// such as int or pointers.
   const ParameterVector *BuiltinDefaultRegionParameterVec;
+
+  unsigned long ParamIdNumber;
+  unsigned long RegionIdNumber;
+
+  // Private Methods
+  /// \brief Return the next unused ID number. Used to encode names into Prolog.
+  inline unsigned long getNextUniqueParamID() { return ParamIdNumber++; }
+
+  /// \brief Return the next unused ID number. Used to encode names into Prolog.
+  inline unsigned long getNextUniqueRegionID() { return RegionIdNumber++; }
+
+  inline StringRef addFreshName(StringRef SRef) {
+    std::string *S = new std::string(SRef.str());
+    StringRef Result(*S);
+    FreshNames.insert(S);
+    return Result;
+  }
+
 
 public:
 
@@ -215,11 +237,18 @@ public:
 
   const SubstitutionVector *getInheritanceSubVec(QualType QT);
 
-  inline StringRef addFreshName(StringRef SRef) {
-    std::string *S = new std::string(SRef.str());
-    StringRef Result(*S);
-    FreshNames.insert(S);
-    return Result;
+  inline StringRef makeFreshParamName(const std::string &Name) {
+    std::stringstream ss;
+    ss << "p" << getNextUniqueParamID()
+       << "_" << Name;
+    return addFreshName(ss.str());
+  }
+
+  inline StringRef makeFreshRegionName(const std::string &Name) {
+    std::stringstream ss;
+    ss << "r" << getNextUniqueRegionID()
+       << "_" << Name;
+    return addFreshName(ss.str());
   }
 
   inline void addInclusionConstraint(EffectInclusionConstraint* EIC){
@@ -299,8 +328,8 @@ public:
   const ParamRplElement *lookupParameterName(llvm::StringRef Name);
 
   // Adders.
-  void addRegionName(llvm::StringRef Name);
-  void addParameterName(llvm::StringRef Name);
+  void addRegionName(llvm::StringRef Name, llvm::StringRef PrologName);
+  void addParameterName(llvm::StringRef Name, llvm::StringRef PrologName);
 
   // Deleters
   inline void deleteEffectSummary();

@@ -16,6 +16,8 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_EFFECT_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_EFFECT_H
 
+#include <SWI-Prolog.h>
+
 #include "llvm/Support/raw_ostream.h"
 #include "clang/AST/Attr.h"
 
@@ -51,7 +53,7 @@ private:
   EffectKind Kind;
   Rpl *R;
   const Attr *Attribute; // used to get SourceLocation information
-  const Expr *Exp;
+  const Expr *Exp; // used for error reporting
 
   //Fields needed by invocation effects
   SubstitutionVector *SubV;
@@ -84,6 +86,8 @@ public:
 
   /// \brief Return a string for this Effect.
   std::string toString() const;
+
+  term_t getPLTerm() const;
 
   // Predicates
   /// \brief Returns true iff this is a no_effect.
@@ -149,59 +153,12 @@ public:
 class EffectVector : public OwningVector<Effect, EFFECT_VECTOR_SIZE> {
 
 public:
-  void substitute(const Substitution *S) {
-    if (!S)
-      return; // Nothing to do.
-    for (VectorT::const_iterator
-            I = begin(),
-            E = end();
-         I != E; ++I) {
-      Effect *Eff = *I;
-      Eff->substitute(S);
-    }
-  }
-
-  void substitute(const SubstitutionVector *SubV) {
-    if (!SubV)
-      return; // Nothing to do.
-    for (VectorT::const_iterator
-            I = begin(),
-            E = end();
-         I != E; ++I) {
-      Effect *Eff = *I;
-      Eff->substitute(SubV);
-      }
-  }
-
+  void substitute(const Substitution *S);
+  void substitute(const SubstitutionVector *SubV);
   // The following two methods apply the substitutions to the last N
   // elements of the effect vector
-  void substitute(const Substitution *S, int N) {
-    if (!S)
-      return; // Nothing to do.
-    int i=0;
-    for (VectorT::const_reverse_iterator
-	   I = rbegin(),
-	   E = rend();
-         I != E && i<N; ++I, ++i) {
-      Effect *Eff = *I;
-      Eff->substitute(S);
-    }
-
-  }
-
-  void substitute(const SubstitutionVector *SubV, int N) {
-    if (!SubV)
-      return; // Nothing to do.
-    int i=0;
-    for (VectorT::const_reverse_iterator
-	   I = rbegin(),
-	   E = rend();
-         I != E && i<N; ++I, ++i) {
-      Effect *Eff = *I;
-      Eff->substitute(SubV);
-    }
-  }
-
+  void substitute(const Substitution *S, int N);
+  void substitute(const SubstitutionVector *SubV, int N);
 
 }; // end class EffectVector
 

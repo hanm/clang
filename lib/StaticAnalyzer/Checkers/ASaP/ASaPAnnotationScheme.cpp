@@ -13,9 +13,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <string>
-#include <sstream>
-
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 
@@ -104,10 +101,8 @@ helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT) {
     RplV.push_back(Rpl(*SymbolTable::LOCAL_RplElmt));
   }
   for (; I < ArgNum; ++I) {
-    std::stringstream ss;
-    ss << "P_" << D->getNameAsString() << "_" << I;
-    StringRef ParamName = SymT.addFreshName(ss.str());
-    ParamRplElement Param(ParamName);
+    StringRef ParamName = SymT.makeFreshParamName(D->getNameAsString());
+    ParamRplElement Param(ParamName, ParamName);
     Result.ParamVec->push_back(Param); // makes a (persistent) copy of Param
     RplV.push_back(Rpl(*Result.ParamVec->back())); // use the persistent copy
   }
@@ -118,7 +113,9 @@ helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT) {
 inline AnnotationSet AnnotationScheme::
 helperMakeClassParams(const RecordDecl *D) {
   AnnotationSet Result;
-  ParamRplElement Param("P");
+  StringRef ParamName = SymT.makeFreshParamName(D->getNameAsString());
+
+  ParamRplElement Param(ParamName, ParamName);
   Result.ParamVec = new ParameterVector(Param);
   return Result;
 }

@@ -182,6 +182,103 @@ std::string Effect::toString() const {
   return std::string(OS.str());
 }
 
+term_t Effect::getPLTerm() const {
+  term_t Result = PL_new_term_ref();
+  functor_t EffectFunctor;
+  int Res = 0;
+  switch(Kind) {
+    case EK_NoEffect:
+      Res = PL_put_atom_chars(Result,"pure");
+      assert(Res && "Failed to create Prolog term for 'no_effect'");
+      break;
+    case EK_ReadsEffect:
+      assert(R && "Reads effect missing Rpl object");
+      EffectFunctor = PL_new_functor(PL_new_atom("reads"), 1);
+      Res = PL_cons_functor(Result, EffectFunctor, R->getPLTerm());
+      assert(Res && "Failed to create Prolog term for 'reads' effect");
+      break;
+    case EK_WritesEffect:
+      assert(R && "Writes effect missing Rpl object");
+      EffectFunctor = PL_new_functor(PL_new_atom("writes"), 1);
+      Res = PL_cons_functor(Result, EffectFunctor, R->getPLTerm());
+      assert(Res && "Failed to create Prolog term for 'writes' effect");
+      break;
+    case EK_AtomicReadsEffect:
+      assert(R && "Atomic-Reads effect missing Rpl object");
+      EffectFunctor = PL_new_functor(PL_new_atom("atomic_eads"), 1);
+      Res = PL_cons_functor(Result, EffectFunctor, R->getPLTerm());
+      assert(Res && "Failed to create Prolog term for 'atomic_reads' effect");
+      break;
+    case EK_AtomicWritesEffect:
+      assert(R && "Atomic-Writes effect missing Rpl object");
+      EffectFunctor = PL_new_functor(PL_new_atom("atomic_writes"), 1);
+      Res = PL_cons_functor(Result, EffectFunctor, R->getPLTerm());
+      assert(Res && "Failed to create Prolog term for 'atomic-writes' effect");
+      break;
+    case EK_InvocEffect:
+      EffectFunctor = PL_new_functor(PL_new_atom("invokes"), 2);
+      term_t CalleeName = PL_new_term_ref();
+      PL_put_atom_chars(CalleeName, FunD->getNameAsString().data() ); // FIXME: use unique prolog name instead
+      Res = PL_cons_functor(Result, EffectFunctor, CalleeName, SubV->getPLTerm());
+      assert(Res && "Failed to create Prolog term for 'invokes' effect");
+      break;
+  }
+  return Result;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// EffectVector
+
+void EffectVector::substitute(const Substitution *S) {
+  if (!S)
+    return; // Nothing to do.
+  for (VectorT::const_iterator
+          I = begin(),
+          E = end();
+       I != E; ++I) {
+    Effect *Eff = *I;
+    Eff->substitute(S);
+  }
+}
+
+void EffectVector::substitute(const SubstitutionVector *SubV) {
+  if (!SubV)
+    return; // Nothing to do.
+  for (VectorT::const_iterator
+          I = begin(),
+          E = end();
+       I != E; ++I) {
+    Effect *Eff = *I;
+    Eff->substitute(SubV);
+    }
+}
+
+void EffectVector::substitute(const Substitution *S, int N) {
+  if (!S)
+    return; // Nothing to do.
+  int i=0;
+  for (VectorT::const_reverse_iterator
+  I = rbegin(),
+  E = rend();
+       I != E && i<N; ++I, ++i) {
+    Effect *Eff = *I;
+    Eff->substitute(S);
+  }
+}
+
+void EffectVector::substitute(const SubstitutionVector *SubV, int N) {
+  if (!SubV)
+    return; // Nothing to do.
+  int i=0;
+  for (VectorT::const_reverse_iterator
+         I = rbegin(),
+         E = rend();
+       I != E && i<N; ++I, ++i) {
+    Effect *Eff = *I;
+    Eff->substitute(SubV);
+  }
+}
+
 //////////////////////////////////////////////////////////////////////////
 // EffectSummary
 

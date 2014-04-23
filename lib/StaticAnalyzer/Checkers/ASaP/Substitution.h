@@ -16,6 +16,8 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_SUBSTITUTION_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_SUBSTITUTION_H
 
+#include <SWI-Prolog.h>
+
 #include "llvm/ADT/SmallVector.h"
 #include "ASaPFwdDecl.h"
 #include "OwningVector.h"
@@ -44,6 +46,9 @@ public:
   inline const Rpl *getTo() const { return ToRpl; }
   // Setters
   void set(const RplElement *FromEl, const Rpl *ToRpl);
+
+  /// \brief Build a Prolog term_t for the Substitution object
+  term_t getPLTerm() const;
 
   // Apply
   /// \brief Apply substitution to type *T, which must implement

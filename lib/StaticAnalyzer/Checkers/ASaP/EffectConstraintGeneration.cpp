@@ -197,7 +197,7 @@ int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp)
     if (InRpl) {
       // Arrays may not have an InRpl
       Effect E(Effect::EK_ReadsEffect, InRpl, exp);
-      OS << "DEBUG:: Adding Effect "<< E.toString() << "to " << 
+      OS << "DEBUG:: Adding Effect "<< E.toString() << "to " <<
         EC->getDef()->getNameAsString() << "\n";
       EC->addEffect(&E);
       EC->print();
@@ -300,7 +300,7 @@ checkEffectCoverage() {
       else if (RK==RK_DUNNO){
         //assert(false && "Variable summary");
         SymT.addInclusionConstraint(EC);
-        return;
+
 
       }
     }
@@ -318,7 +318,7 @@ checkEffectCoverage() {
           SymT.getEffectSummary(FunD->getCanonicalDecl());
       if (isa<VarEffectSummary>(Effects)) {
         SymT.addInclusionConstraint(EC);
-        return;
+
       }
       const ConcreteEffectSummary *FunEffects =
           dyn_cast<ConcreteEffectSummary>(Effects);
@@ -350,7 +350,7 @@ checkEffectCoverage() {
         }
         else if (RK==RK_DUNNO) {
           SymT.addInclusionConstraint(EC);
-          return;
+
         }
 
       }
@@ -358,7 +358,7 @@ checkEffectCoverage() {
     }
 
   }
-  OS << "DEBUG:: effect covered (OK)\n";
+  OS << "DEBUG:: effect check (DONE)\n";
   IsCoveredBySummary &= Result;
   delete(EC);
   return;
@@ -574,7 +574,7 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
       /// 2. Add effects to tmp effects
 
       Effect IE(Effect::EK_InvocEffect, Exp, FunD, &SubV);
-      OS << "DEBUG:: Adding invocation Effect "<< IE.toString() << 
+      OS << "DEBUG:: Adding invocation Effect "<< IE.toString() <<
         "to " << EC->getDef()->getNameAsString() << "\n";
       EC->addEffect(&IE);
       EC->print();

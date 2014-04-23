@@ -16,6 +16,8 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_RPL_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_RPL_H
 
+#include <SWI-Prolog.h>
+
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -56,8 +58,8 @@ private:
   const RplElementKind Kind;
   /// FIXME: protect copy constructor
   //RplElement(RplElement &Elmt);
-  
-  
+
+
 public:
   /// API
   RplElementKind getKind() const { return Kind; }
@@ -69,20 +71,48 @@ public:
   virtual bool operator == (const RplElement &That) const {
     return (this == &That) ? true : false;
   }
+  virtual term_t getPLTerm() const = 0;
+
   virtual ~RplElement() {}
 }; // end class RplElement
 
 class SpecialRplElement : public RplElement {
+public:
+  enum SpecialRplElementKind {
+      SRK_Root,
+      SRK_Global,
+      SRK_Local,
+      SRK_Immutable
+  };
+private:
   /// Fields
-  const StringRef name;
+  SpecialRplElementKind Kind;
 
 public:
   /// Constructor
-  SpecialRplElement(StringRef name) : RplElement(RK_Special), name(name) {}
+  SpecialRplElement(SpecialRplElementKind Kind) : RplElement(RK_Special), Kind(Kind) {}
   virtual ~SpecialRplElement() {}
 
   /// Methods
-  virtual StringRef getName() const { return name; }
+  virtual StringRef getName() const {
+    switch(Kind) {
+    case SRK_Root: return "Root";
+    case SRK_Global: return "Global";
+    case SRK_Local: return "Local";
+    case SRK_Immutable: return "Immutable";
+    }
+  }
+
+  virtual term_t getPLTerm() const {
+    term_t Result = PL_new_term_ref();
+    switch(Kind) {
+    case SRK_Root: PL_put_atom_chars(Result,"rROOT"); break;
+    case SRK_Global: PL_put_atom_chars(Result,"rGLOBAL"); break;
+    case SRK_Local: PL_put_atom_chars(Result,"rLOCAL"); break;
+    case SRK_Immutable: PL_put_atom_chars(Result,"rIMMUTABLE"); break;
+    }
+    return Result;
+  }
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Special;
@@ -98,6 +128,11 @@ public:
   /// Methods
   virtual bool isFullySpecified() const { return false; }
   virtual StringRef getName() const { return "*"; }
+  virtual term_t getPLTerm() const {
+    term_t Result = PL_new_term_ref();
+    PL_put_atom_chars(Result,"rSTAR");
+    return Result;
+  }
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Star;
@@ -107,14 +142,21 @@ public:
 ///-////////////////////////////////////////
 class NamedRplElement : public RplElement {
   /// Fields
-  const StringRef name;
+  const StringRef Name;
+  const StringRef PrologName;
 
 public:
   /// Constructor
-  NamedRplElement(StringRef name) : RplElement(RK_Named), name(name) {}
+  NamedRplElement(StringRef Name, StringRef PrologName)
+                 : RplElement(RK_Named), Name(Name), PrologName(PrologName) {}
   virtual ~NamedRplElement() {}
   /// Methods
-  virtual StringRef getName() const { return name; }
+  virtual StringRef getName() const { return Name; }
+  virtual term_t getPLTerm() const {
+    term_t Result = PL_new_term_ref();
+    PL_put_atom_chars(Result, PrologName.data());
+    return Result;
+  }
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Named;
@@ -125,15 +167,22 @@ public:
 ///-////////////////////////////////////////
 class ParamRplElement : public RplElement {
   ///Fields
-  StringRef name;
+  const StringRef Name;
+  const StringRef PrologName;
 
 public:
   /// Constructor
-  ParamRplElement(StringRef name) : RplElement(RK_Parameter), name(name) {}
+  ParamRplElement(StringRef Name, StringRef PrologName)
+                 : RplElement(RK_Parameter), Name(Name), PrologName(PrologName) {}
   virtual ~ParamRplElement() {}
 
   /// Methods
-  virtual StringRef getName() const { return name; }
+  virtual StringRef getName() const { return Name; }
+  virtual term_t getPLTerm() const {
+    term_t Result = PL_new_term_ref();
+    PL_put_atom_chars(Result, PrologName.data());
+    return Result;
+  }
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Parameter;
@@ -152,6 +201,7 @@ public:
     RPL_CONCRETE,
     RPL_VAR
   };
+
   /// Static Constants
   static const char RPL_SPLIT_CHARACTER = ':';
   static const StringRef RPL_LIST_SEPARATOR;
@@ -169,14 +219,14 @@ private:
 typedef llvm::SmallVector<const RplElement*,
                           RPL_ELEMENT_VECTOR_SIZE> RplElementVectorTy;
 
-  const RplKind Kind;
-  RplDomain *Domain;
-
   /// Fields
   /// Note: RplElements are not owned by Rpl class.
   /// They are *NOT* destroyed with the Rpl.
-  RplElementVectorTy RplElements;
+  const RplKind Kind;
   bool FullySpecified;
+  RplElementVectorTy RplElements;
+
+  RplDomain *Domain;
 
   /// RplRef class
   // We use the RplRef class, friends with Rpl to efficiently perform
@@ -253,28 +303,32 @@ typedef llvm::SmallVector<const RplElement*,
   Rpl(int dummy) : Kind(RPL_VAR) {//making an Rpl var
   }
 
-  Rpl(const RplElement &Elm) :
-  Kind(RPL_CONCRETE), FullySpecified(Elm.isFullySpecified()){
+  Rpl(const RplElement &Elm)
+     : Kind(RPL_CONCRETE), FullySpecified(Elm.isFullySpecified()), Domain(0) {
     RplElements.push_back(&Elm);
   }
 
   /// Copy Constructor
-  Rpl(const Rpl &That) :
-      Kind(That.Kind),
-      RplElements(That.RplElements),
-      FullySpecified(That.FullySpecified)
-  {}
+  Rpl(const Rpl &That)
+     : Kind(That.Kind),
+       FullySpecified(That.FullySpecified),
+       RplElements(That.RplElements), Domain(0) {}
 
+  /// \brief Returns two StringRefs delimited by the first occurrence
+  /// of the RPL_SPLIT_CHARACTER.
   static std::pair<StringRef, StringRef> splitRpl(StringRef &String);
+
+  /// \brief Print the Rpl to an output stream.
   void print(llvm::raw_ostream &OS) const;
+  /// \brief Print the Rpl to a string.
   std::string toString() const;
 
   RplKind getKind() const { return Kind; }
-
   inline void setDomain(RplDomain *D) { Domain = D;}
   inline RplDomain* getDomain() { return Domain;}
 
-
+  /// \brief Return a Prolog term for the Rpl.
+  term_t getPLTerm() const;
 
   // Getters
   /// \brief Returns the last of the RPL elements of this RPL.
@@ -362,6 +416,12 @@ public:
   virtual bool isFullySpecified() const { return false; }
 
   Rpl& upperBound() const { return includedIn; }
+
+  virtual term_t getPLTerm() const {
+    term_t Result = PL_new_term_ref();
+    // TODO FIXME: implement this
+    return Result;
+  }
 
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Capture;
@@ -670,7 +730,7 @@ public:
     }
     return 0;
   }
-  
+
   void print (llvm::raw_ostream& OS) {
     OS << "Printing Regions vector...\n";
      for (VectorT::iterator I = begin(), E = end();
