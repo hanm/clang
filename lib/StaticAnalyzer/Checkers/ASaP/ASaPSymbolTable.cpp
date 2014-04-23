@@ -622,6 +622,7 @@ void SymbolTable::solveInclusionConstraints(){
   }
   unsigned Num=1;
 
+  //loop to emit esi_constraint facts
   for (InclusionConstraintsSetT::iterator I=InclusionConstraints.begin(); I!=InclusionConstraints.end(); ++I)
     {
       std::string FName=(**I)->getDef()->getNameAsString();
@@ -679,6 +680,29 @@ void SymbolTable::solveInclusionConstraints(){
       
       assert(Rval && "first rval is false");
 
+      ++Num;
+    }
+
+    Num=1;
+  //loop to call esi_collect
+    for (InclusionConstraintsSetT::iterator I=InclusionConstraints.begin(); I!=InclusionConstraints.end(); ++I)
+    {
+      std::string FName=(**I)->getDef()->getNameAsString();
+      OSv2 << "****" << FName << "*****"<< "\n";
+      std::string EVstr;
+      llvm::raw_string_ostream EV(EVstr);
+ 
+      EV << "ev" << Num;
+
+      std::string List = "[";
+      EffectVector* Lhs=(**I)->getLHS();
+      for (EffectVector::iterator It=Lhs->begin(); It!=Lhs->end(); ++It){
+        if(It!=Lhs->begin())
+          List += ",";
+        List +=  (*It)->toString();
+      }
+      List += "]";
+
       predicate_t ESI1 = PL_predicate("esi_collect",4,"user");
       term_t H0 = PL_new_term_refs(4);
       term_t H1 = H0 + 1;
@@ -686,12 +710,12 @@ void SymbolTable::solveInclusionConstraints(){
       term_t H3 = H0 + 3;
       PL_put_atom_chars(H0,EV.str().c_str());
       PL_put_atom_chars(H1,FName.c_str());
-      Res=PL_put_list_chars(H2,List.c_str());
+      int Res=PL_put_list_chars(H2,List.c_str());
       assert(Res);
       
       PL_put_variable(H3);
 
-      Rval = PL_call_predicate(NULL, PL_Q_NORMAL, ESI1, H0);
+      int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, ESI1, H0);
 
       assert(Rval && "rval is false");
 
@@ -701,9 +725,9 @@ void SymbolTable::solveInclusionConstraints(){
       OSv2 << "result is "<< Solution << "\n";
 
       emitConstraintSolution(**I, Solution);
-
       ++Num;
     }
+
 }
 
 AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
