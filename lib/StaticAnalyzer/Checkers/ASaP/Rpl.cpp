@@ -20,30 +20,29 @@
 #include "ASaPUtil.h"
 #include "Substitution.h"
 
-using namespace llvm;
-using namespace clang::asap;
-
+namespace clang {
+namespace asap {
 /// Static
-std::pair<StringRef, StringRef> clang::asap::Rpl::splitRpl(StringRef &String) {
+std::pair<StringRef, StringRef> Rpl::splitRpl(StringRef &String) {
   size_t Idx = 0;
   do {
     Idx = String.find(RPL_SPLIT_CHARACTER, Idx);
-    OSv2 << "Idx = " << Idx << ", size = " << String.size() << "\n";
+    OSv2 << "DEBUG:: Rpl::splitRpl: Idx = " << Idx << ", size = " << String.size() << "\n";
     if (Idx == StringRef::npos)
       break;
 
   } while (Idx < String.size() - 2
     && String[Idx+1] == RPL_SPLIT_CHARACTER && Idx++ && Idx++);
 
-  if (Idx == StringRef::npos)
+  if (Idx == StringRef::npos) // npos (== ~0) is the value for "not found"
     return std::pair<StringRef, StringRef>(String, "");
   else
     return std::pair<StringRef, StringRef>(String.slice(0,Idx),
-    String.slice(Idx+1, String.size()));
+                                           String.slice(Idx+1, String.size()));
 }
 
-namespace clang {
-namespace asap {
+
+
 /// Static
 const StringRef Rpl::RPL_LIST_SEPARATOR = ",";
 const StringRef Rpl::RPL_NAME_SPEC = "::";
@@ -159,12 +158,31 @@ bool Rpl::RplRef::isDisjointRight(RplRef &That) {
     }
   }
 }
+
 ///////////////////////////////////////////////////////////////////////////////
+// end Rpl::RplRef; start Rpl
+
 term_t Rpl::getPLTerm() {
   term_t Result = PL_new_term_ref();
+  functor_t RplFunctor = PL_new_functor(PL_new_atom("rpl"), 2);
   // 1. build RPL element list
+  term_t RplElList = PL_new_term_ref();
+  PL_put_nil(RplElList);
+  int Res;
+  for (RplElementVectorTy::const_reverse_iterator I = RplElements.rbegin(),
+                                                  E = RplElements.rend();
+       I != E; ++I) {
+    term_t RplEl = (*I)->getPLTerm();
+    Res = PL_cons_list(RplElList, RplEl, RplElList);
+    assert(Res && "Failed to add RPL element to Prolog list term");
+  }
 
   // 2. build (empty) substitution list
+  term_t SubList = PL_new_term_ref();
+  PL_put_nil(SubList);
+  // 3. combine the two lists into a functor term
+  Res = PL_cons_functor(Result, RplFunctor, RplElList, SubList);
+  assert(Res && "Failed to create prolog term_t for RPL");
   return Result;
 }
 

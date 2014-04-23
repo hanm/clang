@@ -159,7 +159,7 @@ class ParamRplElement : public RplElement {
 public:
   /// Constructor
   ParamRplElement(StringRef Name, StringRef PrologName)
-                 : RplElement(RK_Named), Name(Name), PrologName(PrologName) {}
+                 : RplElement(RK_Parameter), Name(Name), PrologName(PrologName) {}
   virtual ~ParamRplElement() {}
 
   /// Methods
@@ -298,15 +298,20 @@ typedef llvm::SmallVector<const RplElement*,
   }
 
   /// Copy Constructor
-  Rpl(const Rpl &That) :
-      RplElements(That.RplElements),
-      FullySpecified(That.FullySpecified)
-  {}
+  Rpl(const Rpl &That)
+     : RplElements(That.RplElements),
+       FullySpecified(That.FullySpecified) {}
 
+  /// \brief Returns two StringRefs delimited by the first occurrence
+  /// of the RPL_SPLIT_CHARACTER.
   static std::pair<StringRef, StringRef> splitRpl(StringRef &String);
+
+  /// \brief Print the Rpl to an output stream.
   void print(llvm::raw_ostream &OS) const;
+  /// \brief Print the Rpl to a string.
   std::string toString() const;
 
+  /// \brief Return a Prolog term for the Rpl.
   term_t getPLTerm();
 
   // Getters
