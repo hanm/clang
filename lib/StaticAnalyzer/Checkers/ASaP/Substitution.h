@@ -118,7 +118,6 @@ public:
 
   void push_back_vec(const SubstitutionVector *SubV);
 
-  term_t getPLTerm() const;
 }; // End class SubstituionVector.
 
 } // end namespace clang

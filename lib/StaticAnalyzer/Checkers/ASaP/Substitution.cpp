@@ -130,21 +130,6 @@ void SubstitutionVector::push_back_vec(const SubstitutionVector *SubV) {
   }
 }
 
-term_t SubstitutionVector::getPLTerm() const {
-  term_t Result = PL_new_term_ref();
-  PL_put_nil(Result);
-  int Res;
-
-  for (VectorT::const_reverse_iterator I = rbegin(),
-                                       E = rend();
-       I != E; ++I) {
-    term_t Sub = (*I)->getPLTerm();
-    Res = PL_cons_list(Result, Sub, Result);
-    assert(Res && "Failed to add RPL element to Prolog list term");
-  }
-  return Result;
-}
-
 } // end namespace clang
 } // end namespace asap
 

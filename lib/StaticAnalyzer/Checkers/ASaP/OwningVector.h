@@ -18,6 +18,8 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_OWNING_VECTOR_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_OWNING_VECTOR_H
 
+#include <SWI-Prolog.h>
+
 #include "llvm/ADT/SmallVector.h"
 using llvm::SmallVector;
 
@@ -105,6 +107,22 @@ public:
       VectorT::push_back(front.get()); // non-cloning push back
       front.release(); // release without destroying
     }
+  }
+
+  term_t getPLTerm() const {
+    term_t Result = PL_new_term_ref();
+    PL_put_nil(Result);
+    int Res;
+
+    for (typename VectorT::const_reverse_iterator
+             I = VectorT::rbegin(),
+             E = VectorT::rend();
+         I != E; ++I) {
+      term_t Term = (*I)->getPLTerm();
+      Res = PL_cons_list(Result, Term, Result);
+      assert(Res && "Failed to add OwningVector element to Prolog list term");
+    }
+    return Result;
   }
 
 private:
