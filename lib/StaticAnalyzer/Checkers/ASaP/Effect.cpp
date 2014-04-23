@@ -223,8 +223,62 @@ term_t Effect::getPLTerm() const {
       assert(Res && "Failed to create Prolog term for 'invokes' effect");
       break;
   }
-
+  return Result;
 }
+
+//////////////////////////////////////////////////////////////////////////
+// EffectVector
+
+void EffectVector::substitute(const Substitution *S) {
+  if (!S)
+    return; // Nothing to do.
+  for (VectorT::const_iterator
+          I = begin(),
+          E = end();
+       I != E; ++I) {
+    Effect *Eff = *I;
+    Eff->substitute(S);
+  }
+}
+
+void EffectVector::substitute(const SubstitutionVector *SubV) {
+  if (!SubV)
+    return; // Nothing to do.
+  for (VectorT::const_iterator
+          I = begin(),
+          E = end();
+       I != E; ++I) {
+    Effect *Eff = *I;
+    Eff->substitute(SubV);
+    }
+}
+
+void EffectVector::substitute(const Substitution *S, int N) {
+  if (!S)
+    return; // Nothing to do.
+  int i=0;
+  for (VectorT::const_reverse_iterator
+  I = rbegin(),
+  E = rend();
+       I != E && i<N; ++I, ++i) {
+    Effect *Eff = *I;
+    Eff->substitute(S);
+  }
+}
+
+void EffectVector::substitute(const SubstitutionVector *SubV, int N) {
+  if (!SubV)
+    return; // Nothing to do.
+  int i=0;
+  for (VectorT::const_reverse_iterator
+         I = rbegin(),
+         E = rend();
+       I != E && i<N; ++I, ++i) {
+    Effect *Eff = *I;
+    Eff->substitute(SubV);
+  }
+}
+
 //////////////////////////////////////////////////////////////////////////
 // EffectSummary
 
