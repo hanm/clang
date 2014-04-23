@@ -266,7 +266,7 @@ checkEffectCoverage() {
   OS << "DEBUG:: N is "<< N <<"\n";
   for (int I=0; I<N; ++I){
     //std::auto_ptr<Effect> E = LHS->pop_back_val();
-    Effect* E = LHS->back();
+    Effect* E = (*LHS)[I];
     OS << "### "; E->print(OS); OS << "\n";
 
     if (E->getEffectKind()!=Effect::EK_InvocEffect) {
