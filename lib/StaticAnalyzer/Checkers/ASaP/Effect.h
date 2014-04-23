@@ -16,6 +16,8 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_EFFECT_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_EFFECT_H
 
+#include <SWI-Prolog.h>
+
 #include "llvm/Support/raw_ostream.h"
 #include "clang/AST/Attr.h"
 
@@ -51,7 +53,7 @@ private:
   EffectKind Kind;
   Rpl *R;
   const Attr *Attribute; // used to get SourceLocation information
-  const Expr *Exp;
+  const Expr *Exp; // used for error reporting
 
   //Fields needed by invocation effects
   SubstitutionVector *SubV;
@@ -84,6 +86,8 @@ public:
 
   /// \brief Return a string for this Effect.
   std::string toString() const;
+
+  term_t getPLTerm() const;
 
   // Predicates
   /// \brief Returns true iff this is a no_effect.

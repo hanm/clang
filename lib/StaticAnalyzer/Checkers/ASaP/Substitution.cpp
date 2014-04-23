@@ -54,6 +54,16 @@ void Substitution::set(const RplElement *FromEl, const Rpl *ToRpl) {
   else
     this->ToRpl = 0;
 }
+term_t Substitution::getPLTerm() const {
+  term_t Result = PL_new_term_ref();
+  functor_t SubFunctor = PL_new_functor(PL_new_atom("param_sub"), 2);
+  assert(FromEl && "Subtitution missing left hand side");
+  assert(ToRpl && "Substitution missing right hand side");
+  int Res = PL_cons_functor(Result, SubFunctor,
+                            FromEl->getPLTerm(), ToRpl->getPLTerm());
+  assert(Res && "Failed to create prolog term_t for Substitution");
+  return Result;
+}
 
 void Substitution::print(llvm::raw_ostream &OS) const {
   OS << "[";
@@ -118,6 +128,21 @@ void SubstitutionVector::push_back_vec(const SubstitutionVector *SubV) {
       this->push_back(*I);
     }
   }
+}
+
+term_t SubstitutionVector::getPLTerm() const {
+  term_t Result = PL_new_term_ref();
+  PL_put_nil(Result);
+  int Res;
+
+  for (VectorT::const_reverse_iterator I = rbegin(),
+                                       E = rend();
+       I != E; ++I) {
+    term_t Sub = (*I)->getPLTerm();
+    Res = PL_cons_list(Result, Sub, Result);
+    assert(Res && "Failed to add RPL element to Prolog list term");
+  }
+  return Result;
 }
 
 } // end namespace clang
