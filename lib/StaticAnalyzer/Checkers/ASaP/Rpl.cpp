@@ -159,6 +159,14 @@ bool Rpl::RplRef::isDisjointRight(RplRef &That) {
     }
   }
 }
+///////////////////////////////////////////////////////////////////////////////
+term_t Rpl::getPLTerm() {
+  term_t Result = PL_new_term_ref();
+  // 1. build RPL element list
+
+  // 2. build (empty) substitution list
+  return Result;
+}
 
 bool Rpl::isDisjoint(const Rpl &That) const {
   RplRef LHS1(*this);

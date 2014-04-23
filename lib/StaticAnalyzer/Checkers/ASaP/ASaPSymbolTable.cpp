@@ -59,10 +59,10 @@ VisitorBundle SymbolTable::VB;
 void SymbolTable::Initialize(VisitorBundle &VisB) {
   if (!Initialized) {
     STAR_RplElmt = new StarRplElement();
-    ROOT_RplElmt = new SpecialRplElement("Root");
-    LOCAL_RplElmt = new SpecialRplElement("Local");
-    GLOBAL_RplElmt = new SpecialRplElement("Global");
-    IMMUTABLE_RplElmt = new SpecialRplElement("Immutable");
+    ROOT_RplElmt = new SpecialRplElement(SpecialRplElement::SRK_Root);
+    LOCAL_RplElmt = new SpecialRplElement(SpecialRplElement::SRK_Local);
+    GLOBAL_RplElmt = new SpecialRplElement(SpecialRplElement::SRK_Global);
+    IMMUTABLE_RplElmt = new SpecialRplElement(SpecialRplElement::SRK_Immutable);
     Rpl R(*LOCAL_RplElmt);
     R.appendElement(STAR_RplElmt);
     WritesLocal = new Effect(Effect::EK_WritesEffect, &R);
@@ -123,11 +123,12 @@ isSpecialRplElement(const llvm::StringRef& Str) {
 }
 
 /// Non-Static Functions
-SymbolTable::SymbolTable() {
+SymbolTable::SymbolTable()
+    : AnnotScheme(0), ParamIdNumber(0), RegionIdNumber(0) {
   // FIXME: make this static like the other default Regions etc
-  ParamRplElement Param("P");
+  ParamRplElement Param("P","p");
   BuiltinDefaultRegionParameterVec = new ParameterVector(Param);
-  AnnotScheme = 0; // must be set via SetAnnotationScheme();
+  //AnnotScheme = 0; // must be set via SetAnnotationScheme();
 }
 
 SymbolTable::~SymbolTable() {
@@ -457,7 +458,8 @@ bool SymbolTable::addRegionName(const Decl *D, StringRef Name) {
     return false;
   if (!SymTable.lookup(D))
     SymTable[D] = new SymbolTableEntry();
-  SymTable[D]->addRegionName(Name);
+  StringRef PrologName = makeFreshRegionName(Name);
+  SymTable[D]->addRegionName(Name, PrologName);
   return true;
 }
 
@@ -465,8 +467,9 @@ bool SymbolTable::addParameterName(const Decl *D, StringRef Name) {
   if (hasRegionOrParameterName(D, Name))
     return false;
   if (!SymTable.lookup(D))
-    SymTable[D] = new SymbolTableEntry(); // FIXME Check all calls to new
-  SymTable[D]->addParameterName(Name);
+    SymTable[D] = new SymbolTableEntry();
+  StringRef PrologName = makeFreshParamName(Name);
+  SymTable[D]->addParameterName(Name, PrologName);
   return true;
 }
 
@@ -529,17 +532,17 @@ getInheritanceSubVec(QualType QT) {
   return SubV;
 }
 
-static void emitConstraintSolution(EffectInclusionConstraint *EC, 
+static void emitConstraintSolution(EffectInclusionConstraint *EC,
                                          char* Solution){
   const FunctionDecl *Func=EC->getDef();
   const Stmt  *S=EC->getS();
   StringRef BugName = "Effect Inclusion Constraint Solution";
-  
+
   std::string BugStr;
   llvm::raw_string_ostream StrOS(BugStr);
-  StrOS << "Solution for " << Func->getNameAsString() << ": " << 
+  StrOS << "Solution for " << Func->getNameAsString() << ": " <<
     Solution << "\n";
-      
+
   StringRef Str(StrOS.str());
   helperEmitStatementWarning(*SymbolTable::VB.BR, SymbolTable::VB.AC, S, Func, Str, BugName, false);
 
@@ -563,7 +566,7 @@ void SymbolTable::solveInclusionConstraints(){
       StringRef Name=(*PI)->getName();
       std::string Param;
       llvm::raw_string_ostream RP(Param);
- 
+
       RP << Name.str() << Ind;
       Ind++;
 
@@ -572,7 +575,7 @@ void SymbolTable::solveInclusionConstraints(){
 
       functor_t RPFunctor;
       RPFunctor = PL_new_functor(PL_new_atom("rgn_param"), 1);
-      
+
       PL_put_atom_chars(A, RP.str().c_str()); // param name
 
       int Res=PL_cons_functor(T, RPFunctor, A);
@@ -580,7 +583,7 @@ void SymbolTable::solveInclusionConstraints(){
 
       predicate_t RPpred = PL_predicate("assertz",1,"user");
       int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, RPpred, T);
-      
+
       assert(Rval && "Param rval is false");
     }
   }
@@ -591,15 +594,15 @@ void SymbolTable::solveInclusionConstraints(){
       std::string FName=(**I)->getDef()->getNameAsString();
       OSv2 << "****" << FName << "*****"<< "\n";
       (**I)->print();
-      //The effect variable  
+      //The effect variable
       term_t A = PL_new_term_ref();
       term_t T2  = PL_new_term_ref();
       functor_t EVFunctor;
       EVFunctor = PL_new_functor(PL_new_atom("effect_var"), 1);
-      
+
       std::string EVstr;
       llvm::raw_string_ostream EV(EVstr);
- 
+
       EV << "ev" << Num;
 
       PL_put_atom_chars(A, EV.str().c_str()); // variable name needs to be fresh
@@ -614,11 +617,11 @@ void SymbolTable::solveInclusionConstraints(){
 
       functor_t ESIFunctor;
       ESIFunctor = PL_new_functor(PL_new_atom("esi_constraint"), 4);
-      
- 
+
+
       std::string ESIstr;
       llvm::raw_string_ostream ESI(ESIstr);
- 
+
       ESI << "esi" << Num;
       PL_put_atom_chars(A1, ESI.str().c_str()); // fresh constraint name
       PL_put_atom_chars(A2, FName.c_str());
@@ -637,10 +640,10 @@ void SymbolTable::solveInclusionConstraints(){
       PL_put_term(A4, T2);
       Res=PL_cons_functor(T, ESIFunctor, A1, A2, A3, A4);
       assert(Res);
-      
+
       predicate_t ESIpred1 = PL_predicate("assertz",1,"user");
       int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, ESIpred1, T);
-      
+
       assert(Rval && "first rval is false");
 
       predicate_t ESI1 = PL_predicate("esi_collect",4,"user");
@@ -652,7 +655,7 @@ void SymbolTable::solveInclusionConstraints(){
       PL_put_atom_chars(H1,FName.c_str());
       Res=PL_put_list_chars(H2,List.c_str());
       assert(Res);
-      
+
       PL_put_variable(H3);
 
       Rval = PL_call_predicate(NULL, PL_Q_NORMAL, ESI1, H0);
@@ -770,17 +773,18 @@ lookupParameterName(StringRef Name) {
 }
 
 void SymbolTableEntry::
-addRegionName(StringRef Name) {
+addRegionName(StringRef Name, StringRef PrologName) {
   if (!RegnNameSet)
     RegnNameSet = new RegionNameSet();
-  RegnNameSet->insert(NamedRplElement(Name));
+  RegnNameSet->insert(NamedRplElement(Name, PrologName));
 }
 
 void SymbolTableEntry::
-addParameterName(StringRef Name) {
+addParameterName(StringRef Name, StringRef PrologName) {
   if (!ParamVec)
     ParamVec = new ParameterVector();
-  ParamVec->push_back(ParamRplElement(Name));
+
+  ParamVec->push_back(ParamRplElement(Name, PrologName));
 }
 
 void SymbolTableEntry::
