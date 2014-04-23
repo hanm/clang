@@ -162,7 +162,7 @@ bool Rpl::RplRef::isDisjointRight(RplRef &That) {
 ///////////////////////////////////////////////////////////////////////////////
 // end Rpl::RplRef; start Rpl
 
-term_t Rpl::getPLTerm() {
+term_t Rpl::getPLTerm() const {
   term_t Result = PL_new_term_ref();
   functor_t RplFunctor = PL_new_functor(PL_new_atom("rpl"), 2);
   // 1. build RPL element list

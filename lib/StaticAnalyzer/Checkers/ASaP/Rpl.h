@@ -312,7 +312,7 @@ typedef llvm::SmallVector<const RplElement*,
   std::string toString() const;
 
   /// \brief Return a Prolog term for the Rpl.
-  term_t getPLTerm();
+  term_t getPLTerm() const;
 
   // Getters
   /// \brief Returns the last of the RPL elements of this RPL.
