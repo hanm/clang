@@ -12,6 +12,7 @@
 //
 //===--------------------------------------------------------------------===//
 #include <SWI-Prolog.h>
+#include <stdio.h>
 #include "ClangSACheckers.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
@@ -196,6 +197,12 @@ public:
     predicate_t Consult = PL_predicate("consult",1,"user");
     term_t Plfile=PL_new_term_ref();
     PL_put_atom_chars(Plfile, "/opt/lib/asap.pl");
+    
+
+    FILE *file = fopen("/opt/lib/asap.pl", "r");
+    assert(file && "pl file does not exist");
+    fclose(file);
+
     PL_call_predicate(NULL, PL_Q_NORMAL, Consult, Plfile); 
 
     SymT.solveInclusionConstraints();
