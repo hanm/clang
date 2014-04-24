@@ -569,168 +569,118 @@ getInheritanceSubVec(QualType QT) {
 }
 
 static void emitConstraintSolution(EffectInclusionConstraint *EC,
-                                         char* Solution){
+                                   char* Solution){
   const FunctionDecl *Func=EC->getDef();
   const Stmt  *S=EC->getS();
   StringRef BugName = "Effect Inclusion Constraint Solution";
 
   std::string BugStr;
   llvm::raw_string_ostream StrOS(BugStr);
-  StrOS << "Solution for " << Func->getNameAsString() << ": " <<
-    Solution << "\n";
+  StrOS << "Inferred Effect Summary for " << Func->getNameAsString()
+        << ": " << Solution << "\n";
 
   StringRef Str(StrOS.str());
-  helperEmitStatementWarning(*SymbolTable::VB.BR, SymbolTable::VB.AC, S, Func, Str, BugName, false);
+  helperEmitStatementWarning(*SymbolTable::VB.BR,
+                             SymbolTable::VB.AC,
+                             S, Func, Str, BugName, false);
 
 }
 
-void SymbolTable::solveInclusionConstraints(){
+void SymbolTable::solveInclusionConstraints() {
   //iterate through symbol table entries
-  int Ind=1;
-  for (SymbolTableMapT::iterator MI=SymTable.begin(); MI!=SymTable.end(); ++MI){
+  for (SymbolTableMapT::const_iterator
+         MI = SymTable.begin(),
+         ME = SymTable.end();
+       MI != ME; ++MI) {
     //iterate through paramters and add facts
-    OSv2 << "iterating over map"<< "\n";
-    const ParameterVector* ParamVec=(*MI).second->getParameterVector();
-    OSv2 << "got ParamVec"<< "\n";
-    if (!ParamVec){
-       OSv2 << "ParamVec is NULL"<< "\n";
-       continue;
+    const SymbolTableEntry *Entry = (*MI).second;
+    if (Entry->hasParameterVector()) {
+      Entry->getParameterVector()->assertzProlog();
     }
-    for (ParameterVector::const_iterator PI=ParamVec->begin(); PI!=ParamVec->end();
-         ++PI){
-      OSv2 << "iterating over ParamVec"<< "\n";
-      StringRef Name=(*PI)->getName();
-      std::string Param;
-      llvm::raw_string_ostream RP(Param);
-
-      RP << Name.str() << Ind;
-      Ind++;
-
-      term_t A = PL_new_term_ref();
-      term_t T  = PL_new_term_ref();
-
-      functor_t RPFunctor;
-      RPFunctor = PL_new_functor(PL_new_atom("rgn_param"), 1);
-
-      PL_put_atom_chars(A, RP.str().c_str()); // param name
-
-      int Res=PL_cons_functor(T, RPFunctor, A);
-      assert(Res);
-
-      predicate_t RPpred = PL_predicate("assertz",1,"user");
-      int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, RPpred, T);
-
-      assert(Rval && "Param rval is false");
-    }
+    // TODO: same thing with region names, effect summaries,
   }
+  OSv2 << "DEBUG:: Done emmitting rgn_param facts, gonna do esi_constraints next\n";
+
   unsigned Num=1;
-
   //loop to emit esi_constraint facts
-  for (InclusionConstraintsSetT::iterator I=InclusionConstraints.begin(); I!=InclusionConstraints.end(); ++I)
-    {
-      std::string FName=(**I)->getDef()->getNameAsString();
-      OSv2 << "****" << FName << "*****"<< "\n";
-      (**I)->print();
-      //The effect variable
-      term_t A = PL_new_term_ref();
-      term_t T2  = PL_new_term_ref();
-      functor_t EVFunctor;
-      EVFunctor = PL_new_functor(PL_new_atom("effect_var"), 1);
+  for (InclusionConstraintsSetT::iterator
+           I = InclusionConstraints.begin(),
+           E = InclusionConstraints.end();
+       I != E; ++I) {
+    assert((*I)->getDef());
+    std::string FName=(*I)->getDef()->getNameAsString(); // TODO: unique prolog name
 
-      std::string EVstr;
-      llvm::raw_string_ostream EV(EVstr);
+    std::string EVstr;
+    llvm::raw_string_ostream EV(EVstr);
+    EV << "ev" << Num;
 
-      EV << "ev" << Num;
+    term_t EVName = PL_new_term_ref();
+    term_t EVTerm = PL_new_term_ref();
+    functor_t EVFunctor = PL_new_functor(PL_new_atom("effect_var"), 1);
 
-      PL_put_atom_chars(A, EV.str().c_str()); // variable name needs to be fresh
-      int Res=PL_cons_functor(T2, EVFunctor, A);
-      assert(Res);
+    PL_put_atom_chars(EVName, EV.str().c_str()); // variable name needs to be fresh
+    int Res = PL_cons_functor(EVTerm, EVFunctor, EVName);
+    assert(Res && "Failed to build 'effect_var' Prolog term");
 
-      term_t A1 = PL_new_term_ref();
-      term_t A2 = PL_new_term_ref();
-      term_t A3 = PL_new_term_ref();
-      term_t A4 = PL_new_term_ref();
-      term_t T  = PL_new_term_ref();
+    term_t ESIID = PL_new_term_ref();
+    term_t FNameTerm = PL_new_term_ref();
 
-      functor_t ESIFunctor;
-      ESIFunctor = PL_new_functor(PL_new_atom("esi_constraint"), 4);
+    std::string ESIstr;
+    llvm::raw_string_ostream ESI(ESIstr);
+    ESI << "esi" << Num;
+    PL_put_atom_chars(ESIID, ESI.str().c_str()); // fresh constraint name
 
+    PL_put_atom_chars(FNameTerm, FName.c_str());
+    term_t LHS = (*I)->getLHS()->getPLTerm();
 
-      std::string ESIstr;
-      llvm::raw_string_ostream ESI(ESIstr);
+    term_t ESITerm  = PL_new_term_ref();
+    functor_t ESIFunctor = PL_new_functor(PL_new_atom("esi_constraint"), 4);
+    Res = PL_cons_functor(ESITerm, ESIFunctor, ESIID, FNameTerm, LHS, EVTerm);
+    assert(Res && "Failed to build 'esi_constraint' Prolog term");
 
-      ESI << "esi" << Num;
-      PL_put_atom_chars(A1, ESI.str().c_str()); // fresh constraint name
-      PL_put_atom_chars(A2, FName.c_str());
-      std::string List = "[";
-      EffectVector* Lhs=(**I)->getLHS();
-      for (EffectVector::iterator It=Lhs->begin(); It!=Lhs->end(); ++It){
-        if(It!=Lhs->begin())
-          List += ",";
-        List +=  (*It)->toString();
-      }
-      List += "]";
-      OSv2 << "LHS is "<< List << "\n";
-      Res=PL_put_list_chars(A3, List.c_str());
-      assert(Res);
+    assertzTermProlog(ESITerm, "Failed to assert 'esi_constraint' to Prolog facts");
+    ++Num;
+  }
 
-      PL_put_term(A4, T2);
-      Res=PL_cons_functor(T, ESIFunctor, A1, A2, A3, A4);
-      assert(Res);
-
-      predicate_t ESIpred1 = PL_predicate("assertz",1,"user");
-      int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, ESIpred1, T);
-
-      assert(Rval && "first rval is false");
-
-      ++Num;
-    }
-
-    Num=1;
+  OSv2 << "DEBUG:: Done emmitting esi_constraints, gonna call effect inference next\n";
+  Num=1;
   //loop to call esi_collect
-    for (InclusionConstraintsSetT::iterator I=InclusionConstraints.begin(); I!=InclusionConstraints.end(); ++I)
-    {
-      std::string FName=(**I)->getDef()->getNameAsString();
-      OSv2 << "****" << FName << "*****"<< "\n";
-      std::string EVstr;
-      llvm::raw_string_ostream EV(EVstr);
- 
-      EV << "ev" << Num;
+  for (InclusionConstraintsSetT::iterator
+          I = InclusionConstraints.begin(),
+          E = InclusionConstraints.end();
+       I != E; ++I) {
+    std::string FName=(*I)->getDef()->getNameAsString();
+    OSv2 << "****" << FName << "*****"<< "\n";
+    std::string EVstr;
+    llvm::raw_string_ostream EV(EVstr);
 
-      std::string List = "[";
-      EffectVector* Lhs=(**I)->getLHS();
-      for (EffectVector::iterator It=Lhs->begin(); It!=Lhs->end(); ++It){
-        if(It!=Lhs->begin())
-          List += ",";
-        List +=  (*It)->toString();
-      }
-      List += "]";
+    EV << "ev" << Num;
 
-      predicate_t ESI1 = PL_predicate("esi_collect",4,"user");
-      term_t H0 = PL_new_term_refs(4);
-      term_t H1 = H0 + 1;
-      term_t H2 = H0 + 2;
-      term_t H3 = H0 + 3;
-      PL_put_atom_chars(H0,EV.str().c_str());
-      PL_put_atom_chars(H1,FName.c_str());
-      int Res=PL_put_list_chars(H2,List.c_str());
-      assert(Res);
+    term_t LHS = (*I)->getLHS()->getPLTerm();
 
-      PL_put_variable(H3);
+    predicate_t ESI1 = PL_predicate("esi_collect",4,"user");
+    term_t H0 = PL_new_term_refs(4);
+    term_t H1 = H0 + 1;
+    term_t H2 = H0 + 2;
+    term_t H3 = H0 + 3;
+    PL_put_atom_chars(H0,EV.str().c_str());
+    PL_put_atom_chars(H1,FName.c_str());
 
-      int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, ESI1, H0);
+    PL_put_term(H2,LHS);
+    PL_put_variable(H3);
 
-      assert(Rval && "rval is false");
+    int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, ESI1, H0);
 
-      char* Solution;
-      Res=PL_get_list_chars(H3, &Solution, 0);
-      assert(Res);
-      OSv2 << "result is "<< Solution << "\n";
+    assert(Rval && "rval is false");
 
-      emitConstraintSolution(**I, Solution);
-      ++Num;
-    }
+    char* Solution;
+    int Res=PL_get_chars(H3, &Solution, CVT_WRITE|BUF_RING);
+    assert(Res && "Failed to read solution from Prolog");
+    OSv2 << "result is "<< Solution << "\n";
 
+    emitConstraintSolution(*I, Solution);
+    ++Num;
+  }
 }
 
 AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {

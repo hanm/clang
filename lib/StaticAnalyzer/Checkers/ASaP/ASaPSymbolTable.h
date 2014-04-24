@@ -66,8 +66,8 @@ class SymbolTable {
   typedef llvm::DenseMap<const FunctionDecl*,
                           const SpecificNIChecker*> ParallelismMapT;
   typedef OwningPtrSet<std::string, 1024> FreshNamesSetT;
-  typedef OwningPtrSet<clang::asap::EffectInclusionConstraint*, NUM_OF_CONSTRAINTS> InclusionConstraintsSetT;
-  typedef OwningPtrSet<clang::asap::EffectNIConstraint*, NUM_OF_CONSTRAINTS> NIConstraintsSetT;
+  typedef OwningPtrSet<clang::asap::EffectInclusionConstraint, NUM_OF_CONSTRAINTS> InclusionConstraintsSetT;
+  typedef OwningPtrSet<clang::asap::EffectNIConstraint, NUM_OF_CONSTRAINTS> NIConstraintsSetT;
 
   /// \brief Symbol Table Map
   SymbolTableMapT SymTable;
