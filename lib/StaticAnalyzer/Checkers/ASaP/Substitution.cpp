@@ -60,7 +60,8 @@ term_t Substitution::getPLTerm() const {
   assert(FromEl && "Subtitution missing left hand side");
   assert(ToRpl && "Substitution missing right hand side");
   int Res = PL_cons_functor(Result, SubFunctor,
-                            FromEl->getPLTerm(), ToRpl->getPLTerm());
+                            FromEl->getPLTerm(), 
+                            ToRpl->getRplElementsPLTerm());
   assert(Res && "Failed to create prolog term_t for Substitution");
   return Result;
 }

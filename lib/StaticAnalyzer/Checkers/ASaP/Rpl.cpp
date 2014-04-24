@@ -187,13 +187,10 @@ bool Rpl::RplRef::isDisjointRight(RplRef &That) {
 ///////////////////////////////////////////////////////////////////////////////
 // end Rpl::RplRef; start Rpl
 
-term_t Rpl::getPLTerm() const {
-  term_t Result = PL_new_term_ref();
-  functor_t RplFunctor = PL_new_functor(PL_new_atom("rpl"), 2);
-  // 1. build RPL element list
+term_t Rpl::getRplElementsPLTerm() const {
   term_t RplElList = PL_new_term_ref();
   PL_put_nil(RplElList);
-  int Res;
+  int Res = 0;
   for (RplElementVectorTy::const_reverse_iterator I = RplElements.rbegin(),
                                                   E = RplElements.rend();
        I != E; ++I) {
@@ -201,12 +198,19 @@ term_t Rpl::getPLTerm() const {
     Res = PL_cons_list(RplElList, RplEl, RplElList);
     assert(Res && "Failed to add RPL element to Prolog list term");
   }
+  return RplElList;
+}
 
+term_t Rpl::getPLTerm() const {
+  term_t Result = PL_new_term_ref();
+  functor_t RplFunctor = PL_new_functor(PL_new_atom("rpl"), 2);
+  // 1. build RPL element list
+  term_t RplElList = getRplElementsPLTerm();
   // 2. build (empty) substitution list
   term_t SubList = PL_new_term_ref();
   PL_put_nil(SubList);
   // 3. combine the two lists into a functor term
-  Res = PL_cons_functor(Result, RplFunctor, RplElList, SubList);
+  int Res = PL_cons_functor(Result, RplFunctor, RplElList, SubList);
   assert(Res && "Failed to create prolog term_t for RPL");
   return Result;
 }
