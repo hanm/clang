@@ -518,6 +518,17 @@ public:
     OS << "\n";
   }
 
+  void assertzProlog () const {
+    for (ParameterVector::const_iterator
+           PI = begin(), PE = end();
+         PI != PE; ++PI) {
+      term_t ParamT = PL_new_term_ref();
+      functor_t RPFunctor = PL_new_functor(PL_new_atom("rgn_param"), 1);
+      int Res = PL_cons_functor(ParamT, RPFunctor, (*PI)->getPLTerm());
+      assert(Res && "Failed to create 'rgn_param' Prolog term");
+      assertzTermProlog(ParamT,"Failed to assert 'rgn_param' to Prolog facts");
+    }
+  }
 
 }; // end class ParameterVector
 
