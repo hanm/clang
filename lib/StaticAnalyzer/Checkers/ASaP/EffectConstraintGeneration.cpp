@@ -42,7 +42,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
       IsBase(false),
       EffectCount(0),
       DerefNum(0),
-      IsCoveredBySummary(true) {
+      IsCoveredBySummary(RK_TRUE) {
 
   OS << "DEBUG:: ******** INVOKING EffectConstraintGeneratorVisitor...\n";
 
@@ -254,34 +254,35 @@ void EffectConstraintVisitor::
 checkEffectCoverage() {
   EffectVector* LHS=EC->getLHS();
   const EffectSummary* RHS=EC->getRHS();
-  const int N=LHS->size();
-  if (N<=0){
-    delete(EC);
-    return;
-  }
-  bool Result = true;
+  Trivalent Result = RK_TRUE;
+
   OS << "DEBUG:: In checkEffectCoverage() \n";
   OS << "DEBUG:: LHS empty? "<< LHS->empty() <<"\n";
 
-  OS << "DEBUG:: N is "<< N <<"\n";
-  for (int I=0; I<N; ++I){
-    //std::auto_ptr<Effect> E = LHS->pop_back_val();
-    Effect* E = (*LHS)[I];
-    OS << "### "; E->print(OS); OS << "\n";
+  // for all effects in LHS
+  for (EffectVector::const_iterator
+         I = LHS->begin(),
+         E = LHS->end();
+       I != E; ++I ) {
+  //for (int I=0; I<N; ++I){
+    //const Effect* E = (*LHS)[I];
+    const Effect *Eff = (*I);
+    OS << "### "; Eff->print(OS); OS << "\n";
 
-    if (E->getEffectKind()!=Effect::EK_InvocEffect) {
-      OS << "==== not EK_InvocEffect"<<E->getEffectKind() <<"\n";
+    if (Eff->getEffectKind() != Effect::EK_InvocEffect) {
+      OS << "==== not EK_InvocEffect"<<Eff->getEffectKind() <<"\n";
       // Trivalent RK=RHS->covers(E.get());
-      Trivalent RK=RHS->covers(E);
+      Trivalent RK=RHS->covers(Eff);
       if(RK==RK_FALSE) {
-        const Expr* Exp=E->getExp();
-        const Decl* D;
-        const MemberExpr *me=dyn_cast<const MemberExpr>(Exp);
-        if (me)
-          D = me->getMemberDecl();
-        else {
-          const DeclRefExpr *dre=dyn_cast<const DeclRefExpr>(Exp);
-          D =dre->getDecl();
+        const Expr* Exp=Eff->getExp();
+        const Decl* D = 0;
+
+        if (const MemberExpr *MemEx = dyn_cast<const MemberExpr>(Exp)) {
+          D = MemEx->getMemberDecl();
+        } else if (const DeclRefExpr *DRE=dyn_cast<const DeclRefExpr>(Exp)) {
+          D = DRE->getDecl();
+        } else {
+          assert(false && "Unexpected kind of Expression");
         }
         OS << "DEBUG:: effect not covered: Expr = ";
         Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -293,23 +294,19 @@ checkEffectCoverage() {
         } else {
           OS << "\tDecl = NULL\n";
         }
-        std::string Str = E->toString();
+        std::string Str = Eff->toString();
         emitEffectNotCoveredWarning(Exp, D, Str);
-        Result = false;
+        Result = RK_FALSE;
+      } else if (RK==RK_DUNNO && Result != RK_FALSE) {
+        Result = RK_DUNNO;
+        break;
       }
-      else if (RK==RK_DUNNO){
-        //assert(false && "Variable summary");
-        SymT.addInclusionConstraint(EC);
-
-
-      }
-    }
-
-    else if (E->getEffectKind()==Effect::EK_InvocEffect){
-      const Expr* Exp=E->getExp();
+    } // end if EffectKind != EK_InvocEffect
+    else if (Eff->getEffectKind() == Effect::EK_InvocEffect) {
+      const Expr* Exp=Eff->getExp();
       OS << "====== EK_InvocEffect \n";
-      const FunctionDecl* FunD=E->getDecl();
-      SubstitutionVector* SubV=E->getSubV();
+      const FunctionDecl* FunD=Eff->getDecl();
+      SubstitutionVector* SubV=Eff->getSubV();
 
       OS << "======= EK_InvocEffect -before call to getEffectSummary()\n";
       if(!FunD)
@@ -317,8 +314,8 @@ checkEffectCoverage() {
       const EffectSummary *Effects =
           SymT.getEffectSummary(FunD->getCanonicalDecl());
       if (isa<VarEffectSummary>(Effects)) {
-        SymT.addInclusionConstraint(EC);
-
+        Result = RK_DUNNO;
+        break;
       }
       const ConcreteEffectSummary *FunEffects =
           dyn_cast<ConcreteEffectSummary>(Effects);
@@ -328,11 +325,11 @@ checkEffectCoverage() {
             I = FunEffects->begin(),
             End = FunEffects->end();
           I != End; ++I) {
-        Effect Eff(*(*I));
+        Effect Eff2(**I); // we need a copy of the effect
         OS << "======= EK_InvocEffect -before call to applyTo()\n";
-        SubV->applyTo(&Eff);
+        SubV->applyTo(&Eff2);
         OS << "======= EK_InvocEffect -before call to isCovered by\n";
-        Trivalent RK=RHS->covers(&Eff);
+        Trivalent RK=RHS->covers(&Eff2);
         if(RK==RK_FALSE){
           OS << "DEBUG:: effect not covered: Expr = ";
           Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -344,24 +341,26 @@ checkEffectCoverage() {
           } else {
             OS << "\tDecl = NULL\n";
           }
-          std::string Str = Eff.toString();
+          std::string Str = Eff2.toString();
           emitEffectNotCoveredWarning(Exp, FunD, Str);
-          Result = false;
+          Result = RK_FALSE;
         }
-        else if (RK==RK_DUNNO) {
-          SymT.addInclusionConstraint(EC);
-
+        else if (RK == RK_DUNNO && Result != RK_FALSE) {
+          Result = RK_DUNNO;
+          break;
         }
-
-      }
-
-    }
-
-  }
+      } // end for-all effects in effect summary of invokes effect
+      if (Result == RK_DUNNO)
+        break;
+    } // end if InvocEffect
+  } // end for-all effects in LHS of Effect Constraint
   OS << "DEBUG:: effect check (DONE)\n";
-  IsCoveredBySummary &= Result;
-  delete(EC);
-  return;
+  if (Result == RK_DUNNO) {
+    SymT.addInclusionConstraint(EC);
+  } else {
+    delete(EC);
+  }
+  IsCoveredBySummary = Result;
 }
 
 

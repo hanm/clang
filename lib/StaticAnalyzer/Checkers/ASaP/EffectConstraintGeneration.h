@@ -40,7 +40,7 @@ class EffectConstraintVisitor
   int EffectCount;
   /// Count of number of dereferences on expression (values in [-1, 0, ...] ).
   int DerefNum;
-  bool IsCoveredBySummary;
+  Trivalent IsCoveredBySummary;
   const EffectSummary *EffSummary;
 
   /// \brief Using Type with DerefNum perform substitution on all TmpEffects.
@@ -82,7 +82,7 @@ public:
   //~EffectConstraintVisitor();
 
   // Getters
-  inline bool getIsCoveredBySummary() { return IsCoveredBySummary; }
+  inline Trivalent getIsCoveredBySummary() { return IsCoveredBySummary; }
 
   // Visitors
   void VisitMemberExpr(MemberExpr *E);
