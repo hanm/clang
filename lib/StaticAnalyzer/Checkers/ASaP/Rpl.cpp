@@ -73,6 +73,31 @@ bool Rpl::isValidRegionName(const llvm::StringRef& Str) {
   return true;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//// RplRef
+
+Rpl::RplRef::RplRef(const Rpl& R) : rpl(R) {
+  firstIdx = 0;
+  lastIdx = rpl.RplElements.size()-1;
+}
+/// Printing (Rpl Ref)
+void Rpl::RplRef::print(llvm::raw_ostream& OS) const {
+  int I = firstIdx;
+  for (; I < lastIdx; ++I) {
+    OS << rpl.RplElements[I]->getName() << RPL_SPLIT_CHARACTER;
+  }
+  // print last element
+  if (I==lastIdx)
+    OS << rpl.RplElements[I]->getName();
+}
+
+std::string Rpl::RplRef::toString() {
+  std::string SBuf;
+  llvm::raw_string_ostream OS(SBuf);
+  print(OS);
+  return std::string(OS.str());
+}
+
 bool Rpl::RplRef::isUnder(RplRef& RHS) {
   OSv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
         << this->toString() << ", " << RHS.toString() << ")\n";
@@ -168,7 +193,8 @@ bool Rpl::isDisjoint(const Rpl &That) const {
 
   return LHS1.isDisjointLeft(RHS1) || LHS2.isDisjointRight(RHS2);
 }
-
+///////////////////////////////////////////////////////////////////////////////
+////   Rpl
 void Rpl::print(raw_ostream &OS) const {
   RplElementVectorTy::const_iterator I = RplElements.begin();
   RplElementVectorTy::const_iterator E = RplElements.end();
@@ -305,6 +331,207 @@ void Rpl::join(Rpl* That) {
 Rpl *Rpl::capture() {
   if (this->isFullySpecified()) return this;
   else return new Rpl(*new CaptureRplElement(*this));
+}
+///////////////////////////////////////////////////////////////////////////////
+//// ParameterSet
+
+bool ParameterSet::hasElement(const RplElement *Elmt) const {
+  for(const_iterator I = begin(), E = end();
+      I != E; ++I) {
+    if (Elmt == *I)
+      return true;
+  }
+  return false;
+}
+///////////////////////////////////////////////////////////////////////////////
+//// ParameterVector
+void ParameterVector::addToParamSet(ParameterSet *PSet) const {
+  for(VectorT::const_iterator I = begin(), E = end();
+      I != E; ++I) {
+    const ParamRplElement *El = *I;
+    PSet->insert(El);
+  }
+}
+
+/// \brief Returns the ParamRplElement with name=Name or null.
+const ParamRplElement *ParameterVector::lookup(StringRef Name) const {
+  for(VectorT::const_iterator I = begin(), E = end();
+      I != E; ++I) {
+    const ParamRplElement *El = *I;
+    if (El->getName().compare(Name) == 0)
+      return El;
+  }
+  return 0;
+}
+
+/// \brief Returns true if the argument RplElement is contained.
+bool ParameterVector::hasElement(const RplElement *Elmt) const {
+  for(VectorT::const_iterator I = begin(), E = end();
+      I != E; ++I) {
+    if (Elmt == *I)
+      return true;
+  }
+  return false;
+}
+
+void ParameterVector::take(ParameterVector *&PV) {
+  if (!PV)
+    return;
+
+  BaseClass::take(PV);
+  assert(PV->size()==0);
+  delete PV;
+  PV = 0;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//// RplVector
+
+RplVector::RplVector(const ParameterVector &ParamVec) {
+  for(ParameterVector::const_iterator
+        I = ParamVec.begin(),
+        E = ParamVec.end();
+      I != E; ++I) {
+    if (*I) {
+      Rpl Param(**I);
+      push_back(Param);
+    }
+  }
+}
+
+  /// \brief Same as performing deref() DerefNum times.
+std::auto_ptr<Rpl> RplVector::deref(size_t DerefNum) {
+  std::auto_ptr<Rpl> Result;
+  assert(DerefNum < size());
+  for (VectorT::iterator I = begin();
+        DerefNum > 0 && I != end(); ++I, --DerefNum) {
+    Result.reset(*I);
+    I = VectorT::erase(I);
+  }
+  return Result;
+}
+
+/// \brief Joins this to That.
+void RplVector::join(RplVector *That) {
+  if (!That)
+    return;
+  assert(That->size() == this->size());
+
+  VectorT::iterator
+          ThatI = That->begin(),
+          ThisI = this->begin(),
+          ThatE = That->end(),
+          ThisE = this->end();
+  for ( ;
+        ThatI != ThatE && ThisI != ThisE;
+        ++ThatI, ++ThisI) {
+    Rpl *LHS = *ThisI;
+    Rpl *RHS = *ThatI;
+    assert(LHS);
+    LHS->join(RHS); // modify *ThisI in place
+  }
+  return;
+}
+
+/// \brief Return true when this is included in That, false otherwise.
+bool RplVector::isIncludedIn (const RplVector &That) const {
+  bool Result = true;
+  assert(That.size() == this->size());
+
+  VectorT::const_iterator
+          ThatI = That.begin(),
+          ThisI = this->begin(),
+          ThatE = That.end(),
+          ThisE = this->end();
+  for ( ;
+        ThatI != ThatE && ThisI != ThisE;
+        ++ThatI, ++ThisI) {
+    Rpl *LHS = *ThisI;
+    Rpl *RHS = *ThatI;
+    if (!LHS->isIncludedIn(*RHS)) {
+      Result = false;
+      break;
+    }
+  }
+  OSv2 << "DEBUG:: [" << this->toString() << "] is " << (Result?"":"not ")
+      << "included in [" << That.toString() << "]\n";
+  return Result;
+}
+
+void RplVector::substitute(const Substitution *S) {
+  for(VectorT::const_iterator I = begin(), E = end();
+        I != E; ++I) {
+    if (*I)
+      (*I)->substitute(S);
+  }
+}
+
+void RplVector::print(llvm::raw_ostream &OS) const {
+  VectorT::const_iterator I = begin(), E = end();
+  for(; I < E-1; ++I) {
+    (*I)->print(OS);
+    OS << ", ";
+  }
+  // print last one
+  if (I != E)
+    (*I)->print(OS);
+}
+
+//static
+RplVector *RplVector::merge(const RplVector *A, const RplVector *B) {
+  if (!A && !B)
+    return 0;
+  if (!A && B)
+    return new RplVector(*B);
+  if (A && !B)
+    return new RplVector(*A);
+  // invariant henceforth A!=null && B!=null
+  RplVector *LHS;
+  const RplVector *RHS;
+  (A->size() >= B->size()) ? ( LHS = new RplVector(*A), RHS = B)
+                           : ( LHS = new RplVector(*B), RHS = A);
+  // fold RHS into LHS
+  VectorT::const_iterator RHSI = RHS->begin(), RHSE = RHS->end();
+  while (RHSI != RHSE) {
+    LHS->push_back(*RHSI);
+    ++RHSI;
+  }
+  return LHS;
+}
+
+/// \brief Returns the union of two RPL Vectors but destroys its inputs.
+//static
+RplVector *RplVector::destructiveMerge(RplVector *&A, RplVector *&B) {
+  if (!A)
+    return B;
+  if (!B)
+    return A;
+  // invariant henceforth A!=null && B!=null
+  RplVector *LHS, *RHS;
+  (A->size() >= B->size()) ? ( LHS = A, RHS = B)
+                           : ( LHS = B, RHS = A);
+  // fold RHS into LHS
+  VectorT::iterator RHSI = RHS->begin();
+  while (RHSI != RHS->end()) {
+    Rpl *R = *RHSI;
+    LHS->VectorT::push_back(R);
+    RHSI = RHS->VectorT::erase(RHSI);
+  }
+  delete RHS;
+  A = B = 0;
+  return LHS;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//// RegionNameSet
+const NamedRplElement *RegionNameSet::lookup (StringRef Name) {
+  for (SetT::iterator I = begin(), E = end();
+        I != E; ++I) {
+    const NamedRplElement *El = *I;
+    if (El->getName().compare(Name) == 0)
+      return El;
+  }
+  return 0;
 }
 
 } // End namespace asap.
