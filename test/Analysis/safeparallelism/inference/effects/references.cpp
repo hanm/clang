@@ -2,7 +2,7 @@
 //
 //
 
-void foo() { //expected-warning{{Solution for foo: [Reads Effect on Global]}}
+void foo() { //expected-warning{{Inferred Effect Summary for foo: [reads(rpl([rGLOBAL],[]))]}}
   int G[[asap::arg("Global")]] = 5 ;
   int &gRef[[asap::arg("Global")]] = G;
 }
