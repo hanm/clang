@@ -577,7 +577,7 @@ static void emitConstraintSolution(EffectInclusionConstraint *EC,
   std::string BugStr;
   llvm::raw_string_ostream StrOS(BugStr);
   StrOS << "Inferred Effect Summary for " << Func->getNameAsString()
-        << ": " << Solution << "\n";
+        << ": " << Solution;
 
   StringRef Str(StrOS.str());
   helperEmitStatementWarning(*SymbolTable::VB.BR,
