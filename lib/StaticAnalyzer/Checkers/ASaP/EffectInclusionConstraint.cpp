@@ -19,18 +19,18 @@
 namespace clang {
 namespace asap {
 
-EffectInclusionConstraint::EffectInclusionConstraint(const EffectSummary* Rhs,
-                                                     const FunctionDecl* Def,
-                                                     const Stmt* S)
+EffectInclusionConstraint::EffectInclusionConstraint(const EffectSummary *Rhs,
+                                                     const FunctionDecl *Def,
+                                                     const Stmt *S)
                                                      : RHS(Rhs), Def(Def), S(S) {
   LHS = new EffectVector();
 }
 
-void EffectInclusionConstraint::addEffect(Effect* Eff){
+void EffectInclusionConstraint::addEffect(Effect *Eff) {
   LHS->push_back(Eff);
 }
 
-void EffectInclusionConstraint::print(){
+void EffectInclusionConstraint::print() {
   llvm::raw_ostream &OS = *SymbolTable::VB.OS;
   OS << "**** Effect Inclusion Constraint for:" << Def->getNameAsString() <<
  "*****"<< "\n";
