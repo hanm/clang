@@ -16,6 +16,8 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_UTIL_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_UTIL_H
 
+#include <SWI-Prolog.h>
+
 #include "clang/AST/Decl.h"
 
 #include "ASaPFwdDecl.h"
@@ -79,6 +81,8 @@ void helperEmitInvalidAssignmentWarning(BugReporter &BR,
                                         StringRef &BugName);
 
 const Decl *getDeclFromContext(const DeclContext *DC);
+
+void assertzTermProlog(term_t Fact, StringRef ErrMsg = "");
 
 } // end namespace asap
 } // end namespace clang

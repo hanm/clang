@@ -136,5 +136,12 @@ const Decl *getDeclFromContext(const DeclContext *DC) {
   return D;
 }
 
+void assertzTermProlog(term_t Fact, StringRef ErrMsg) {
+  predicate_t AssertzP = PL_predicate("assertz",1,"user");
+  int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, AssertzP, Fact);
+  assert(Rval && ErrMsg.data());
+}
+
+
 } // end namespace asap
 } // end namespace clang
