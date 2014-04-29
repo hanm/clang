@@ -458,12 +458,11 @@ typecheckCXXConstructExpr(VarDecl *VarD,
   assert(ClassDecl);
   // Set up Substitution Vector
   const ParameterVector *PV = SymT.getParameterVector(ClassDecl);
-  if (PV && PV->size() > 0) {
-    assert(PV->size() == 1); // until we support multiple region params
-    const ParamRplElement *ParamEl = PV->getParamAt(0);
-    const ASaPType *T = SymT.getType(VarD);
-    if (T) {
-      const Rpl *R = T->getSubstArg();
+  const ASaPType *T = SymT.getType(VarD);
+  if (T && PV && PV->size() > 0) {
+    for (int I = 0; I < PV->size(); ++I) {
+      const ParamRplElement *ParamEl = PV->getParamAt(I);
+      const Rpl *R = T->getSubstArg(I);
       Substitution Sub(ParamEl, R);
       OS << "DEBUG:: ConstructExpr Substitution = " << Sub.toString() << "\n";
       SubV.push_back(&Sub);
