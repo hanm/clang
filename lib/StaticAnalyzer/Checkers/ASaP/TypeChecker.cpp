@@ -459,15 +459,7 @@ typecheckCXXConstructExpr(VarDecl *VarD,
   // Set up Substitution Vector
   const ParameterVector *PV = SymT.getParameterVector(ClassDecl);
   const ASaPType *T = SymT.getType(VarD);
-  if (T && PV && PV->size() > 0) {
-    for (int I = 0; I < PV->size(); ++I) {
-      const ParamRplElement *ParamEl = PV->getParamAt(I);
-      const Rpl *R = T->getSubstArg(I);
-      Substitution Sub(ParamEl, R);
-      OS << "DEBUG:: ConstructExpr Substitution = " << Sub.toString() << "\n";
-      SubV.push_back(&Sub);
-    }
-  }
+  buildSubstitutionVector(T,PV,SubV);
   typecheckParamAssignments(ConstrDecl, Exp->arg_begin(), Exp->arg_end(), SubV);
   OS << "DEBUG:: DONE with typecheckCXXConstructExpr\n";
 
@@ -536,21 +528,9 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
 
     // Build substitution for class region parameter(s)
     const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
-    if (ParamV && ParamV->size() > 0) {
-      assert(ParamV->size() == 1); // until we support multiple region params
-      const ParamRplElement *ParamEl = ParamV->getParamAt(0);
+    ASaPType *T = TBV.getType();
+    buildSubstitutionVector(T,ParamV,SubV);
 
-      ASaPType *T = TBV.getType();
-      if (T) {
-        OS << "DEBUG:: Base Type = " << T->toString(Ctx) << "\n";
-        const Rpl *R = T->getSubstArg();
-        Substitution Sub(ParamEl, R);
-        OS << "DEBUG:: typecheckCallExpr Substitution = "
-           << Sub.toString() << "\n";
-        SubV.push_back(&Sub);
-        OS << "DEBUG:: SubVec: " << SubV.toString() << "\n";
-      }
-    }
     unsigned NumArgs = Exp->getNumArgs();
     unsigned NumParams = FunD->getNumParams();
     OS << "DEBUG:: NumArgs=" << NumArgs << ", NumParams=" << NumParams << "\n";
@@ -583,6 +563,21 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
     // TODO
   }
 } // End typecheckCallExpr
+
+void AssignmentCheckerVisitor::
+buildSubstitutionVector(const ASaPType *Typ,
+                        const ParameterVector *ParamV,
+                        SubstitutionVector &SubV) {
+  if (Typ && ParamV && ParamV->size() > 0) {
+    for (unsigned int I = 0; I < ParamV->size(); ++I) {
+      const ParamRplElement *ParamEl = ParamV->getParamAt(I);
+      const Rpl *R = Typ->getSubstArg(I);
+      Substitution Sub(ParamEl, R);
+      OS << "DEBUG:: ConstructExpr Substitution = " << Sub.toString() << "\n";
+      SubV.push_back(&Sub);
+    }
+  }
+}
 
 void AssignmentCheckerVisitor::
 buildParamSubstitutions(const FunctionDecl *CalleeDecl,
