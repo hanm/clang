@@ -508,11 +508,16 @@ public:
   }
 
   void print (llvm::raw_ostream& OS) const {
-    OS << "Printing Params vector..."<< size() <<"\n";
+    // OS << "Printing Params vector..."<< size() <<"\n";
     if(!size())
       return;
-    for(VectorT::const_iterator I = begin(), E = end();
-        I != E; ++I) {
+    VectorT::const_iterator I = begin(), E = end();
+    if (I != E){
+      const ParamRplElement *El = *I;
+      OS << El->getName();
+      ++I;
+    }
+    for(; I != E; ++I) {
       const ParamRplElement *El = *I;
       OS << ", " << El->getName();
     }
@@ -744,14 +749,17 @@ public:
   }
 
   void print (llvm::raw_ostream& OS) {
-    OS << "Printing Regions vector...\n";
-     for (VectorT::iterator I = begin(), E = end();
-          I != E; ++I) {
-       OS << "in loop\n";
+    //    OS << "Printing Regions vector...\n";
+    VectorT::iterator I = begin(), E = end();
+    if (I != E) {
+      const NamedRplElement *El = *I;
+      OS << El->getName();
+      ++I;
+    }
+    for(; I != E; ++I) {
        const NamedRplElement *El = *I;
        OS << ", " << El->getName();
      }
-     OS << "after loop\n";
   }
 }; // End class RegionNameVector.
 

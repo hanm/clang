@@ -60,17 +60,19 @@ void RplDomain::addRegion(NamedRplElement *R){
 
 
 void RplDomain::print (llvm::raw_ostream& OS) {
-  OS << "----------------------------";
-  OS << "Params: ";
+  OS << "----------------------------\n";
+  OS << "Params: \n";
   if(Params)
     Params->print(OS);
-  OS << "Regions: ";
+  OS << "\n";
+  OS << "Regions: \n";
   if(Regions)
     Regions->print(OS);
+  OS << "\n";
   OS << "**Parent**\n";
   if (Parent)
     Parent->print(OS);
-  OS << "----------------------------";
+  OS << "----------------------------\n";
 }
 
 bool Rpl::isValidRegionName(const llvm::StringRef& Str) {

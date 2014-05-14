@@ -328,10 +328,6 @@ RplDomain *SymbolTable::buildDomain(const Decl *D) const {
     const Decl *EnclosingDecl = getDeclFromContext(DC);
     if (EnclosingDecl){
       RplDomain *Parent = buildDomain(EnclosingDecl);
-      if(PV)
-        PV->print(OSv2);
-      if(RNV)
-        RNV->print(OSv2);
       return new RplDomain(RNV, PV, Parent);
     }
     else
