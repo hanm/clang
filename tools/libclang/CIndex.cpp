@@ -15,7 +15,6 @@
 #include "CIndexer.h"
 #include "CIndexDiagnostic.h"
 #include "CLog.h"
-#include "CXComment.h"
 #include "CXCursor.h"
 #include "CXSourceLocation.h"
 #include "CXString.h"
@@ -25,6 +24,8 @@
 #include "clang/AST/Attr.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Basic/Diagnostic.h"
+#include "clang/Basic/DiagnosticCategories.h"
+#include "clang/Basic/DiagnosticIDs.h"
 #include "clang/Basic/Version.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Frontend/CompilerInstance.h"
@@ -34,6 +35,7 @@
 #include "clang/Lex/Lexer.h"
 #include "clang/Lex/PreprocessingRecord.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Serialization/SerializationDiagnostic.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringSwitch.h"
@@ -62,6 +64,7 @@ using namespace clang::cxindex;
 CXTranslationUnit cxtu::MakeCXTranslationUnit(CIndexer *CIdx, ASTUnit *AU) {
   if (!AU)
     return 0;
+  assert(CIdx);
   CXTranslationUnit D = new CXTranslationUnitImpl();
   D->CIdx = CIdx;
   D->TheASTUnit = AU;
@@ -70,6 +73,18 @@ CXTranslationUnit cxtu::MakeCXTranslationUnit(CIndexer *CIdx, ASTUnit *AU) {
   D->OverridenCursorsPool = createOverridenCXCursorsPool();
   D->CommentToXML = 0;
   return D;
+}
+
+bool cxtu::isASTReadError(ASTUnit *AU) {
+  for (ASTUnit::stored_diag_iterator D = AU->stored_diag_begin(),
+                                     DEnd = AU->stored_diag_end();
+       D != DEnd; ++D) {
+    if (D->getLevel() >= DiagnosticsEngine::Error &&
+        DiagnosticIDs::getCategoryNumberForDiag(D->getID()) ==
+            diag::DiagCat_AST_Deserialization_Issue)
+      return true;
+  }
+  return false;
 }
 
 cxtu::CXTUOwner::~CXTUOwner() {
@@ -298,7 +313,7 @@ bool CursorVisitor::visitDeclsFromFileRegion(FileID File,
     if (Outer.isInvalid())
       return false;
 
-    llvm::tie(File, Offset) = SM.getDecomposedExpansionLoc(Outer);
+    std::tie(File, Offset) = SM.getDecomposedExpansionLoc(Outer);
     Length = 0;
     Unit->findFileRegionDecls(File, Offset, Length, Decls);
   }
@@ -796,13 +811,11 @@ bool CursorVisitor::VisitFunctionDecl(FunctionDecl *ND) {
     if (CXXConstructorDecl *Constructor = dyn_cast<CXXConstructorDecl>(ND)) {
       // Find the initializers that were written in the source.
       SmallVector<CXXCtorInitializer *, 4> WrittenInits;
-      for (CXXConstructorDecl::init_iterator I = Constructor->init_begin(),
-                                          IEnd = Constructor->init_end();
-           I != IEnd; ++I) {
-        if (!(*I)->isWritten())
+      for (auto *I : Constructor->inits()) {
+        if (!I->isWritten())
           continue;
       
-        WrittenInits.push_back(*I);
+        WrittenInits.push_back(I);
       }
       
       // Sort the initializers in source order
@@ -900,10 +913,8 @@ bool CursorVisitor::VisitObjCMethodDecl(ObjCMethodDecl *ND) {
     if (Visit(TSInfo->getTypeLoc()))
       return true;
 
-  for (ObjCMethodDecl::param_iterator P = ND->param_begin(),
-       PEnd = ND->param_end();
-       P != PEnd; ++P) {
-    if (Visit(MakeCXCursor(*P, TU, RegionOfInterest)))
+  for (const auto *P : ND->params()) {
+    if (Visit(MakeCXCursor(P, TU, RegionOfInterest)))
       return true;
   }
 
@@ -933,19 +944,6 @@ static void addRangedDeclsInContainer(DeclIt *DI_current, DeclIt DE_current,
     }
     break;
   }
-}
-
-namespace {
-  struct ContainerDeclsSort {
-    SourceManager &SM;
-    ContainerDeclsSort(SourceManager &sm) : SM(sm) {}
-    bool operator()(Decl *A, Decl *B) {
-      SourceLocation L_A = A->getLocStart();
-      SourceLocation L_B = B->getLocStart();
-      assert(L_A.isValid() && L_B.isValid());
-      return SM.isBeforeInTranslationUnit(L_A, L_B);
-    }
-  };
 }
 
 bool CursorVisitor::VisitObjCContainerDecl(ObjCContainerDecl *D) {
@@ -979,18 +977,21 @@ bool CursorVisitor::VisitObjCContainerDecl(ObjCContainerDecl *D) {
 
   // Get all the Decls in the DeclContext, and sort them with the
   // additional ones we've collected.  Then visit them.
-  for (DeclContext::decl_iterator I = D->decls_begin(), E = D->decls_end();
-       I!=E; ++I) {
-    Decl *subDecl = *I;
-    if (!subDecl || subDecl->getLexicalDeclContext() != D ||
-        subDecl->getLocStart().isInvalid())
+  for (auto *SubDecl : D->decls()) {
+    if (!SubDecl || SubDecl->getLexicalDeclContext() != D ||
+        SubDecl->getLocStart().isInvalid())
       continue;
-    DeclsInContainer.push_back(subDecl);
+    DeclsInContainer.push_back(SubDecl);
   }
 
   // Now sort the Decls so that they appear in lexical order.
   std::sort(DeclsInContainer.begin(), DeclsInContainer.end(),
-            ContainerDeclsSort(SM));
+            [&SM](Decl *A, Decl *B) {
+    SourceLocation L_A = A->getLocStart();
+    SourceLocation L_B = B->getLocStart();
+    assert(L_A.isValid() && L_B.isValid());
+    return SM.isBeforeInTranslationUnit(L_A, L_B);
+  });
 
   // Now visit the decls.
   for (SmallVectorImpl<Decl*>::iterator I = DeclsInContainer.begin(),
@@ -1656,9 +1657,8 @@ bool CursorVisitor::VisitCXXRecordDecl(CXXRecordDecl *D) {
       return true;
 
   if (D->isCompleteDefinition()) {
-    for (CXXRecordDecl::base_class_iterator I = D->bases_begin(),
-         E = D->bases_end(); I != E; ++I) {
-      if (Visit(cxcursor::MakeCursorCXXBaseSpecifier(I, TU)))
+    for (const auto &I : D->bases()) {
+      if (Visit(cxcursor::MakeCursorCXXBaseSpecifier(&I, TU)))
         return true;
     }
   }
@@ -1667,9 +1667,8 @@ bool CursorVisitor::VisitCXXRecordDecl(CXXRecordDecl *D) {
 }
 
 bool CursorVisitor::VisitAttributes(Decl *D) {
-  for (AttrVec::const_iterator i = D->attr_begin(), e = D->attr_end();
-       i != e; ++i)
-    if (Visit(MakeCXCursor(*i, D, TU)))
+  for (const auto *I : D->attrs())
+    if (Visit(MakeCXCursor(I, D, TU)))
         return true;
 
   return false;
@@ -1851,6 +1850,7 @@ public:
   void VisitLambdaExpr(const LambdaExpr *E);
   void VisitOMPExecutableDirective(const OMPExecutableDirective *D);
   void VisitOMPParallelDirective(const OMPParallelDirective *D);
+  void VisitOMPSimdDirective(const OMPSimdDirective *D);
 
 private:
   void AddDeclarationNameInfo(const Stmt *S);
@@ -1923,14 +1923,26 @@ public:
 #include "clang/Basic/OpenMPKinds.def"
 };
 
+void OMPClauseEnqueue::VisitOMPIfClause(const OMPIfClause *C) {
+  Visitor->AddStmt(C->getCondition());
+}
+
+void OMPClauseEnqueue::VisitOMPNumThreadsClause(const OMPNumThreadsClause *C) {
+  Visitor->AddStmt(C->getNumThreads());
+}
+
+void OMPClauseEnqueue::VisitOMPSafelenClause(const OMPSafelenClause *C) {
+  Visitor->AddStmt(C->getSafelen());
+}
+
 void OMPClauseEnqueue::VisitOMPDefaultClause(const OMPDefaultClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPProcBindClause(const OMPProcBindClause *C) { }
 
 template<typename T>
 void OMPClauseEnqueue::VisitOMPClauseList(T *Node) {
-  for (typename T::varlist_const_iterator I = Node->varlist_begin(),
-                                          E = Node->varlist_end();
-         I != E; ++I)
-    Visitor->AddStmt(*I);
+  for (const auto *I : Node->varlists())
+    Visitor->AddStmt(I);
 }
 
 void OMPClauseEnqueue::VisitOMPPrivateClause(const OMPPrivateClause *C) {
@@ -1941,6 +1953,13 @@ void OMPClauseEnqueue::VisitOMPFirstprivateClause(
   VisitOMPClauseList(C);
 }
 void OMPClauseEnqueue::VisitOMPSharedClause(const OMPSharedClause *C) {
+  VisitOMPClauseList(C);
+}
+void OMPClauseEnqueue::VisitOMPLinearClause(const OMPLinearClause *C) {
+  VisitOMPClauseList(C);
+  Visitor->AddStmt(C->getStep());
+}
+void OMPClauseEnqueue::VisitOMPCopyinClause(const OMPCopyinClause *C) {
   VisitOMPClauseList(C);
 }
 }
@@ -2065,9 +2084,8 @@ void EnqueueVisitor::VisitDependentScopeDeclRefExpr(
 void EnqueueVisitor::VisitDeclStmt(const DeclStmt *S) {
   unsigned size = WL.size();
   bool isFirst = true;
-  for (DeclStmt::const_decl_iterator D = S->decl_begin(), DEnd = S->decl_end();
-       D != DEnd; ++D) {
-    AddDecl(*D, isFirst);
+  for (const auto *D : S->decls()) {
+    AddDecl(D, isFirst);
     isFirst = false;
   }
   if (size == WL.size())
@@ -2234,6 +2252,10 @@ void EnqueueVisitor::VisitOMPExecutableDirective(
 }
 
 void EnqueueVisitor::VisitOMPParallelDirective(const OMPParallelDirective *D) {
+  VisitOMPExecutableDirective(D);
+}
+
+void EnqueueVisitor::VisitOMPSimdDirective(const OMPSimdDirective *D) {
   VisitOMPExecutableDirective(D);
 }
 
@@ -2589,11 +2611,26 @@ void clang_toggleCrashRecovery(unsigned isEnabled) {
   else
     llvm::CrashRecoveryContext::Disable();
 }
-  
+
 CXTranslationUnit clang_createTranslationUnit(CXIndex CIdx,
                                               const char *ast_filename) {
-  if (!CIdx || !ast_filename)
-    return 0;
+  CXTranslationUnit TU;
+  enum CXErrorCode Result =
+      clang_createTranslationUnit2(CIdx, ast_filename, &TU);
+  (void)Result;
+  assert((TU && Result == CXError_Success) ||
+         (!TU && Result != CXError_Success));
+  return TU;
+}
+
+enum CXErrorCode clang_createTranslationUnit2(CXIndex CIdx,
+                                              const char *ast_filename,
+                                              CXTranslationUnit *out_TU) {
+  if (out_TU)
+    *out_TU = NULL;
+
+  if (!CIdx || !ast_filename || !out_TU)
+    return CXError_InvalidArguments;
 
   LOG_FUNC_SECTION {
     *Log << ast_filename;
@@ -2603,19 +2640,20 @@ CXTranslationUnit clang_createTranslationUnit(CXIndex CIdx,
   FileSystemOptions FileSystemOpts;
 
   IntrusiveRefCntPtr<DiagnosticsEngine> Diags;
-  ASTUnit *TU = ASTUnit::LoadFromASTFile(ast_filename, Diags, FileSystemOpts,
+  ASTUnit *AU = ASTUnit::LoadFromASTFile(ast_filename, Diags, FileSystemOpts,
                                          CXXIdx->getOnlyLocalDecls(), None,
                                          /*CaptureDiagnostics=*/true,
                                          /*AllowPCHWithCompilerErrors=*/true,
                                          /*UserFilesAreVolatile=*/true);
-  return MakeCXTranslationUnit(CXXIdx, TU);
+  *out_TU = MakeCXTranslationUnit(CXXIdx, AU);
+  return *out_TU ? CXError_Success : CXError_Failure;
 }
 
 unsigned clang_defaultEditingTranslationUnitOptions() {
   return CXTranslationUnit_PrecompiledPreamble | 
          CXTranslationUnit_CacheCompletionResults;
 }
-  
+
 CXTranslationUnit
 clang_createTranslationUnitFromSourceFile(CXIndex CIdx,
                                           const char *source_filename,
@@ -2638,7 +2676,8 @@ struct ParseTranslationUnitInfo {
   struct CXUnsavedFile *unsaved_files;
   unsigned num_unsaved_files;
   unsigned options;
-  CXTranslationUnit result;
+  CXTranslationUnit *out_TU;
+  CXErrorCode result;
 };
 static void clang_parseTranslationUnit_Impl(void *UserData) {
   ParseTranslationUnitInfo *PTUI =
@@ -2650,10 +2689,19 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
   struct CXUnsavedFile *unsaved_files = PTUI->unsaved_files;
   unsigned num_unsaved_files = PTUI->num_unsaved_files;
   unsigned options = PTUI->options;
-  PTUI->result = 0;
+  CXTranslationUnit *out_TU = PTUI->out_TU;
 
-  if (!CIdx)
+  // Set up the initial return values.
+  if (out_TU)
+    *out_TU = NULL;
+  PTUI->result = CXError_Failure;
+
+  // Check arguments.
+  if (!CIdx || !out_TU ||
+      (unsaved_files == NULL && num_unsaved_files != 0)) {
+    PTUI->result = CXError_InvalidArguments;
     return;
+  }
 
   CIndexer *CXXIdx = static_cast<CIndexer *>(CIdx);
 
@@ -2680,8 +2728,8 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
     llvm::CrashRecoveryContextReleaseRefCleanup<DiagnosticsEngine> >
     DiagCleanup(Diags.getPtr());
 
-  OwningPtr<std::vector<ASTUnit::RemappedFile> >
-    RemappedFiles(new std::vector<ASTUnit::RemappedFile>());
+  std::unique_ptr<std::vector<ASTUnit::RemappedFile>> RemappedFiles(
+      new std::vector<ASTUnit::RemappedFile>());
 
   // Recover resources if we crash before exiting this function.
   llvm::CrashRecoveryContextCleanupRegistrar<
@@ -2695,8 +2743,8 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
                                             Buffer));
   }
 
-  OwningPtr<std::vector<const char *> >
-    Args(new std::vector<const char*>());
+  std::unique_ptr<std::vector<const char *>> Args(
+      new std::vector<const char *>());
 
   // Recover resources if we crash before exiting this method.
   llvm::CrashRecoveryContextCleanupRegistrar<std::vector<const char*> >
@@ -2736,26 +2784,15 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
   }
   
   unsigned NumErrors = Diags->getClient()->getNumErrors();
-  OwningPtr<ASTUnit> ErrUnit;
-  OwningPtr<ASTUnit> Unit(
-    ASTUnit::LoadFromCommandLine(Args->size() ? &(*Args)[0] : 0 
-                                 /* vector::data() not portable */,
-                                 Args->size() ? (&(*Args)[0] + Args->size()) :0,
-                                 Diags,
-                                 CXXIdx->getClangResourcesPath(),
-                                 CXXIdx->getOnlyLocalDecls(),
-                                 /*CaptureDiagnostics=*/true,
-                                 *RemappedFiles.get(),
-                                 /*RemappedFilesKeepOriginalName=*/true,
-                                 PrecompilePreamble,
-                                 TUKind,
-                                 CacheCodeCompletionResults,
-                                 IncludeBriefCommentsInCodeCompletion,
-                                 /*AllowPCHWithCompilerErrors=*/true,
-                                 SkipFunctionBodies,
-                                 /*UserFilesAreVolatile=*/true,
-                                 ForSerialization,
-                                 &ErrUnit));
+  std::unique_ptr<ASTUnit> ErrUnit;
+  std::unique_ptr<ASTUnit> Unit(ASTUnit::LoadFromCommandLine(
+      Args->data(), Args->data() + Args->size(), Diags,
+      CXXIdx->getClangResourcesPath(), CXXIdx->getOnlyLocalDecls(),
+      /*CaptureDiagnostics=*/true, *RemappedFiles.get(),
+      /*RemappedFilesKeepOriginalName=*/true, PrecompilePreamble, TUKind,
+      CacheCodeCompletionResults, IncludeBriefCommentsInCodeCompletion,
+      /*AllowPCHWithCompilerErrors=*/true, SkipFunctionBodies,
+      /*UserFilesAreVolatile=*/true, ForSerialization, &ErrUnit));
 
   if (NumErrors != Diags->getClient()->getNumErrors()) {
     // Make sure to check that 'Unit' is non-NULL.
@@ -2763,15 +2800,41 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
       printDiagsToStderr(Unit ? Unit.get() : ErrUnit.get());
   }
 
-  PTUI->result = MakeCXTranslationUnit(CXXIdx, Unit.take());
+  if (isASTReadError(Unit ? Unit.get() : ErrUnit.get())) {
+    PTUI->result = CXError_ASTReadError;
+  } else {
+    *PTUI->out_TU = MakeCXTranslationUnit(CXXIdx, Unit.release());
+    PTUI->result = *PTUI->out_TU ? CXError_Success : CXError_Failure;
+  }
 }
-CXTranslationUnit clang_parseTranslationUnit(CXIndex CIdx,
-                                             const char *source_filename,
-                                         const char * const *command_line_args,
-                                             int num_command_line_args,
-                                            struct CXUnsavedFile *unsaved_files,
-                                             unsigned num_unsaved_files,
-                                             unsigned options) {
+
+CXTranslationUnit
+clang_parseTranslationUnit(CXIndex CIdx,
+                           const char *source_filename,
+                           const char *const *command_line_args,
+                           int num_command_line_args,
+                           struct CXUnsavedFile *unsaved_files,
+                           unsigned num_unsaved_files,
+                           unsigned options) {
+  CXTranslationUnit TU;
+  enum CXErrorCode Result = clang_parseTranslationUnit2(
+      CIdx, source_filename, command_line_args, num_command_line_args,
+      unsaved_files, num_unsaved_files, options, &TU);
+  (void)Result;
+  assert((TU && Result == CXError_Success) ||
+         (!TU && Result != CXError_Success));
+  return TU;
+}
+
+enum CXErrorCode clang_parseTranslationUnit2(
+    CXIndex CIdx,
+    const char *source_filename,
+    const char *const *command_line_args,
+    int num_command_line_args,
+    struct CXUnsavedFile *unsaved_files,
+    unsigned num_unsaved_files,
+    unsigned options,
+    CXTranslationUnit *out_TU) {
   LOG_FUNC_SECTION {
     *Log << source_filename << ": ";
     for (int i = 0; i != num_command_line_args; ++i)
@@ -2780,7 +2843,8 @@ CXTranslationUnit clang_parseTranslationUnit(CXIndex CIdx,
 
   ParseTranslationUnitInfo PTUI = { CIdx, source_filename, command_line_args,
                                     num_command_line_args, unsaved_files,
-                                    num_unsaved_files, options, 0 };
+                                    num_unsaved_files, options, out_TU,
+                                    CXError_Failure };
   llvm::CrashRecoveryContext CRC;
 
   if (!RunSafely(CRC, clang_parseTranslationUnit_Impl, &PTUI)) {
@@ -2803,10 +2867,11 @@ CXTranslationUnit clang_parseTranslationUnit(CXIndex CIdx,
     fprintf(stderr, "],\n");
     fprintf(stderr, "  'options' : %d,\n", options);
     fprintf(stderr, "}\n");
-    
-    return 0;
+
+    return CXError_Crashed;
   } else if (getenv("LIBCLANG_RESOURCE_USAGE")) {
-    PrintLibclangResourceUsage(PTUI.result);
+    if (CXTranslationUnit *TU = PTUI.out_TU)
+      PrintLibclangResourceUsage(*TU);
   }
   
   return PTUI.result;
@@ -2891,7 +2956,8 @@ void clang_disposeTranslationUnit(CXTranslationUnit CTUnit) {
   if (CTUnit) {
     // If the translation unit has been marked as unsafe to free, just discard
     // it.
-    if (cxtu::getASTUnit(CTUnit)->isUnsafeToFree())
+    ASTUnit *Unit = cxtu::getASTUnit(CTUnit);
+    if (Unit && Unit->isUnsafeToFree())
       return;
 
     delete cxtu::getASTUnit(CTUnit);
@@ -2918,11 +2984,22 @@ struct ReparseTranslationUnitInfo {
 static void clang_reparseTranslationUnit_Impl(void *UserData) {
   ReparseTranslationUnitInfo *RTUI =
     static_cast<ReparseTranslationUnitInfo*>(UserData);
-  RTUI->result = 1; // Error.
+  RTUI->result = CXError_Failure;
 
   CXTranslationUnit TU = RTUI->TU;
+  unsigned num_unsaved_files = RTUI->num_unsaved_files;
+  struct CXUnsavedFile *unsaved_files = RTUI->unsaved_files;
+  unsigned options = RTUI->options;
+  (void) options;
+
+  // Check arguments.
   if (isNotUsableTU(TU)) {
     LOG_BAD_TU(TU);
+    RTUI->result = CXError_InvalidArguments;
+    return;
+  }
+  if (unsaved_files == NULL && num_unsaved_files != 0) {
+    RTUI->result = CXError_InvalidArguments;
     return;
   }
 
@@ -2930,21 +3007,16 @@ static void clang_reparseTranslationUnit_Impl(void *UserData) {
   delete static_cast<CXDiagnosticSetImpl*>(TU->Diagnostics);
   TU->Diagnostics = 0;
 
-  unsigned num_unsaved_files = RTUI->num_unsaved_files;
-  struct CXUnsavedFile *unsaved_files = RTUI->unsaved_files;
-  unsigned options = RTUI->options;
-  (void) options;
-
   CIndexer *CXXIdx = TU->CIdx;
   if (CXXIdx->isOptEnabled(CXGlobalOpt_ThreadBackgroundPriorityForEditing))
     setThreadBackgroundPriority();
 
   ASTUnit *CXXUnit = cxtu::getASTUnit(TU);
   ASTUnit::ConcurrencyCheck Check(*CXXUnit);
-  
-  OwningPtr<std::vector<ASTUnit::RemappedFile> >
-    RemappedFiles(new std::vector<ASTUnit::RemappedFile>());
-  
+
+  std::unique_ptr<std::vector<ASTUnit::RemappedFile>> RemappedFiles(
+      new std::vector<ASTUnit::RemappedFile>());
+
   // Recover resources if we crash before exiting this function.
   llvm::CrashRecoveryContextCleanupRegistrar<
     std::vector<ASTUnit::RemappedFile> > RemappedCleanup(RemappedFiles.get());
@@ -2956,9 +3028,11 @@ static void clang_reparseTranslationUnit_Impl(void *UserData) {
     RemappedFiles->push_back(std::make_pair(unsaved_files[I].Filename,
                                             Buffer));
   }
-  
+
   if (!CXXUnit->Reparse(*RemappedFiles.get()))
-    RTUI->result = 0;
+    RTUI->result = CXError_Success;
+  else if (isASTReadError(CXXUnit))
+    RTUI->result = CXError_ASTReadError;
 }
 
 int clang_reparseTranslationUnit(CXTranslationUnit TU,
@@ -2970,7 +3044,7 @@ int clang_reparseTranslationUnit(CXTranslationUnit TU,
   }
 
   ReparseTranslationUnitInfo RTUI = { TU, num_unsaved_files, unsaved_files,
-                                      options, 0 };
+                                      options, CXError_Failure };
 
   if (getenv("LIBCLANG_NOTHREADS")) {
     clang_reparseTranslationUnit_Impl(&RTUI);
@@ -2982,7 +3056,7 @@ int clang_reparseTranslationUnit(CXTranslationUnit TU,
   if (!RunSafely(CRC, clang_reparseTranslationUnit_Impl, &RTUI)) {
     fprintf(stderr, "libclang: crash detected during reparsing\n");
     cxtu::getASTUnit(TU)->setUnsafeToFree(true);
-    return 1;
+    return CXError_Crashed;
   } else if (getenv("LIBCLANG_RESOURCE_USAGE"))
     PrintLibclangResourceUsage(TU);
 
@@ -3318,6 +3392,22 @@ CXString clang_getCursorSpelling(CXCursor C) {
   }
 
   if (clang_isExpression(C.kind)) {
+    const Expr *E = getCursorExpr(C);
+
+    if (C.kind == CXCursor_ObjCStringLiteral ||
+        C.kind == CXCursor_StringLiteral) {
+      const StringLiteral *SLit;
+      if (const ObjCStringLiteral *OSL = dyn_cast<ObjCStringLiteral>(E)) {
+        SLit = OSL->getString();
+      } else {
+        SLit = cast<StringLiteral>(E);
+      }
+      SmallString<256> Buf;
+      llvm::raw_svector_ostream OS(Buf);
+      SLit->outputString(OS);
+      return cxstring::createDup(OS.str());
+    }
+
     const Decl *D = getDeclFromExpr(getCursorExpr(C));
     if (D)
       return getDeclSpelling(D);
@@ -3779,6 +3869,12 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
     return cxstring::createRef("asm label");
   case CXCursor_PackedAttr:
     return cxstring::createRef("attribute(packed)");
+  case CXCursor_PureAttr:
+    return cxstring::createRef("attribute(pure)");
+  case CXCursor_ConstAttr:
+    return cxstring::createRef("attribute(const)");
+  case CXCursor_NoDuplicateAttr:
+    return cxstring::createRef("attribute(noduplicate)");
   case CXCursor_PreprocessingDirective:
     return cxstring::createRef("preprocessing directive");
   case CXCursor_MacroDefinition:
@@ -3828,7 +3924,9 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
   case CXCursor_ModuleImportDecl:
     return cxstring::createRef("ModuleImport");
   case CXCursor_OMPParallelDirective:
-      return cxstring::createRef("OMPParallelDirective");
+    return cxstring::createRef("OMPParallelDirective");
+  case CXCursor_OMPSimdDirective:
+    return cxstring::createRef("OMPSimdDirective");
   }
 
   llvm_unreachable("Unhandled CXCursorKind");
@@ -5259,10 +5357,8 @@ AnnotateTokensWorker::Visit(CXCursor cursor, CXCursor parent) {
         if (Method->getObjCDeclQualifier())
           HasContextSensitiveKeywords = true;
         else {
-          for (ObjCMethodDecl::param_const_iterator P = Method->param_begin(),
-                                                 PEnd = Method->param_end();
-               P != PEnd; ++P) {
-            if ((*P)->getObjCDeclQualifier()) {
+          for (const auto *P : Method->params()) {
+            if (P->getObjCDeclQualifier()) {
               HasContextSensitiveKeywords = true;
               break;
             }
@@ -5939,28 +6035,30 @@ static int getCursorPlatformAvailabilityForDecl(const Decl *D,
                                                 int availability_size) {
   bool HadAvailAttr = false;
   int N = 0;
-  for (Decl::attr_iterator A = D->attr_begin(), AEnd = D->attr_end(); A != AEnd;
-       ++A) {
-    if (DeprecatedAttr *Deprecated = dyn_cast<DeprecatedAttr>(*A)) {
+  for (auto A : D->attrs()) {
+    if (DeprecatedAttr *Deprecated = dyn_cast<DeprecatedAttr>(A)) {
       HadAvailAttr = true;
       if (always_deprecated)
         *always_deprecated = 1;
-      if (deprecated_message)
+      if (deprecated_message) {
+        clang_disposeString(*deprecated_message);
         *deprecated_message = cxstring::createDup(Deprecated->getMessage());
+      }
       continue;
     }
     
-    if (UnavailableAttr *Unavailable = dyn_cast<UnavailableAttr>(*A)) {
+    if (UnavailableAttr *Unavailable = dyn_cast<UnavailableAttr>(A)) {
       HadAvailAttr = true;
       if (always_unavailable)
         *always_unavailable = 1;
       if (unavailable_message) {
+        clang_disposeString(*unavailable_message);
         *unavailable_message = cxstring::createDup(Unavailable->getMessage());
       }
       continue;
     }
     
-    if (AvailabilityAttr *Avail = dyn_cast<AvailabilityAttr>(*A)) {
+    if (AvailabilityAttr *Avail = dyn_cast<AvailabilityAttr>(A)) {
       HadAvailAttr = true;
       if (N < availability_size) {
         availability[N].Platform
@@ -6221,17 +6319,6 @@ CXString clang_Cursor_getBriefCommentText(CXCursor C) {
   return cxstring::createNull();
 }
 
-CXComment clang_Cursor_getParsedComment(CXCursor C) {
-  if (!clang_isDeclaration(C.kind))
-    return cxcomment::createCXComment(NULL, NULL);
-
-  const Decl *D = getCursorDecl(C);
-  const ASTContext &Context = getCursorContext(C);
-  const comments::FullComment *FC = Context.getCommentForDecl(D, /*PP=*/ NULL);
-
-  return cxcomment::createCXComment(FC, getCursorTU(C));
-}
-
 CXModule clang_Cursor_getModule(CXCursor C) {
   if (C.kind == CXCursor_ModuleImportDecl) {
     if (const ImportDecl *ImportD =
@@ -6240,6 +6327,26 @@ CXModule clang_Cursor_getModule(CXCursor C) {
   }
 
   return 0;
+}
+
+CXModule clang_getModuleForFile(CXTranslationUnit TU, CXFile File) {
+  if (isNotUsableTU(TU)) {
+    LOG_BAD_TU(TU);
+    return nullptr;
+  }
+  if (!File)
+    return nullptr;
+  FileEntry *FE = static_cast<FileEntry *>(File);
+  
+  ASTUnit &Unit = *cxtu::getASTUnit(TU);
+  HeaderSearch &HS = Unit.getPreprocessor().getHeaderSearchInfo();
+  ModuleMap::KnownHeader Header = HS.findModuleForHeader(FE);
+  
+  if (Module *Mod = Header.getModule()) {
+    if (Header.getRole() != ModuleMap::ExcludedHeader)
+      return Mod;
+  }
+  return nullptr;
 }
 
 CXFile clang_Module_getASTFile(CXModule CXMod) {
@@ -6268,6 +6375,13 @@ CXString clang_Module_getFullName(CXModule CXMod) {
     return cxstring::createEmpty();
   Module *Mod = static_cast<Module*>(CXMod);
   return cxstring::createDup(Mod->getFullModuleName());
+}
+
+int clang_Module_isSystem(CXModule CXMod) {
+  if (!CXMod)
+    return 0;
+  Module *Mod = static_cast<Module*>(CXMod);
+  return Mod->IsSystem;
 }
 
 unsigned clang_Module_getNumTopLevelHeaders(CXTranslationUnit TU,
@@ -6317,6 +6431,16 @@ unsigned clang_CXXMethod_isPureVirtual(CXCursor C) {
   const CXXMethodDecl *Method =
       D ? dyn_cast_or_null<CXXMethodDecl>(D->getAsFunction()) : 0;
   return (Method && Method->isVirtual() && Method->isPure()) ? 1 : 0;
+}
+
+unsigned clang_CXXMethod_isConst(CXCursor C) {
+  if (!clang_isDeclaration(C.kind))
+    return 0;
+
+  const Decl *D = cxcursor::getCursorDecl(C);
+  const CXXMethodDecl *Method =
+      D ? dyn_cast_or_null<CXXMethodDecl>(D->getAsFunction()) : 0;
+  return (Method && (Method->getTypeQualifiers() & Qualifiers::Const)) ? 1 : 0;
 }
 
 unsigned clang_CXXMethod_isStatic(CXCursor C) {
@@ -6428,7 +6552,7 @@ CXTUResourceUsage clang_getCXTUResourceUsage(CXTranslationUnit TU) {
   }
   
   ASTUnit *astUnit = cxtu::getASTUnit(TU);
-  OwningPtr<MemUsageEntries> entries(new MemUsageEntries());
+  std::unique_ptr<MemUsageEntries> entries(new MemUsageEntries());
   ASTContext &astContext = astUnit->getASTContext();
   
   // How much memory is used by AST nodes and types?
@@ -6509,7 +6633,7 @@ CXTUResourceUsage clang_getCXTUResourceUsage(CXTranslationUnit TU) {
   CXTUResourceUsage usage = { (void*) entries.get(),
                             (unsigned) entries->size(),
                             entries->size() ? &(*entries)[0] : 0 };
-  entries.take();
+  entries.release();
   return usage;
 }
 
@@ -6622,7 +6746,7 @@ void cxindex::printDiagsToStderr(ASTUnit *Unit) {
   for (ASTUnit::stored_diag_iterator D = Unit->stored_diag_begin(), 
                                   DEnd = Unit->stored_diag_end();
        D != DEnd; ++D) {
-    CXStoredDiagnostic Diag(*D, Unit->getASTContext().getLangOpts());
+    CXStoredDiagnostic Diag(*D, Unit->getLangOpts());
     CXString Msg = clang_formatDiagnostic(&Diag,
                                 clang_defaultDiagnosticDisplayOptions());
     fprintf(stderr, "%s\n", clang_getCString(Msg));
@@ -6747,9 +6871,9 @@ Logger &cxindex::Logger::operator<<(CXTranslationUnit TU) {
         LogOS << " (" << Unit->getASTFileName() << ')';
       return *this;
     }
+  } else {
+    LogOS << "<NULL TU>";
   }
-
-  LogOS << "<NULL TU>";
   return *this;
 }
 

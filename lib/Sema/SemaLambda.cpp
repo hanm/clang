@@ -15,7 +15,6 @@
 #include "clang/AST/ASTLambda.h"
 #include "clang/AST/ExprCXX.h"
 #include "clang/Basic/TargetInfo.h"
-#include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/Initialization.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/Scope.h"
@@ -418,10 +417,8 @@ CXXMethodDecl *Sema::startLambdaDefinition(CXXRecordDecl *Class,
                              const_cast<ParmVarDecl **>(Params.end()),
                              /*CheckParameterNames=*/false);
     
-    for (CXXMethodDecl::param_iterator P = Method->param_begin(), 
-                                    PEnd = Method->param_end();
-         P != PEnd; ++P)
-      (*P)->setOwningFunction(Method);
+    for (auto P : Method->params())
+      P->setOwningFunction(Method);
   }
 
   Decl *ManglingContextDecl;
@@ -738,6 +735,9 @@ QualType Sema::performLambdaInitCaptureInitialization(SourceLocation Loc,
       return QualType();
     } else {
       DeduceInit = CXXDirectInit->getExpr(0);
+      if (isa<InitListExpr>(DeduceInit))
+        Diag(CXXDirectInit->getLocStart(), diag::err_init_capture_paren_braces)
+          << DeclarationName(Id) << Loc;
     }
   }
 
@@ -898,14 +898,10 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
 
     ExplicitResultType = FTI.hasTrailingReturnType();
 
-    if (FTI.NumArgs == 1 && !FTI.isVariadic && FTI.ArgInfo[0].Ident == 0 &&
-        cast<ParmVarDecl>(FTI.ArgInfo[0].Param)->getType()->isVoidType()) {
-      // Empty arg list, don't push any params.
-      checkVoidParamDecl(cast<ParmVarDecl>(FTI.ArgInfo[0].Param));
-    } else {
-      Params.reserve(FTI.NumArgs);
-      for (unsigned i = 0, e = FTI.NumArgs; i != e; ++i)
-        Params.push_back(cast<ParmVarDecl>(FTI.ArgInfo[i].Param));
+    if (FTIHasNonVoidParameters(FTI)) {
+      Params.reserve(FTI.NumParams);
+      for (unsigned i = 0, e = FTI.NumParams; i != e; ++i)
+        Params.push_back(cast<ParmVarDecl>(FTI.Params[i].Param));
     }
 
     // Check for unexpanded parameter packs in the method type.
@@ -958,21 +954,17 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
   // Handle explicit captures.
   SourceLocation PrevCaptureLoc
     = Intro.Default == LCD_None? Intro.Range.getBegin() : Intro.DefaultLoc;
-  for (SmallVectorImpl<LambdaCapture>::const_iterator
-         C = Intro.Captures.begin(),
-         E = Intro.Captures.end();
-       C != E;
+  for (auto C = Intro.Captures.begin(), E = Intro.Captures.end(); C != E;
        PrevCaptureLoc = C->Loc, ++C) {
     if (C->Kind == LCK_This) {
       // C++11 [expr.prim.lambda]p8:
       //   An identifier or this shall not appear more than once in a 
       //   lambda-capture.
       if (LSI->isCXXThisCaptured()) {
-        Diag(C->Loc, diag::err_capture_more_than_once) 
-          << "'this'"
-          << SourceRange(LSI->getCXXThisCapture().getLocation())
-          << FixItHint::CreateRemoval(
-               SourceRange(PP.getLocForEndOfToken(PrevCaptureLoc), C->Loc));
+        Diag(C->Loc, diag::err_capture_more_than_once)
+            << "'this'" << SourceRange(LSI->getCXXThisCapture().getLocation())
+            << FixItHint::CreateRemoval(
+                   SourceRange(getLocForEndOfToken(PrevCaptureLoc), C->Loc));
         continue;
       }
 
@@ -981,8 +973,8 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
       //   lambda-capture shall not contain this [...].
       if (Intro.Default == LCD_ByCopy) {
         Diag(C->Loc, diag::err_this_capture_with_copy_default)
-          << FixItHint::CreateRemoval(
-               SourceRange(PP.getLocForEndOfToken(PrevCaptureLoc), C->Loc));
+            << FixItHint::CreateRemoval(
+                SourceRange(getLocForEndOfToken(PrevCaptureLoc), C->Loc));
         continue;
       }
 
@@ -1035,13 +1027,13 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
       //   each identifier it contains shall be preceded by &.
       if (C->Kind == LCK_ByRef && Intro.Default == LCD_ByRef) {
         Diag(C->Loc, diag::err_reference_capture_with_reference_default)
-          << FixItHint::CreateRemoval(
-               SourceRange(PP.getLocForEndOfToken(PrevCaptureLoc), C->Loc));
+            << FixItHint::CreateRemoval(
+                SourceRange(getLocForEndOfToken(PrevCaptureLoc), C->Loc));
         continue;
       } else if (C->Kind == LCK_ByCopy && Intro.Default == LCD_ByCopy) {
         Diag(C->Loc, diag::err_copy_capture_with_copy_default)
-          << FixItHint::CreateRemoval(
-               SourceRange(PP.getLocForEndOfToken(PrevCaptureLoc), C->Loc));
+            << FixItHint::CreateRemoval(
+                SourceRange(getLocForEndOfToken(PrevCaptureLoc), C->Loc));
         continue;
       }
 
@@ -1062,6 +1054,8 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
       }
 
       Var = R.getAsSingle<VarDecl>();
+      if (Var && DiagnoseUseOfDecl(Var, C->Loc))
+        continue;
     }
 
     // C++11 [expr.prim.lambda]p8:
@@ -1070,9 +1064,9 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
     if (!CaptureNames.insert(C->Id)) {
       if (Var && LSI->isCaptured(Var)) {
         Diag(C->Loc, diag::err_capture_more_than_once)
-          << C->Id << SourceRange(LSI->getCapture(Var).getLocation())
-          << FixItHint::CreateRemoval(
-               SourceRange(PP.getLocForEndOfToken(PrevCaptureLoc), C->Loc));
+            << C->Id << SourceRange(LSI->getCapture(Var).getLocation())
+            << FixItHint::CreateRemoval(
+                   SourceRange(getLocForEndOfToken(PrevCaptureLoc), C->Loc));
       } else
         // Previous capture captured something different (one or both was
         // an init-cpature): no fixit.
@@ -1137,6 +1131,8 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
 
 void Sema::ActOnLambdaError(SourceLocation StartLoc, Scope *CurScope,
                             bool IsInstantiation) {
+  LambdaScopeInfo *LSI = getCurLambda();
+
   // Leave the expression-evaluation context.
   DiscardCleanupsInEvaluationContext();
   PopExpressionEvaluationContext();
@@ -1146,15 +1142,11 @@ void Sema::ActOnLambdaError(SourceLocation StartLoc, Scope *CurScope,
     PopDeclContext();
 
   // Finalize the lambda.
-  LambdaScopeInfo *LSI = getCurLambda();
   CXXRecordDecl *Class = LSI->Lambda;
   Class->setInvalidDecl();
-  SmallVector<Decl*, 4> Fields;
-  for (RecordDecl::field_iterator i = Class->field_begin(),
-                                  e = Class->field_end(); i != e; ++i)
-    Fields.push_back(*i);
-  ActOnFields(0, Class->getLocation(), Class, Fields, 
-              SourceLocation(), SourceLocation(), 0);
+  SmallVector<Decl*, 4> Fields(Class->fields());
+  ActOnFields(0, Class->getLocation(), Class, Fields, SourceLocation(),
+              SourceLocation(), 0);
   CheckCompletedCXXClass(Class);
 
   PopFunctionScopeInfo();
@@ -1381,7 +1373,7 @@ ExprResult Sema::ActOnLambdaExpr(SourceLocation StartLoc, Stmt *Body,
                                  Scope *CurScope, 
                                  bool IsInstantiation) {
   // Collect information from the lambda scope.
-  SmallVector<LambdaExpr::Capture, 4> Captures;
+  SmallVector<LambdaCapture, 4> Captures;
   SmallVector<Expr *, 4> CaptureInits;
   LambdaCaptureDefault CaptureDefault;
   SourceLocation CaptureDefaultLoc;
@@ -1414,9 +1406,8 @@ ExprResult Sema::ActOnLambdaExpr(SourceLocation StartLoc, Stmt *Body,
 
       // Handle 'this' capture.
       if (From.isThisCapture()) {
-        Captures.push_back(LambdaExpr::Capture(From.getLocation(),
-                                               IsImplicit,
-                                               LCK_This));
+        Captures.push_back(
+            LambdaCapture(From.getLocation(), IsImplicit, LCK_This));
         CaptureInits.push_back(new (Context) CXXThisExpr(From.getLocation(),
                                                          getCurrentThisType(),
                                                          /*isImplicit=*/true));
@@ -1425,8 +1416,8 @@ ExprResult Sema::ActOnLambdaExpr(SourceLocation StartLoc, Stmt *Body,
 
       VarDecl *Var = From.getVariable();
       LambdaCaptureKind Kind = From.isCopyCapture()? LCK_ByCopy : LCK_ByRef;
-      Captures.push_back(LambdaExpr::Capture(From.getLocation(), IsImplicit, 
-                                             Kind, Var, From.getEllipsisLoc()));
+      Captures.push_back(LambdaCapture(From.getLocation(), IsImplicit, Kind,
+                                       Var, From.getEllipsisLoc()));
       CaptureInits.push_back(From.getInitExpr());
     }
 
@@ -1512,12 +1503,9 @@ ExprResult Sema::ActOnLambdaExpr(SourceLocation StartLoc, Stmt *Body,
       addBlockPointerConversion(*this, IntroducerRange, Class, CallOperator);
     
     // Finalize the lambda class.
-    SmallVector<Decl*, 4> Fields;
-    for (RecordDecl::field_iterator i = Class->field_begin(),
-                                    e = Class->field_end(); i != e; ++i)
-      Fields.push_back(*i);
-    ActOnFields(0, Class->getLocation(), Class, Fields, 
-                SourceLocation(), SourceLocation(), 0);
+    SmallVector<Decl*, 4> Fields(Class->fields());
+    ActOnFields(0, Class->getLocation(), Class, Fields, SourceLocation(),
+                SourceLocation(), 0);
     CheckCompletedCXXClass(Class);
   }
 

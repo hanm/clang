@@ -7,7 +7,11 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Driver/Driver.h"
+#include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Job.h"
+#include "clang/Driver/Tool.h"
+#include "clang/Driver/ToolChain.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
@@ -58,7 +62,8 @@ static int skipArgs(const char *Flag) {
 
   // These flags are treated as a single argument (e.g., -F<Dir>).
   StringRef FlagRef(Flag);
-  if (FlagRef.startswith("-F") || FlagRef.startswith("-I"))
+  if (FlagRef.startswith("-F") || FlagRef.startswith("-I") ||
+      FlagRef.startswith("-fmodules-cache-path="))
     return 1;
 
   return 0;
@@ -158,6 +163,9 @@ int FallbackCommand::Execute(const StringRef **Redirects, std::string *ErrMsg,
     ErrMsg->clear();
   if (ExecutionFailed)
     *ExecutionFailed = false;
+
+  const Driver &D = getCreator().getToolChain().getDriver();
+  D.Diag(diag::warn_drv_invoking_fallback) << Fallback->getExecutable();
 
   int SecondaryStatus = Fallback->Execute(Redirects, ErrMsg, ExecutionFailed);
   return SecondaryStatus;

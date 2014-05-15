@@ -223,3 +223,58 @@ SmallSetVector<foo*, 2> fooSet;
 }
 
 PR18685::BitVector Map;  // expected-error-re {{no type named 'BitVector' in namespace 'PR18685'{{$}}}}
+
+namespace shadowed_template {
+template <typename T> class Fizbin {};  // expected-note {{'::shadowed_template::Fizbin' declared here}}
+class Baz {
+   int Fizbin();
+   // TODO: Teach the parser to recover from the typo correction instead of
+   // continuing to treat the template name as an implicit-int declaration.
+   Fizbin<int> qux;  // expected-error {{unknown type name 'Fizbin'; did you mean '::shadowed_template::Fizbin'?}} \
+                     // expected-error {{expected member name or ';' after declaration specifiers}}
+};
+}
+
+namespace PR18852 {
+void func() {
+  struct foo {
+    void bar() {}
+  };
+  bar();  // expected-error-re {{use of undeclared identifier 'bar'{{$}}}}
+}
+
+class Thread {
+ public:
+  void Start();
+  static void Stop();  // expected-note {{'Thread::Stop' declared here}}
+};
+
+class Manager {
+ public:
+  void Start(int);  // expected-note {{'Start' declared here}}
+  void Stop(int);  // expected-note {{'Stop' declared here}}
+};
+
+void test(Manager *m) {
+  // Don't suggest Thread::Start as a correction just because it has the same
+  // (unqualified) name and accepts the right number of args; this is a method
+  // call on an object in an unrelated class.
+  m->Start();  // expected-error-re {{too few arguments to function call, expected 1, have 0{{$}}}}
+  m->Stop();  // expected-error-re {{too few arguments to function call, expected 1, have 0{{$}}}}
+  Stop();  // expected-error {{use of undeclared identifier 'Stop'; did you mean 'Thread::Stop'?}}
+}
+
+}
+
+namespace std {
+class bernoulli_distribution {
+ public:
+  double p() const;
+};
+}
+void test() {
+  // Make sure that typo correction doesn't suggest changing 'p' to
+  // 'std::bernoulli_distribution::p' as that is most likely wrong.
+  if (p)  // expected-error-re {{use of undeclared identifier 'p'{{$}}}}
+    return;
+}

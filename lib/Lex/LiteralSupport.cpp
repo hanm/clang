@@ -212,6 +212,48 @@ static unsigned ProcessCharEscape(const char *ThisTokBegin,
   return ResultChar;
 }
 
+static void appendCodePoint(unsigned Codepoint,
+                            llvm::SmallVectorImpl<char> &Str) {
+  char ResultBuf[4];
+  char *ResultPtr = ResultBuf;
+  bool Res = llvm::ConvertCodePointToUTF8(Codepoint, ResultPtr);
+  (void)Res;
+  assert(Res && "Unexpected conversion failure");
+  Str.append(ResultBuf, ResultPtr);
+}
+
+void clang::expandUCNs(SmallVectorImpl<char> &Buf, StringRef Input) {
+  for (StringRef::iterator I = Input.begin(), E = Input.end(); I != E; ++I) {
+    if (*I != '\\') {
+      Buf.push_back(*I);
+      continue;
+    }
+
+    ++I;
+    assert(*I == 'u' || *I == 'U');
+
+    unsigned NumHexDigits;
+    if (*I == 'u')
+      NumHexDigits = 4;
+    else
+      NumHexDigits = 8;
+
+    assert(I + NumHexDigits <= E);
+
+    uint32_t CodePoint = 0;
+    for (++I; NumHexDigits != 0; ++I, --NumHexDigits) {
+      unsigned Value = llvm::hexDigitValue(*I);
+      assert(Value != -1U);
+
+      CodePoint <<= 4;
+      CodePoint += Value;
+    }
+
+    appendCodePoint(CodePoint, Buf);
+    --I;
+  }
+}
+
 /// ProcessUCNEscape - Read the Universal Character Name, check constraints and
 /// return the UTF32.
 static bool ProcessUCNEscape(const char *ThisTokBegin, const char *&ThisTokBuf,
@@ -625,8 +667,9 @@ NumericLiteralParser::NumericLiteralParser(StringRef TokSpelling,
   }
 
   if (s != ThisTokEnd) {
-    if (isValidUDSuffix(PP.getLangOpts(),
-                        StringRef(SuffixBegin, ThisTokEnd - SuffixBegin))) {
+    // FIXME: Don't bother expanding UCNs if !tok.hasUCN().
+    expandUCNs(UDSuffixBuf, StringRef(SuffixBegin, ThisTokEnd - SuffixBegin));
+    if (isValidUDSuffix(PP.getLangOpts(), UDSuffixBuf)) {
       // Any suffix pieces we might have parsed are actually part of the
       // ud-suffix.
       isLong = false;
@@ -722,6 +765,7 @@ void NumericLiteralParser::ParseNumberStartingWithZero(SourceLocation TokLoc) {
       s++;
       saw_period = true;
       const char *floatDigitsBegin = s;
+      checkSeparator(TokLoc, s, CSK_BeforeDigits);
       s = SkipHexDigits(s);
       noSignificand &= (floatDigitsBegin == s);
     }
@@ -736,6 +780,7 @@ void NumericLiteralParser::ParseNumberStartingWithZero(SourceLocation TokLoc) {
     // A binary exponent can appear with or with a '.'. If dotted, the
     // binary exponent is required.
     if (*s == 'p' || *s == 'P') {
+      checkSeparator(TokLoc, s, CSK_AfterDigits);
       const char *Exponent = s;
       s++;
       saw_exponent = true;
@@ -747,6 +792,7 @@ void NumericLiteralParser::ParseNumberStartingWithZero(SourceLocation TokLoc) {
         hadError = true;
         return;
       }
+      checkSeparator(TokLoc, s, CSK_BeforeDigits);
       s = first_non_digit;
 
       if (!PP.getLangOpts().HexFloats)
@@ -815,9 +861,11 @@ void NumericLiteralParser::ParseNumberStartingWithZero(SourceLocation TokLoc) {
     s++;
     radix = 10;
     saw_period = true;
+    checkSeparator(TokLoc, s, CSK_BeforeDigits);
     s = SkipDigits(s); // Skip suffix.
   }
   if (*s == 'e' || *s == 'E') { // exponent
+    checkSeparator(TokLoc, s, CSK_AfterDigits);
     const char *Exponent = s;
     s++;
     radix = 10;
@@ -825,6 +873,7 @@ void NumericLiteralParser::ParseNumberStartingWithZero(SourceLocation TokLoc) {
     if (*s == '+' || *s == '-')  s++; // sign
     const char *first_non_digit = SkipDigits(s);
     if (first_non_digit != s) {
+      checkSeparator(TokLoc, s, CSK_BeforeDigits);
       s = first_non_digit;
     } else {
       PP.Diag(PP.AdvanceToTokenCharacter(TokLoc, Exponent-ThisTokBegin),
@@ -992,7 +1041,8 @@ CharLiteralParser::CharLiteralParser(const char *begin, const char *end,
     do {
       --end;
     } while (end[-1] != '\'');
-    UDSuffixBuf.assign(end, UDSuffixEnd);
+    // FIXME: Don't bother with this if !tok.hasUCN().
+    expandUCNs(UDSuffixBuf, StringRef(end, UDSuffixEnd - end));
     UDSuffixOffset = end - TokBegin;
   }
 
@@ -1311,23 +1361,34 @@ void StringLiteralParser::init(const Token *StringToks, unsigned NumStringToks){
       StringRef UDSuffix(ThisTokEnd, UDSuffixEnd - ThisTokEnd);
 
       if (UDSuffixBuf.empty()) {
-        UDSuffixBuf.assign(UDSuffix);
+        if (StringToks[i].hasUCN())
+          expandUCNs(UDSuffixBuf, UDSuffix);
+        else
+          UDSuffixBuf.assign(UDSuffix);
         UDSuffixToken = i;
         UDSuffixOffset = ThisTokEnd - ThisTokBuf;
         UDSuffixTokLoc = StringToks[i].getLocation();
-      } else if (!UDSuffixBuf.equals(UDSuffix)) {
+      } else {
+        SmallString<32> ExpandedUDSuffix;
+        if (StringToks[i].hasUCN()) {
+          expandUCNs(ExpandedUDSuffix, UDSuffix);
+          UDSuffix = ExpandedUDSuffix;
+        }
+
         // C++11 [lex.ext]p8: At the end of phase 6, if a string literal is the
         // result of a concatenation involving at least one user-defined-string-
         // literal, all the participating user-defined-string-literals shall
         // have the same ud-suffix.
-        if (Diags) {
-          SourceLocation TokLoc = StringToks[i].getLocation();
-          Diags->Report(TokLoc, diag::err_string_concat_mixed_suffix)
-            << UDSuffixBuf << UDSuffix
-            << SourceRange(UDSuffixTokLoc, UDSuffixTokLoc)
-            << SourceRange(TokLoc, TokLoc);
+        if (UDSuffixBuf != UDSuffix) {
+          if (Diags) {
+            SourceLocation TokLoc = StringToks[i].getLocation();
+            Diags->Report(TokLoc, diag::err_string_concat_mixed_suffix)
+              << UDSuffixBuf << UDSuffix
+              << SourceRange(UDSuffixTokLoc, UDSuffixTokLoc)
+              << SourceRange(TokLoc, TokLoc);
+          }
+          hadError = true;
         }
-        hadError = true;
       }
     }
 
