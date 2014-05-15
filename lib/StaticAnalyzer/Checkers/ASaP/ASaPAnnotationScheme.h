@@ -123,21 +123,22 @@ public:
 }; // end class CheckGlobalsAnnotationScheme
 
 // Insert effect summary variables and rpl variables wherever they are missing.
-class InferenceAnnotationScheme : public AnnotationScheme {
+class InferenceAnnotationScheme : public ParametricAnnotationScheme {
 public:
   // Constructor
-  InferenceAnnotationScheme(SymbolTable &SymT) :AnnotationScheme(SymT) {}
+  InferenceAnnotationScheme(SymbolTable &SymT)
+                           : ParametricAnnotationScheme(SymT) {}
   // Destructor
   virtual ~InferenceAnnotationScheme() {}
 
   // Methods
   virtual AnnotationSet makeClassParams(const RecordDecl *D);
 
-  virtual AnnotationSet makeGlobalType(const VarDecl *D, long ArgNum);
-  virtual AnnotationSet makeStackType(const VarDecl *D, long ArgNum);
-  virtual AnnotationSet makeFieldType(const FieldDecl *D, long ArgNum);
-  virtual AnnotationSet makeParamType(const ParmVarDecl *D, long ArgNum);
-  virtual AnnotationSet makeReturnType(const FunctionDecl *D, long ArgNum);
+  //virtual AnnotationSet makeGlobalType(const VarDecl *D, long ArgNum);
+  //virtual AnnotationSet makeStackType(const VarDecl *D, long ArgNum);
+  //virtual AnnotationSet makeFieldType(const FieldDecl *D, long ArgNum);
+  //virtual AnnotationSet makeParamType(const ParmVarDecl *D, long ArgNum);
+  //virtual AnnotationSet makeReturnType(const FunctionDecl *D, long ArgNum);
 
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
 

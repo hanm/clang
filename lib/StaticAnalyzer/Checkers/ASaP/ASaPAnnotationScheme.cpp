@@ -280,7 +280,7 @@ makeClassParams(const RecordDecl *D) {
   return Result;
 }
 
-AnnotationSet InferenceAnnotationScheme::
+/*AnnotationSet InferenceAnnotationScheme::
 makeGlobalType(const VarDecl *D, long ArgNum) {
   return helperMakeVarType(D, ArgNum);
 }
@@ -304,7 +304,7 @@ makeParamType(const ParmVarDecl *D, long ArgNum) {
 AnnotationSet InferenceAnnotationScheme::
 makeReturnType(const FunctionDecl *D, long ArgNum) {
   return helperMakeVarType(D, ArgNum);
-}
+}*/
 
 AnnotationSet InferenceAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
