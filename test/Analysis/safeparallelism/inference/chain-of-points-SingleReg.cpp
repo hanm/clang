@@ -7,7 +7,7 @@ class [[asap::param("class")]] point  {
 
 public:
     point() {}
-    point(double x, double y) : m_x(x), m_y(y) {} //expected-warning{{Solution for point: [Reads Effect on Local,Reads Effect on Local]}}
+    point(double x, double y) : m_x(x), m_y(y) {} //expected-warning{{Inferred Effect Summary for point: [reads(rpl([rLOCAL],[])),reads(rpl([rLOCAL],[]))]}}
  
     [[asap::param("Q"), asap::reads("Q")]] point(
         const point &p [[asap::arg("Q")]]
@@ -45,7 +45,7 @@ struct [[asap::param("Pl")]] link {
         pos(pos_in),
         next(nullptr) {}
     // copy constructor
-    link(link &l[[asap::arg("Pl")]]) : pos(l.pos), next(l.next) {} //expected-warning{{Solution for link: [Reads Effect on Pl]}}
+    link(link &l[[asap::arg("Pl")]]) : pos(l.pos), next(l.next) {} //expected-warning{{Inferred Effect Summary for link: [reads(rpl([p3_Pl],[]))]}}
     // move "constructor"
     link &operator = [[asap::arg("Pl")]] (link && l[[asap::arg("Pl")]]) { return l; }
     };

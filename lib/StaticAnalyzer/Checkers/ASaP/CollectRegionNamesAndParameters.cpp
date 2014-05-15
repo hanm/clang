@@ -80,7 +80,7 @@ checkRegionOrParamDecls(Decl *D) {
         /// Add it to the vector.
         OS << "DEBUG:: creating RPL Element called " << Name << "\n";
         if (isa<RegionAttr>(*I)) {
-         const Decl *ScopeDecl = D;
+          const Decl *ScopeDecl = D;
           if (isa<EmptyDecl>(D)) {
             // An empty declaration is typically at global scope
             // E.g., [[asap::name("X")]];
