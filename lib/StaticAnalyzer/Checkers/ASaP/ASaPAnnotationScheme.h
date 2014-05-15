@@ -58,7 +58,7 @@ protected:
   AnnotationSet helperMakeLocalType(const ValueDecl *D, long ArgNum);
   AnnotationSet helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT);
   AnnotationSet helperMakeWritesLocalEffectSummary(const FunctionDecl *D);
-  AnnotationSet helperVarType(const ValueDecl *D, long ArgNum);
+  AnnotationSet helperMakeVarType(const ValueDecl *D, long ArgNum);
 
 };
 

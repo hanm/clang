@@ -54,7 +54,7 @@ helperMakeLocalType(const ValueDecl *D, long ArgNum) {
 }
 
 inline AnnotationSet AnnotationScheme::
-helperVarType(const ValueDecl *D, long ArgNum) {
+helperMakeVarType(const ValueDecl *D, long ArgNum) {
   AnnotationSet Result;
   //assert(false && "method not implemented yet");
   RplVector RplVec;
@@ -66,7 +66,7 @@ helperVarType(const ValueDecl *D, long ArgNum) {
     OSv2 << "Printing domain ....\n";
     Dm->print(OSv2);
     RplVar->setDomain(Dm);
-    
+
     // 2. Push it back
     RplVec.push_back(Rpl(*RplVar));
   }
@@ -282,28 +282,28 @@ makeClassParams(const RecordDecl *D) {
 
 AnnotationSet InferenceAnnotationScheme::
 makeGlobalType(const VarDecl *D, long ArgNum) {
-  return helperVarType(D, ArgNum);
+  return helperMakeVarType(D, ArgNum);
 }
 
 AnnotationSet InferenceAnnotationScheme::
 makeStackType(const VarDecl *D, long ArgNum) {
-  return helperVarType(D, ArgNum);
+  return helperMakeVarType(D, ArgNum);
 }
 
 AnnotationSet InferenceAnnotationScheme::
 makeFieldType(const FieldDecl *D, long ArgNum) {
-  return helperVarType(D, ArgNum);
+  return helperMakeVarType(D, ArgNum);
 }
 
 AnnotationSet InferenceAnnotationScheme::
 makeParamType(const ParmVarDecl *D, long ArgNum) {
-  return helperVarType(D, ArgNum);
+  return helperMakeVarType(D, ArgNum);
 
 }
 
 AnnotationSet InferenceAnnotationScheme::
 makeReturnType(const FunctionDecl *D, long ArgNum) {
-  return helperVarType(D, ArgNum);
+  return helperMakeVarType(D, ArgNum);
 }
 
 AnnotationSet InferenceAnnotationScheme::
