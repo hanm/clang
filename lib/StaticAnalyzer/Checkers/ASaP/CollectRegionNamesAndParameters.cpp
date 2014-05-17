@@ -28,7 +28,8 @@ namespace asap {
 // Constructor
 CollectRegionNamesAndParametersTraverser::
 CollectRegionNamesAndParametersTraverser()
-  : BR(*SymbolTable::VB.BR),
+  : Checker(SymbolTable::VB.Checker),
+    BR(*SymbolTable::VB.BR),
     Ctx(*SymbolTable::VB.Ctx),
     OS(*SymbolTable::VB.OS),
     SymT(*SymbolTable::Table),
@@ -112,7 +113,7 @@ checkRegionOrParamDecls(Decl *D) {
 inline void CollectRegionNamesAndParametersTraverser::
 emitRedeclaredRegionName(const Decl *D, const StringRef &Str) {
   StringRef BugName = "region name already declared at this scope";
-  helperEmitDeclarationWarning(BR, D, Str, BugName);
+  helperEmitDeclarationWarning(Checker, BR, D, Str, BugName);
   // Not a Fatal Error
 }
 
@@ -120,7 +121,7 @@ inline void CollectRegionNamesAndParametersTraverser::
 emitRedeclaredRegionParameter(const Decl *D, const StringRef &Str) {
   FatalError = true;
   StringRef BugName = "region parameter already declared at this scope";
-  helperEmitDeclarationWarning(BR, D, Str, BugName);
+  helperEmitDeclarationWarning(Checker, BR, D, Str, BugName);
 }
 
 inline void CollectRegionNamesAndParametersTraverser::
@@ -136,7 +137,7 @@ emitIllFormedRegionNameOrParameter(const Decl *D,
   std::string BugName = "invalid ";
   BugName.append(AttrTypeStr);
   BugName.append(" name");
-  helperEmitAttributeWarning(BR, D, A, Name, BugName);
+  helperEmitAttributeWarning(Checker, BR, D, A, Name, BugName);
 }
 
 //////////////////////////////////////////////////////////////////////////

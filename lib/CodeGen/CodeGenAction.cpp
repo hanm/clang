@@ -18,19 +18,20 @@
 #include "clang/CodeGen/ModuleBuilder.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendDiagnostic.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Bitcode/ReaderWriter.h"
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IRReader/IRReader.h"
-#include "llvm/Linker.h"
+#include "llvm/Linker/Linker.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/Timer.h"
+#include <memory>
 using namespace clang;
 using namespace llvm;
 
@@ -47,9 +48,9 @@ namespace clang {
 
     Timer LLVMIRGeneration;
 
-    OwningPtr<CodeGenerator> Gen;
+    std::unique_ptr<CodeGenerator> Gen;
 
-    OwningPtr<llvm::Module> TheModule, LinkModule;
+    std::unique_ptr<llvm::Module> TheModule, LinkModule;
 
   public:
     BackendConsumer(BackendAction action, DiagnosticsEngine &_Diags,
@@ -66,14 +67,14 @@ namespace clang {
       llvm::TimePassesIsEnabled = TimePasses;
     }
 
-    llvm::Module *takeModule() { return TheModule.take(); }
-    llvm::Module *takeLinkModule() { return LinkModule.take(); }
+    llvm::Module *takeModule() { return TheModule.release(); }
+    llvm::Module *takeLinkModule() { return LinkModule.release(); }
 
-    virtual void HandleCXXStaticMemberVarInstantiation(VarDecl *VD) {
+    void HandleCXXStaticMemberVarInstantiation(VarDecl *VD) override {
       Gen->HandleCXXStaticMemberVarInstantiation(VD);
     }
 
-    virtual void Initialize(ASTContext &Ctx) {
+    void Initialize(ASTContext &Ctx) override {
       Context = &Ctx;
 
       if (llvm::TimePassesIsEnabled)
@@ -87,7 +88,7 @@ namespace clang {
         LLVMIRGeneration.stopTimer();
     }
 
-    virtual bool HandleTopLevelDecl(DeclGroupRef D) {
+    bool HandleTopLevelDecl(DeclGroupRef D) override {
       PrettyStackTraceDecl CrashInfo(*D.begin(), SourceLocation(),
                                      Context->getSourceManager(),
                                      "LLVM IR generation of declaration");
@@ -103,7 +104,7 @@ namespace clang {
       return true;
     }
 
-    virtual void HandleTranslationUnit(ASTContext &C) {
+    void HandleTranslationUnit(ASTContext &C) override {
       {
         PrettyStackTraceString CrashInfo("Per-file LLVM IR generation");
         if (llvm::TimePassesIsEnabled)
@@ -125,7 +126,7 @@ namespace clang {
       if (!M) {
         // The module has been released by IR gen on failures, do not double
         // free.
-        TheModule.take();
+        TheModule.release();
         return;
       }
 
@@ -165,35 +166,35 @@ namespace clang {
       Ctx.setDiagnosticHandler(OldDiagnosticHandler, OldDiagnosticContext);
     }
 
-    virtual void HandleTagDeclDefinition(TagDecl *D) {
+    void HandleTagDeclDefinition(TagDecl *D) override {
       PrettyStackTraceDecl CrashInfo(D, SourceLocation(),
                                      Context->getSourceManager(),
                                      "LLVM IR generation of declaration");
       Gen->HandleTagDeclDefinition(D);
     }
 
-    virtual void HandleTagDeclRequiredDefinition(const TagDecl *D) {
+    void HandleTagDeclRequiredDefinition(const TagDecl *D) override {
       Gen->HandleTagDeclRequiredDefinition(D);
     }
 
-    virtual void CompleteTentativeDefinition(VarDecl *D) {
+    void CompleteTentativeDefinition(VarDecl *D) override {
       Gen->CompleteTentativeDefinition(D);
     }
 
-    virtual void HandleVTable(CXXRecordDecl *RD, bool DefinitionRequired) {
+    void HandleVTable(CXXRecordDecl *RD, bool DefinitionRequired) override {
       Gen->HandleVTable(RD, DefinitionRequired);
     }
 
-    virtual void HandleLinkerOptionPragma(llvm::StringRef Opts) {
+    void HandleLinkerOptionPragma(llvm::StringRef Opts) override {
       Gen->HandleLinkerOptionPragma(Opts);
     }
 
-    virtual void HandleDetectMismatch(llvm::StringRef Name,
-                                      llvm::StringRef Value) {
+    void HandleDetectMismatch(llvm::StringRef Name,
+                                      llvm::StringRef Value) override {
       Gen->HandleDetectMismatch(Name, Value);
     }
 
-    virtual void HandleDependentLibrary(llvm::StringRef Opts) {
+    void HandleDependentLibrary(llvm::StringRef Opts) override {
       Gen->HandleDependentLibrary(Opts);
     }
 
@@ -220,6 +221,11 @@ namespace clang {
     /// \return True if the diagnostic has been successfully reported, false
     /// otherwise.
     bool StackSizeDiagHandler(const llvm::DiagnosticInfoStackSize &D);
+    /// \brief Specialized handler for the optimization diagnostic.
+    /// Note that this handler only accepts remarks and it always handles
+    /// them.
+    void
+    OptimizationRemarkHandler(const llvm::DiagnosticInfoOptimizationRemark &D);
   };
   
   void BackendConsumer::anchor() {}
@@ -307,6 +313,27 @@ void BackendConsumer::InlineAsmDiagHandler2(const llvm::SMDiagnostic &D,
     case llvm::DS_Warning:                                                     \
       DiagID = diag::warn_fe_##GroupName;                                      \
       break;                                                                   \
+    case llvm::DS_Remark:                                                      \
+      llvm_unreachable("'remark' severity not expected");                      \
+      break;                                                                   \
+    case llvm::DS_Note:                                                        \
+      DiagID = diag::note_fe_##GroupName;                                      \
+      break;                                                                   \
+    }                                                                          \
+  } while (false)
+
+#define ComputeDiagRemarkID(Severity, GroupName, DiagID)                       \
+  do {                                                                         \
+    switch (Severity) {                                                        \
+    case llvm::DS_Error:                                                       \
+      DiagID = diag::err_fe_##GroupName;                                       \
+      break;                                                                   \
+    case llvm::DS_Warning:                                                     \
+      DiagID = diag::warn_fe_##GroupName;                                      \
+      break;                                                                   \
+    case llvm::DS_Remark:                                                      \
+      DiagID = diag::remark_fe_##GroupName;                                    \
+      break;                                                                   \
     case llvm::DS_Note:                                                        \
       DiagID = diag::note_fe_##GroupName;                                      \
       break;                                                                   \
@@ -320,7 +347,7 @@ BackendConsumer::InlineAsmDiagHandler(const llvm::DiagnosticInfoInlineAsm &D) {
   std::string Message = D.getMsgStr().str();
 
   // If this problem has clang-level source location information, report the
-  // issue as being a prbolem in the source with a note showing the instantiated
+  // issue as being a problem in the source with a note showing the instantiated
   // code.
   SourceLocation LocCookie =
       SourceLocation::getFromRawEncoding(D.getLocCookie());
@@ -353,6 +380,51 @@ BackendConsumer::StackSizeDiagHandler(const llvm::DiagnosticInfoStackSize &D) {
   return true;
 }
 
+void BackendConsumer::OptimizationRemarkHandler(
+    const llvm::DiagnosticInfoOptimizationRemark &D) {
+  // We only support remarks.
+  assert(D.getSeverity() == llvm::DS_Remark);
+
+  // Optimization remarks are active only if -Rpass=regexp is given and the
+  // regular expression pattern in 'regexp' matches the name of the pass
+  // name in \p D.
+  if (CodeGenOpts.OptimizationRemarkPattern &&
+      CodeGenOpts.OptimizationRemarkPattern->match(D.getPassName())) {
+    SourceManager &SourceMgr = Context->getSourceManager();
+    FileManager &FileMgr = SourceMgr.getFileManager();
+    StringRef Filename;
+    unsigned Line, Column;
+    D.getLocation(&Filename, &Line, &Column);
+    SourceLocation Loc;
+    const FileEntry *FE = FileMgr.getFile(Filename);
+    if (FE && Line > 0) {
+      // If -gcolumn-info was not used, Column will be 0. This upsets the
+      // source manager, so if Column is not set, set it to 1.
+      if (Column == 0)
+        Column = 1;
+      Loc = SourceMgr.translateFileLineCol(FE, Line, Column);
+    }
+    Diags.Report(Loc, diag::remark_fe_backend_optimization_remark)
+        << AddFlagValue(D.getPassName()) << D.getMsg().str();
+
+    if (Line == 0)
+      // If we could not extract a source location for the diagnostic,
+      // inform the user how they can get source locations back.
+      //
+      // FIXME: We should really be generating !srcloc annotations when
+      // -Rpass is used. !srcloc annotations need to be emitted in
+      // approximately the same spots as !dbg nodes.
+      Diags.Report(diag::note_fe_backend_optimization_remark_missing_loc);
+    else if (Loc.isInvalid())
+      // If we were not able to translate the file:line:col information
+      // back to a SourceLocation, at least emit a note stating that
+      // we could not translate this location. This can happen in the
+      // case of #line directives.
+      Diags.Report(diag::note_fe_backend_optimization_remark_invalid_loc)
+        << Filename << Line << Column;
+  }
+}
+
 /// \brief This function is invoked when the backend needs
 /// to report something to the user.
 void BackendConsumer::DiagnosticHandlerImpl(const DiagnosticInfo &DI) {
@@ -370,9 +442,14 @@ void BackendConsumer::DiagnosticHandlerImpl(const DiagnosticInfo &DI) {
       return;
     ComputeDiagID(Severity, backend_frame_larger_than, DiagID);
     break;
+  case llvm::DK_OptimizationRemark:
+    // Optimization remarks are always handled completely by this
+    // handler. There is no generic way of emitting them.
+    OptimizationRemarkHandler(cast<DiagnosticInfoOptimizationRemark>(DI));
+    return;
   default:
     // Plugin IDs are not bound to any value as they are set dynamically.
-    ComputeDiagID(Severity, backend_plugin, DiagID);
+    ComputeDiagRemarkID(Severity, backend_plugin, DiagID);
     break;
   }
   std::string MsgStorage;
@@ -414,9 +491,7 @@ void CodeGenAction::EndSourceFileAction() {
   TheModule.reset(BEConsumer->takeModule());
 }
 
-llvm::Module *CodeGenAction::takeModule() {
-  return TheModule.take();
-}
+llvm::Module *CodeGenAction::takeModule() { return TheModule.release(); }
 
 llvm::LLVMContext *CodeGenAction::takeLLVMContext() {
   OwnsVMContext = false;
@@ -446,7 +521,7 @@ static raw_ostream *GetOutputStream(CompilerInstance &CI,
 ASTConsumer *CodeGenAction::CreateASTConsumer(CompilerInstance &CI,
                                               StringRef InFile) {
   BackendAction BA = static_cast<BackendAction>(Act);
-  OwningPtr<raw_ostream> OS(GetOutputStream(CI, InFile, BA));
+  std::unique_ptr<raw_ostream> OS(GetOutputStream(CI, InFile, BA));
   if (BA != Backend_EmitNothing && !OS)
     return 0;
 
@@ -476,12 +551,10 @@ ASTConsumer *CodeGenAction::CreateASTConsumer(CompilerInstance &CI,
     LinkModuleToUse = ModuleOrErr.get();
   }
 
-  BEConsumer = 
-      new BackendConsumer(BA, CI.getDiagnostics(),
-                          CI.getCodeGenOpts(), CI.getTargetOpts(),
-                          CI.getLangOpts(),
-                          CI.getFrontendOpts().ShowTimers, InFile,
-                          LinkModuleToUse, OS.take(), *VMContext);
+  BEConsumer = new BackendConsumer(BA, CI.getDiagnostics(), CI.getCodeGenOpts(),
+                                   CI.getTargetOpts(), CI.getLangOpts(),
+                                   CI.getFrontendOpts().ShowTimers, InFile,
+                                   LinkModuleToUse, OS.release(), *VMContext);
   return BEConsumer;
 }
 

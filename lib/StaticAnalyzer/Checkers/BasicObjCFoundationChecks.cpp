@@ -14,6 +14,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "ClangSACheckers.h"
+#include "SelectorExtras.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/Expr.h"
@@ -39,7 +40,8 @@ using namespace ento;
 namespace {
 class APIMisuse : public BugType {
 public:
-  APIMisuse(const char* name) : BugType(name, "API Misuse (Apple)") {}
+  APIMisuse(const CheckerBase *checker, const char *name)
+      : BugType(checker, name, "API Misuse (Apple)") {}
 };
 } // end anonymous namespace
 
@@ -94,7 +96,19 @@ namespace {
   class NilArgChecker : public Checker<check::PreObjCMessage,
                                        check::PostStmt<ObjCDictionaryLiteral>,
                                        check::PostStmt<ObjCArrayLiteral> > {
-    mutable OwningPtr<APIMisuse> BT;
+    mutable std::unique_ptr<APIMisuse> BT;
+
+    mutable llvm::SmallDenseMap<Selector, unsigned, 16> StringSelectors;
+    mutable Selector ArrayWithObjectSel;
+    mutable Selector AddObjectSel;
+    mutable Selector InsertObjectAtIndexSel;
+    mutable Selector ReplaceObjectAtIndexWithObjectSel;
+    mutable Selector SetObjectAtIndexedSubscriptSel;
+    mutable Selector ArrayByAddingObjectSel;
+    mutable Selector DictionaryWithObjectForKeySel;
+    mutable Selector SetObjectForKeySel;
+    mutable Selector SetObjectForKeyedSubscriptSel;
+    mutable Selector RemoveObjectForKeySel;
 
     void warnIfNilExpr(const Expr *E,
                        const char *Msg,
@@ -191,7 +205,7 @@ void NilArgChecker::generateBugReport(ExplodedNode *N,
                                       const Expr *E,
                                       CheckerContext &C) const {
   if (!BT)
-    BT.reset(new APIMisuse("nil argument"));
+    BT.reset(new APIMisuse(this, "nil argument"));
 
   BugReport *R = new BugReport(*BT, Msg, N);
   R->addRange(Range);
@@ -213,50 +227,62 @@ void NilArgChecker::checkPreObjCMessage(const ObjCMethodCall &msg,
   
   if (Class == FC_NSString) {
     Selector S = msg.getSelector();
-    
+
     if (S.isUnarySelector())
       return;
-    
-    // FIXME: This is going to be really slow doing these checks with
-    //  lexical comparisons.
-    
-    std::string NameStr = S.getAsString();
-    StringRef Name(NameStr);
-    assert(!Name.empty());
-    
-    // FIXME: Checking for initWithFormat: will not work in most cases
-    //  yet because [NSString alloc] returns id, not NSString*.  We will
-    //  need support for tracking expected-type information in the analyzer
-    //  to find these errors.
-    if (Name == "caseInsensitiveCompare:" ||
-        Name == "compare:" ||
-        Name == "compare:options:" ||
-        Name == "compare:options:range:" ||
-        Name == "compare:options:range:locale:" ||
-        Name == "componentsSeparatedByCharactersInSet:" ||
-        Name == "initWithFormat:") {
-      Arg = 0;
+
+    if (StringSelectors.empty()) {
+      ASTContext &Ctx = C.getASTContext();
+      Selector Sels[] = {
+        getKeywordSelector(Ctx, "caseInsensitiveCompare", nullptr),
+        getKeywordSelector(Ctx, "compare", nullptr),
+        getKeywordSelector(Ctx, "compare", "options", nullptr),
+        getKeywordSelector(Ctx, "compare", "options", "range", nullptr),
+        getKeywordSelector(Ctx, "compare", "options", "range", "locale",
+                           nullptr),
+        getKeywordSelector(Ctx, "componentsSeparatedByCharactersInSet",
+                           nullptr),
+        getKeywordSelector(Ctx, "initWithFormat",
+                           nullptr),
+        getKeywordSelector(Ctx, "localizedCaseInsensitiveCompare", nullptr),
+        getKeywordSelector(Ctx, "localizedCompare", nullptr),
+        getKeywordSelector(Ctx, "localizedStandardCompare", nullptr),
+      };
+      for (Selector KnownSel : Sels)
+        StringSelectors[KnownSel] = 0;
     }
+    auto I = StringSelectors.find(S);
+    if (I == StringSelectors.end())
+      return;
+    Arg = I->second;
   } else if (Class == FC_NSArray) {
     Selector S = msg.getSelector();
 
     if (S.isUnarySelector())
       return;
 
-    if (S.getNameForSlot(0).equals("addObject")) {
+    if (ArrayWithObjectSel.isNull()) {
+      ASTContext &Ctx = C.getASTContext();
+      ArrayWithObjectSel = getKeywordSelector(Ctx, "arrayWithObject", nullptr);
+      AddObjectSel = getKeywordSelector(Ctx, "addObject", nullptr);
+      InsertObjectAtIndexSel =
+        getKeywordSelector(Ctx, "insertObject", "atIndex", nullptr);
+      ReplaceObjectAtIndexWithObjectSel =
+        getKeywordSelector(Ctx, "replaceObjectAtIndex", "withObject", nullptr);
+      SetObjectAtIndexedSubscriptSel =
+        getKeywordSelector(Ctx, "setObject", "atIndexedSubscript", nullptr);
+      ArrayByAddingObjectSel =
+        getKeywordSelector(Ctx, "arrayByAddingObject", nullptr);
+    }
+
+    if (S == ArrayWithObjectSel || S == AddObjectSel ||
+        S == InsertObjectAtIndexSel || S == ArrayByAddingObjectSel) {
       Arg = 0;
-    } else if (S.getNameForSlot(0).equals("insertObject") &&
-               S.getNameForSlot(1).equals("atIndex")) {
-      Arg = 0;
-    } else if (S.getNameForSlot(0).equals("replaceObjectAtIndex") &&
-               S.getNameForSlot(1).equals("withObject")) {
-      Arg = 1;
-    } else if (S.getNameForSlot(0).equals("setObject") &&
-               S.getNameForSlot(1).equals("atIndexedSubscript")) {
+    } else if (S == SetObjectAtIndexedSubscriptSel) {
       Arg = 0;
       CanBeSubscript = true;
-    } else if (S.getNameForSlot(0).equals("arrayByAddingObject")) {
-      Arg = 0;
+    } else if (S == ReplaceObjectAtIndexWithObjectSel) {
+      Arg = 1;
     }
   } else if (Class == FC_NSDictionary) {
     Selector S = msg.getSelector();
@@ -264,20 +290,26 @@ void NilArgChecker::checkPreObjCMessage(const ObjCMethodCall &msg,
     if (S.isUnarySelector())
       return;
 
-    if (S.getNameForSlot(0).equals("dictionaryWithObject") &&
-        S.getNameForSlot(1).equals("forKey")) {
+    if (DictionaryWithObjectForKeySel.isNull()) {
+      ASTContext &Ctx = C.getASTContext();
+      DictionaryWithObjectForKeySel =
+        getKeywordSelector(Ctx, "dictionaryWithObject", "forKey", nullptr);
+      SetObjectForKeySel =
+        getKeywordSelector(Ctx, "setObject", "forKey", nullptr);
+      SetObjectForKeyedSubscriptSel =
+        getKeywordSelector(Ctx, "setObject", "forKeyedSubscript", nullptr);
+      RemoveObjectForKeySel =
+        getKeywordSelector(Ctx, "removeObjectForKey", nullptr);
+    }
+
+    if (S == DictionaryWithObjectForKeySel || S == SetObjectForKeySel) {
       Arg = 0;
       warnIfNilArg(C, msg, /* Arg */1, Class);
-    } else if (S.getNameForSlot(0).equals("setObject") &&
-               S.getNameForSlot(1).equals("forKey")) {
-      Arg = 0;
-      warnIfNilArg(C, msg, /* Arg */1, Class);
-    } else if (S.getNameForSlot(0).equals("setObject") &&
-               S.getNameForSlot(1).equals("forKeyedSubscript")) {
+    } else if (S == SetObjectForKeyedSubscriptSel) {
       CanBeSubscript = true;
       Arg = 0;
       warnIfNilArg(C, msg, /* Arg */1, Class, CanBeSubscript);
-    } else if (S.getNameForSlot(0).equals("removeObjectForKey")) {
+    } else if (S == RemoveObjectForKeySel) {
       Arg = 0;
     }
   }
@@ -285,7 +317,6 @@ void NilArgChecker::checkPreObjCMessage(const ObjCMethodCall &msg,
   // If argument is '0', report a warning.
   if ((Arg != InvalidArgIndex))
     warnIfNilArg(C, msg, Arg, Class, CanBeSubscript);
-
 }
 
 void NilArgChecker::checkPostStmt(const ObjCArrayLiteral *AL,
@@ -312,7 +343,7 @@ void NilArgChecker::checkPostStmt(const ObjCDictionaryLiteral *DL,
 
 namespace {
 class CFNumberCreateChecker : public Checker< check::PreStmt<CallExpr> > {
-  mutable OwningPtr<APIMisuse> BT;
+  mutable std::unique_ptr<APIMisuse> BT;
   mutable IdentifierInfo* II;
 public:
   CFNumberCreateChecker() : II(0) {}
@@ -483,8 +514,8 @@ void CFNumberCreateChecker::checkPreStmt(const CallExpr *CE,
       << " bits of the input integer will be lost.";
 
     if (!BT)
-      BT.reset(new APIMisuse("Bad use of CFNumberCreate"));
-    
+      BT.reset(new APIMisuse(this, "Bad use of CFNumberCreate"));
+
     BugReport *report = new BugReport(*BT, os.str(), N);
     report->addRange(CE->getArg(2)->getSourceRange());
     C.emitReport(report);
@@ -497,7 +528,7 @@ void CFNumberCreateChecker::checkPreStmt(const CallExpr *CE,
 
 namespace {
 class CFRetainReleaseChecker : public Checker< check::PreStmt<CallExpr> > {
-  mutable OwningPtr<APIMisuse> BT;
+  mutable std::unique_ptr<APIMisuse> BT;
   mutable IdentifierInfo *Retain, *Release, *MakeCollectable;
 public:
   CFRetainReleaseChecker(): Retain(0), Release(0), MakeCollectable(0) {}
@@ -522,8 +553,8 @@ void CFRetainReleaseChecker::checkPreStmt(const CallExpr *CE,
     Retain = &Ctx.Idents.get("CFRetain");
     Release = &Ctx.Idents.get("CFRelease");
     MakeCollectable = &Ctx.Idents.get("CFMakeCollectable");
-    BT.reset(
-      new APIMisuse("null passed to CFRetain/CFRelease/CFMakeCollectable"));
+    BT.reset(new APIMisuse(
+        this, "null passed to CFRetain/CFRelease/CFMakeCollectable"));
   }
 
   // Check if we called CFRetain/CFRelease/CFMakeCollectable.
@@ -551,7 +582,7 @@ void CFRetainReleaseChecker::checkPreStmt(const CallExpr *CE,
 
   // Are they equal?
   ProgramStateRef stateTrue, stateFalse;
-  llvm::tie(stateTrue, stateFalse) = state->assume(ArgIsNull);
+  std::tie(stateTrue, stateFalse) = state->assume(ArgIsNull);
 
   if (stateTrue && !stateFalse) {
     ExplodedNode *N = C.generateSink(stateTrue);
@@ -589,7 +620,7 @@ class ClassReleaseChecker : public Checker<check::PreObjCMessage> {
   mutable Selector retainS;
   mutable Selector autoreleaseS;
   mutable Selector drainS;
-  mutable OwningPtr<BugType> BT;
+  mutable std::unique_ptr<BugType> BT;
 
 public:
   void checkPreObjCMessage(const ObjCMethodCall &msg, CheckerContext &C) const;
@@ -600,9 +631,9 @@ void ClassReleaseChecker::checkPreObjCMessage(const ObjCMethodCall &msg,
                                               CheckerContext &C) const {
   
   if (!BT) {
-    BT.reset(new APIMisuse("message incorrectly sent to class instead of class "
-                           "instance"));
-  
+    BT.reset(new APIMisuse(
+        this, "message incorrectly sent to class instead of class instance"));
+
     ASTContext &Ctx = C.getASTContext();
     releaseS = GetNullarySelector("release", Ctx);
     retainS = GetNullarySelector("retain", Ctx);
@@ -648,7 +679,7 @@ class VariadicMethodTypeChecker : public Checker<check::PreObjCMessage> {
   mutable Selector orderedSetWithObjectsS;
   mutable Selector initWithObjectsS;
   mutable Selector initWithObjectsAndKeysS;
-  mutable OwningPtr<BugType> BT;
+  mutable std::unique_ptr<BugType> BT;
 
   bool isVariadicMessage(const ObjCMethodCall &msg) const;
 
@@ -708,7 +739,8 @@ VariadicMethodTypeChecker::isVariadicMessage(const ObjCMethodCall &msg) const {
 void VariadicMethodTypeChecker::checkPreObjCMessage(const ObjCMethodCall &msg,
                                                     CheckerContext &C) const {
   if (!BT) {
-    BT.reset(new APIMisuse("Arguments passed to variadic method aren't all "
+    BT.reset(new APIMisuse(this,
+                           "Arguments passed to variadic method aren't all "
                            "Objective-C pointer types"));
 
     ASTContext &Ctx = C.getASTContext();
@@ -856,7 +888,7 @@ static ProgramStateRef checkCollectionNonNil(CheckerContext &C,
     return State;
 
   ProgramStateRef StNonNil, StNil;
-  llvm::tie(StNonNil, StNil) = State->assume(*KnownCollection);
+  std::tie(StNonNil, StNil) = State->assume(*KnownCollection);
   if (StNil && !StNonNil) {
     // The collection is nil. This path is infeasible.
     return NULL;
@@ -1263,6 +1295,7 @@ void ento::registerObjCLoopChecker(CheckerManager &mgr) {
   mgr.registerChecker<ObjCLoopChecker>();
 }
 
-void ento::registerObjCNonNilReturnValueChecker(CheckerManager &mgr) {
+void
+ento::registerObjCNonNilReturnValueChecker(CheckerManager &mgr) {
   mgr.registerChecker<ObjCNonNilReturnValueChecker>();
 }

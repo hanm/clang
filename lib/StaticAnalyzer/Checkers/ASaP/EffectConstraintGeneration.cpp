@@ -39,6 +39,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   bool VisitCXXInitializer,
   bool HasWriteSemantics
   ) : BaseClass(Def),
+      Checker(SymbolTable::VB.Checker),
       HasWriteSemantics(HasWriteSemantics),
       IsBase(false),
       EffectCount(0),
@@ -228,7 +229,8 @@ emitOverridenVirtualFunctionMustCoverEffectsOfChildren(
   std::string Str;
   llvm::raw_string_ostream StrOS(Str);
   StrOS << "[in derived class '" << Child->getParent()->getName() << "']";
-  helperEmitDeclarationWarning(BR, Parent, StrOS.str(), BugName, false);
+  helperEmitDeclarationWarning(Checker, BR, Parent,
+                               StrOS.str(), BugName, false);
 }
 
 void EffectConstraintVisitor::
@@ -236,7 +238,7 @@ emitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
   FatalError = true;
     StringRef BugName = "unsupported constructor initializer."
       " Please file feature support request.";
-    helperEmitDeclarationWarning(BR, D, "", BugName, false);
+    helperEmitDeclarationWarning(Checker, BR, D, "", BugName, false);
 }
 
 void EffectConstraintVisitor::
@@ -244,7 +246,7 @@ emitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
                                   const StringRef &Str) {
   FatalError = true;
   StringRef BugName = "effect not covered by effect summary";
-  helperEmitStatementWarning(BR, AC, S, D, Str, BugName);
+  helperEmitStatementWarning(Checker, BR, AC, S, D, Str, BugName);
 }
 
 void EffectConstraintVisitor::

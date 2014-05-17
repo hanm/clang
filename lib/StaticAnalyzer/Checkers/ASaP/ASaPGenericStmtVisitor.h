@@ -40,6 +40,7 @@ class ASaPStmtVisitor
 
 protected:
   /// Fields
+  const CheckerBase *Checker;
   BugReporter &BR;
   ASTContext &Ctx;
   AnalysisManager &Mgr;
@@ -54,7 +55,8 @@ protected:
 public:
   /// Constructor
   explicit ASaPStmtVisitor(const FunctionDecl *Def)
-      : BR(*SymbolTable::VB.BR),
+      : Checker(SymbolTable::VB.Checker),
+        BR(*SymbolTable::VB.BR),
         Ctx(*SymbolTable::VB.Ctx),
         Mgr(*SymbolTable::VB.Mgr),
         AC(SymbolTable::VB.AC),

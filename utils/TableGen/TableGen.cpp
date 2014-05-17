@@ -29,7 +29,7 @@ enum ActionType {
   GenClangAttrList,
   GenClangAttrPCHRead,
   GenClangAttrPCHWrite,
-  GenClangAttrSpellingList,
+  GenClangAttrHasAttributeImpl,
   GenClangAttrSpellingListIndex,
   GenClangAttrASTVisitor,
   GenClangAttrTemplateInstantiate,
@@ -51,7 +51,8 @@ enum ActionType {
   GenClangCommentCommandList,
   GenArmNeon,
   GenArmNeonSema,
-  GenArmNeonTest
+  GenArmNeonTest,
+  GenAttrDocs
 };
 
 namespace {
@@ -71,7 +72,8 @@ cl::opt<ActionType> Action(
                    "Generate clang PCH attribute reader"),
         clEnumValN(GenClangAttrPCHWrite, "gen-clang-attr-pch-write",
                    "Generate clang PCH attribute writer"),
-        clEnumValN(GenClangAttrSpellingList, "gen-clang-attr-spelling-list",
+        clEnumValN(GenClangAttrHasAttributeImpl,
+                   "gen-clang-attr-has-attribute-impl",
                    "Generate a clang attribute spelling list"),
         clEnumValN(GenClangAttrSpellingListIndex,
                    "gen-clang-attr-spelling-index",
@@ -129,6 +131,8 @@ cl::opt<ActionType> Action(
                    "Generate ARM NEON sema support for clang"),
         clEnumValN(GenArmNeonTest, "gen-arm-neon-test",
                    "Generate ARM NEON tests for clang"),
+        clEnumValN(GenAttrDocs, "gen-attr-docs",
+                   "Generate attribute documentation"),
         clEnumValEnd));
 
 cl::opt<std::string>
@@ -156,8 +160,8 @@ bool ClangTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
   case GenClangAttrPCHWrite:
     EmitClangAttrPCHWrite(Records, OS);
     break;
-  case GenClangAttrSpellingList:
-    EmitClangAttrSpellingList(Records, OS);
+  case GenClangAttrHasAttributeImpl:
+    EmitClangAttrHasAttrImpl(Records, OS);
     break;
   case GenClangAttrSpellingListIndex:
     EmitClangAttrSpellingListIndex(Records, OS);
@@ -225,6 +229,9 @@ bool ClangTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
     break;
   case GenArmNeonTest:
     EmitNeonTest(Records, OS);
+    break;
+  case GenAttrDocs:
+    EmitClangAttrDocs(Records, OS);
     break;
   }
 

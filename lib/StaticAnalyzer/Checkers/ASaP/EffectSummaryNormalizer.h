@@ -31,6 +31,7 @@ namespace asap {
 class EffectSummaryNormalizerTraverser :
   public RecursiveASTVisitor<EffectSummaryNormalizerTraverser> {
 
+  const CheckerBase *Checker;
   BugReporter &BR;
   ASTContext &Ctx;
   raw_ostream &OS;

@@ -217,7 +217,7 @@ void CodeGenFunction::StartThunk(llvm::Function *Fn, GlobalDecl GD,
 
   // Start defining the function.
   StartFunction(GlobalDecl(), ResultType, Fn, FnInfo, FunctionArgs,
-                SourceLocation());
+                MD->getLocation(), SourceLocation());
 
   // Since we didn't pass a GlobalDecl to StartFunction, do this ourselves.
   CGM.getCXXABI().EmitInstanceFunctionProlog(*this);
@@ -321,27 +321,30 @@ void CodeGenVTables::emitThunk(GlobalDecl GD, const ThunkInfo &Thunk,
   const CGFunctionInfo &FnInfo = CGM.getTypes().arrangeGlobalDeclaration(GD);
 
   // FIXME: re-use FnInfo in this computation.
-  llvm::Constant *Entry = CGM.GetAddrOfThunk(GD, Thunk);
-  
+  llvm::Constant *C = CGM.GetAddrOfThunk(GD, Thunk);
+  llvm::GlobalValue *Entry;
+
   // Strip off a bitcast if we got one back.
-  if (llvm::ConstantExpr *CE = dyn_cast<llvm::ConstantExpr>(Entry)) {
+  if (llvm::ConstantExpr *CE = dyn_cast<llvm::ConstantExpr>(C)) {
     assert(CE->getOpcode() == llvm::Instruction::BitCast);
-    Entry = CE->getOperand(0);
+    Entry = cast<llvm::GlobalValue>(CE->getOperand(0));
+  } else {
+    Entry = cast<llvm::GlobalValue>(C);
   }
-  
+
   // There's already a declaration with the same name, check if it has the same
   // type or if we need to replace it.
-  if (cast<llvm::GlobalValue>(Entry)->getType()->getElementType() != 
+  if (Entry->getType()->getElementType() !=
       CGM.getTypes().GetFunctionTypeForVTable(GD)) {
-    llvm::GlobalValue *OldThunkFn = cast<llvm::GlobalValue>(Entry);
-    
+    llvm::GlobalValue *OldThunkFn = Entry;
+
     // If the types mismatch then we have to rewrite the definition.
     assert(OldThunkFn->isDeclaration() &&
            "Shouldn't replace non-declaration");
 
     // Remove the name from the old thunk function and get a new thunk.
     OldThunkFn->setName(StringRef());
-    Entry = CGM.GetAddrOfThunk(GD, Thunk);
+    Entry = cast<llvm::GlobalValue>(CGM.GetAddrOfThunk(GD, Thunk));
     
     // If needed, replace the old thunk with a bitcast.
     if (!OldThunkFn->use_empty()) {
@@ -554,7 +557,7 @@ CodeGenVTables::GenerateConstructionVTable(const CXXRecordDecl *RD,
   if (CGDebugInfo *DI = CGM.getModuleDebugInfo())
     DI->completeClassData(Base.getBase());
 
-  OwningPtr<VTableLayout> VTLayout(
+  std::unique_ptr<VTableLayout> VTLayout(
       getItaniumVTableContext().createConstructionVTableLayout(
           Base.getBase(), Base.getBaseOffset(), BaseIsVirtual, RD));
 

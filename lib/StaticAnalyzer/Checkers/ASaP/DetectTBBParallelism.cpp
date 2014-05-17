@@ -30,12 +30,13 @@ emitUnexpectedTBBParallelFor(const FunctionDecl *D) {
   StringRef Str = "";
   StringRef BugName = "unexpected tbb::parallel_for method: parallelism"
                       " invoked through it will not be checked";
-  helperEmitDeclarationWarning(BR, D, Str, BugName, false);
+  helperEmitDeclarationWarning(Checker, BR, D, Str, BugName, false);
 }
 
 DetectTBBParallelism::
 DetectTBBParallelism()
-  : BR(*SymbolTable::VB.BR),
+  : Checker(SymbolTable::VB.Checker),
+    BR(*SymbolTable::VB.BR),
     Ctx(*SymbolTable::VB.Ctx),
     OS(*SymbolTable::VB.OS),
     SymT(*SymbolTable::Table),

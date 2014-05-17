@@ -68,8 +68,7 @@ static bool isCallbackArg(SVal V, QualType T) {
 
   if (const RecordType *RT = T->getAsStructureType()) {
     const RecordDecl *RD = RT->getDecl();
-    for (RecordDecl::field_iterator I = RD->field_begin(), E = RD->field_end();
-         I != E; ++I) {
+    for (const auto *I : RD->fields()) {
       QualType FieldT = I->getType();
       if (FieldT->isBlockPointerType() || FieldT->isFunctionPointerType())
         return true;
@@ -139,6 +138,11 @@ static void findPtrToConstParams(llvm::SmallSet<unsigned, 4> &PreserveArgs,
 ProgramStateRef CallEvent::invalidateRegions(unsigned BlockCount,
                                              ProgramStateRef Orig) const {
   ProgramStateRef Result = (Orig ? Orig : getState());
+
+  // Don't invalidate anything if the callee is marked pure/const.
+  if (const Decl *callee = getDecl())
+    if (callee->hasAttr<PureAttr>() || callee->hasAttr<ConstAttr>())
+      return Result;
 
   SmallVector<SVal, 8> ValuesToInvalidate;
   RegionAndSymbolInvalidationTraits ETraits;

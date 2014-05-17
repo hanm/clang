@@ -1067,6 +1067,11 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
     Kind = CK_BitCast;
     return TC_Success;
   }
+  // Allow ns-pointer to cf-pointer conversion in either direction
+  // with static casts.
+  if (!CStyle &&
+      Self.CheckTollFreeBridgeStaticCast(DestType, SrcExpr.get(), Kind))
+    return TC_Success;
   
   // We tried everything. Everything! Nothing works! :-(
   return TC_NotApplicable;
@@ -1584,8 +1589,7 @@ static TryCastResult TryConstCast(Sema &Self, ExprResult &SrcExpr,
     // This is a const_cast from a class prvalue to an rvalue reference type.
     // Materialize a temporary to store the result of the conversion.
     SrcExpr = new (Self.Context) MaterializeTemporaryExpr(
-        SrcType, SrcExpr.take(), /*IsLValueReference*/ false,
-        /*ExtendingDecl*/ 0);
+        SrcType, SrcExpr.take(), /*IsLValueReference*/ false);
 
   return TC_Success;
 }
@@ -2087,8 +2091,6 @@ void CastOperation::CheckCXXCStyleCast(bool FunctionalStyle,
 
   if (Self.getLangOpts().ObjCAutoRefCount && tcr == TC_Success)
     checkObjCARCConversion(CCK);
-  else if (Self.getLangOpts().ObjC1 && tcr == TC_Success)
-    Self.CheckTollFreeBridgeCast(DestType, SrcExpr.get());
 
   if (tcr != TC_Success && msg != 0) {
     if (SrcExpr.get()->getType() == Self.Context.OverloadTy) {
@@ -2097,10 +2099,16 @@ void CastOperation::CheckCXXCStyleCast(bool FunctionalStyle,
                                 DestType,
                                 /*Complain*/ true,
                                 Found);
-      
-      assert(!Fn && "cast failed but able to resolve overload expression!!");
-      (void)Fn;
-
+      if (Fn) {
+        // If DestType is a function type (not to be confused with the function
+        // pointer type), it will be possible to resolve the function address,
+        // but the type cast should be considered as failure.
+        OverloadExpr *OE = OverloadExpr::find(SrcExpr.get()).Expression;
+        Self.Diag(OpRange.getBegin(), diag::err_bad_cstyle_cast_overload)
+          << OE->getName() << DestType << OpRange
+          << OE->getQualifierLoc().getSourceRange();
+        Self.NoteAllOverloadCandidates(SrcExpr.get());
+      }
     } else {
       diagnoseBadCast(Self, msg, (FunctionalStyle ? CT_Functional : CT_CStyle),
                       OpRange, SrcExpr.get(), DestType, ListInitialization);
@@ -2349,8 +2357,6 @@ void CastOperation::CheckCStyleCast() {
       return;
     }
   }
-  else if (Self.getLangOpts().ObjC1)
-    Self.CheckTollFreeBridgeCast(DestType, SrcExpr.get());
   
   DiagnoseCastOfObjCSEL(Self, SrcExpr, DestType);
   DiagnoseBadFunctionCast(Self, SrcExpr, DestType);

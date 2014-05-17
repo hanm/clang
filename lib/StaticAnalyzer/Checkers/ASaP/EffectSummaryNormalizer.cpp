@@ -28,7 +28,8 @@ namespace asap {
 
 EffectSummaryNormalizerTraverser::
 EffectSummaryNormalizerTraverser()
-  : BR(*SymbolTable::VB.BR),
+  : Checker(SymbolTable::VB.Checker),
+    BR(*SymbolTable::VB.BR),
     Ctx(*SymbolTable::VB.Ctx),
     OS(*SymbolTable::VB.OS),
     SymT(*SymbolTable::Table),
@@ -39,7 +40,7 @@ emitCanonicalDeclHasSmallerEffectSummary(const Decl *D, const StringRef Str) {
 
   StringRef BugName = "effect summary of canonical declaration does not cover"\
     " the summary of this declaration";
-  helperEmitDeclarationWarning(BR, D, Str, BugName);
+  helperEmitDeclarationWarning(Checker, BR, D, Str, BugName);
   FatalError = true;
 }
 

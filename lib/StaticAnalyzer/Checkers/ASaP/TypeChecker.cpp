@@ -37,13 +37,17 @@ namespace asap {
 
 static void emitUnsafeExplicitCastWarning(Expr *Exp, StringRef FromTo) {
   StringRef BugName = "unsafe explicit cast";
-  helperEmitStatementWarning(*SymbolTable::VB.BR, SymbolTable::VB.AC,
-                             Exp, 0, FromTo, BugName, false);
+  helperEmitStatementWarning(SymbolTable::VB.Checker,
+                             *SymbolTable::VB.BR,
+                             SymbolTable::VB.AC, Exp,
+                             0, FromTo, BugName, false);
 }
 
 static void emitUnsafeImplicitCastWarning(Expr *Exp, StringRef FromTo) {
   StringRef BugName = "unsafe implicit cast";
-  helperEmitStatementWarning(*SymbolTable::VB.BR, SymbolTable::VB.AC,
+  helperEmitStatementWarning(SymbolTable::VB.Checker,
+                             *SymbolTable::VB.BR,
+                             SymbolTable::VB.AC,
                              Exp, 0, FromTo, BugName, false);
 }
 
@@ -196,38 +200,46 @@ typecheck(const ASaPType *LHSType, const ASaPType *RHSType, bool IsInit) {
 }
 
 void AssignmentCheckerVisitor::
-helperEmitInvalidArgToFunctionWarning(const Stmt *S, const ASaPType *LHS,
+helperEmitInvalidArgToFunctionWarning(const Stmt *S,
+                                      const ASaPType *LHS,
                                       const ASaPType *RHS) {
   StringRef BugName = "invalid argument to function call";
-  helperEmitInvalidAssignmentWarning(BR, AC, Ctx, S, LHS, RHS, BugName);
+  helperEmitInvalidAssignmentWarning(Checker, BR, AC, Ctx,
+                                     S, LHS, RHS, BugName);
 }
 
 void AssignmentCheckerVisitor::
-helperEmitInvalidExplicitAssignmentWarning(const Stmt *S, const ASaPType *LHS,
+helperEmitInvalidExplicitAssignmentWarning(const Stmt *S,
+                                           const ASaPType *LHS,
                                            const ASaPType *RHS) {
   StringRef BugName = "invalid assignment";
-  helperEmitInvalidAssignmentWarning(BR, AC, Ctx, S, LHS, RHS, BugName);
+  helperEmitInvalidAssignmentWarning(Checker, BR, AC, Ctx,
+                                     S, LHS, RHS, BugName);
 }
 
 void AssignmentCheckerVisitor::
-helperEmitInvalidReturnTypeWarning(const Stmt *S, const ASaPType *LHS,
+helperEmitInvalidReturnTypeWarning(const Stmt *S,
+                                   const ASaPType *LHS,
                                    const ASaPType *RHS) {
   StringRef BugName = "invalid return type";
-  helperEmitInvalidAssignmentWarning(BR, AC, Ctx, S, LHS, RHS, BugName);
+  helperEmitInvalidAssignmentWarning(Checker, BR, AC, Ctx,
+                                     S, LHS, RHS, BugName);
 }
 
 void AssignmentCheckerVisitor::
-helperEmitInvalidInitializationWarning(const Stmt *S, const ASaPType *LHS,
+helperEmitInvalidInitializationWarning(const Stmt *S,
+                                       const ASaPType *LHS,
                                        const ASaPType *RHS) {
   StringRef BugName = "invalid initialization";
-  helperEmitInvalidAssignmentWarning(BR, AC, Ctx, S, LHS, RHS, BugName);
+  helperEmitInvalidAssignmentWarning(Checker, BR, AC, Ctx,
+                                     S, LHS, RHS, BugName);
 }
 
 void AssignmentCheckerVisitor::
 helperEmitUnsupportedConstructorInitializer(const CXXConstructorDecl *D) {
   StringRef BugName = "unsupported constructor initializer."
     " Please file feature support request.";
-  helperEmitDeclarationWarning(BR, D, "", BugName, false);
+  helperEmitDeclarationWarning(Checker, BR, D, "", BugName, false);
 }
 
 void AssignmentCheckerVisitor::

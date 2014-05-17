@@ -1,7 +1,11 @@
 // RUN: %clang_cc1 -fno-rtti -emit-llvm %s -o - -triple=i386-pc-win32 | FileCheck %s
+// RUN: %clang_cc1 -fno-rtti -emit-llvm %s -o - -triple=x86_64-pc-win32 | FileCheck %s -check-prefix=X64
+// RUN: %clang_cc1 -fno-rtti -emit-llvm %s -o - -triple=i386-pc-win32 -DINCOMPLETE_VIRTUAL -fms-extensions -verify
+// RUN: %clang_cc1 -fno-rtti -emit-llvm %s -o - -triple=i386-pc-win32 -DINCOMPLETE_VIRTUAL -DMEMFUN -fms-extensions -verify
 // FIXME: Test x86_64 member pointers when codegen no longer asserts on records
 // with virtual bases.
 
+#ifndef INCOMPLETE_VIRTUAL
 struct B1 {
   void foo();
   int b;
@@ -226,12 +230,16 @@ bool nullTestDataUnspecified(int Unspecified::*mp) {
 // CHECK:   %[[cmp0:.*]] = icmp ne i32 %[[mp0]], 0
 // CHECK:   %[[mp1:.*]] = extractvalue { i32, i32, i32 } %[[mp]], 1
 // CHECK:   %[[cmp1:.*]] = icmp ne i32 %[[mp1]], 0
-// CHECK:   %[[and0:.*]] = and i1 %[[cmp0]], %[[cmp1]]
+// CHECK:   %[[and0:.*]] = or i1 %[[cmp0]], %[[cmp1]]
 // CHECK:   %[[mp2:.*]] = extractvalue { i32, i32, i32 } %[[mp]], 2
 // CHECK:   %[[cmp2:.*]] = icmp ne i32 %[[mp2]], -1
-// CHECK:   %[[and1:.*]] = and i1 %[[and0]], %[[cmp2]]
+// CHECK:   %[[and1:.*]] = or i1 %[[and0]], %[[cmp2]]
 // CHECK:   ret i1 %[[and1]]
 // CHECK: }
+
+// Pass this large type indirectly.
+// X64-LABEL: define zeroext i1 @"\01?nullTestDataUnspecified@@
+// X64:             ({ i32, i32, i32 }*)
 }
 
 bool nullTestFunctionUnspecified(void (Unspecified::*mp)()) {
@@ -268,6 +276,11 @@ int loadDataMemberPointerVirtual(Virtual *o, int Virtual::*memptr) {
 // CHECK:   %[[v12:.*]] = load i32* %[[v11]]
 // CHECK:   ret i32 %[[v12]]
 // CHECK: }
+
+// A two-field data memptr on x64 gets coerced to i64 and is passed in a
+// register or memory.
+// X64-LABEL: define i32 @"\01?loadDataMemberPointerVirtual@@YAHPEAUVirtual@@PEQ1@H@Z"
+// X64:             (%struct.Virtual* %o, i64 %memptr.coerce)
 }
 
 int loadDataMemberPointerUnspecified(Unspecified *o, int Unspecified::*memptr) {
@@ -309,6 +322,11 @@ void callMemberPointerSingle(Single *o, void (Single::*memptr)()) {
 // CHECK:   call x86_thiscallcc void %{{.*}}(%{{.*}} %{{.*}})
 // CHECK:   ret void
 // CHECK: }
+
+// X64-LABEL: define void @"\01?callMemberPointerSingle@@
+// X64:           (%struct.Single* %o, i8* %memptr)
+// X64:   bitcast i8* %{{[^ ]*}} to void (%struct.Single*)*
+// X64:   ret void
 }
 
 void callMemberPointerMultiple(Multiple *o, void (Multiple::*memptr)()) {
@@ -355,6 +373,9 @@ bool compareSingleFunctionMemptr(void (Single::*l)(), void (Single::*r)()) {
 // CHECK-NOT: icmp
 // CHECK:   ret i1 %[[r]]
 // CHECK: }
+
+// X64-LABEL: define zeroext i1 @"\01?compareSingleFunctionMemptr@@
+// X64:             (i8* %{{[^,]*}}, i8* %{{[^)]*}})
 }
 
 bool compareNeqSingleFunctionMemptr(void (Single::*l)(), void (Single::*r)()) {
@@ -390,6 +411,9 @@ bool unspecFuncMemptrEq(void (Unspecified::*l)(), void (Unspecified::*r)()) {
 // CHECK:   %{{.*}} = and i1 %[[bits_or_null]], %[[cmp0]]
 // CHECK:   ret i1 %{{.*}}
 // CHECK: }
+
+// X64-LABEL: define zeroext i1 @"\01?unspecFuncMemptrEq@@
+// X64:             ({ i8*, i32, i32, i32 }*, { i8*, i32, i32, i32 }*)
 }
 
 bool unspecFuncMemptrNeq(void (Unspecified::*l)(), void (Unspecified::*r)()) {
@@ -432,6 +456,9 @@ bool unspecDataMemptrEq(int Unspecified::*l, int Unspecified::*r) {
 // CHECK:   and i1
 // CHECK:   ret i1
 // CHECK: }
+
+// X64-LABEL: define zeroext i1 @"\01?unspecDataMemptrEq@@
+// X64:             ({ i32, i32, i32 }*, { i32, i32, i32 }*)
 }
 
 void (Multiple::*convertB2FuncToMultiple(void (B2::*mp)()))() {
@@ -557,3 +584,38 @@ int *load_data(A *a, int A::*mp) {
 }
 
 }
+
+namespace Test4 {
+
+struct A        { virtual void f(); };
+struct B        { virtual void g(); };
+struct C : A, B { virtual void g(); };
+
+void (C::*getmp())() {
+  return &C::g;
+}
+// CHECK-LABEL: define i64 @"\01?getmp@Test4@@YAP8C@1@AEXXZXZ"()
+// CHECK: store { i8*, i32 } { i8* bitcast (void (i8*)* @"\01??_9C@Test4@@$BA@AE" to i8*), i32 4 }, { i8*, i32 }* %{{.*}}
+//
+
+// CHECK-LABEL: define linkonce_odr x86_thiscallcc void @"\01??_9C@Test4@@$BA@AE"(i8*)
+// CHECK-NOT:  getelementptr
+// CHECK:  load void (i8*)*** %{{.*}}
+// CHECK:  getelementptr inbounds void (i8*)** %{{.*}}, i64 0
+// CHECK-NOT:  getelementptr
+// CHECK:  call x86_thiscallcc void %
+
+}
+
+#else
+struct __virtual_inheritance A;
+#ifdef MEMFUN
+int foo(A *a, int (A::*mp)()) {
+    return (a->*mp)(); // expected-error{{requires a complete class type}}
+}
+#else
+int foo(A *a, int A::*mp) {
+    return a->*mp; // expected-error{{requires a complete class type}}
+}
+#endif
+#endif

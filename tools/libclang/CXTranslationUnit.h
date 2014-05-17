@@ -14,8 +14,8 @@
 #ifndef LLVM_CLANG_CXTRANSLATIONUNIT_H
 #define LLVM_CLANG_CXTRANSLATIONUNIT_H
 
-#include "CXString.h"
 #include "CLog.h"
+#include "CXString.h"
 #include "clang-c/Index.h"
 
 namespace clang {
@@ -45,6 +45,10 @@ static inline ASTUnit *getASTUnit(CXTranslationUnit TU) {
     return 0;
   return TU->TheASTUnit;
 }
+
+/// \returns true if the ASTUnit has a diagnostic about the AST file being
+/// corrupted.
+bool isASTReadError(ASTUnit *AU);
 
 static inline bool isNotUsableTU(CXTranslationUnit TU) {
   return !TU;

@@ -284,6 +284,10 @@ bool Preprocessor::HandleEndOfFile(Token &Result, bool isEndOfMacro) {
       if (const FileEntry *FE =
             SourceMgr.getFileEntryForID(CurPPLexer->getFileID())) {
         HeaderInfo.SetFileControllingMacro(FE, ControllingMacro);
+        if (MacroInfo *MI =
+              getMacroInfo(const_cast<IdentifierInfo*>(ControllingMacro))) {
+          MI->UsedForHeaderGuard = true;
+        }
         if (const IdentifierInfo *DefinedMacro =
               CurPPLexer->MIOpt.GetDefinedMacro()) {
           if (!ControllingMacro->hasMacroDefinition() &&
@@ -427,11 +431,15 @@ bool Preprocessor::HandleEndOfFile(Token &Result, bool isEndOfMacro) {
   if (!isIncrementalProcessingEnabled())
     CurPPLexer = 0;
 
-  // This is the end of the top-level file. 'WarnUnusedMacroLocs' has collected
-  // all macro locations that we need to warn because they are not used.
-  for (WarnUnusedMacroLocsTy::iterator
-         I=WarnUnusedMacroLocs.begin(), E=WarnUnusedMacroLocs.end(); I!=E; ++I)
-    Diag(*I, diag::pp_macro_not_used);
+  if (TUKind == TU_Complete) {
+    // This is the end of the top-level file. 'WarnUnusedMacroLocs' has
+    // collected all macro locations that we need to warn because they are not
+    // used.
+    for (WarnUnusedMacroLocsTy::iterator
+           I=WarnUnusedMacroLocs.begin(), E=WarnUnusedMacroLocs.end();
+           I!=E; ++I)
+      Diag(*I, diag::pp_macro_not_used);
+  }
 
   // If we are building a module that has an umbrella header, make sure that
   // each of the headers within the directory covered by the umbrella header
@@ -520,7 +528,7 @@ bool Preprocessor::HandleEndOfTokenLexer(Token &Result) {
   if (NumCachedTokenLexers == TokenLexerCacheSize)
     CurTokenLexer.reset();
   else
-    TokenLexerCache[NumCachedTokenLexers++] = CurTokenLexer.take();
+    TokenLexerCache[NumCachedTokenLexers++] = CurTokenLexer.release();
 
   // Handle this like a #include file being popped off the stack.
   return HandleEndOfFile(Result, true);
@@ -537,7 +545,7 @@ void Preprocessor::RemoveTopOfLexerStack() {
     if (NumCachedTokenLexers == TokenLexerCacheSize)
       CurTokenLexer.reset();
     else
-      TokenLexerCache[NumCachedTokenLexers++] = CurTokenLexer.take();
+      TokenLexerCache[NumCachedTokenLexers++] = CurTokenLexer.release();
   }
 
   PopIncludeMacroStack();

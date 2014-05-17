@@ -21,6 +21,7 @@
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/StmtCXX.h"
+#include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/TargetInfo.h"
@@ -42,6 +43,12 @@
 #include "llvm/Support/CrashRecoveryContext.h"
 using namespace clang;
 using namespace sema;
+
+SourceLocation Sema::getLocForEndOfToken(SourceLocation Loc, unsigned Offset) {
+  return Lexer::getLocForEndOfToken(Loc, Offset, SourceMgr, LangOpts);
+}
+
+ModuleLoader &Sema::getModuleLoader() const { return PP.getModuleLoader(); }
 
 PrintingPolicy Sema::getPrintingPolicy(const ASTContext &Context,
                                        const Preprocessor &PP) {
@@ -76,7 +83,11 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
     CollectStats(false), CodeCompleter(CodeCompleter),
     CurContext(0), OriginalLexicalContext(0),
     PackContext(0), MSStructPragmaOn(false),
-    MSPointerToMemberRepresentationMethod(PPTMK_BestCase), VisContext(0),
+    MSPointerToMemberRepresentationMethod(
+        LangOpts.getMSPointerToMemberRepresentationMethod()),
+    VtorDispModeStack(1, MSVtorDispAttr::Mode(LangOpts.VtorDispMode)),
+    DataSegStack(nullptr), BSSSegStack(nullptr), ConstSegStack(nullptr),
+    CodeSegStack(nullptr), VisContext(0),
     IsBuildingRecoveryCallExpr(false),
     ExprNeedsCleanups(false), LateTemplateParser(0), OpaqueParser(0),
     IdResolver(pp), StdInitializerList(0), CXXTypeInfoDecl(0), MSVCGuidDecl(0),
@@ -86,7 +97,7 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
     NSDictionaryDecl(0), DictionaryWithObjectsMethod(0),
     GlobalNewDeleteDeclared(false),
     TUKind(TUKind),
-    NumSFINAEErrors(0), InFunctionDeclarator(0),
+    NumSFINAEErrors(0),
     AccessCheckingSFINAE(false), InNonInstantiationSFINAEContext(false),
     NonInstantiationEntries(0), ArgumentPackSubstitutionIndex(-1),
     CurrentInstantiationScope(0), DisableTypoCorrection(false),
@@ -140,7 +151,7 @@ void Sema::Initialize() {
     ExternalSema->InitializeSema(*this);
 
   // Initialize predefined 128-bit integer types, if needed.
-  if (PP.getTargetInfo().hasInt128Type()) {
+  if (Context.getTargetInfo().hasInt128Type()) {
     // If either of the 128-bit integer types are unavailable to name lookup,
     // define them now.
     DeclarationName Int128 = &Context.Idents.get("__int128_t");
@@ -205,10 +216,7 @@ void Sema::Initialize() {
 }
 
 Sema::~Sema() {
-  for (LateParsedTemplateMapT::iterator I = LateParsedTemplateMap.begin(),
-                                        E = LateParsedTemplateMap.end();
-       I != E; ++I)
-    delete I->second;
+  llvm::DeleteContainerSeconds(LateParsedTemplateMap);
   if (PackContext) FreePackedContext();
   if (VisContext) FreeVisContext();
   // Kill all the active scopes.
@@ -409,25 +417,6 @@ static bool ShouldRemoveFromUnused(Sema *SemaRef, const DeclaratorDecl *D) {
   return false;
 }
 
-namespace {
-  struct SortUndefinedButUsed {
-    const SourceManager &SM;
-    explicit SortUndefinedButUsed(SourceManager &SM) : SM(SM) {}
-
-    bool operator()(const std::pair<NamedDecl *, SourceLocation> &l,
-                    const std::pair<NamedDecl *, SourceLocation> &r) const {
-      if (l.second.isValid() && !r.second.isValid())
-        return true;
-      if (!l.second.isValid() && r.second.isValid())
-        return false;
-      if (l.second != r.second)
-        return SM.isBeforeInTranslationUnit(l.second, r.second);
-      return SM.isBeforeInTranslationUnit(l.first->getLocation(),
-                                          r.first->getLocation());
-    }
-  };
-}
-
 /// Obtains a sorted list of functions that are undefined but ODR-used.
 void Sema::getUndefinedButUsed(
     SmallVectorImpl<std::pair<NamedDecl *, SourceLocation> > &Undefined) {
@@ -460,8 +449,19 @@ void Sema::getUndefinedButUsed(
 
   // Sort (in order of use site) so that we're not dependent on the iteration
   // order through an llvm::DenseMap.
+  SourceManager &SM = Context.getSourceManager();
   std::sort(Undefined.begin(), Undefined.end(),
-            SortUndefinedButUsed(Context.getSourceManager()));
+            [&SM](const std::pair<NamedDecl *, SourceLocation> &l,
+                  const std::pair<NamedDecl *, SourceLocation> &r) {
+    if (l.second.isValid() && !r.second.isValid())
+      return true;
+    if (!l.second.isValid() && r.second.isValid())
+      return false;
+    if (l.second != r.second)
+      return SM.isBeforeInTranslationUnit(l.second, r.second);
+    return SM.isBeforeInTranslationUnit(l.first->getLocation(),
+                                        r.first->getLocation());
+  });
 }
 
 /// checkUndefinedButUsed - Check for undefined objects with internal linkage
@@ -607,7 +607,8 @@ void Sema::ActOnEndOfTranslationUnit() {
          I != E; ++I) {
       assert(!(*I)->isDependentType() &&
              "Should not see dependent types here!");
-      if (const CXXMethodDecl *KeyFunction = Context.getCurrentKeyFunction(*I)) {
+      if (const CXXMethodDecl *KeyFunction =
+              Context.getCurrentKeyFunction(*I)) {
         const FunctionDecl *Definition = 0;
         if (KeyFunction->hasBody(Definition))
           MarkVTableUsed(Definition->getLocation(), *I, true);
@@ -628,7 +629,15 @@ void Sema::ActOnEndOfTranslationUnit() {
     // so it will find some names that are not required to be found. This is
     // valid, but we could do better by diagnosing if an instantiation uses a
     // name that was not visible at its first point of instantiation.
+    if (ExternalSource) {
+      // Load pending instantiations from the external source.
+      SmallVector<PendingImplicitInstantiation, 4> Pending;
+      ExternalSource->ReadPendingInstantiations(Pending);
+      PendingInstantiations.insert(PendingInstantiations.begin(),
+                                   Pending.begin(), Pending.end());
+    }
     PerformPendingInstantiations();
+
     CheckDelayedMemberExceptionSpecs();
   }
 
@@ -1077,19 +1086,12 @@ void Sema::PopFunctionScopeInfo(const AnalysisBasedWarnings::Policy *WP,
   // Issue any analysis-based warnings.
   if (WP && D)
     AnalysisWarnings.IssueWarnings(*WP, Scope, D, blkExpr);
-  else {
-    for (SmallVectorImpl<sema::PossiblyUnreachableDiag>::iterator
-         i = Scope->PossiblyUnreachableDiags.begin(),
-         e = Scope->PossiblyUnreachableDiags.end();
-         i != e; ++i) {
-      const sema::PossiblyUnreachableDiag &D = *i;
-      Diag(D.Loc, D.PD);
-    }
-  }
+  else
+    for (const auto &PUD : Scope->PossiblyUnreachableDiags)
+      Diag(PUD.Loc, PUD.PD);
 
-  if (FunctionScopes.back() != Scope) {
+  if (FunctionScopes.back() != Scope)
     delete Scope;
-  }
 }
 
 void Sema::PushCompoundScope() {
@@ -1113,14 +1115,30 @@ BlockScopeInfo *Sema::getCurBlock() {
   if (FunctionScopes.empty())
     return 0;
 
-  return dyn_cast<BlockScopeInfo>(FunctionScopes.back());
+  auto CurBSI = dyn_cast<BlockScopeInfo>(FunctionScopes.back());
+  if (CurBSI && CurBSI->TheDecl &&
+      !CurBSI->TheDecl->Encloses(CurContext)) {
+    // We have switched contexts due to template instantiation.
+    assert(!ActiveTemplateInstantiations.empty());
+    return nullptr;
+  }
+
+  return CurBSI;
 }
 
 LambdaScopeInfo *Sema::getCurLambda() {
   if (FunctionScopes.empty())
     return 0;
 
-  return dyn_cast<LambdaScopeInfo>(FunctionScopes.back());
+  auto CurLSI = dyn_cast<LambdaScopeInfo>(FunctionScopes.back());
+  if (CurLSI && CurLSI->Lambda &&
+      !CurLSI->Lambda->Encloses(CurContext)) {
+    // We have switched contexts due to template instantiation.
+    assert(!ActiveTemplateInstantiations.empty());
+    return nullptr;
+  }
+
+  return CurLSI;
 }
 // We have a generic lambda if we parsed auto parameters, or we have 
 // an associated template parameter list.
