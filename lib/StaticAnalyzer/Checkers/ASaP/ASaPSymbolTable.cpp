@@ -576,7 +576,8 @@ static void emitConstraintSolution(EffectInclusionConstraint *EC,
         << ": " << Solution;
 
   StringRef Str(StrOS.str());
-  helperEmitStatementWarning(*SymbolTable::VB.BR,
+  helperEmitStatementWarning(SymbolTable::VB.Checker,
+                             *SymbolTable::VB.BR,
                              SymbolTable::VB.AC,
                              S, Func, Str, BugName, false);
 
