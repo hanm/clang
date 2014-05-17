@@ -81,6 +81,9 @@ private:
   void typecheckCXXConstructExpr(VarDecl *D, CXXConstructExpr *Exp,
                                  SubstitutionVector &SubV);
 
+  void buildSubstitutionVector(const ASaPType *Typ,
+                               const ParameterVector *ParamV,
+                               SubstitutionVector &SubV);
   void buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
                                     const ParameterSet &ParamSet,
                                     SubstitutionVector &SubV);
