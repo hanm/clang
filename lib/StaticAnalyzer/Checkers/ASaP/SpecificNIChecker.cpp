@@ -20,6 +20,7 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/Expr.h"
+#include "clang/AST/ExprCXX.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 
 #include "ASaPSymbolTable.h"
@@ -51,7 +52,8 @@ static void emitNICheckNotImplemented(const Stmt *S,
   else
     Name = "";
   StringRef Str(Name);
-  helperEmitStatementWarning(*SymbolTable::VB.BR,
+  helperEmitStatementWarning(SymbolTable::VB.Checker,
+                             *SymbolTable::VB.BR,
                              SymbolTable::VB.AC,
                              S, FunD, Str, BugName, false);
 }
@@ -65,7 +67,8 @@ static void emitUnexpectedTypeOfArgumentPassed(const Stmt *S,
   else
     Name = "";
   StringRef Str(Name);
-  helperEmitStatementWarning(*SymbolTable::VB.BR,
+  helperEmitStatementWarning(SymbolTable::VB.Checker,
+                             *SymbolTable::VB.BR,
                              SymbolTable::VB.AC,
                              S, FunD, Str, BugName, false);
 }
@@ -79,7 +82,8 @@ static void emitInterferingEffects(const Stmt *S,
   OS << "{" << ES1.toString() << "} interferes with {"
      << ES2.toString() << "}";
   StringRef Str(OS.str());
-  helperEmitStatementWarning(*SymbolTable::VB.BR,
+  helperEmitStatementWarning(SymbolTable::VB.Checker,
+                             *SymbolTable::VB.BR,
                              SymbolTable::VB.AC,
                              S, 0, Str, BugName, false);
 }
@@ -95,7 +99,8 @@ static void emitEffectsNotCoveredWarning(const Stmt *S,
     OS << ": " << DefES->toString();
   }
   StringRef BugName(OS.str());
-  helperEmitStatementWarning(*SymbolTable::VB.BR,
+  helperEmitStatementWarning(SymbolTable::VB.Checker,
+                             *SymbolTable::VB.BR,
                              SymbolTable::VB.AC,
                              S, D, Str, BugName);
 }

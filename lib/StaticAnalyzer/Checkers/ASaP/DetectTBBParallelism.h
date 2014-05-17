@@ -26,6 +26,7 @@ namespace asap {
 class DetectTBBParallelism :
   public RecursiveASTVisitor<DetectTBBParallelism> {
 
+  const CheckerBase *Checker;
   BugReporter &BR;
   ASTContext &Ctx;
   raw_ostream &OS;

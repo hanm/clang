@@ -29,6 +29,7 @@ class EffectConstraintVisitor
     : public ASaPStmtVisitor<EffectConstraintVisitor> {
   typedef ASaPStmtVisitor<EffectConstraintVisitor> BaseClass;
 
+  const CheckerBase *Checker;
   EffectVector *EffectsTmp;
   EffectInclusionConstraint* EC;
 

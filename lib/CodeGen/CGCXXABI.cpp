@@ -28,6 +28,41 @@ void CGCXXABI::ErrorUnsupportedABI(CodeGenFunction &CGF, StringRef S) {
     << S;
 }
 
+bool CGCXXABI::canCopyArgument(const CXXRecordDecl *RD) const {
+  // If RD has a non-trivial move or copy constructor, we cannot copy the
+  // argument.
+  if (RD->hasNonTrivialCopyConstructor() || RD->hasNonTrivialMoveConstructor())
+    return false;
+
+  // If RD has a non-trivial destructor, we cannot copy the argument.
+  if (RD->hasNonTrivialDestructor())
+    return false;
+
+  // We can only copy the argument if there exists at least one trivial,
+  // non-deleted copy or move constructor.
+  // FIXME: This assumes that all lazily declared copy and move constructors are
+  // not deleted.  This assumption might not be true in some corner cases.
+  bool CopyDeleted = false;
+  bool MoveDeleted = false;
+  for (const CXXConstructorDecl *CD : RD->ctors()) {
+    if (CD->isCopyConstructor() || CD->isMoveConstructor()) {
+      assert(CD->isTrivial());
+      // We had at least one undeleted trivial copy or move ctor.  Return
+      // directly.
+      if (!CD->isDeleted())
+        return true;
+      if (CD->isCopyConstructor())
+        CopyDeleted = true;
+      else
+        MoveDeleted = true;
+    }
+  }
+
+  // If all trivial copy and move constructors are deleted, we cannot copy the
+  // argument.
+  return !(CopyDeleted && MoveDeleted);
+}
+
 llvm::Constant *CGCXXABI::GetBogusMemberPointer(QualType T) {
   return llvm::Constant::getNullValue(CGM.getTypes().ConvertType(T));
 }
@@ -37,10 +72,9 @@ CGCXXABI::ConvertMemberPointerType(const MemberPointerType *MPT) {
   return CGM.getTypes().ConvertType(CGM.getContext().getPointerDiffType());
 }
 
-llvm::Value *CGCXXABI::EmitLoadOfMemberFunctionPointer(CodeGenFunction &CGF,
-                                                       llvm::Value *&This,
-                                                       llvm::Value *MemPtr,
-                                                 const MemberPointerType *MPT) {
+llvm::Value *CGCXXABI::EmitLoadOfMemberFunctionPointer(
+    CodeGenFunction &CGF, const Expr *E, llvm::Value *&This,
+    llvm::Value *MemPtr, const MemberPointerType *MPT) {
   ErrorUnsupportedABI(CGF, "calls through member pointers");
 
   const FunctionProtoType *FPT = 
@@ -52,10 +86,10 @@ llvm::Value *CGCXXABI::EmitLoadOfMemberFunctionPointer(CodeGenFunction &CGF,
   return llvm::Constant::getNullValue(FTy->getPointerTo());
 }
 
-llvm::Value *CGCXXABI::EmitMemberDataPointerAddress(CodeGenFunction &CGF,
-                                                    llvm::Value *Base,
-                                                    llvm::Value *MemPtr,
-                                              const MemberPointerType *MPT) {
+llvm::Value *
+CGCXXABI::EmitMemberDataPointerAddress(CodeGenFunction &CGF, const Expr *E,
+                                       llvm::Value *Base, llvm::Value *MemPtr,
+                                       const MemberPointerType *MPT) {
   ErrorUnsupportedABI(CGF, "loads of member pointers");
   llvm::Type *Ty = CGF.ConvertType(MPT->getPointeeType())->getPointerTo();
   return llvm::Constant::getNullValue(Ty);
@@ -281,12 +315,41 @@ void CGCXXABI::EmitThreadLocalInitFuncs(
     llvm::Function *InitFunc) {
 }
 
-LValue CGCXXABI::EmitThreadLocalDeclRefExpr(CodeGenFunction &CGF,
-                                          const DeclRefExpr *DRE) {
+LValue CGCXXABI::EmitThreadLocalVarDeclLValue(CodeGenFunction &CGF,
+                                              const VarDecl *VD,
+                                              QualType LValType) {
   ErrorUnsupportedABI(CGF, "odr-use of thread_local global");
   return LValue();
 }
 
 bool CGCXXABI::NeedsVTTParameter(GlobalDecl GD) {
   return false;
+}
+
+/// What sort of uniqueness rules should we use for the RTTI for the
+/// given type?
+CGCXXABI::RTTIUniquenessKind
+CGCXXABI::classifyRTTIUniqueness(QualType CanTy,
+                                 llvm::GlobalValue::LinkageTypes Linkage) {
+  if (shouldRTTIBeUnique())
+    return RUK_Unique;
+
+  // It's only necessary for linkonce_odr or weak_odr linkage.
+  if (Linkage != llvm::GlobalValue::LinkOnceODRLinkage &&
+      Linkage != llvm::GlobalValue::WeakODRLinkage)
+    return RUK_Unique;
+
+  // It's only necessary with default visibility.
+  if (CanTy->getVisibility() != DefaultVisibility)
+    return RUK_Unique;
+
+  // If we're not required to publish this symbol, hide it.
+  if (Linkage == llvm::GlobalValue::LinkOnceODRLinkage)
+    return RUK_NonUniqueHidden;
+
+  // If we're required to publish this symbol, as we might be under an
+  // explicit instantiation, leave it with default visibility but
+  // enable string-comparisons.
+  assert(Linkage == llvm::GlobalValue::WeakODRLinkage);
+  return RUK_NonUniqueVisible;
 }

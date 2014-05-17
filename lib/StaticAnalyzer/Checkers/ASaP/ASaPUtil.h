@@ -32,6 +32,7 @@ extern raw_ostream &OSv2;
 
 
 struct VisitorBundle {
+  const CheckerBase *Checker;
   BugReporter *BR;
   ASTContext *Ctx;
   AnalysisManager *Mgr;
@@ -49,14 +50,16 @@ enum Trivalent{
 };
 
 /// \brief Issues Warning: '<str>': <bugName> on Declaration.
-void helperEmitDeclarationWarning(BugReporter &BR,
+void helperEmitDeclarationWarning(const CheckerBase *Checker,
+                                  BugReporter &BR,
                                   const Decl *D,
                                   const StringRef &Str,
                                   const StringRef &BugName,
                                   bool AddQuotes = true);
 
 /// \brief Issues Warning: '<str>': <bugName> on Attribute.
-void helperEmitAttributeWarning(BugReporter &BR,
+void helperEmitAttributeWarning(const CheckerBase *Checker,
+                                BugReporter &BR,
                                 const Decl *D,
                                 const Attr *A,
                                 const StringRef &Str,
@@ -64,7 +67,8 @@ void helperEmitAttributeWarning(BugReporter &BR,
                                 bool AddQuotes = true);
 
 /// \brief Issues Warning: '<str>' <bugName> on Statement
-void helperEmitStatementWarning(BugReporter &BR,
+void helperEmitStatementWarning(const CheckerBase *Checker,
+                                BugReporter &BR,
                                 AnalysisDeclContext *AC,
                                 const Stmt *S,
                                 const Decl *D,
@@ -72,7 +76,8 @@ void helperEmitStatementWarning(BugReporter &BR,
                                 const StringRef &BugName,
                                 bool AddQuotes = true);
 
-void helperEmitInvalidAssignmentWarning(BugReporter &BR,
+void helperEmitInvalidAssignmentWarning(const CheckerBase *Checker,
+                                        BugReporter &BR,
                                         AnalysisDeclContext *AC,
                                         ASTContext &Ctx,
                                         const Stmt *S,

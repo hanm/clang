@@ -31,10 +31,12 @@ namespace ento {
   class BugReporter;
   class PathDiagnosticLocation;
   class AnalysisManager;
+  class CheckerBase;
 }
 using ento::PathDiagnosticLocation;
 using ento::BugReporter;
 using ento::AnalysisManager;
+using ento::CheckerBase;
 
 class AnalysisDeclContext;
 class ASTContext;

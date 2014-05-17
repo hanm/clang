@@ -30,9 +30,10 @@ namespace {
 // Diagnostic classes.
 enum {
   CLASS_NOTE       = 0x01,
-  CLASS_WARNING    = 0x02,
-  CLASS_EXTENSION  = 0x03,
-  CLASS_ERROR      = 0x04
+  CLASS_REMARK     = 0x02,
+  CLASS_WARNING    = 0x03,
+  CLASS_EXTENSION  = 0x04,
+  CLASS_ERROR      = 0x05
 };
 
 struct StaticDiagInfoRec {
@@ -108,7 +109,7 @@ static const StaticDiagInfoRec *GetDiagInfo(unsigned DiagID) {
   // Out of bounds diag. Can't be in the table.
   using namespace diag;
   if (DiagID >= DIAG_UPPER_LIMIT || DiagID <= DIAG_START_COMMON)
-    return 0;
+    return nullptr;
 
   // Compute the index of the requested diagnostic in the static table.
   // 1. Add the number of diagnostics in each category preceding the
@@ -138,7 +139,7 @@ CATEGORY(ANALYSIS, SEMA)
 
   // Avoid out of bounds reads.
   if (ID + Offset >= StaticDiagInfoSize)
-    return 0;
+    return nullptr;
 
   assert(ID < StaticDiagInfoSize && Offset < StaticDiagInfoSize);
 
@@ -147,7 +148,7 @@ CATEGORY(ANALYSIS, SEMA)
   // happen when this function is called with an ID that points into a hole in
   // the diagID space.
   if (Found->DiagID != DiagID)
-    return 0;
+    return nullptr;
   return Found;
 }
 
@@ -215,7 +216,7 @@ static const StaticDiagCategoryRec CategoryNameTable[] = {
 #define CATEGORY(X, ENUM) { X, STR_SIZE(X, uint8_t) },
 #include "clang/Basic/DiagnosticGroups.inc"
 #undef GET_CATEGORY_TABLE
-  { 0, 0 }
+  { nullptr, 0 }
 };
 
 /// getNumberOfCategories - Return the number of categories
@@ -300,9 +301,7 @@ namespace clang {
 // Common Diagnostic implementation
 //===----------------------------------------------------------------------===//
 
-DiagnosticIDs::DiagnosticIDs() {
-  CustomDiagInfo = 0;
-}
+DiagnosticIDs::DiagnosticIDs() { CustomDiagInfo = nullptr; }
 
 DiagnosticIDs::~DiagnosticIDs() {
   delete CustomDiagInfo;
@@ -315,7 +314,7 @@ DiagnosticIDs::~DiagnosticIDs() {
 /// \param FormatString A fixed diagnostic format string that will be hashed and
 /// mapped to a unique DiagID.
 unsigned DiagnosticIDs::getCustomDiagID(Level L, StringRef FormatString) {
-  if (CustomDiagInfo == 0)
+  if (!CustomDiagInfo)
     CustomDiagInfo = new diag::CustomDiagInfo();
   return CustomDiagInfo->getOrCreateDiagID(L, FormatString, *this);
 }
@@ -358,6 +357,11 @@ bool DiagnosticIDs::isDefaultMappingAsError(unsigned DiagID) {
     return false;
 
   return GetDefaultDiagMappingInfo(DiagID).getMapping() == diag::MAP_ERROR;
+}
+
+bool DiagnosticIDs::isRemark(unsigned DiagID) {
+  return DiagID < diag::DIAG_UPPER_LIMIT &&
+         getBuiltinDiagClass(DiagID) == CLASS_REMARK;
 }
 
 /// getDescription - Given a diagnostic ID, return a description of the
@@ -409,6 +413,9 @@ DiagnosticIDs::getDiagnosticLevel(unsigned DiagID, unsigned DiagClass,
   case diag::MAP_IGNORE:
     Result = DiagnosticIDs::Ignored;
     break;
+  case diag::MAP_REMARK:
+    Result = DiagnosticIDs::Remark;
+    break;
   case diag::MAP_WARNING:
     Result = DiagnosticIDs::Warning;
     break;
@@ -424,6 +431,11 @@ DiagnosticIDs::getDiagnosticLevel(unsigned DiagID, unsigned DiagClass,
   if (Diag.EnableAllWarnings && Result == DiagnosticIDs::Ignored &&
       !MappingInfo.isUser())
     Result = DiagnosticIDs::Warning;
+
+  // Diagnostics of class REMARK are either printed as remarks or in case they
+  // have been added to -Werror they are printed as errors.
+  if (DiagClass == CLASS_REMARK && Result == DiagnosticIDs::Warning)
+    Result = DiagnosticIDs::Remark;
 
   // Ignore -pedantic diagnostics inside __extension__ blocks.
   // (The diagnostics controlled by -pedantic are the extension diagnostics

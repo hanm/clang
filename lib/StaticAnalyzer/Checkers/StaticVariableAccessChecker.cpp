@@ -363,6 +363,7 @@ namespace {
 
   typedef RecursiveASTVisitor<ASTTraverser> BaseClass;
 
+  const CheckerBase *Checker;
   ento::BugReporter& BR;
   ASTContext& Ctx;
   AnalysisDeclContext* AC;
@@ -385,10 +386,12 @@ public:
   };
 
   explicit ASTTraverser(
-    ento::BugReporter& BR, ASTContext& ctx, 
+    const CheckerBase *Checker,
+    ento::BugReporter& BR, ASTContext& ctx,
     AnalysisDeclContext* AC,
     TracingType tracingType
-  ) : BR(BR),
+  ) : Checker(Checker),
+      BR(BR),
       Ctx(ctx),
       AC(AC),
       IsTracingEnabled(tracingType==WITH_TRACING),
@@ -396,9 +399,9 @@ public:
 
   bool shouldVisitTemplateInstantiations() const { return true; }
 
-  static const FunctionType* getFunctionType(QualType CalleeType, 
+  static const FunctionType* getFunctionType(QualType CalleeType,
       ASTContext& Context) {
-    QualType TY = CalleeType.getDesugaredType(Context); 
+    QualType TY = CalleeType.getDesugaredType(Context);
 
     /// Handle the pointer to function cases.
     while (true) {
@@ -419,7 +422,7 @@ public:
     assert(TY->isFunctionType() && "Type must be a function or a pointer to function!");
     return TY->getAs<FunctionType>();
   }
-  
+
   template <class ASTNodeType>
   void checkValueDeclForStaticDuration(ASTNodeType* Node, ValueDecl* D) {
     if (VarDecl* VD = dyn_cast<VarDecl>(D)) {
@@ -441,9 +444,9 @@ public:
       assert(
         (
           // We don't care about function declarations
-          isa<FunctionDecl>(D) ||     
+          isa<FunctionDecl>(D) ||
           // We don't care about enumerants.
-          isa<EnumConstantDecl>(D) || 
+          isa<EnumConstantDecl>(D) ||
           // FieldDecl represents non-static data members of classes.
           isa<FieldDecl>(D)
         ) && "Unknown ValueDecl type.");
@@ -466,8 +469,8 @@ public:
 #endif
 
       // report bug
-      SourceRange SR = 
-        SourceRangeOverride.getBegin().isValid() ? 
+      SourceRange SR =
+        SourceRangeOverride.getBegin().isValid() ?
         SourceRangeOverride : Node->getSourceRange();
 
       // In some cases, the source range is invalid and the
@@ -476,13 +479,13 @@ public:
       if (!SR.getEnd().isValid()) SR.setEnd(SR.getBegin());
 
 			CurrentBugDescription = GenerateDiagnosticDescriptionFromErrorKind(
-        StaticVarWrite, 
+        StaticVarWrite,
         D->getQualifiedNameAsString());
 			const char *desc = CurrentBugDescription.c_str();
 
       PathDiagnosticLocation VDLoc =
         PathDiagnosticLocation::createBegin(Node, BR.getSourceManager(), AC);
-      BR.EmitBasicReport(D, desc, "static variable access", desc,
+      BR.EmitBasicReport(D, Checker, desc, "static variable access", desc,
         VDLoc, SR);
 
     }
@@ -600,7 +603,7 @@ public:
     TraceTraversalGuard traceGuard(
       *this, "Decl", D->getDeclKindName(), D,
       ND ? ND->getQualifiedNameAsString() : "");
-    
+
     if (IsTracingEnabled) {
       // BaseClass::TraverseDecl() ignores implicit declarations because
       // as a syntax visitor, one should ignore declarations for
@@ -632,12 +635,12 @@ public:
         llvm::errs() << "isTypeDependent = " << E->isTypeDependent() << "\n";
       }
     }
-    
+
     // Skip template dependent expressions since we can't reliably
     // analyse them. These template dependent expressions will be
     // checked once they are instanted or specialized.
     if (E && E->isTypeDependent()) return true;
-    
+
     return BaseClass::TraverseStmt(S);
   }
 
@@ -712,7 +715,7 @@ public:
   bool VisitCXXBindTemporaryExpr(CXXBindTemporaryExpr* S) {
     assert(S->getType()->isStructureOrClassType() &&
            "Temporary objects should only be created for instances of a class");
-    
+
     return true;
   }
 
@@ -767,7 +770,7 @@ public:
 
     return true;
   }
-  
+
   bool TraverseThisPointerCallHelper( Expr* Object, QualType CalleeType,
                                       OverloadedOperatorKind overloadedOp) {
     TraceTraversalGuard traceGuard(*this, "CallHelper", "ThisPointer", Object);
@@ -830,7 +833,7 @@ public:
     if (Callee->getType()->isSpecificPlaceholderType(BuiltinType::BoundMember)) {
       CalleeType = clang::Expr::findBoundMemberType(Callee);
     }
-    
+
     const FunctionType* FT = getFunctionType(CalleeType, Ctx);
 
     const unsigned numArgs = S->getNumArgs();
@@ -840,7 +843,7 @@ public:
       const unsigned numParams = FTProto->getNumParams();
 
       unsigned paramIdx = 0;
-      
+
       if (overloadedOp == OO_Equal || overloadedOp == OO_Arrow ||
           overloadedOp == OO_Call  || overloadedOp == OO_Subscript) {
         // These overloaded operators can only be declared as member
@@ -848,7 +851,7 @@ public:
         // operator argument as a "this" pointer. Note that this first
         // argument will not be part of the function
         // prototype. Note also to some of these overloaded operators
-        // accept variable length argument list. 
+        // accept variable length argument list.
         TraverseThisPointerCallHelper(
           S->getArg(argIdx), CalleeType, overloadedOp);
         ++argIdx;
@@ -869,14 +872,14 @@ public:
           Expr* Object = S->getArg(argIdx);
           QualType ObjectType = Object->getType();
           TraverseObjectCallHelper(Object, ObjectType.isConstQualified(), overloadedOp);
-          
+
           assert(numParams == numArgs);
           ++paramIdx;
         }
 
         ++argIdx;
       }
-      
+
       for (; paramIdx<numParams; ++paramIdx, ++argIdx) {
         Expr* Arg = S->getArg(argIdx);
         QualType ParamType = FTProto->getParamType(paramIdx);
@@ -890,7 +893,7 @@ public:
       QualType ArgType = Arg->getType();
       if (!TraverseBindingHelper(ArgType, Arg)) return false;
     }
-  
+
     return true;
   }
 
@@ -918,7 +921,7 @@ public:
       QualType ArgType = Arg->getType();
       if (!TraverseBindingHelper(ArgType, Arg)) return false;
     }
-  
+
     return true;
   }
 
@@ -960,7 +963,7 @@ public:
     // dependent of template type arguments. The delete expression
     // will be analyzed when the template is instantiated.
     if (Arg->isTypeDependent()) return true;
-    
+
     if (!WalkUpFromCXXDeleteExpr(S)) return false;
 
     // Always assume that invoking delete on static variable (of
@@ -1028,7 +1031,7 @@ public:
   TRAVERSE_BINOP_PTR_MEM(D, OO_None);
   TRAVERSE_BINOP_PTR_MEM(I, OO_ArrowStar);
 #undef TRAVERSE_BINOP_PTR_MEM
-  
+
 
   //==========================================================================
   // Traversals for checking the bindings of various types of variable
@@ -1042,8 +1045,8 @@ public:
     if (!TraverseDeclContextHelper(dyn_cast<DeclContext>(D))) return false;
     return true;
   }
-  
-  
+
+
   bool TraverseParmVarDecl(ParmVarDecl* D) {
     if (!WalkUpFromVarDecl(D)) return false;
     if (!TraverseDeclaratorHelper(D)) return false;
@@ -1057,12 +1060,12 @@ public:
         if (!TraverseBindingHelper(D->getType(), D->getDefaultArg())) return false;
       }
     }
-    
+
     if (!TraverseDeclContextHelper(dyn_cast<DeclContext>(D))) return false;
     return true;
   }
-  
-  
+
+
   bool TraverseCXXDefaultArgExpr(CXXDefaultArgExpr *S) {
     if (!WalkUpFromCXXDefaultArgExpr(S)) return false;
 
@@ -1077,7 +1080,7 @@ public:
 
     return TraverseBindingHelper(CurrentFunctionReturnType, S->getRetValue());
   }
-  
+
   //==========================================================================
   // Traversals for checking the bindings of various types of
   // assignment operators and unary operators with side-effects for
@@ -1141,7 +1144,8 @@ public:
 //===----------------------------------------------------------------------===//
 // Entry point for checks.
 //===----------------------------------------------------------------------===//
-static void TraverseAST(TranslationUnitDecl &TU, 
+static void TraverseAST(TranslationUnitDecl &TU,
+  const CheckerBase *Checker,
   AnalysisDeclContext* AC,
   ento::BugReporter &BR)
 {
@@ -1155,18 +1159,19 @@ static void TraverseAST(TranslationUnitDecl &TU,
 #endif
 
   ASTTraverser traverser(
-    BR, TU.getASTContext(), AC, EnableTracing ? ASTTraverser::WITH_TRACING :
-    ASTTraverser::WITHOUT_TRACING);
+    Checker, BR, TU.getASTContext(), AC,
+    EnableTracing ? ASTTraverser::WITH_TRACING
+                  : ASTTraverser::WITHOUT_TRACING);
   traverser.TraverseDecl(&TU);
 }
 
 namespace {
-class  StaticVariableAccessChecker 
+class  StaticVariableAccessChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
 
 public:
   void checkASTDecl(const TranslationUnitDecl* D, AnalysisManager& mgr, BugReporter &BR) const {
-    TraverseAST(*const_cast<TranslationUnitDecl*>(D), mgr.getAnalysisDeclContext(D), BR);
+    TraverseAST(*const_cast<TranslationUnitDecl*>(D), this, mgr.getAnalysisDeclContext(D), BR);
   }
 };
 }

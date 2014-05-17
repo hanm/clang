@@ -83,7 +83,7 @@ public:
     TranslationUnitDecl *TUDecl = const_cast<TranslationUnitDecl*>(TUDeclConst);
     ASTContext &Ctx = TUDecl->getASTContext();
     AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(TUDecl);
-    VisitorBundle VB = {&BR, &Ctx, &Mgr, AC, &os};
+    VisitorBundle VB = {this, &BR, &Ctx, &Mgr, AC, &os};
     SymbolTable::Initialize(VB);
 
     // initialize traverser

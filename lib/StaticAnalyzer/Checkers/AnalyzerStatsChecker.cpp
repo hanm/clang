@@ -8,8 +8,6 @@
 //===----------------------------------------------------------------------===//
 // This file reports various statistics about analyzer visitation.
 //===----------------------------------------------------------------------===//
-#define DEBUG_TYPE "StatsChecker"
-
 #include "ClangSACheckers.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/Basic/SourceManager.h"
@@ -25,6 +23,8 @@
 
 using namespace clang;
 using namespace ento;
+
+#define DEBUG_TYPE "StatsChecker"
 
 STATISTIC(NumBlocks,
           "The # of blocks in top level functions");
@@ -112,7 +112,7 @@ void AnalyzerStatsChecker::checkEndAnalysis(ExplodedGraph &G,
       << " | Empty WorkList: "
       << (Eng.hasEmptyWorkList() ? "yes" : "no");
 
-  B.EmitBasicReport(D, "Analyzer Statistics", "Internal Statistics",
+  B.EmitBasicReport(D, this, "Analyzer Statistics", "Internal Statistics",
                     output.str(), PathDiagnosticLocation(D, SM));
 
   // Emit warning for each block we bailed out on.
@@ -129,7 +129,7 @@ void AnalyzerStatsChecker::checkEndAnalysis(ExplodedGraph &G,
       outputI << "(" << NameOfRootFunction << ")" <<
                  ": The analyzer generated a sink at this point";
       B.EmitBasicReport(
-          D, "Sink Point", "Internal Statistics", outputI.str(),
+          D, this, "Sink Point", "Internal Statistics", outputI.str(),
           PathDiagnosticLocation::createBegin(CS->getStmt(), SM, LC));
     }
   }

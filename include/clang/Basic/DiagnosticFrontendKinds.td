@@ -29,7 +29,16 @@ def note_fe_backend_frame_larger_than: Note<"%0">, CatBackend;
 
 def warn_fe_backend_plugin: Warning<"%0">, CatBackend, InGroup<BackendPlugin>;
 def err_fe_backend_plugin: Error<"%0">, CatBackend;
+def remark_fe_backend_plugin: Remark<"%0">, CatBackend, InGroup<RemarkBackendPlugin>;
 def note_fe_backend_plugin: Note<"%0">, CatBackend;
+
+def remark_fe_backend_optimization_remark : Remark<"%0">, CatBackend,
+    InGroup<BackendOptimizationRemark>, DefaultRemark;
+def note_fe_backend_optimization_remark_missing_loc : Note<"use "
+  "-gline-tables-only -gcolumn-info to track source location information "
+  "for this optimization remark">;
+def note_fe_backend_optimization_remark_invalid_loc : Note<"could "
+  "not determine the original source location for %0:%1:%2">;
 
 def err_fe_invalid_code_complete_file : Error<
     "cannot locate code-completion file %0">, DefaultFatal;
@@ -151,6 +160,8 @@ def err_module_unavailable : Error<
   "module '%0' %select{is incompatible with|requires}1 feature '%2'">;
 def err_module_header_missing : Error<
   "%select{|umbrella }0header '%1' not found">;
+def err_module_cannot_create_includes : Error<
+  "cannot create includes file for module %0: %1">;
 def warn_module_config_macro_undef : Warning<
   "%select{definition|#undef}0 of configuration macro '%1' has no effect on "
   "the import of '%2'; pass '%select{-D%1=...|-U%1}0' on the command line "
@@ -158,4 +169,11 @@ def warn_module_config_macro_undef : Warning<
   InGroup<ConfigMacros>;
 def note_module_def_undef_here : Note<
   "macro was %select{defined|#undef'd}0 here">;
+def remark_module_build : Remark<"building module '%0' as '%1'">,
+  InGroup<DiagGroup<"module-build">>, DefaultIgnore;
+
+def err_missing_vfs_overlay_file : Error<
+  "virtual filesystem overlay file '%0' not found">, DefaultFatal;
+def err_invalid_vfs_overlay : Error<
+  "invalid virtual filesystem overlay file '%0'">, DefaultFatal;
 }

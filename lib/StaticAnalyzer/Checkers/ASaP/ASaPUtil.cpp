@@ -41,7 +41,8 @@ raw_ostream &OSv2 = llvm::nulls();
 
 using llvm::raw_string_ostream;
 
-void helperEmitDeclarationWarning(BugReporter &BR,
+void helperEmitDeclarationWarning(const CheckerBase *Checker,
+                                  BugReporter &BR,
                                   const Decl *D,
                                   const StringRef &Str,
                                   const StringRef &BugName,
@@ -52,12 +53,14 @@ void helperEmitDeclarationWarning(BugReporter &BR,
           << (AddQuotes ? "'" : "") << ": " << BugName;
 
   StringRef BugStr = DescrOS.str();
+  assert(D && "Expected non-null Decl pointer");
   PathDiagnosticLocation VDLoc(D->getLocation(), BR.getSourceManager());
-  BR.EmitBasicReport(D, BugName, BugCategory,
+  BR.EmitBasicReport(D, Checker, BugName, BugCategory,
                      BugStr, VDLoc, D->getSourceRange());
 }
 
-void helperEmitAttributeWarning(BugReporter &BR,
+void helperEmitAttributeWarning(const CheckerBase *Checker,
+                                BugReporter &BR,
                                 const Decl *D,
                                 const Attr *Attr,
                                 const StringRef &Str,
@@ -70,12 +73,13 @@ void helperEmitAttributeWarning(BugReporter &BR,
 
   StringRef BugStr = DescrOS.str();
   PathDiagnosticLocation VDLoc(Attr->getLocation(), BR.getSourceManager());
-  BR.EmitBasicReport(D, BugName, BugCategory,
+  BR.EmitBasicReport(D, Checker, BugName, BugCategory,
                      BugStr, VDLoc, Attr->getRange());
 }
 
 
-void helperEmitStatementWarning(BugReporter &BR,
+void helperEmitStatementWarning(const CheckerBase *Checker,
+                                BugReporter &BR,
                                 AnalysisDeclContext *AC,
                                 const Stmt *S,
                                 const Decl *D,
@@ -92,11 +96,12 @@ void helperEmitStatementWarning(BugReporter &BR,
   PathDiagnosticLocation VDLoc =
       PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
 
-  BR.EmitBasicReport(D, BugName, BugCategory,
+  BR.EmitBasicReport(D, Checker, BugName, BugCategory,
                      BugStr, VDLoc, S->getSourceRange());
 }
 
-void helperEmitInvalidAssignmentWarning(BugReporter &BR,
+void helperEmitInvalidAssignmentWarning(const CheckerBase *Checker,
+                                        BugReporter &BR,
                                         AnalysisDeclContext *AC,
                                         ASTContext &Ctx,
                                         const Stmt *S,
@@ -117,7 +122,7 @@ void helperEmitInvalidAssignmentWarning(BugReporter &BR,
   PathDiagnosticLocation VDLoc =
       PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
 
-  ento::BugType *BT = new ento::BugType(BugName, BugCategory);
+  ento::BugType *BT = new ento::BugType(Checker, BugName, BugCategory);
   ento::BugReport *R = new ento::BugReport(*BT, BugStr, VDLoc);
   BR.emitReport(R);
 }

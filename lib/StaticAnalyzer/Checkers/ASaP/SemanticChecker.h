@@ -45,6 +45,7 @@ class ASaPSemanticCheckerTraverser :
 
   typedef llvm::DenseMap<const Attr*, RplVector*> RplVecAttrMapT;
 
+  const CheckerBase *Checker;
   BugReporter &BR;
   ASTContext &Ctx;
   raw_ostream &OS;
