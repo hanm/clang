@@ -13,6 +13,7 @@
 //===--------------------------------------------------------------------===//
 #include <SWI-Prolog.h>
 #include <stdio.h>
+
 #include "ClangSACheckers.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
@@ -79,6 +80,21 @@ public:
   void checkASTDecl(const TranslationUnitDecl *TUDeclConst,
                     AnalysisManager &Mgr,
                     BugReporter &BR) const {
+    // Initialize Prolog otherwise assert won't work
+    // Known swipl bug: http://www.swi-prolog.org/bugzilla/show_bug.cgi?id=41
+    // Bug 41 - swi-prolog overrides all assertions by defining __assert_fail
+    char Libpl[] = "libpl.dll";
+    char G32[] = "-G32m";
+    char L32[] = "-L32m";
+    char T32[] = "-T32m";
+
+    char* Argv[4] = {Libpl, G32, L32, T32};
+    int Argc = 4;
+
+    PL_initialise(Argc, Argv);
+    //PL_action(PL_ACTION_DEBUG);
+    //PL_action(PL_ACTION_TRACE);
+
     bool Error = false;
     TranslationUnitDecl *TUDecl = const_cast<TranslationUnitDecl*>(TUDeclConst);
     ASTContext &Ctx = TUDecl->getASTContext();
@@ -117,6 +133,7 @@ public:
 
     SymbolTable::Destroy();
     delete AnnotScheme;
+    PL_cleanup(0);
   }
 
   void runCheckers(TranslationUnitDecl *TUDecl) const {
@@ -179,35 +196,20 @@ public:
       os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;
     }
-    SymbolTable &SymT = *SymbolTable::Table;
 
-    int Argc;
-
-    char Libpl[] = "libpl.dll";
-    char G32[] = "-G32m";
-    char L32[] = "-L32m";
-    char T32[] = "-T32m";
-
-    char* Argv[4] = {Libpl, G32, L32, T32};
-    Argc = 4;
-
-    PL_initialise(Argc, Argv);
-    //PL_action(PL_ACTION_DEBUG);
-    //PL_action(PL_ACTION_TRACE);
+    // Make sure asap.pl exists at the expected location.
+    FILE *File = fopen("/opt/lib/asap.pl", "r");
+    if (!File) {
+      fclose(File);
+      assert(File && "pl file does not exist");
+    }
+    // Consult the asap.pl file
     predicate_t Consult = PL_predicate("consult",1,"user");
     term_t Plfile=PL_new_term_ref();
     PL_put_atom_chars(Plfile, "/opt/lib/asap.pl");
-
-
-    FILE *file = fopen("/opt/lib/asap.pl", "r");
-    assert(file && "pl file does not exist");
-    fclose(file);
-
     PL_call_predicate(NULL, PL_Q_NORMAL, Consult, Plfile);
 
-    SymT.solveInclusionConstraints();
-
-    PL_cleanup(0);
+    SymbolTable::Table->solveInclusionConstraints();
 
     os << "DEBUG:: starting ASaP Non-Interference Checking\n";
     StmtVisitorInvoker<NonInterferenceChecker> NonIChecker;
