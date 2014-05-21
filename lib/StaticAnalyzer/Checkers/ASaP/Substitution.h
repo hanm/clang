@@ -112,7 +112,7 @@ public:
   std::string toString() const;
 
   void push_back_vec(const SubstitutionVector *SubV);
-
+  void add(const ASaPType *Typ, const ParameterVector *ParamV);
 }; // End class SubstituionVector.
 
 } // end namespace clang

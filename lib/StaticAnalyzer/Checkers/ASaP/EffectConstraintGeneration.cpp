@@ -298,19 +298,18 @@ checkEffectCoverage() {
         //assert(false && "Variable summary");
         SymT.addInclusionConstraint(EC);
         return;
-
       }
     }
 
     else if (E->getEffectKind()==Effect::EK_InvocEffect){
       const Expr* Exp=E->getExp();
       OS << "====== EK_InvocEffect \n";
-      const FunctionDecl* FunD=E->getDecl();
-      SubstitutionVector* SubV=E->getSubV();
-
+      const FunctionDecl* FunD = E->getDecl();
+      SubstitutionVector* SubV = E->getSubV();
+      assert(SubV && "Internal Error: SubV cannot be null");
+      OS << "DEBUG:: SubV = " << SubV->toString() << ". (size = " << SubV->size() << ")\n";
       OS << "======= EK_InvocEffect -before call to getEffectSummary()\n";
-      if(!FunD)
-        OS << "FunD is NULL\n";
+      assert(FunD && "Internal Error: FunD should not be null");
       const EffectSummary *Effects =
           SymT.getEffectSummary(FunD->getCanonicalDecl());
       if (isa<VarEffectSummary>(Effects)) {
@@ -571,7 +570,7 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
       /// 2. Add effects to tmp effects
 
       Effect IE(Effect::EK_InvocEffect, Exp, FunD, &SubV);
-      OS << "DEBUG:: Adding invocation Effect\n";
+      OS << "DEBUG:: Adding invocation Effect "<< IE.toString() << "\n";
       EC->addEffect(&IE);
       OS << "DEBUG:: After Adding invocation Effect\n";
       SaveAndRestore<int> EffectAccumulator(EffectCount, EffectCount+1);

@@ -424,7 +424,7 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
     }
   }
   if (ParamSet->size() > 0) {
-    buildParamSubstitutions(CalleeDecl, ArgI, ArgE, *ParamSet, SubV);
+    buildParamSubstitutions(Def, SymT, CalleeDecl, ArgI, ArgE, *ParamSet, SubV);
   }
   delete ParamSet;
 
@@ -471,7 +471,7 @@ typecheckCXXConstructExpr(VarDecl *VarD,
   // Set up Substitution Vector
   const ParameterVector *PV = SymT.getParameterVector(ClassDecl);
   const ASaPType *T = SymT.getType(VarD);
-  buildSubstitutionVector(T,PV,SubV);
+  SubV.add(T, PV);
   typecheckParamAssignments(ConstrDecl, Exp->arg_begin(), Exp->arg_end(), SubV);
   OS << "DEBUG:: DONE with typecheckCXXConstructExpr\n";
 
@@ -541,7 +541,7 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
     // Build substitution for class region parameter(s)
     const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
     ASaPType *T = TBV.getType();
-    buildSubstitutionVector(T,ParamV,SubV);
+    SubV.add(T, ParamV);
 
     unsigned NumArgs = Exp->getNumArgs();
     unsigned NumParams = FunD->getNumParams();
@@ -575,83 +575,6 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
     // TODO
   }
 } // End typecheckCallExpr
-
-void AssignmentCheckerVisitor::
-buildSubstitutionVector(const ASaPType *Typ,
-                        const ParameterVector *ParamV,
-                        SubstitutionVector &SubV) {
-  if (Typ && ParamV && ParamV->size() > 0) {
-    for (unsigned int I = 0; I < ParamV->size(); ++I) {
-      const ParamRplElement *ParamEl = ParamV->getParamAt(I);
-      const Rpl *R = Typ->getSubstArg(I);
-      Substitution Sub(ParamEl, R);
-      OS << "DEBUG:: ConstructExpr Substitution = " << Sub.toString() << "\n";
-      SubV.push_back(&Sub);
-    }
-  }
-}
-
-void AssignmentCheckerVisitor::
-buildParamSubstitutions(const FunctionDecl *CalleeDecl,
-                        ExprIterator ArgI, ExprIterator ArgE,
-                        const ParameterSet &ParamSet,
-                        SubstitutionVector &SubV) {
-  assert(CalleeDecl);
-  FunctionDecl::param_const_iterator ParamI, ParamE;
-  for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
-      ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
-    Expr *ArgExpr = *ArgI;
-    ParmVarDecl *ParamDecl = *ParamI;
-    buildSingleParamSubstitution(ParamDecl, ArgExpr, ParamSet, SubV);
-  }
-}
-
-void AssignmentCheckerVisitor::
-buildSingleParamSubstitution(
-    ParmVarDecl *Param, Expr *Arg,
-    const ParameterSet &ParamSet, // Set of fn & class region params
-    SubstitutionVector &SubV) {
-  // if the function parameter has region argument that is a region
-  // parameter, infer a substitution based on the type of the function argument
-  const ASaPType *ParamType = SymT.getType(Param);
-  if (!ParamType)
-    return;
-  const RplVector *ParamArgV = ParamType->getArgV();
-  if (!ParamArgV)
-    return;
-  TypeBuilderVisitor TBV(Def, Arg);
-  const ASaPType *ArgType = TBV.getType();
-  if (!ArgType)
-    return;
-  const RplVector *ArgArgV = ArgType->getArgV();
-  if (!ArgArgV)
-    return;
-  // For each element of ArgV if it's a simple arg, check if it's
-  // a function region param
-  for(RplVector::const_iterator
-        ParamI = ParamArgV->begin(), ParamE = ParamArgV->end(),
-        ArgI = ArgArgV->begin(), ArgE = ArgArgV->end();
-      ParamI != ParamE && ArgI != ArgE; ++ParamI, ++ArgI) {
-    const Rpl *ParamR = *ParamI;
-    assert(ParamR && "RplVector should not contain null Rpl pointer");
-    if (ParamR->length() < 1)
-      continue;
-    if (ParamR->length() > 1)
-      // In this case, we need to implement type unification
-      // of ParamR and ArgR = *ArgI or allow explicitly giving
-      // the substitution in an annotation at the call-site
-      continue;
-    const RplElement *Elmt = ParamR->getFirstElement();
-    assert(Elmt && "Rpl should not contain null RplElement pointer");
-    if (! ParamSet.hasElement(Elmt))
-      continue;
-    // Ok find the argument
-    Substitution Sub(Elmt, *ArgI);
-    SubV.push_back(&Sub);
-    OS << "DEBUG:: added function param sub: " << Sub.toString() << "\n";
-  }
-}
-
 
 //////////////////////////////////////////////////////////////////////////
 // TypeBuilderVisitor

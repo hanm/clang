@@ -169,11 +169,12 @@ public:
       return;
     }
     // Check that Effect Summaries cover effects
+    os << "DEBUG:: starting ASaP Effect Constraint Generator\n";
     //StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker;
     StmtVisitorInvoker<EffectConstraintVisitor> EffectChecker;
     EffectChecker.TraverseDecl(TUDecl);
     os << "##############################################\n";
-    os << "DEBUG:: done running ASaP Effect Checker\n\n";
+    os << "DEBUG:: done running ASaP Effect Constraint Generator\n\n";
     if (EffectChecker.encounteredFatalError()) {
       os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;

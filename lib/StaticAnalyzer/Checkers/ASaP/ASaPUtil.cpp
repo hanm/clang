@@ -16,11 +16,16 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "clang/AST/Attr.h"
+#include "clang/AST/Expr.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 
+#include "ASaPSymbolTable.h"
 #include "ASaPType.h"
 #include "ASaPUtil.h"
+#include "Rpl.h"
+#include "Substitution.h"
+#include "TypeChecker.h"
 
 namespace clang {
 namespace asap {
@@ -139,6 +144,70 @@ const Decl *getDeclFromContext(const DeclContext *DC) {
   else if (DC->isTranslationUnit())
     D = dyn_cast<TranslationUnitDecl>(DC);
   return D;
+}
+
+void buildSingleParamSubstitution(
+        const FunctionDecl *Def,
+        SymbolTable &SymT,
+        ParmVarDecl *Param, Expr *Arg,
+        const ParameterSet &ParamSet, // Set of fn & class region params
+        SubstitutionVector &SubV) {
+  // if the function parameter has region argument that is a region
+  // parameter, infer a substitution based on the type of the function argument
+  const ASaPType *ParamType = SymT.getType(Param);
+  if (!ParamType)
+    return;
+  const RplVector *ParamArgV = ParamType->getArgV();
+  if (!ParamArgV)
+    return;
+  TypeBuilderVisitor TBV(Def, Arg);
+  const ASaPType *ArgType = TBV.getType();
+  if (!ArgType)
+    return;
+  const RplVector *ArgArgV = ArgType->getArgV();
+  if (!ArgArgV)
+    return;
+  // For each element of ArgV if it's a simple arg, check if it's
+  // a function region param
+  for(RplVector::const_iterator
+        ParamI = ParamArgV->begin(), ParamE = ParamArgV->end(),
+        ArgI = ArgArgV->begin(), ArgE = ArgArgV->end();
+      ParamI != ParamE && ArgI != ArgE; ++ParamI, ++ArgI) {
+    const Rpl *ParamR = *ParamI;
+    assert(ParamR && "RplVector should not contain null Rpl pointer");
+    if (ParamR->length() < 1)
+      continue;
+    if (ParamR->length() > 1)
+      // In this case, we need to implement type unification
+      // of ParamR and ArgR = *ArgI or allow explicitly giving
+      // the substitution in an annotation at the call-site
+      continue;
+    const RplElement *Elmt = ParamR->getFirstElement();
+    assert(Elmt && "Rpl should not contain null RplElement pointer");
+    if (! ParamSet.hasElement(Elmt))
+      continue;
+    // Ok find the argument
+    Substitution Sub(Elmt, *ArgI);
+    SubV.push_back(&Sub);
+    //OS << "DEBUG:: added function param sub: " << Sub.toString() << "\n";
+  }
+}
+
+void buildParamSubstitutions(
+        const FunctionDecl *Def,
+        SymbolTable &SymT,
+        const FunctionDecl *CalleeDecl,
+        ExprIterator ArgI, ExprIterator ArgE,
+        const ParameterSet &ParamSet,
+        SubstitutionVector &SubV) {
+  assert(CalleeDecl);
+  FunctionDecl::param_const_iterator ParamI, ParamE;
+  for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
+      ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
+    Expr *ArgExpr = *ArgI;
+    ParmVarDecl *ParamDecl = *ParamI;
+    buildSingleParamSubstitution(Def, SymT, ParamDecl, ArgExpr, ParamSet, SubV);
+  }
 }
 
 } // end namespace asap

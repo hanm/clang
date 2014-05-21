@@ -85,6 +85,20 @@ void helperEmitInvalidAssignmentWarning(const CheckerBase *Checker,
 
 const Decl *getDeclFromContext(const DeclContext *DC);
 
+void buildSingleParamSubstitution(const FunctionDecl *Def,
+                                  SymbolTable &SymT,
+                                  ParmVarDecl *Param, Expr *Arg,
+                                  const ParameterSet &ParamSet,
+                                  SubstitutionVector &SubV);
+
+void buildParamSubstitutions(const FunctionDecl *Def,
+                             SymbolTable &SymT,
+                             const FunctionDecl *CalleeDecl,
+                             ExprIterator ArgI, ExprIterator ArgE,
+                             const ParameterSet &ParamSet,
+                             SubstitutionVector &SubV);
+
+
 } // end namespace asap
 } // end namespace clang
 
