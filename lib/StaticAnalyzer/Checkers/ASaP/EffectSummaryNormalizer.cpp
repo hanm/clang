@@ -96,8 +96,23 @@ bool EffectSummaryNormalizerTraverser::VisitFunctionDecl(FunctionDecl *D) {
     if (RK == RK_FALSE) {
       std::string Name = D->getNameInfo().getAsString();
       emitCanonicalDeclHasSmallerEffectSummary(D, Name);
-    } else if (RK == RK_DUNNO){
-	    assert(false && "Found variable effect summary");
+    } else if (RK == RK_DUNNO) {
+      if (isa<VarEffectSummary>(CanES)) {
+        if (isa<VarEffectSummary>(ES)) {
+          SymT.resetEffectSummary(D, CanES);
+        } else if (isa<ConcreteEffectSummary>(ES)) {
+          SymT.resetEffectSummary(CanFD, ES);
+        } else {
+          assert(false && "Unexpected kind of effect summary");
+        }
+      } else if (isa<ConcreteEffectSummary>(CanES)) {
+        assert(isa<VarEffectSummary>(ES) && "Expected Effect Summary Variable");
+        // Copy concrete effect summary from canonical declaration to
+        // definition/redeclaration
+        SymT.resetEffectSummary(D, CanES);
+      } else {
+        assert(false && "Unexpected kind of effect summary");
+      }
     } else { // The effect summary of the canonical decl covers this.
 
       // Set the Effect summary of this declaration to be the same

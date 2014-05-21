@@ -933,6 +933,7 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
       ES = AnSe.EffSum;
       OS << "Implicit Effect Summary:\n";
       ES->print(OS);
+      OS << "\n";
     } else {
       /// C.2. Check Effect Summary is minimal
       ConcreteEffectSummary::EffectCoverageVector ECV;
