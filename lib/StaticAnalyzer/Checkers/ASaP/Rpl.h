@@ -504,10 +504,10 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
     VectorT::insert(begin(), new Rpl(*R));
   }
   /// \brief Remove and return the first RPL in the vector.
-  inline std::auto_ptr<Rpl> deref() { return pop_front(); }
+  inline std::unique_ptr<Rpl> deref() { return pop_front(); }
 
   /// \brief Same as performing deref() DerefNum times.
-  std::auto_ptr<Rpl> deref(size_t DerefNum);
+  std::unique_ptr<Rpl> deref(size_t DerefNum);
 
   /// \brief Return a pointer to the RPL at position Idx in the vector.
   inline const Rpl *getRplAt(size_t Idx) const {

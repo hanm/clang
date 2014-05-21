@@ -17,6 +17,7 @@
 #include "clang/AST/Type.h"
 #include "clang/AST/Decl.h"
 
+#include "ASaPAnnotationScheme.h"
 #include "ASaPUtil.h"
 #include "ASaPSymbolTable.h"
 #include "CollectRegionNamesAndParameters.h"

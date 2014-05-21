@@ -84,7 +84,7 @@ public:
   /// FIXME: support multiple region parameters per class type.
   const Rpl *getSubstArg(int DerefNum = 0) const;
   /// \brief return the stubstitution vector for this type (create it if needed)
-  std::auto_ptr<SubstitutionVector> getSubstitutionVector() const;
+  std::unique_ptr<SubstitutionVector> getSubstitutionVector() const;
   /// \brief Return the QualType of this ASapType.
   inline QualType getQT() const { return QT; }
   /// \brief Return the QualType of this after DerefNum dereferences.
