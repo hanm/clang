@@ -143,7 +143,9 @@ makeStackType(const VarDecl *D, long ArgNum) {
 
 AnnotationSet ParametricAnnotationScheme::
 makeFieldType(const FieldDecl *D, long ArgNum) {
+  assert(D);
   const RecordDecl *ReD = D->getParent();
+  assert(ReD);
   const ParameterVector *ParamV = SymT.getParameterVector(ReD);
 
   AnnotationSet Result;
@@ -152,7 +154,7 @@ makeFieldType(const FieldDecl *D, long ArgNum) {
   // NOTE: We are not allowed to add a parameter here.
   // We should do it though the makeClassParams method during the
   // CollectRegionNamesAndParams pass.
-  assert(ParamV && ParamV->size()>0
+  assert(ParamV && ParamV->size() > 0
          && "Internal error: empty region parameter vector.");
 
   const ParamRplElement &Param = *ParamV->getParamAt(0);
@@ -272,13 +274,6 @@ makeEffectSummary(const FunctionDecl *D) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-
-AnnotationSet InferenceAnnotationScheme::
-makeClassParams(const RecordDecl *D) {
-  AnnotationSet Result;
-  Result.ParamVec = 0; // Expecting region parameters to be given for now.
-  return Result;
-}
 
 /*AnnotationSet InferenceAnnotationScheme::
 makeGlobalType(const VarDecl *D, long ArgNum) {

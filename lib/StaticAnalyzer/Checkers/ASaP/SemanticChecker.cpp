@@ -913,6 +913,12 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
 
   if (Success) {
     /// C. Check effect summary
+    /// C.0. Check this function does not already have an effect summary.
+    ///      There seems to be a bug in the traverser causing a duplicate
+    ///      visitation of functions occassionally...
+    if (SymT.hasEffectSummary(D)) {
+      return true;
+    }
     /// C.1. Build Effect Summary
     ConcreteEffectSummary *CES = new ConcreteEffectSummary();
     EffectSummary *ES = CES;

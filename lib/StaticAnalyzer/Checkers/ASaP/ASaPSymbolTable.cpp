@@ -683,6 +683,7 @@ void SymbolTable::solveInclusionConstraints() {
 AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
   OSv2 << "DEBUG:: SymbolTable::makeDefaultType\n";
   if (FieldDecl *FieldD = dyn_cast<FieldDecl>(ValD)) {
+    OSv2 << "DEBUG:: SymbolTable::makeDefaultType ValD isa FiledDecl\n";
     AnnotationSet AnSe = AnnotScheme->makeFieldType(FieldD, ParamCount);
     assert(AnSe.ParamVec == 0 && "Internal Error: Not allowed to create a "
                                  "region parameter in method makeDefaultType");
@@ -697,12 +698,23 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
       OSv2 << "DEBUG:: DeclContext:";
       DC->dumpDeclContext();
       OSv2 << "\n";
-      assert(DC->isFunctionOrMethod() && "Internal error: ParmVarDecl found "
-             "outside FunctionDecl Context.");
-      FunctionDecl *FunD = dyn_cast<FunctionDecl>(DC);
-      assert(FunD);
-      addToParameterVector(FunD, AnSe.ParamVec);
-      assert(AnSe.ParamVec == 0);
+      OSv2 << "DEBUG:: DeclContext->isFunctionOrMethod = "  << DC->isFunctionOrMethod() << "\n";
+      //assert(DC->isFunctionOrMethod() && "Internal error: ParmVarDecl found "
+      //       "outside FunctionDecl Context.");
+      if (DC->isFunctionOrMethod()) {
+        FunctionDecl *FunD = dyn_cast<FunctionDecl>(DC);
+        assert(FunD && "Expected DeclContext of type FunctionDecl");
+        addToParameterVector(FunD, AnSe.ParamVec);
+        assert(AnSe.ParamVec == 0);
+      } else {
+        // FIXME:: this is a temporary work-around for function pointers with
+        // parameters. The parameters should be added to the fn-pointer type
+        // but (a) we don't reason about those correctly yet and (b) I'm not
+        // sure how to get the fn-ptr type from the parameter declaration at
+        // this point.
+        addToParameterVector(ParamD, AnSe.ParamVec);
+        assert(AnSe.ParamVec == 0);
+      }
     }
     OSv2 << "DEBUG::         case ParmVarDecl = DONE\n";
     return AnSe;
