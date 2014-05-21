@@ -400,8 +400,8 @@ RplVector::RplVector(const ParameterVector &ParamVec) {
 }
 
   /// \brief Same as performing deref() DerefNum times.
-std::auto_ptr<Rpl> RplVector::deref(size_t DerefNum) {
-  std::auto_ptr<Rpl> Result;
+std::unique_ptr<Rpl> RplVector::deref(size_t DerefNum) {
+  std::unique_ptr<Rpl> Result;
   assert(DerefNum < size());
   for (VectorT::iterator I = begin();
         DerefNum > 0 && I != end(); ++I, --DerefNum) {

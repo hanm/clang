@@ -10,7 +10,7 @@
 //  This file defines a generic derived class of llvm::SmallVector that owns its
 //  elements and calls delete on them when destroyed. It also call the copy
 //  constructor each time an element is pushed into the vector. The client code
-//  that removes an element gets it wrapped in an auto_ptr so that ownership is
+//  that removes an element gets it wrapped in an unique_ptr so that ownership is
 //  transferred.
 //
 //===----------------------------------------------------------------------===//
@@ -74,9 +74,9 @@ public:
     VectorT::push_back(new ElmtTyp(E));
   }
 
-  inline std::auto_ptr<ElmtTyp> pop_back_val() {
+  inline std::unique_ptr<ElmtTyp> pop_back_val() {
     ElmtTyp *Back = VectorT::pop_back_val();
-    return std::auto_ptr<ElmtTyp>(Back);
+    return std::unique_ptr<ElmtTyp>(Back);
   }
 
   inline void pop_back() {
@@ -85,13 +85,13 @@ public:
   }
 
   /// \brief Remove and return the first RPL in the vector.
-  std::auto_ptr<ElmtTyp> pop_front() {
+  std::unique_ptr<ElmtTyp> pop_front() {
     if (VectorT::size() > 0) {
       ElmtTyp *Result = VectorT::front();
       VectorT::erase(VectorT::begin());
-      return std::auto_ptr<ElmtTyp>(Result);
+      return std::unique_ptr<ElmtTyp>(Result);
     } else {
-      return std::auto_ptr<ElmtTyp>(0);
+      return std::unique_ptr<ElmtTyp>();
     }
   }
 
@@ -101,7 +101,7 @@ public:
       return; // nothing to take, all done
 
     while(OwV->VectorT::size() > 0) {
-      std::auto_ptr<ElmtTyp> front = OwV->pop_front();
+      std::unique_ptr<ElmtTyp> front = OwV->pop_front();
       VectorT::push_back(front.get()); // non-cloning push back
       front.release(); // release without destroying
     }

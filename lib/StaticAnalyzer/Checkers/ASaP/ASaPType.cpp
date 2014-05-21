@@ -158,7 +158,7 @@ const Rpl *ASaPType::getSubstArg(int DerefNum) const {
     return this->ArgV->getRplAt(DerefNum);
 }
 
-std::auto_ptr<SubstitutionVector> ASaPType::getSubstitutionVector() const {
+std::unique_ptr<SubstitutionVector> ASaPType::getSubstitutionVector() const {
   const ParameterVector *ParamV =
     SymbolTable::Table->getParameterVectorFromQualType(QT);
   RplVector *RplV = new RplVector();
@@ -170,7 +170,7 @@ std::auto_ptr<SubstitutionVector> ASaPType::getSubstitutionVector() const {
 
   SubstitutionVector *SubV = new SubstitutionVector();
   SubV->buildSubstitutionVector(ParamV, RplV);
-  return std::auto_ptr<SubstitutionVector>(SubV);
+  return std::unique_ptr<SubstitutionVector>(SubV);
 }
 
 

@@ -152,7 +152,7 @@ void EffectConstraintVisitor::memberSubstitute(const ValueDecl *D) {
   OS << "DEBUG:: before substitution on LHS\n";
   EC->getLHS()->substitute(InheritanceSubV, EffectCount);
 
-  std::auto_ptr<SubstitutionVector> SubV = T1->getSubstitutionVector();
+  std::unique_ptr<SubstitutionVector> SubV = T1->getSubstitutionVector();
 
 
   OS << "DEBUG:: before second substitution on LHS\n";
@@ -264,7 +264,7 @@ checkEffectCoverage() {
 
   OS << "DEBUG:: N is "<< N <<"\n";
   for (int I=0; I<N; ++I){
-    std::auto_ptr<Effect> E = LHS->pop_back_val();
+    std::unique_ptr<Effect> E = LHS->pop_back_val();
     OS << "### "; E->print(OS); OS << "\n";
 
     if (E->getEffectKind()!=Effect::EK_InvocEffect) {

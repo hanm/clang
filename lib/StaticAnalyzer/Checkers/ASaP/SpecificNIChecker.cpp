@@ -27,6 +27,7 @@
 #include "ASaPType.h"
 #include "Effect.h"
 #include "SpecificNIChecker.h"
+#include "Substitution.h"
 
 namespace clang {
 namespace asap {
@@ -189,7 +190,7 @@ inline static const CXXMethodDecl
   return Result;
 }
 
-static std::auto_ptr<EffectSummary>
+static std::unique_ptr<EffectSummary>
 getInvokeEffectSummary(const Expr *Arg,
                        const CXXMethodDecl *Method, const FunctionDecl *Def) {
   raw_ostream &OS = *SymbolTable::VB.OS;
@@ -228,7 +229,7 @@ getInvokeEffectSummary(const Expr *Arg,
       assert(NamD && "Internal Error: ValD should have been initialized");
     } else {
       emitUnexpectedTypeOfArgumentPassed(Arg, Def);
-      return std::auto_ptr<EffectSummary>(0);
+      return std::unique_ptr<EffectSummary>();
     }
     assert(NamD && "Internal Error: ValD should have been initialized");
     //OS << "DEBUG:: ValD = ";
@@ -238,7 +239,7 @@ getInvokeEffectSummary(const Expr *Arg,
     if (T) {
       OS << "In if\n";
       //OS << "DEBUG: T= " << T->toString() << "\n";
-      std::auto_ptr<SubstitutionVector> SubV = T->getSubstitutionVector();
+      std::unique_ptr<SubstitutionVector> SubV = T->getSubstitutionVector();
       ES->substitute(SubV.get());
     }
   } else {
@@ -246,7 +247,7 @@ getInvokeEffectSummary(const Expr *Arg,
     // to check it. Nothing to do.
   }
 
-  return std::auto_ptr<EffectSummary>(ES);
+  return std::unique_ptr<EffectSummary>(ES);
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -269,7 +270,7 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
   llvm::raw_ostream &OS = *SymbolTable::VB.OS;
   for(unsigned int I = 0; I < NumArgs; ++I) {
     Expr *Arg = Exp->getArg(I)->IgnoreImplicit();
-    std::auto_ptr<EffectSummary> ES =
+    std::unique_ptr<EffectSummary> ES =
         getInvokeEffectSummary(Arg,getOperatorMethod(Arg), Def);
     ESVec.push_back(ES.release());
   }
@@ -333,7 +334,7 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   raw_ostream &OS = *SymbolTable::VB.OS;
   //QualType QTArg = Arg->getType();
   const CXXMethodDecl *Method = getOperatorMethod(Arg, true);
-  std::auto_ptr<EffectSummary> ES = getInvokeEffectSummary(Arg, Method, Def);
+  std::unique_ptr<EffectSummary> ES = getInvokeEffectSummary(Arg, Method, Def);
   // 2. Detect induction variables
   // TODO InductionVarVector IVV = detectInductionVariablesVector
 
@@ -378,7 +379,7 @@ bool TBBParallelForIndexNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
     Arg = Exp->getArg(TBB_PARFOR_INDEX3_FUNCTOR_POSITION)->IgnoreImplicit();
     Method = getOperatorMethod(Arg, true);
   }
-  std::auto_ptr<EffectSummary> ES = getInvokeEffectSummary(Arg, Method, Def);
+  std::unique_ptr<EffectSummary> ES = getInvokeEffectSummary(Arg, Method, Def);
 
   // 2. Detect induction variables
   // TODO InductionVarVector IVV = detectInductionVariablesVector
