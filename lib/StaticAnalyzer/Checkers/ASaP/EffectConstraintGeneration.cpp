@@ -542,8 +542,8 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
     Visit(Exp->getCallee());
   } else {
     // Not a PseudoDestructorExpr -> Exp->getCalleeDecl should return non-null
-    Decl *D = Exp->getCalleeDecl();
-    assert(D);
+    Decl *CalleeDecl = Exp->getCalleeDecl();
+    assert(CalleeDecl && "Internal Error: Expected non-null Callee Declaration");
 
     /// 1. Visit Arguments w. Read semantics
     {
@@ -554,18 +554,35 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
       }
     }
 
-    FunctionDecl *FunD = dyn_cast<FunctionDecl>(D);
-    VarDecl *VarD = dyn_cast<VarDecl>(D); // Non-null if calling through fn-ptr
+    FunctionDecl *FunD = dyn_cast<FunctionDecl>(CalleeDecl);
+    VarDecl *VarD = dyn_cast<VarDecl>(CalleeDecl); // Non-null if calling through fn-ptr
     assert(FunD || VarD);
     if (FunD) {
 
       SubstitutionVector SubV;
-      // Set up Substitution Vector
-      const ParameterVector *FD_ParamV = SymT.getParameterVector(FunD);
-      if (FD_ParamV && FD_ParamV->size() > 0) {
-        buildParamSubstitutions(FunD, Exp->arg_begin(),
-                                Exp->arg_end(), *FD_ParamV, SubV);
+      // FIXME BEGIN: this code is the same as in AssignmentChecker -- Factor it Out
+      ParameterSet *ParamSet = new ParameterSet();
+      assert(ParamSet);
+      // Build SubV for function region params
+      const ParameterVector *ParamV = SymT.getParameterVector(CalleeDecl);
+      if (ParamV && ParamV->size() > 0) {
+        ParamV->addToParamSet(ParamSet);
       }
+      // if isa<CXXMethodDecl>CalleeDecl -> add Class parameters to set
+      if (CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(CalleeDecl)) {
+        CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
+        ParamV = SymT.getParameterVector(Rec);
+        if (ParamV && ParamV->size() > 0) {
+          ParamV->addToParamSet(ParamSet);
+        }
+      }
+      if (ParamSet->size() > 0) {
+        buildParamSubstitutions
+        (Def, SymT, FunD, Exp->arg_begin(),
+                                Exp->arg_end(), *ParamSet, SubV);
+      }
+      delete ParamSet;
+      // FIXME END.
 
       /// 2. Add effects to tmp effects
 
@@ -647,60 +664,6 @@ void EffectConstraintVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
 
 // End Visitors
 //////////////////////////////////////////////////////////////////////////
-void EffectConstraintVisitor::
-buildParamSubstitutions(const FunctionDecl *CalleeDecl,
-                        ExprIterator ArgI, ExprIterator ArgE,
-                        const ParameterVector &ParamV,
-                        SubstitutionVector &SubV) {
-  assert(CalleeDecl);
-  FunctionDecl::param_const_iterator ParamI, ParamE;
-  for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
-      ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
-    Expr *ArgExpr = *ArgI;
-    ParmVarDecl *ParamDecl = *ParamI;
-    buildSingleParamSubstitution(ParamDecl, ArgExpr, ParamV, SubV);
-  }
-}
-
-void EffectConstraintVisitor::
-buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
-                             const ParameterVector &ParamV,
-                             SubstitutionVector &SubV) {
-  // if param has argument that is a parameter, create a substitution
-  // based on the argument
-  const ASaPType *ParamType = SymT.getType(Param);
-  if (!ParamType)
-    return;
-  const RplVector *ParamArgV = ParamType->getArgV();
-  if (!ParamArgV)
-    return;
-  TypeBuilderVisitor TBV(Def, Arg);
-  const ASaPType *ArgType = TBV.getType();
-  if (!ArgType)
-    return;
-  const RplVector *ArgArgV = ArgType->getArgV();
-  if (!ArgArgV)
-    return;
-  // For each element of ArgV if it's a simple arg, check if it's
-  // a function region param
-  for(RplVector::const_iterator
-        ParamI = ParamArgV->begin(), ParamE = ParamArgV->end(),
-        ArgI = ArgArgV->begin(), ArgE = ArgArgV->end();
-      ParamI != ParamE && ArgI != ArgE; ++ParamI, ++ArgI) {
-    const Rpl *ParamR = *ParamI;
-    assert(ParamR && "RplVector should not contain null Rpl pointer");
-    if (ParamR->length() != 1)
-      continue;
-    const RplElement *Elmt = ParamR->getFirstElement();
-    assert(Elmt && "Rpl should not contain null RplElement pointer");
-    if (ParamV.hasElement(Elmt)) {
-      // Ok find the argument
-      Substitution Sub(Elmt, *ArgI);
-      SubV.push_back(&Sub);
-      OS << "DEBUG:: added function param sub: " << Sub.toString() << "\n";
-    }
-  }
-}
 
 } // end namespace asap
 } // end namespace clang

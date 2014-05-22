@@ -412,10 +412,10 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
   assert(ParamSet);
   // Build SubV for function region params
   const ParameterVector *ParamV = SymT.getParameterVector(CalleeDecl);
-  // FIXME: if isa<CXXMethodDecl>CalleeDecl -> add Class parameters to vector
   if (ParamV && ParamV->size() > 0) {
     ParamV->addToParamSet(ParamSet);
   }
+  // if isa<CXXMethodDecl>CalleeDecl -> add Class parameters to set
   if (CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(CalleeDecl)) {
     CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
     ParamV = SymT.getParameterVector(Rec);

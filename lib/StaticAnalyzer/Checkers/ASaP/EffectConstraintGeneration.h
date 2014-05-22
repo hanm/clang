@@ -65,14 +65,6 @@ class EffectConstraintVisitor
   void helperVisitAssignment(BinaryOperator *E);
   void helperVisitCXXConstructorDecl(const CXXConstructorDecl *D);
 
-  void buildSingleParamSubstitution(ParmVarDecl *Param, Expr *Arg,
-                                    const ParameterVector &ParamV,
-                                    SubstitutionVector &SubV);
-  void buildParamSubstitutions(const FunctionDecl *CalleeDecl,
-                                ExprIterator ArgI, ExprIterator ArgE,
-                                const ParameterVector &ParamV,
-                                SubstitutionVector &SubV);
-
 public:
   // Constructor
   EffectConstraintVisitor (const FunctionDecl* Def,
