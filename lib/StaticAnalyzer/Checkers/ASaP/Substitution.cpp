@@ -126,8 +126,10 @@ void SubstitutionVector::add(const ASaPType *Typ,
     for (unsigned int I = 0; I < ParamV->size(); ++I) {
       const ParamRplElement *ParamEl = ParamV->getParamAt(I);
       const Rpl *R = Typ->getSubstArg(I);
-      Substitution Sub(ParamEl, R);
-      push_back(&Sub);
+      if (ParamEl && R) {
+        Substitution Sub(ParamEl, R);
+        push_back(&Sub);
+      }
     }
   }
 }

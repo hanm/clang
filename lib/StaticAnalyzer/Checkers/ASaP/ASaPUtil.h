@@ -85,6 +85,11 @@ void helperEmitInvalidAssignmentWarning(const CheckerBase *Checker,
 
 const Decl *getDeclFromContext(const DeclContext *DC);
 
+void buildTypeSubstitution(const SymbolTable &SymT,
+                           const RecordDecl *ClassD,
+                           const ASaPType *Typ,
+                           SubstitutionVector &SubV);
+
 void buildSingleParamSubstitution(const FunctionDecl *Def,
                                   SymbolTable &SymT,
                                   ParmVarDecl *Param, Expr *Arg,
@@ -98,6 +103,12 @@ void buildParamSubstitutions(const FunctionDecl *Def,
                              const ParameterSet &ParamSet,
                              SubstitutionVector &SubV);
 
+void tryBuildParamSubstitutions(
+        const FunctionDecl *Def,
+        SymbolTable &SymT,
+        const FunctionDecl *CalleeDecl,
+        ExprIterator ArgI, ExprIterator ArgE,
+        SubstitutionVector &SubV);
 
 } // end namespace asap
 } // end namespace clang

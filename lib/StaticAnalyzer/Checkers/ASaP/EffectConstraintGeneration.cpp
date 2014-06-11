@@ -14,8 +14,9 @@
 
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
-#include "clang/AST/Stmt.h"
 #include "clang/AST/DeclCXX.h"
+#include "clang/AST/ExprCXX.h"
+#include "clang/AST/Stmt.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "llvm/Support/SaveAndRestore.h"
 
@@ -145,19 +146,17 @@ void EffectConstraintVisitor::memberSubstitute(const ValueDecl *D) {
     return; // Nothing to do here
 
   // First, compute inheritance induced substitutions
-  const SubstitutionVector *InheritanceSubV = // memory leak?
+  const SubstitutionVector *InheritanceSubV = // FIXME: is there memory leak?
       SymT.getInheritanceSubVec(T1->getQT());
-
-
-  OS << "DEBUG:: before substitution on LHS\n";
+  OS << "DEBUG:: before inheritance substitution on LHS (EffectCount="
+     << EffectCount << ")\n";
   EC->getLHS()->substitute(InheritanceSubV, EffectCount);
 
   std::unique_ptr<SubstitutionVector> SubV = T1->getSubstitutionVector();
-
-
-  OS << "DEBUG:: before second substitution on LHS\n";
+  OS << "DEBUG:: before type substitution on LHS\n";
   EC->getLHS()->substitute(SubV.get(), EffectCount);
 
+  //OS << "DEBUG:: EC->LHS=" << EC->LHS->
   OS << "   DONE\n";
   delete T1;
 }
@@ -166,12 +165,13 @@ int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp)
 
   if (DerefNum < 0)
     return 0;
+
+  assert(D);
   OS << "DEBUG:: in EffectChecker::collectEffects: ";
   D->print(OS, Ctx.getPrintingPolicy());
   OS << "\nDEBUG:: isBase = " << (IsBase ? "true" : "false") << "\n";
   OS << "DEBUG:: DerefNum = " << DerefNum << "\n";
 
-  assert(D);
   const ASaPType *T0 = SymT.getType(D);
   if (!T0) // e.g., method returning void
     return 0; // Nothing to do here.
@@ -215,6 +215,8 @@ int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp)
       OS << "DEBUG:: Adding Effect\n";
       EC->addEffect(&E);
       EffectNr++;
+    } else {
+      OS << "DEBUG:: NOT Adding Effect (InRpl=NULL)\n";
     }
   }
   delete T1;
@@ -251,10 +253,10 @@ emitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
 
 void EffectConstraintVisitor::
 checkEffectCoverage() {
-  EffectVector* LHS=EC->getLHS();
-  const EffectSummary* RHS=EC->getRHS();
-  const int N=LHS->size();
-  if (N<=0){
+  EffectVector* LHS = EC->getLHS();
+  const EffectSummary* RHS = EC->getRHS();
+  const int N = LHS->size();
+  if (N <= 0){
     delete(EC);
     return;
   }
@@ -263,22 +265,22 @@ checkEffectCoverage() {
   OS << "DEBUG:: LHS empty? "<< LHS->empty() <<"\n";
 
   OS << "DEBUG:: N is "<< N <<"\n";
-  for (int I=0; I<N; ++I){
+  for (int I=0; I < N; ++I) {
     std::unique_ptr<Effect> E = LHS->pop_back_val();
     OS << "### "; E->print(OS); OS << "\n";
 
-    if (E->getEffectKind()!=Effect::EK_InvocEffect) {
+    if (E->getEffectKind() != Effect::EK_InvocEffect) {
       OS << "==== not EK_InvocEffect"<<E->getEffectKind() <<"\n";
       Trivalent RK=RHS->covers(E.get());
       if(RK==RK_FALSE) {
-        const Expr* Exp=E->getExp();
-        const Decl* D;
+        const Expr *Exp=E->getExp();
+        const Decl *D;
         const MemberExpr *me=dyn_cast<const MemberExpr>(Exp);
         if (me)
           D = me->getMemberDecl();
         else {
-          const DeclRefExpr *dre=dyn_cast<const DeclRefExpr>(Exp);
-          D =dre->getDecl();
+          const DeclRefExpr *dre = dyn_cast<const DeclRefExpr>(Exp);
+          D = dre->getDecl();
         }
         OS << "DEBUG:: effect not covered: Expr = ";
         Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -301,13 +303,14 @@ checkEffectCoverage() {
       }
     }
 
-    else if (E->getEffectKind()==Effect::EK_InvocEffect){
-      const Expr* Exp=E->getExp();
+    else if (E->getEffectKind() == Effect::EK_InvocEffect) {
+      const Expr *Exp = E->getExp();
       OS << "====== EK_InvocEffect \n";
       const FunctionDecl* FunD = E->getDecl();
       SubstitutionVector* SubV = E->getSubV();
       assert(SubV && "Internal Error: SubV cannot be null");
-      OS << "DEBUG:: SubV = " << SubV->toString() << ". (size = " << SubV->size() << ")\n";
+      OS << "DEBUG:: SubV = " << SubV->toString() << ". (size = "
+         << SubV->size() << ")\n";
       OS << "======= EK_InvocEffect -before call to getEffectSummary()\n";
       assert(FunD && "Internal Error: FunD should not be null");
       const EffectSummary *Effects =
@@ -518,27 +521,30 @@ void EffectConstraintVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
 }
 
 void EffectConstraintVisitor::
-VisitCompoundAssignOperator(CompoundAssignOperator *E) {
+VisitCompoundAssignOperator(CompoundAssignOperator *Exp) {
   OS << "DEBUG:: !!!!!!!!!!! Mother of compound Assign!!!!!!!!!!!!!\n";
-  E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-  helperVisitAssignment(E);
+  helperVisitAssignment(Exp);
 }
 
-void EffectConstraintVisitor::VisitBinAssign(BinaryOperator *E) {
+void EffectConstraintVisitor::VisitBinAssign(BinaryOperator *Exp) {
   OS << "DEBUG:: >>>>>>>>>>VisitBinAssign<<<<<<<<<<<<<<<<<\n";
-  E->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-  helperVisitAssignment(E);
+  helperVisitAssignment(Exp);
 }
 
 void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
   if (Exp->getType()->isDependentType())
     return; // Do not visit if this is dependent type
 
-  OS << "DEBUG:: VisitCallExpr\n";
+  OS << "DEBUG:: VisitCallExpr: ";
+  Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << "\n";
 
   if (isa<CXXPseudoDestructorExpr>(Exp->getCallee())) {
+    OS << "DEBUG:: it is a CXXPseudoDesctuctorExpr -> visiting Exp->getCallee\n";
     Visit(Exp->getCallee());
   } else {
     // Not a PseudoDestructorExpr -> Exp->getCalleeDecl should return non-null
@@ -548,50 +554,42 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
     /// 1. Visit Arguments w. Read semantics
     {
       SaveAndRestore<bool> VisitWithReadSemantics(HasWriteSemantics, false);
+      OS << "DEBUG:: Visiting Args with Read semantics.\n";
       for(ExprIterator I = Exp->arg_begin(), E = Exp->arg_end();
           I != E; ++I) {
         Visit(*I);
       }
+      OS << "DEBUG:: DONE Visiting Args with Read semantics.\n";
     }
 
     FunctionDecl *FunD = dyn_cast<FunctionDecl>(CalleeDecl);
     VarDecl *VarD = dyn_cast<VarDecl>(CalleeDecl); // Non-null if calling through fn-ptr
     assert(FunD || VarD);
     if (FunD) {
-
+      OS << "DEBUG:: VisitCallExpr::(FunD!=NULL)\n";
       SubstitutionVector SubV;
-      // FIXME BEGIN: this code is the same as in AssignmentChecker -- Factor it Out
-      ParameterSet *ParamSet = new ParameterSet();
-      assert(ParamSet);
-      // Build SubV for function region params
-      const ParameterVector *ParamV = SymT.getParameterVector(CalleeDecl);
-      if (ParamV && ParamV->size() > 0) {
-        ParamV->addToParamSet(ParamSet);
-      }
-      // if isa<CXXMethodDecl>CalleeDecl -> add Class parameters to set
-      if (CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(CalleeDecl)) {
+      if (isa<CXXOperatorCallExpr>(Exp)
+          && dyn_cast<CXXOperatorCallExpr>(Exp)->getOperator() == OO_Call) {
+        OS << "DEBUG:: isa<CXXOperatorCallExpr>(Exp) == true\n";
+        CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(CalleeDecl);
+        assert(CXXCalleeDecl && "Internal Error: Expected isa<CXXMethodDecl>(CalleeDecl)");
         CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
-        ParamV = SymT.getParameterVector(Rec);
-        if (ParamV && ParamV->size() > 0) {
-          ParamV->addToParamSet(ParamSet);
-        }
+        TypeBuilderVisitor TBV(Def, Exp->getArg(0));
+        ASaPType *Typ = TBV.getType();
+        buildTypeSubstitution(SymT, Rec, Typ, SubV);
+        tryBuildParamSubstitutions(Def, SymT, FunD, Exp->arg_begin()+1, Exp->arg_end(), SubV);
+      } else {
+        tryBuildParamSubstitutions(Def, SymT, FunD, Exp->arg_begin(), Exp->arg_end(), SubV);
       }
-      if (ParamSet->size() > 0) {
-        buildParamSubstitutions
-        (Def, SymT, FunD, Exp->arg_begin(),
-                                Exp->arg_end(), *ParamSet, SubV);
-      }
-      delete ParamSet;
-      // FIXME END.
 
       /// 2. Add effects to tmp effects
 
       Effect IE(Effect::EK_InvocEffect, Exp, FunD, &SubV);
       OS << "DEBUG:: Adding invocation Effect "<< IE.toString() << "\n";
       EC->addEffect(&IE);
-      OS << "DEBUG:: After Adding invocation Effect\n";
-      SaveAndRestore<int> EffectAccumulator(EffectCount, EffectCount+1);
+
       /// 3. Visit base if it exists
+      SaveAndRestore<int> EffectAccumulator(EffectCount, EffectCount+1);
       Visit(Exp->getCallee());
     // end if (FunD)
     } else { // VarD != null (call through function pointer)

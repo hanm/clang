@@ -3,14 +3,16 @@
 
 class [[asap::param("P")]] IntersectInvoker {
 public:
-	void operator() [[asap::reads("P")]] () const {}
+  void operator() [[asap::reads("P")]] () const {}
+  void exec [[asap::reads("P")]] () const {}
 };
 
 class [[asap::region("R")]] CollisionTree {
 public:
-	void intersect [[asap::reads("R")]] ()
-	{
-		IntersectInvoker leftFn [[asap::arg("R")]];
-		leftFn();
-	}
+  void intersect [[asap::reads("R")]] ()
+  {
+    IntersectInvoker leftFn [[asap::arg("R")]];
+    leftFn.exec();
+    leftFn()
+  }
 };

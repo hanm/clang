@@ -176,6 +176,10 @@ void Effect::print(raw_ostream &OS) const {
     assert(R && "NULL RPL in non-pure effect");
     R->print(OS);
   }
+  if (Kind == EK_InvocEffect) {
+    OS << ": " << FunD->getNameAsString()
+       << "[" << SubV->toString() << "]";
+  }
 }
 
 std::string Effect::toString() const {

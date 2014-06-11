@@ -37,7 +37,7 @@ class EffectConstraintVisitor
   bool HasWriteSemantics;
   /// True when visiting a base expression (e.g., B in B.f, or B->f).
   bool IsBase;
-
+  /// Number of Effects of a statement visited so far. Used for substitutions.
   int EffectCount;
   /// Count of number of dereferences on expression (values in [-1, 0, ...] ).
   int DerefNum;

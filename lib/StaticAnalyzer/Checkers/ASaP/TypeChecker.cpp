@@ -407,26 +407,8 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
                           ExprIterator ArgI,
                           ExprIterator ArgE,
                           SubstitutionVector &SubV) {
-  assert(CalleeDecl);
-  ParameterSet *ParamSet = new ParameterSet();
-  assert(ParamSet);
-  // Build SubV for function region params
-  const ParameterVector *ParamV = SymT.getParameterVector(CalleeDecl);
-  if (ParamV && ParamV->size() > 0) {
-    ParamV->addToParamSet(ParamSet);
-  }
-  // if isa<CXXMethodDecl>CalleeDecl -> add Class parameters to set
-  if (CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(CalleeDecl)) {
-    CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
-    ParamV = SymT.getParameterVector(Rec);
-    if (ParamV && ParamV->size() > 0) {
-      ParamV->addToParamSet(ParamSet);
-    }
-  }
-  if (ParamSet->size() > 0) {
-    buildParamSubstitutions(Def, SymT, CalleeDecl, ArgI, ArgE, *ParamSet, SubV);
-  }
-  delete ParamSet;
+
+  tryBuildParamSubstitutions(Def, SymT, CalleeDecl, ArgI, ArgE, SubV);
 
   OS << "DEBUG:: CALLING typecheckParamAssignments\n";
   FunctionDecl::param_iterator
@@ -469,9 +451,9 @@ typecheckCXXConstructExpr(VarDecl *VarD,
   RecordDecl *ClassDecl = dyn_cast<RecordDecl>(ClassDeclContext);
   assert(ClassDecl);
   // Set up Substitution Vector
-  const ParameterVector *PV = SymT.getParameterVector(ClassDecl);
   const ASaPType *T = SymT.getType(VarD);
-  SubV.add(T, PV);
+  buildTypeSubstitution(SymT, ClassDecl, T, SubV);
+
   typecheckParamAssignments(ConstrDecl, Exp->arg_begin(), Exp->arg_end(), SubV);
   OS << "DEBUG:: DONE with typecheckCXXConstructExpr\n";
 
