@@ -89,6 +89,31 @@ const Decl *getDeclFromContext(const DeclContext *DC);
 
 void assertzTermProlog(term_t Fact, StringRef ErrMsg = "");
 
+void buildTypeSubstitution(const SymbolTable &SymT,
+                           const RecordDecl *ClassD,
+                           const ASaPType *Typ,
+                           SubstitutionVector &SubV);
+
+void buildSingleParamSubstitution(const FunctionDecl *Def,
+                                  SymbolTable &SymT,
+                                  ParmVarDecl *Param, Expr *Arg,
+                                  const ParameterSet &ParamSet,
+                                  SubstitutionVector &SubV);
+
+void buildParamSubstitutions(const FunctionDecl *Def,
+                             SymbolTable &SymT,
+                             const FunctionDecl *CalleeDecl,
+                             ExprIterator ArgI, ExprIterator ArgE,
+                             const ParameterSet &ParamSet,
+                             SubstitutionVector &SubV);
+
+void tryBuildParamSubstitutions(
+        const FunctionDecl *Def,
+        SymbolTable &SymT,
+        const FunctionDecl *CalleeDecl,
+        ExprIterator ArgI, ExprIterator ArgE,
+        SubstitutionVector &SubV);
+
 } // end namespace asap
 } // end namespace clang
 

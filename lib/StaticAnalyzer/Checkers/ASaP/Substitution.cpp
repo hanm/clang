@@ -131,6 +131,20 @@ void SubstitutionVector::push_back_vec(const SubstitutionVector *SubV) {
   }
 }
 
+void SubstitutionVector::add(const ASaPType *Typ,
+                             const ParameterVector *ParamV) {
+  if (Typ && ParamV && ParamV->size() > 0) {
+    for (unsigned int I = 0; I < ParamV->size(); ++I) {
+      const ParamRplElement *ParamEl = ParamV->getParamAt(I);
+      const Rpl *R = Typ->getSubstArg(I);
+      if (ParamEl && R) {
+        Substitution Sub(ParamEl, R);
+        push_back(&Sub);
+      }
+    }
+  }
+}
+
 } // end namespace clang
 } // end namespace asap
 

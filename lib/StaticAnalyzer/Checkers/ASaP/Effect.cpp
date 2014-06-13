@@ -36,7 +36,7 @@ Effect::Effect(EffectKind EK, const Rpl* R,  const Expr* E)
 Effect::Effect(const Effect &E)
   : Kind(E.Kind), Attribute(E.Attribute), Exp(E.Exp), FunD(E.FunD) {
   R = (E.R) ? new Rpl(*E.R) : 0;
-  SubV=new SubstitutionVector();
+  SubV = new SubstitutionVector();
   SubV->push_back_vec(E.SubV);
 }
 
@@ -53,19 +53,22 @@ Effect::~Effect() {
 }
 
 void Effect::substitute(const Substitution *S) {
-  if(Kind == EK_InvocEffect && S){
+  if (S == 0)
+    return; // Nothing to do
+  if (Kind == EK_InvocEffect)
     SubV->push_back(S);
-  }
-  else if (S && R)
+  else if (R)
     S->applyTo(R);
 }
 
 void Effect::substitute(const SubstitutionVector *S) {
-  if(Kind == EK_InvocEffect && S){
+  if (S == 0)
+    return; // Nothing to do
+  if (Kind == EK_InvocEffect)
     SubV->push_back_vec(S);
-  }
-  else if (S && R)
+  else if (R)
     S->applyTo(R);
+
 }
 
 bool Effect::isSubEffectOf(const Effect &That) const {
@@ -172,6 +175,10 @@ void Effect::print(raw_ostream &OS) const {
     OS << " on ";
     assert(R && "NULL RPL in non-pure effect");
     R->print(OS);
+  }
+  if (Kind == EK_InvocEffect) {
+    OS << ": " << FunD->getNameAsString()
+       << "[" << SubV->toString() << "]";
   }
 }
 
