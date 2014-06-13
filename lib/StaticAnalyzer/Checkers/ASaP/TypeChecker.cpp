@@ -56,7 +56,7 @@ AssignmentCheckerVisitor::AssignmentCheckerVisitor(
   Stmt *S,
   bool VisitCXXInitializer
   ) : BaseClass(Def),
-      Type(0), SubV(0) {
+      Type(0) {
 
     OS << "DEBUG:: ******** INVOKING AssignmentCheckerVisitor...(VisitInit="
        << (VisitCXXInitializer?"ture":"false") << ")\n";
@@ -98,11 +98,8 @@ ASaPType *AssignmentCheckerVisitor::stealType() {
 void AssignmentCheckerVisitor::
 VisitCallExpr(CallExpr *Exp) {
   if (!Exp->getBuiltinCallee()) {
-    assert(!SubV);
-    SubV = new SubstitutionVector();
-    typecheckCallExpr(Exp, *SubV);
-    delete SubV;
-    SubV = 0;
+    SubstitutionVector SubV;
+    typecheckCallExpr(Exp, SubV);
   }
 }
 
@@ -171,11 +168,8 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
             break; // VD->getInit() could be a ParenListExpr or perhaps some
                    // other Expr
           assert(Exp);
-          assert(!SubV);
-          SubV = new SubstitutionVector();
-          typecheckCXXConstructExpr(VD, Exp, *SubV);
-          delete SubV;
-          SubV = 0;
+          SubstitutionVector SubV;
+          typecheckCXXConstructExpr(VD, Exp, SubV);
           break;
         }
       }
@@ -337,12 +331,9 @@ VisitCXXConstructExpr(CXXConstructExpr *Exp) {
   OS << "DEBUG:: Visiting CXXConstructExpr: ";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-  assert(!SubV);
-  SubV = new SubstitutionVector();
+  SubstitutionVector SubV;
   typecheckParamAssignments(Exp->getConstructor(),
-                            Exp->arg_begin(), Exp->arg_end(), *SubV);
-  delete SubV;
-  SubV = 0;
+                            Exp->arg_begin(), Exp->arg_end(), SubV);
 }
 
 void AssignmentCheckerVisitor::
@@ -415,19 +406,6 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
     ParamI = CalleeDecl->param_begin(),
     ParamE = CalleeDecl->param_end();
 
-  if (CalleeDecl->isOverloadedOperator()) {
-    if (isa<CXXMethodDecl>(CalleeDecl)) {
-      // if the overloaded operator is a member function, it's 1st
-      // (implicit) argument is 'this' which doesn't have a corresponding
-      // parameter, so skip it!
-      assert(ArgI!=ArgE);
-      OS << "DEBUG:: Callee is Overloaded Operator -> skipping 1st arg:";
-      ArgI->printPretty(OS, 0, Ctx.getPrintingPolicy());
-      OS << ", with Type: " << ArgI->getType().getAsString();
-      OS << "\n";
-      ++ArgI;
-    }
-  }
   for(; ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
     Expr *ArgExpr = *ArgI;
     ParmVarDecl *ParamDecl = *ParamI;
@@ -536,7 +514,23 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
     assert((FunD->isVariadic() || NumParams == NumArgs ||
           NumParams+((FunD->isOverloadedOperator()) ? 1 : 0) == NumArgs) &&
           "Unexpected number of arguments to a call expresion");
-    typecheckParamAssignments(FunD, Exp->arg_begin(), Exp->arg_end(), SubV);
+
+    if (FunD->isOverloadedOperator()
+        && isa<CXXMethodDecl>(FunD)) {
+      // if the overloaded operator is a member function, it's 1st
+      // (implicit) argument is 'this' which doesn't have a corresponding
+      // parameter, so skip it!
+
+      CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(FunD);
+      assert(CXXCalleeDecl && "Internal Error: Expected isa<CXXMethodDecl>(CalleeDecl)");
+      CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
+      TypeBuilderVisitor TBV(Def, Exp->getArg(0));
+      ASaPType *Typ = TBV.getType();
+      buildTypeSubstitution(SymT, Rec, Typ, SubV);
+      typecheckParamAssignments(FunD, Exp->arg_begin()+1, Exp->arg_end(), SubV);
+    } else {
+      typecheckParamAssignments(FunD, Exp->arg_begin(), Exp->arg_end(), SubV);
+    }
     OS << "DEBUG:: DONE typecheckCallExpr\n";
 
     // Now set Type to the return type of this call

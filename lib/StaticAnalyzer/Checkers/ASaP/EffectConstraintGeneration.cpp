@@ -307,13 +307,21 @@ checkEffectCoverage() {
     else if (Eff->getEffectKind() == Effect::EK_InvocEffect) {
       const Expr* Exp=Eff->getExp();
       OS << "====== EK_InvocEffect \n";
-      const FunctionDecl* FunD=Eff->getDecl();
-      SubstitutionVector* SubV=Eff->getSubV();
+      const FunctionDecl* FunD = Eff->getDecl();
+      SubstitutionVector* SubV = Eff->getSubV();
+      assert(FunD && "Internal Error: FunD cannot be null");
+      assert(SubV && "Internal Error: SubV cannot be null");
+      OS << "DEBUG:: SubV = " << SubV->toString() << ". (size = "
+         << SubV->size() << ")\n";
+      OS << "======= EK_InvocEffect -before call to getEffectSummary() for ("
+         << FunD << " CanD(" << FunD->getCanonicalDecl() << "))\n";
+      FunD->print(OS, Ctx.getPrintingPolicy());
+      OS << "\n";
 
-      OS << "======= EK_InvocEffect -before call to getEffectSummary()\n";
-      assert(FunD && "Internal Error: FunD should not be null");
       const EffectSummary *Effects =
           SymT.getEffectSummary(FunD->getCanonicalDecl());
+      if (!Effects)
+        continue; // if effect summary is empty, check next collected effect
       if (isa<VarEffectSummary>(Effects)) {
         Result = RK_DUNNO;
         break;
@@ -350,11 +358,11 @@ checkEffectCoverage() {
           Result = RK_DUNNO;
           break;
         }
-      } // end for-all effects in effect summary of invokes effect
+      } // end for all effects in concrete effect summary
       if (Result == RK_DUNNO)
         break;
-    } // end if InvocEffect
-  } // end for-all effects in LHS of Effect Constraint
+    } // end if invokes-effect
+  } // end for all collected effects, check effect coverage
   OS << "DEBUG:: effect check (DONE)\n";
   if (Result == RK_DUNNO) {
     SymT.addInclusionConstraint(EC);
@@ -363,9 +371,6 @@ checkEffectCoverage() {
   }
   IsCoveredBySummary = Result;
 }
-
-
-
 
 void EffectConstraintVisitor::helperVisitAssignment(BinaryOperator *E) {
   OS << "DEBUG:: helperVisitAssignment. ";
@@ -400,6 +405,39 @@ helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
     }
   }
 }
+
+void EffectConstraintVisitor::
+checkCXXConstructExpr(VarDecl *VarD,
+                      CXXConstructExpr *Exp,
+                      SubstitutionVector &SubV) {
+  // 1. build substitutions
+  CXXConstructorDecl *ConstrDecl =  Exp->getConstructor();
+  DeclContext *ClassDeclContext = ConstrDecl->getDeclContext();
+  assert(ClassDeclContext);
+  RecordDecl *ClassDecl = dyn_cast<RecordDecl>(ClassDeclContext);
+  assert(ClassDecl);
+  // Set up Substitution Vector
+  const ASaPType *T = SymT.getType(VarD);
+  buildTypeSubstitution(SymT, ClassDecl, T, SubV);
+  tryBuildParamSubstitutions(Def, SymT, ConstrDecl, Exp->arg_begin(),
+                             Exp->arg_end(), SubV);
+
+  // 2. Add effects to tmp effects
+  Effect IE(Effect::EK_InvocEffect, Exp, ConstrDecl, &SubV);
+  OS << "DEBUG:: Adding invocation Effect "<< IE.toString() << "\n";
+  EC->addEffect(&IE);
+
+  // 3. Visit arguments
+  for (ExprIterator I = Exp->arg_begin(), E = Exp->arg_end();
+       I != E; ++I) {
+      SaveAndRestore<bool> VisitInitWithReadSemantics(HasWriteSemantics, false);
+      SaveAndRestore<int> EffectAccumulate(EffectCount, 0);
+      SaveAndRestore<int> ResetDerefNum(DerefNum,  0);
+      Visit(*I);
+  }
+}
+
+//////////////////////////////////////////////////////////////////////////
 
 void EffectConstraintVisitor::VisitMemberExpr(MemberExpr *Exp) {
   OS << "DEBUG:: VisitMemberExpr: ";
@@ -493,7 +531,61 @@ void EffectConstraintVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   }
   delete RetTyp;
 }
+/////////////////////////////////////////////////////////
+void EffectConstraintVisitor::VisitDeclStmt(DeclStmt *S) {
+  OS << "Decl Stmt INIT ?? (";
+  S->printPretty(OS, 0, Ctx.getPrintingPolicy());
+  OS << ")\n";
+  for(DeclGroupRef::const_iterator I = S->decl_begin(), E = S->decl_end();
+      I != E; ++I) {
+    if (VarDecl *VD = dyn_cast<VarDecl>(*I)) {
+      if (VD->hasInit()) {
+        Expr *Init = VD->getInit();
 
+        OS << "DEBUG:: EffectConstraintGenDeclWithInit: Decl = ";
+        VD->print(OS,  Ctx.getPrintingPolicy());
+        OS << "\n VarDecl isDependentType ? "
+          << (VD->getType()->isDependentType() ? "true" : "false") << "\n";
+        OS << "\n Init Expr = ";
+        Init->printPretty(OS, 0, Ctx.getPrintingPolicy());
+        OS << "\n";
+        Init->dump(OS, BR.getSourceManager());
+        OS << "\n";
+
+        OS << "DEBUG:: IsDirectInit = "
+           << (VD->isDirectInit()?"true":"false")
+           << "\n";
+        OS << "DEBUG:: Init Style: ";
+        switch(VD->getInitStyle()) {
+        case VarDecl::CInit:
+          OS << "CInit\n";
+          {
+            SaveAndRestore<bool> VisitInitWithReadSemantics(HasWriteSemantics, false);
+            SaveAndRestore<int> EffectAccumulate(EffectCount, 0);
+            SaveAndRestore<int> ResetDerefNum(DerefNum,  0);
+            Visit(VD->getInit());
+          }
+          break;
+        case VarDecl::ListInit:
+          OS << "ListInit\n";
+          // Intentonally falling through (i.e., no break stmt).
+        case VarDecl::CallInit:
+          OS << "CallInit\n";
+          CXXConstructExpr *Exp = dyn_cast<CXXConstructExpr>(VD->getInit());
+          if (VD->getType()->isDependentType() && !Exp)
+            break; // VD->getInit() could be a ParenListExpr or perhaps some
+                   // other Expr
+          assert(Exp);
+          SubstitutionVector SubV;
+          checkCXXConstructExpr(VD, Exp, SubV);
+          break;
+        }
+      }
+    } // end if VarDecl
+  } // end for each declaration
+}
+
+/////////////////////////////////////////////////////////
 void EffectConstraintVisitor::VisitDeclRefExpr(DeclRefExpr *Exp) {
   OS << "DEBUG:: VisitDeclRefExpr --- whatever that is!: ";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
@@ -567,20 +659,27 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
     VarDecl *VarD = dyn_cast<VarDecl>(CalleeDecl); // Non-null if calling through fn-ptr
     assert(FunD || VarD);
     if (FunD) {
+      // Use the cannonical decl for annotations
+      FunctionDecl *CanD = FunD->getCanonicalDecl();
+      if (CanD)
+        FunD = CanD;
       OS << "DEBUG:: VisitCallExpr::(FunD!=NULL)\n";
       SubstitutionVector SubV;
-      if (isa<CXXOperatorCallExpr>(Exp)
-          && dyn_cast<CXXOperatorCallExpr>(Exp)->getOperator() == OO_Call) {
+      if (FunD->isOverloadedOperator()
+          && isa<CXXMethodDecl>(FunD)) {
+
         OS << "DEBUG:: isa<CXXOperatorCallExpr>(Exp) == true\n";
-        CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(CalleeDecl);
-        assert(CXXCalleeDecl && "Internal Error: Expected isa<CXXMethodDecl>(CalleeDecl)");
+        CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(FunD);
+        assert(CXXCalleeDecl && "Internal Error: Expected isa<CXXMethodDecl>(FunD)");
         CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
         TypeBuilderVisitor TBV(Def, Exp->getArg(0));
         ASaPType *Typ = TBV.getType();
         buildTypeSubstitution(SymT, Rec, Typ, SubV);
-        tryBuildParamSubstitutions(Def, SymT, FunD, Exp->arg_begin()+1, Exp->arg_end(), SubV);
+        tryBuildParamSubstitutions(Def, SymT, FunD, Exp->arg_begin()+1,
+                                   Exp->arg_end(), SubV);
       } else {
-        tryBuildParamSubstitutions(Def, SymT, FunD, Exp->arg_begin(), Exp->arg_end(), SubV);
+        tryBuildParamSubstitutions(Def, SymT, FunD, Exp->arg_begin(),
+                                   Exp->arg_end(), SubV);
       }
 
       /// 2. Add effects to tmp effects
