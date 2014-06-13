@@ -40,7 +40,6 @@ class AssignmentCheckerVisitor
   typedef ASaPStmtVisitor<AssignmentCheckerVisitor> BaseClass;
 
   ASaPType *Type;
-  SubstitutionVector *SubV;
 
 public:
   AssignmentCheckerVisitor (
