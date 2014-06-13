@@ -13,6 +13,6 @@ public:
   {
     IntersectInvoker leftFn [[asap::arg("R")]];
     leftFn.exec();
-    leftFn()
+    leftFn();
   }
 };
