@@ -202,11 +202,11 @@ public:
     FILE *File = fopen("/opt/lib/asap.pl", "r");
     if (!File) {
       fclose(File);
-      assert(File && "pl file does not exist");
+      assert(File && "Prolog rules file does not exist");
     }
     // Consult the asap.pl file
-    predicate_t Consult = PL_predicate("consult",1,"user");
-    term_t Plfile=PL_new_term_ref();
+    predicate_t Consult = PL_predicate("consult", 1, "user");
+    term_t Plfile = PL_new_term_ref();
     PL_put_atom_chars(Plfile, "/opt/lib/asap.pl");
     PL_call_predicate(NULL, PL_Q_NORMAL, Consult, Plfile);
 
