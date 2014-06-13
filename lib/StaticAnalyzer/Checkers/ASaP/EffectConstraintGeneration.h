@@ -64,6 +64,8 @@ class EffectConstraintVisitor
 
   void helperVisitAssignment(BinaryOperator *E);
   void helperVisitCXXConstructorDecl(const CXXConstructorDecl *D);
+  void checkCXXConstructExpr(VarDecl *VarD,
+                             CXXConstructExpr *Exp, SubstitutionVector &SubV);
 
 public:
   // Constructor
@@ -88,6 +90,7 @@ public:
   void VisitUnaryPreDec(UnaryOperator *E);
   void VisitReturnStmt(ReturnStmt *Ret);
   void VisitDeclRefExpr(DeclRefExpr *E);
+  void VisitDeclStmt(DeclStmt *S);
   void VisitCXXThisExpr(CXXThisExpr *E);
   void VisitCompoundAssignOperator(CompoundAssignOperator *E);
   void VisitBinAssign(BinaryOperator *E);
