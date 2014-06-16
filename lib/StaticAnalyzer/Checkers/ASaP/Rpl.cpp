@@ -185,13 +185,19 @@ bool Rpl::RplRef::isDisjointRight(RplRef &That) {
   }
 }
 
+inline bool Rpl::isPrivate() const {
+  return (this->RplElements.size()==1 &&
+      this->RplElements[0] == SymbolTable::LOCAL_RplElmt);
+}
+
 bool Rpl::isDisjoint(const Rpl &That) const {
   RplRef LHS1(*this);
   RplRef RHS1(That);
   RplRef LHS2(*this);
   RplRef RHS2(That);
 
-  return LHS1.isDisjointLeft(RHS1) || LHS2.isDisjointRight(RHS2);
+  return isPrivate() || That.isPrivate()
+         || LHS1.isDisjointLeft(RHS1) || LHS2.isDisjointRight(RHS2);
 }
 ///////////////////////////////////////////////////////////////////////////////
 ////   Rpl

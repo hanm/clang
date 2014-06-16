@@ -266,6 +266,7 @@ typedef llvm::SmallVector<const RplElement*,
   // Predicates
   inline bool isFullySpecified() { return FullySpecified; }
   inline bool isEmpty() { return RplElements.empty(); }
+  bool isPrivate() const;
 
   // Nesting (Under)
   /// \brief Returns true iff this is under That
