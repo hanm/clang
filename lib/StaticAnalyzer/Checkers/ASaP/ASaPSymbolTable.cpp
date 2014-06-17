@@ -124,7 +124,7 @@ isSpecialRplElement(const llvm::StringRef& Str) {
 
 /// Non-Static Functions
 SymbolTable::SymbolTable()
-    : AnnotScheme(0), ParamIdNumber(0), RegionIdNumber(0) {
+  : AnnotScheme(0), ParamIdNumber(0), RegionIdNumber(0), RVIdNumber(0) {
   // FIXME: make this static like the other default Regions etc
   ParamRplElement Param("P","p");
   BuiltinDefaultRegionParameterVec = new ParameterVector(Param);
@@ -319,21 +319,32 @@ RegionNameVector *SymbolTable::getRegionNameVector(const Decl *D) const {
   }
 }
 
-RplDomain *SymbolTable::buildDomain(const Decl *D) const {
+RplDomain *SymbolTable::buildDomain(const Decl *D) {
   //add region names from D to RNV
+  OSv2 << "in buildDomain\n";
   RegionNameVector *RNV = getRegionNameVector(D);
   const ParameterVector *PV = getParameterVector(D);
   const DeclContext *DC = D->getDeclContext();
   while (DC){
+    OSv2 << "in while loop\n";
     const Decl *EnclosingDecl = getDeclFromContext(DC);
     if (EnclosingDecl){
+      //add fresh region variable name to enclosing scope
+      const NamedDecl* ND = dyn_cast<NamedDecl>(D);
+      assert(ND);
+      StringRef Name = ND->getName();
+      OSv2 << "before makeFresghRVName "<<Name<<"\n";
+      StringRef RV = makeFreshRVName(Name);
+      OSv2 << "after makeFreshRVName " <<RV<<" \n";
+      SymTable[EnclosingDecl]->addRegionName(Name, RV);
+      OSv2 << "Before recursive call to buildDomain\n";
       RplDomain *Parent = buildDomain(EnclosingDecl);
       return new RplDomain(RNV, PV, Parent);
     }
     else
       DC = DC->getParent();
   }
-
+  
   return 0;
 }
 
@@ -793,9 +804,17 @@ lookupParameterName(StringRef Name) {
 
 void SymbolTableEntry::
 addRegionName(StringRef Name, StringRef PrologName) {
-  if (!RegnNameSet)
+  OSv2 << "in addRegionName\n";
+  if (!RegnNameSet){
+    OSv2 << "in if\n";
     RegnNameSet = new RegionNameSet();
+  }
+  else{
+    OSv2 << "in else\n";
+  }
+  OSv2 << "before insertion\n";
   RegnNameSet->insert(NamedRplElement(Name, PrologName));
+  OSv2 << "addRegionName is done\n";
 }
 
 void SymbolTableEntry::

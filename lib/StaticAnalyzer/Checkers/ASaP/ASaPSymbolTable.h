@@ -103,6 +103,7 @@ class SymbolTable {
 
   unsigned long ParamIdNumber;
   unsigned long RegionIdNumber;
+  unsigned long RVIdNumber;
 
   // Private Methods
   /// \brief Return the next unused ID number. Used to encode names into Prolog.
@@ -110,6 +111,8 @@ class SymbolTable {
 
   /// \brief Return the next unused ID number. Used to encode names into Prolog.
   inline unsigned long getNextUniqueRegionID() { return RegionIdNumber++; }
+
+  inline unsigned long getNextUniqueRVID() { return RVIdNumber++; }
 
   inline StringRef addFreshName(StringRef SRef) {
     std::string *S = new std::string(SRef.str());
@@ -171,7 +174,7 @@ public:
   /// \brief Returns the region names declarations for D or null.
   const RegionNameSet *getRegionNameSet(const Decl *D) const;
   RegionNameVector *getRegionNameVector(const Decl *D) const;
-  RplDomain *buildDomain(const Decl *D) const;
+  RplDomain *buildDomain(const Decl *D) ;
 
   /// \brief Returns the effect summmary for D or null.
   const EffectSummary *getEffectSummary(const Decl *D) const;
@@ -247,6 +250,13 @@ public:
   inline StringRef makeFreshRegionName(const std::string &Name) {
     std::stringstream ss;
     ss << "r" << getNextUniqueRegionID()
+       << "_" << Name;
+    return addFreshName(ss.str());
+  }
+
+  inline StringRef makeFreshRVName(const std::string &Name) {
+    std::stringstream ss;
+    ss << "rv" << getNextUniqueRVID()
        << "_" << Name;
     return addFreshName(ss.str());
   }
