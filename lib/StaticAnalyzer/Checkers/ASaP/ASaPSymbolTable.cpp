@@ -124,7 +124,8 @@ isSpecialRplElement(const llvm::StringRef& Str) {
 
 /// Non-Static Functions
 SymbolTable::SymbolTable()
-    : AnnotScheme(0), ParamIdNumber(0), RegionIdNumber(0) {
+    : AnnotScheme(0), ParamIdNumber(0),
+      RegionIdNumber(0), DeclIdNumber(0) {
   // FIXME: make this static like the other default Regions etc
   ParamRplElement Param("P","p");
   BuiltinDefaultRegionParameterVec = new ParameterVector(Param);
@@ -584,17 +585,35 @@ static void emitConstraintSolution(EffectInclusionConstraint *EC,
 }
 
 void SymbolTable::solveInclusionConstraints() {
+  int Res = 0;
   //iterate through symbol table entries
   for (SymbolTableMapT::const_iterator
          MI = SymTable.begin(),
          ME = SymTable.end();
        MI != ME; ++MI) {
     //iterate through paramters and add facts
+    const Decl *Dec = (*MI).first;
     const SymbolTableEntry *Entry = (*MI).second;
     if (Entry->hasParameterVector()) {
       Entry->getParameterVector()->assertzProlog();
     }
-    // TODO: same thing with region names, effect summaries,
+    if (Entry->getRegionNameSet()) {
+      Entry->getRegionNameSet()->assertzProlog();
+    }/*
+    if (Entry->hasEffectSummary()) {
+      assert(isa<NamedDecl>(Dec) && "Internal Error: Expected NamedDecl");
+      const NamedDecl *NDec = dyn_cast<NamedDecl>(Dec);
+      std::string Name = NDec->getNameAsString(); // TODO: produce unique names
+      term_t EffSumT = Entry->getEffectSummary()->getPLTerm();
+
+      term_t HasEffSumT = PL_new_term_ref();
+      functor_t HasEffSumF =
+        PL_new_functor(PL_new_atom(PL_HasEffSum.c_str()),2);
+      Res = PL_cons_functor(HasEffSumT, HasEffSumF,
+                            PL_new_atom(Name.c_str()), EffSumT);
+      assert(Res && "Failed to build 'has_effect_summary' functor");
+      assertzTermProlog(HasEffSumT, "Failed to assert 'has_effect_summary' to Prolog facts");
+    }*/
   }
   OSv2 << "DEBUG:: Done emmitting rgn_param facts, gonna do esi_constraints next\n";
 
@@ -613,10 +632,10 @@ void SymbolTable::solveInclusionConstraints() {
 
     term_t EVName = PL_new_term_ref();
     term_t EVTerm = PL_new_term_ref();
-    functor_t EVFunctor = PL_new_functor(PL_new_atom("effect_var"), 1);
+    functor_t EVFunctor = PL_new_functor(PL_new_atom(PL_EffectVar.c_str()), 1);
 
     PL_put_atom_chars(EVName, EV.str().c_str()); // variable name needs to be fresh
-    int Res = PL_cons_functor(EVTerm, EVFunctor, EVName);
+    Res = PL_cons_functor(EVTerm, EVFunctor, EVName);
     assert(Res && "Failed to build 'effect_var' Prolog term");
 
     term_t ESIID = PL_new_term_ref();
@@ -631,7 +650,8 @@ void SymbolTable::solveInclusionConstraints() {
     term_t LHS = (*I)->getLHS()->getPLTerm();
 
     term_t ESITerm  = PL_new_term_ref();
-    functor_t ESIFunctor = PL_new_functor(PL_new_atom("esi_constraint"), 4);
+    functor_t ESIFunctor =
+      PL_new_functor(PL_new_atom(PL_ESIConstraint.c_str()), 4);
     Res = PL_cons_functor(ESITerm, ESIFunctor, ESIID, FNameTerm, LHS, EVTerm);
     assert(Res && "Failed to build 'esi_constraint' Prolog term");
 
@@ -641,7 +661,7 @@ void SymbolTable::solveInclusionConstraints() {
 
   OSv2 << "DEBUG:: Done emmitting esi_constraints, gonna call effect inference next\n";
   Num=1;
-  //loop to call esi_collect
+  //loop to call esi_collect (effect inference)
   for (InclusionConstraintsSetT::iterator
           I = InclusionConstraints.begin(),
           E = InclusionConstraints.end();
@@ -668,7 +688,7 @@ void SymbolTable::solveInclusionConstraints() {
 
     int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, ESI1, H0);
 
-    assert(Rval && "rval is false");
+    assert(Rval && "Effect Inference Failed");
 
     char* Solution;
     int Res=PL_get_chars(H3, &Solution, CVT_WRITE|BUF_RING);

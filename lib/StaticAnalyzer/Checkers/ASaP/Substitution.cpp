@@ -56,11 +56,12 @@ void Substitution::set(const RplElement *FromEl, const Rpl *ToRpl) {
 }
 term_t Substitution::getPLTerm() const {
   term_t Result = PL_new_term_ref();
-  functor_t SubFunctor = PL_new_functor(PL_new_atom("param_sub"), 2);
+  functor_t SubFunctor =
+    PL_new_functor(PL_new_atom(PL_ParamSub.c_str()), 2);
   assert(FromEl && "Subtitution missing left hand side");
   assert(ToRpl && "Substitution missing right hand side");
   int Res = PL_cons_functor(Result, SubFunctor,
-                            FromEl->getPLTerm(), 
+                            FromEl->getPLTerm(),
                             ToRpl->getRplElementsPLTerm());
   assert(Res && "Failed to create prolog term_t for Substitution");
   return Result;

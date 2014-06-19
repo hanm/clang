@@ -32,7 +32,7 @@
 namespace clang {
 namespace asap {
 
-static StringRef BugCategory = "Safe Parallelism";
+static const StringRef BugCategory = "Safe Parallelism";
 
 #ifdef ASAP_DEBUG
 raw_ostream &os = llvm::errs();

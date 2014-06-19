@@ -95,6 +95,10 @@ public:
     return (Kind == EK_NoEffect) ? true : false;
   }
 
+  inline bool isCompound() const {
+    return (Kind == EK_InvocEffect);
+  }
+
   /// \brief Returns true iff this effect has RPL argument.
   inline bool hasRplArgument() const { return !isNoEffect(); }
   /// \brief Returns true if this effect is atomic.
@@ -137,9 +141,6 @@ public:
   /// \brief true iff this # That
   bool isNonInterfering(const Effect &That) const;
 
-  /// \brief Returns covering effect in effect summary or null.
-  //const Effect *isCoveredBy(const EffectSummary &ES);
-  //  EffectSummary::Trivalent isCoveredBy(const EffectSummary &ES);
 }; // end class Effect
 
 
@@ -209,7 +210,8 @@ public:
   EffectSummary(SummaryKind SK) : Kind(SK) {}
   virtual EffectSummary *clone() const = 0;
   virtual ~EffectSummary() {};
-};
+  virtual term_t getPLTerm() const = 0;
+}; // end class EffectSummary
 
 #ifndef EFFECT_SUMMARY_SIZE
   #define EFFECT_SUMMARY_SIZE 8
@@ -253,6 +255,7 @@ public:
   virtual void substitute(const SubstitutionVector *SubV);
 
   virtual ~ConcreteEffectSummary() {};
+  virtual term_t getPLTerm() const;
 }; // end class ConcreteEffectSummary
 
 class VarEffectSummary : public EffectSummary {
@@ -288,6 +291,7 @@ public:
   }
 
   virtual ~VarEffectSummary() {};
+  virtual term_t getPLTerm() const;
 }; // end class VarEffectSummary
 
 

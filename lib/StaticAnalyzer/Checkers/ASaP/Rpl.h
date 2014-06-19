@@ -21,7 +21,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "ASaPUtil.h"  // Included for the 2 uses of OSv2
+#include "ASaPUtil.h"
 #include "OwningPtrSet.h"
 #include "OwningVector.h"
 
@@ -475,7 +475,8 @@ public:
            PI = begin(), PE = end();
          PI != PE; ++PI) {
       term_t ParamT = PL_new_term_ref();
-      functor_t RPFunctor = PL_new_functor(PL_new_atom("rgn_param"), 1);
+      functor_t RPFunctor =
+        PL_new_functor(PL_new_atom(PL_RgnParam.c_str()), 1);
       int Res = PL_cons_functor(ParamT, RPFunctor, (*PI)->getPLTerm());
       assert(Res && "Failed to create 'rgn_param' Prolog term");
       assertzTermProlog(ParamT,"Failed to assert 'rgn_param' to Prolog facts");
@@ -550,6 +551,7 @@ class RegionNameSet
 public:
   /// \brief Returns the NamedRplElement with name=Name or null.
   const NamedRplElement *lookup (StringRef Name);
+  void assertzProlog() const;
 }; // End class RegionNameSet.
 
 

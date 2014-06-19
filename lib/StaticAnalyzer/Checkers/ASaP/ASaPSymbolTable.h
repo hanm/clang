@@ -103,6 +103,7 @@ class SymbolTable {
 
   unsigned long ParamIdNumber;
   unsigned long RegionIdNumber;
+  unsigned long DeclIdNumber;
 
   // Private Methods
   /// \brief Return the next unused ID number. Used to encode names into Prolog.
@@ -110,6 +111,9 @@ class SymbolTable {
 
   /// \brief Return the next unused ID number. Used to encode names into Prolog.
   inline unsigned long getNextUniqueRegionID() { return RegionIdNumber++; }
+
+  /// \brief Return the next unused ID number. Used to encode names into Prolog.
+  inline unsigned long getNextUniqueDeclID() { return DeclIdNumber++; }
 
   inline StringRef addFreshName(StringRef SRef) {
     std::string *S = new std::string(SRef.str());
@@ -120,7 +124,6 @@ class SymbolTable {
 
 
 public:
-
   // Static Constants
   static const StarRplElement *STAR_RplElmt;
   static const SpecialRplElement *ROOT_RplElmt;
@@ -251,6 +254,13 @@ public:
     return addFreshName(ss.str());
   }
 
+  inline StringRef makeFreshDeclName(const std::string &Name) {
+    std::stringstream ss;
+    ss << "fn" << getNextUniqueDeclID()
+       << "_" << Name;
+    return addFreshName(ss.str());
+  }
+
   inline void addInclusionConstraint(EffectInclusionConstraint* EIC){
     InclusionConstraints.insert(EIC);
   }
@@ -280,6 +290,7 @@ public:
 class SymbolTableEntry {
   friend class SymbolTable;
   // Fields
+  //StringRef PrologName;
   ASaPType *Typ;
   ParameterVector *ParamVec;
   RegionNameSet *RegnNameSet;
@@ -299,6 +310,7 @@ class SymbolTableEntry {
   void computeInheritanceSubVec();
 
 public:
+  //SymbolTableEntry(StringRef PrologName);
   SymbolTableEntry();
   ~SymbolTableEntry();
 

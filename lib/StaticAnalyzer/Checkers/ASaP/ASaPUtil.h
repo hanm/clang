@@ -25,6 +25,26 @@
 namespace clang {
 namespace asap {
 
+  // Static Constant Strings
+static const std::string PL_RgnName = "rgn_name";
+static const std::string PL_RgnParam = "rgn_param";
+
+static const std::string PL_NoEffect = "pure";
+static const std::string PL_ReadsEffect = "reads";
+static const std::string PL_WritesEffect = "writes";
+static const std::string PL_AtomicReadsEffect = "atomic_reads";
+static const std::string PL_AtomicWritesEffect = "atomic_writes";
+static const std::string PL_InvokesEffect = "invokes";
+
+static const std::string PL_EffectSummary = "effect_summary";
+static const std::string PL_EffectVar = "effect_var";
+static const std::string PL_Rpl = "rpl";
+static const std::string PL_ParamSub = "param_sub";
+
+static const std::string PL_ESIConstraint = "esi_constraint";
+static const std::string PL_HasEffSum = "has_effect_summary";
+
+
 #define ASAP_DEBUG
 #define ASAP_DEBUG_VERBOSE2
 extern raw_ostream &os;

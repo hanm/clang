@@ -195,37 +195,41 @@ term_t Effect::getPLTerm() const {
   int Res = 0;
   switch(Kind) {
     case EK_NoEffect:
-      Res = PL_put_atom_chars(Result,"pure");
+      Res = PL_put_atom_chars(Result, PL_NoEffect.c_str());
       assert(Res && "Failed to create Prolog term for 'no_effect'");
       break;
     case EK_ReadsEffect:
       assert(R && "Reads effect missing Rpl object");
-      EffectFunctor = PL_new_functor(PL_new_atom("reads"), 1);
+      EffectFunctor =
+        PL_new_functor(PL_new_atom(PL_ReadsEffect.c_str()), 1);
       Res = PL_cons_functor(Result, EffectFunctor, R->getPLTerm());
       assert(Res && "Failed to create Prolog term for 'reads' effect");
       break;
     case EK_WritesEffect:
       assert(R && "Writes effect missing Rpl object");
-      EffectFunctor = PL_new_functor(PL_new_atom("writes"), 1);
+      EffectFunctor =
+        PL_new_functor(PL_new_atom(PL_WritesEffect.c_str()), 1);
       Res = PL_cons_functor(Result, EffectFunctor, R->getPLTerm());
       assert(Res && "Failed to create Prolog term for 'writes' effect");
       break;
     case EK_AtomicReadsEffect:
       assert(R && "Atomic-Reads effect missing Rpl object");
-      EffectFunctor = PL_new_functor(PL_new_atom("atomic_eads"), 1);
+      EffectFunctor =
+        PL_new_functor(PL_new_atom(PL_AtomicReadsEffect.c_str()), 1);
       Res = PL_cons_functor(Result, EffectFunctor, R->getPLTerm());
       assert(Res && "Failed to create Prolog term for 'atomic_reads' effect");
       break;
     case EK_AtomicWritesEffect:
       assert(R && "Atomic-Writes effect missing Rpl object");
-      EffectFunctor = PL_new_functor(PL_new_atom("atomic_writes"), 1);
+      EffectFunctor =
+        PL_new_functor(PL_new_atom(PL_AtomicWritesEffect.c_str()), 1);
       Res = PL_cons_functor(Result, EffectFunctor, R->getPLTerm());
       assert(Res && "Failed to create Prolog term for 'atomic-writes' effect");
       break;
     case EK_InvocEffect:
-      EffectFunctor = PL_new_functor(PL_new_atom("invokes"), 2);
+      EffectFunctor = PL_new_functor(PL_new_atom(PL_InvokesEffect.c_str()), 2);
       term_t CalleeName = PL_new_term_ref();
-      PL_put_atom_chars(CalleeName, FunD->getNameAsString().data() ); // FIXME: use unique prolog name instead
+      PL_put_atom_chars(CalleeName, FunD->getNameAsString().c_str() ); // FIXME: use unique prolog name instead
       Res = PL_cons_functor(Result, EffectFunctor, CalleeName, SubV->getPLTerm());
       assert(Res && "Failed to create Prolog term for 'invokes' effect");
       break;
@@ -442,6 +446,32 @@ void ConcreteEffectSummary::substitute(const SubstitutionVector *SubV) {
   OS << "after iterating\n";
 }
 
+term_t ConcreteEffectSummary::getPLTerm() const {
+  int Res = 0;
+  term_t EffectSumT = PL_new_term_ref();
+  functor_t EffectSumF = PL_new_functor(PL_new_atom(PL_EffectSummary.c_str()), 2);
+  term_t SimpleL = PL_new_term_ref();
+  PL_put_nil(SimpleL);
+  term_t CompoundL = PL_new_term_ref();
+  PL_put_nil(CompoundL);
+
+  for(SetT::iterator I = begin(), E = end(); I != E; ++I) {
+    Effect *Eff = *I;
+    term_t Term = Eff->getPLTerm();
+    if (Eff->isCompound()) {
+      Res = PL_cons_list(CompoundL, Term, CompoundL);
+      assert(Res && "Failed to add Compound Effect to Prolog list term");
+    } else {
+      Res = PL_cons_list(SimpleL, Term, SimpleL);
+      assert(Res && "Failed to add Simple Effect to Prolog list term");
+    }
+  }
+
+  Res = PL_cons_functor(EffectSumT, EffectSumF, SimpleL, CompoundL);
+  assert(Res && "Failed to create 'effect_summary' Prolog term");
+  return EffectSumT;
+}
+
 //VarEffectSummary
 void VarEffectSummary::print(raw_ostream &OS,
                           std::string Separator,
@@ -449,6 +479,13 @@ void VarEffectSummary::print(raw_ostream &OS,
   OS << "Var Effect Summary";
 }
 
+term_t VarEffectSummary::getPLTerm() const {
+  term_t EffectSumT = PL_new_term_ref();
+  functor_t EffectSumF = PL_new_functor(PL_new_atom(PL_EffectVar.c_str()), 1);
+  int Res = PL_cons_functor(EffectSumT, EffectSumF, "evX");
+  assert(Res && "Failed to create 'effect_var' Prolog term");
+  return EffectSumT;
+}
 
 } // end namespace clang
 } // end namespace asap
