@@ -65,7 +65,7 @@ protected:
 class ParametricAnnotationScheme : public AnnotationScheme {
 public:
   // Constructor
-  ParametricAnnotationScheme(SymbolTable &SymT) :AnnotationScheme(SymT) {}
+  ParametricAnnotationScheme(SymbolTable &SymT) : AnnotationScheme(SymT) {}
   // Destructor
   virtual ~ParametricAnnotationScheme() {}
 
@@ -123,11 +123,11 @@ public:
 }; // end class CheckGlobalsAnnotationScheme
 
 // Insert effect summary variables and rpl variables wherever they are missing.
-class InferenceAnnotationScheme : public SimpleAnnotationScheme {
+class InferenceAnnotationScheme : public ParametricAnnotationScheme {
 public:
   // Constructor
   InferenceAnnotationScheme(SymbolTable &SymT)
-                           : SimpleAnnotationScheme(SymT) {}
+                           : ParametricAnnotationScheme(SymT) {}
   // Destructor
   virtual ~InferenceAnnotationScheme() {}
 
