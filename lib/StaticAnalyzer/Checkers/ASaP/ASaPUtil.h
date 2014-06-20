@@ -44,6 +44,8 @@ static const std::string PL_ParamSub = "param_sub";
 static const std::string PL_ESIConstraint = "esi_constraint";
 static const std::string PL_HasEffSum = "has_effect_summary";
 
+static const std::string PL_UnNamedDecl = "unnamed";
+
 
 #define ASAP_DEBUG
 #define ASAP_DEBUG_VERBOSE2

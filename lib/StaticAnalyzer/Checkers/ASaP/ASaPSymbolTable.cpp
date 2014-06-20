@@ -51,7 +51,9 @@ const SpecialRplElement *SymbolTable::ROOT_RplElmt = 0;
 const SpecialRplElement *SymbolTable::LOCAL_RplElmt = 0;
 const SpecialRplElement *SymbolTable::GLOBAL_RplElmt = 0;
 const SpecialRplElement *SymbolTable::IMMUTABLE_RplElmt = 0;
+const ConcreteEffectSummary *SymbolTable::PURE_EffSum = 0;
 const Effect *SymbolTable::WritesLocal = 0;
+
 SymbolTable *SymbolTable::Table = 0;
 VisitorBundle SymbolTable::VB;
 
@@ -63,6 +65,10 @@ void SymbolTable::Initialize(VisitorBundle &VisB) {
     LOCAL_RplElmt = new SpecialRplElement(SpecialRplElement::SRK_Local);
     GLOBAL_RplElmt = new SpecialRplElement(SpecialRplElement::SRK_Global);
     IMMUTABLE_RplElmt = new SpecialRplElement(SpecialRplElement::SRK_Immutable);
+
+    Effect Pure(Effect::EK_NoEffect,0);
+    PURE_EffSum = new ConcreteEffectSummary(Pure);
+
     Rpl R(*LOCAL_RplElmt);
     R.appendElement(STAR_RplElmt);
     WritesLocal = new Effect(Effect::EK_WritesEffect, &R);
@@ -81,6 +87,8 @@ void SymbolTable::Destroy() {
     delete LOCAL_RplElmt;
     delete GLOBAL_RplElmt;
     delete IMMUTABLE_RplElmt;
+    delete PURE_EffSum;
+
     delete WritesLocal;
     delete Table;
 
@@ -89,6 +97,8 @@ void SymbolTable::Destroy() {
     LOCAL_RplElmt = 0;
     GLOBAL_RplElmt = 0;
     IMMUTABLE_RplElmt = 0;
+    PURE_EffSum = 0;
+
     WritesLocal = 0;
     Table = 0;
   }
@@ -299,6 +309,14 @@ getInheritanceSubVec(const Decl *D) const {
     return SymTable.lookup(D)->getInheritanceSubVec();
 }
 
+const StringRef SymbolTable::getPrologName(const Decl *D) const {
+  if (!SymTable.lookup(D)) {
+    assert(false && "Internal Error: Decl missing from Symbol Table");
+    return PL_UnNamedDecl;
+  } else
+    return SymTable.lookup(D)->getPrologName();
+}
+
 const RegionNameSet *SymbolTable::getRegionNameSet(const Decl *D) const {
   if (!SymTable.lookup(D))
     return 0;
@@ -347,7 +365,7 @@ const EffectSummary *SymbolTable::getEffectSummary(const Decl *D) const {
 
 bool SymbolTable::setType(const Decl* D, ASaPType *T) {
   if (!SymTable[D])
-    SymTable[D] = new SymbolTableEntry();
+    createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasType())
     return false;
@@ -359,7 +377,7 @@ bool SymbolTable::setType(const Decl* D, ASaPType *T) {
 
 bool SymbolTable::initParameterVector(const Decl *D) {
   if (!SymTable[D])
-    SymTable[D] = new SymbolTableEntry();
+    createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasParameterVector())
     return false;
@@ -371,7 +389,7 @@ bool SymbolTable::initParameterVector(const Decl *D) {
 
 bool SymbolTable::setParameterVector(const Decl *D, ParameterVector *PV) {
   if (!SymTable[D])
-    SymTable[D] = new SymbolTableEntry();
+    createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasParameterVector())
     return false;
@@ -383,7 +401,7 @@ bool SymbolTable::setParameterVector(const Decl *D, ParameterVector *PV) {
 
 bool SymbolTable::addToParameterVector(const Decl *D, ParameterVector *&PV) {
   if (!SymTable[D])
-    SymTable[D] = new SymbolTableEntry();
+    createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   SymTable[D]->addToParameterVector(PV);
   return true;
@@ -391,7 +409,7 @@ bool SymbolTable::addToParameterVector(const Decl *D, ParameterVector *&PV) {
 
 bool SymbolTable::setRegionNameSet(const Decl *D, RegionNameSet *RNS) {
   if (!SymTable[D])
-    SymTable[D] = new SymbolTableEntry();
+    createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasRegionNameSet())
     return false;
@@ -403,7 +421,7 @@ bool SymbolTable::setRegionNameSet(const Decl *D, RegionNameSet *RNS) {
 
 bool SymbolTable::setEffectSummary(const Decl *D, EffectSummary *ES) {
   if (!SymTable[D])
-    SymTable[D] = new SymbolTableEntry();
+    createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasEffectSummary())
     return false;
@@ -418,7 +436,7 @@ bool SymbolTable::setEffectSummary(const Decl *D, const Decl *Dfrom) {
     return false;
 
   if (!SymTable[D])
-    SymTable[D] = new SymbolTableEntry();
+    createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasEffectSummary())
     return false;
@@ -432,7 +450,7 @@ bool SymbolTable::setEffectSummary(const Decl *D, const Decl *Dfrom) {
 
 void SymbolTable::resetEffectSummary(const Decl *D, const EffectSummary *ES) {
   if (!SymTable[D])
-    SymTable[D] = new SymbolTableEntry();
+    createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasEffectSummary())
     SymTable[D]->deleteEffectSummary();
@@ -490,7 +508,7 @@ bool SymbolTable::addRegionName(const Decl *D, StringRef Name) {
   if (hasRegionOrParameterName(D, Name))
     return false;
   if (!SymTable.lookup(D))
-    SymTable[D] = new SymbolTableEntry();
+    createSymbolTableEntry(D);
   StringRef PrologName = makeFreshRegionName(Name);
   SymTable[D]->addRegionName(Name, PrologName);
   return true;
@@ -500,7 +518,7 @@ bool SymbolTable::addParameterName(const Decl *D, StringRef Name) {
   if (hasRegionOrParameterName(D, Name))
     return false;
   if (!SymTable.lookup(D))
-    SymTable[D] = new SymbolTableEntry();
+    createSymbolTableEntry(D);
   StringRef PrologName = makeFreshParamName(Name);
   SymTable[D]->addParameterName(Name, PrologName);
   return true;
@@ -515,10 +533,10 @@ bool SymbolTable::addBaseTypeAndSub(const Decl *D,
     return false; // FIXME: should we instead merge SubVs?...
   }
   if (!SymTable.lookup(D))
-    SymTable[D] = new SymbolTableEntry();
+    createSymbolTableEntry(D);
 
   if (!SymTable.lookup(Base))
-    SymTable[Base] = new SymbolTableEntry();
+    createSymbolTableEntry(Base);
 
   SymTable[D]->addBaseTypeAndSub(Base, SymTable.lookup(Base), SubV);
   return true;
@@ -599,21 +617,25 @@ void SymbolTable::solveInclusionConstraints() {
     }
     if (Entry->getRegionNameSet()) {
       Entry->getRegionNameSet()->assertzProlog();
-    }/*
-    if (Entry->hasEffectSummary()) {
+    }
+    if (Entry->hasEffectSummary() &&
+        isa<ConcreteEffectSummary>(Entry->getEffectSummary())) {
       assert(isa<NamedDecl>(Dec) && "Internal Error: Expected NamedDecl");
       const NamedDecl *NDec = dyn_cast<NamedDecl>(Dec);
-      std::string Name = NDec->getNameAsString(); // TODO: produce unique names
-      term_t EffSumT = Entry->getEffectSummary()->getPLTerm();
+      *VB.OS << "DEBUG:: NamedDecl = " << NDec->getNameAsString()
+             << ", PrologName = " << getPrologName(NDec).data()
+             << ", EffSum = " << Entry->getEffectSummary()->toString() << "\n";
 
+      term_t EffSumT = Entry->getEffectSummary()->getPLTerm();
       term_t HasEffSumT = PL_new_term_ref();
       functor_t HasEffSumF =
         PL_new_functor(PL_new_atom(PL_HasEffSum.c_str()),2);
-      Res = PL_cons_functor(HasEffSumT, HasEffSumF,
-                            PL_new_atom(Name.c_str()), EffSumT);
+      term_t NameT = PL_new_term_ref();
+      PL_put_atom_chars(NameT, getPrologName(NDec).data());
+      Res = PL_cons_functor(HasEffSumT, HasEffSumF, NameT, EffSumT);
       assert(Res && "Failed to build 'has_effect_summary' functor");
       assertzTermProlog(HasEffSumT, "Failed to assert 'has_effect_summary' to Prolog facts");
-    }*/
+    }
   }
   OSv2 << "DEBUG:: Done emmitting rgn_param facts, gonna do esi_constraints next\n";
 
@@ -624,7 +646,7 @@ void SymbolTable::solveInclusionConstraints() {
            E = InclusionConstraints.end();
        I != E; ++I) {
     assert((*I)->getDef());
-    std::string FName=(*I)->getDef()->getNameAsString(); // TODO: unique prolog name
+    std::string FName = getPrologName((*I)->getDef());
 
     std::string EVstr;
     llvm::raw_string_ostream EV(EVstr);
@@ -666,8 +688,10 @@ void SymbolTable::solveInclusionConstraints() {
           I = InclusionConstraints.begin(),
           E = InclusionConstraints.end();
        I != E; ++I) {
-    std::string FName=(*I)->getDef()->getNameAsString();
+    assert((*I)->getDef());
+    std::string FName = getPrologName((*I)->getDef());
     OSv2 << "****" << FName << "*****"<< "\n";
+
     std::string EVstr;
     llvm::raw_string_ostream EV(EVstr);
 
@@ -763,10 +787,23 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
            "SymbolTable::makeDefaultType");
   }
 }
+
+void SymbolTable::createSymbolTableEntry(const Decl *D) {
+  assert(!SymTable[D] && "Internal Error: trying to create duplicate entry");
+  StringRef Name;
+  if (const NamedDecl *ND = dyn_cast<NamedDecl>(D)) {
+    Name = makeFreshDeclName(ND->getNameAsString());
+  } else {
+    Name = PL_UnNamedDecl;
+  }
+  SymTable[D] = new SymbolTableEntry(Name);
+}
+
 //////////////////////////////////////////////////////////////////////////
 // SymbolTableEntry
 
-SymbolTableEntry::SymbolTableEntry() :
+SymbolTableEntry::SymbolTableEntry(StringRef PrologName) :
+    PrologName(PrologName),
     Typ(0), ParamVec(0), RegnNameSet(0), EffSum(0), InheritanceMap(0),
     ComputedInheritanceSubVec(false), InheritanceSubVec(0) {}
 

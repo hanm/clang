@@ -229,7 +229,7 @@ term_t Effect::getPLTerm() const {
     case EK_InvocEffect:
       EffectFunctor = PL_new_functor(PL_new_atom(PL_InvokesEffect.c_str()), 2);
       term_t CalleeName = PL_new_term_ref();
-      PL_put_atom_chars(CalleeName, FunD->getNameAsString().c_str() ); // FIXME: use unique prolog name instead
+      PL_put_atom_chars(CalleeName, SymbolTable::Table->getPrologName(FunD).data());
       Res = PL_cons_functor(Result, EffectFunctor, CalleeName, SubV->getPLTerm());
       assert(Res && "Failed to create Prolog term for 'invokes' effect");
       break;

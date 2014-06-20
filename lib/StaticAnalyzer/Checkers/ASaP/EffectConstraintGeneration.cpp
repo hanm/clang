@@ -254,10 +254,9 @@ emitEffectNotCoveredWarning(const Stmt *S, const Decl *D,
   helperEmitStatementWarning(Checker, BR, AC, S, D, Str, BugName);
 }
 
-void EffectConstraintVisitor::
-checkEffectCoverage() {
-  EffectVector* LHS=EC->getLHS();
-  const EffectSummary* RHS=EC->getRHS();
+void EffectConstraintVisitor::checkEffectCoverage() {
+  EffectVector *LHS = EC->getLHS();
+  const EffectSummary *RHS = EC->getRHS();
   Trivalent Result = RK_TRUE;
 
   OS << "DEBUG:: In checkEffectCoverage() \n";
@@ -273,9 +272,9 @@ checkEffectCoverage() {
 
     if (Eff->getEffectKind() != Effect::EK_InvocEffect) {
       OS << "==== not EK_InvocEffect" << Eff->getEffectKind() << "\n";
-      Trivalent RK=RHS->covers(Eff);
+      Trivalent RK = RHS->covers(Eff);
 
-      if (RK==RK_FALSE) {
+      if (RK == RK_FALSE) {
         const Expr* Exp=Eff->getExp();
         const Decl* D = 0;
 
@@ -320,8 +319,17 @@ checkEffectCoverage() {
 
       const EffectSummary *Effects =
           SymT.getEffectSummary(FunD->getCanonicalDecl());
+      /////////////////////////////////////////////////////////////////////////
+      // FIXME
+      // There seems to be a bug in RecursiveASTVisitor that causes not visiting
+      // all FunctionDecl nodes. In the test anonymous-unions-structs.cpp a
+      // CXXConstructorDecl is never visited by the SemanticChecker (and other
+      // passes derived from RecursiveASTVisitor). So at this point the effect
+      // summary is not present in our SymbolTable. Just assume it is pure and
+      // skip check for now.
       if (!Effects)
         continue; // if effect summary is empty, check next collected effect
+      /////////////////////////////////////////////////////////////////////////
       if (isa<VarEffectSummary>(Effects)) {
         Result = RK_DUNNO;
         break;
@@ -367,6 +375,10 @@ checkEffectCoverage() {
   if (Result == RK_DUNNO) {
     SymT.addInclusionConstraint(EC);
   } else {
+    if (LHS->size() == 0 && isa<VarEffectSummary>(RHS)) {
+      // Replace RHS with 'no_effect'
+      SymT.resetEffectSummary(Def, SymbolTable::PURE_EffSum);
+    }
     delete(EC);
   }
   IsCoveredBySummary = Result;
@@ -425,6 +437,12 @@ checkCXXConstructExpr(VarDecl *VarD,
   // 2. Add effects to tmp effects
   Effect IE(Effect::EK_InvocEffect, Exp, ConstrDecl, &SubV);
   OS << "DEBUG:: Adding invocation Effect "<< IE.toString() << "\n";
+  OS << "DEBUG:: Callee = ";
+  ConstrDecl->print(OS);
+  OS << "\n";
+  ConstrDecl->dump(OS);
+  OS << "\n";
+
   EC->addEffect(&IE);
 
   // 3. Visit arguments

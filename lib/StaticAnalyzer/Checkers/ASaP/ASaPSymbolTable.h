@@ -130,7 +130,9 @@ public:
   static const SpecialRplElement *LOCAL_RplElmt;
   static const SpecialRplElement *GLOBAL_RplElmt;
   static const SpecialRplElement *IMMUTABLE_RplElmt;
+  static const ConcreteEffectSummary *PURE_EffSum;
   static const Effect *WritesLocal;
+
   // Unique globally accessible symbol table
   static SymbolTable *Table;
   static VisitorBundle VB;
@@ -182,6 +184,7 @@ public:
   const InheritanceMapT *getInheritanceMap(const CXXRecordDecl *D) const;
   const InheritanceMapT *getInheritanceMap(QualType QT) const;
   const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;
+  const StringRef getPrologName(const Decl *D) const;
 
   inline const SpecificNIChecker *getNIChecker(const FunctionDecl *FD) const {
     return ParTable.lookup(FD);
@@ -256,8 +259,8 @@ public:
 
   inline StringRef makeFreshDeclName(const std::string &Name) {
     std::stringstream ss;
-    ss << "fn" << getNextUniqueDeclID()
-       << "_" << Name;
+    ss << "d" << getNextUniqueDeclID();
+       //<< "_" << Name;
     return addFreshName(ss.str());
   }
 
@@ -272,6 +275,8 @@ public:
   void solveInclusionConstraints();
   // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
+
+  void createSymbolTableEntry(const Decl *D);
 
   Rpl* createFreshRplVar(){
     return new Rpl(0);
@@ -290,7 +295,7 @@ public:
 class SymbolTableEntry {
   friend class SymbolTable;
   // Fields
-  //StringRef PrologName;
+  StringRef PrologName;
   ASaPType *Typ;
   ParameterVector *ParamVec;
   RegionNameSet *RegnNameSet;
@@ -310,8 +315,7 @@ class SymbolTableEntry {
   void computeInheritanceSubVec();
 
 public:
-  //SymbolTableEntry(StringRef PrologName);
-  SymbolTableEntry();
+  SymbolTableEntry(StringRef PrologName);
   ~SymbolTableEntry();
 
   // Predicates.
@@ -327,6 +331,7 @@ public:
   inline const RegionNameSet *getRegionNameSet() const { return RegnNameSet; }
   inline const EffectSummary *getEffectSummary() const { return EffSum; }
   inline const InheritanceMapT *getInheritanceMap() const { return InheritanceMap; }
+  inline const StringRef getPrologName() const { return PrologName; }
 
   // Setters.
   inline void setType(ASaPType *T) { Typ = T; }
@@ -352,9 +357,7 @@ public:
                          SubstitutionVector *&SubV);
 
   const SubstitutionVector *getSubVec(const RecordDecl *Base) const;
-
   const SubstitutionVector *getInheritanceSubVec();
-
 
 protected:
   inline EffectSummary *getNonConstEffectSummary() const { return EffSum; }
