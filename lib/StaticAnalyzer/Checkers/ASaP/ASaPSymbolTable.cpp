@@ -332,11 +332,17 @@ RplDomain *SymbolTable::buildDomain(const Decl *D) {
       //add fresh region variable name to enclosing scope
       const NamedDecl* ND = dyn_cast<NamedDecl>(D);
       assert(ND);
-      StringRef Name = ND->getName();
-      OSv2 << "before makeFresghRVName "<<Name<<"\n";
-      StringRef RV = makeFreshRVName(Name);
-      OSv2 << "after makeFreshRVName " <<RV<<" \n";
-      SymTable[EnclosingDecl]->addRegionName(Name, RV);
+      const ValueDecl* VD = dyn_cast<ValueDecl>(ND);
+      if(VD){
+        OSv2 << "value decl\n";
+        StringRef Name = ND->getName();
+        OSv2 << "before makeFresghRVName "<<Name<<"\n";
+        StringRef RV = makeFreshRVName(Name);
+        OSv2 << "after makeFreshRVName " <<RV<<" \n";
+        SymTable[EnclosingDecl]->addRegionName(Name, RV);
+      }
+      else
+        OSv2 << "not a value decl\n";
       OSv2 << "Before recursive call to buildDomain\n";
       RplDomain *Parent = buildDomain(EnclosingDecl);
       return new RplDomain(RNV, PV, Parent);
@@ -804,7 +810,12 @@ lookupParameterName(StringRef Name) {
 
 void SymbolTableEntry::
 addRegionName(StringRef Name, StringRef PrologName) {
-  OSv2 << "in addRegionName\n";
+  OSv2 << "in addRegionName 1\n";
+  OSv2 << "before check\n";
+  if(RegnNameSet == NULL)
+    OSv2 << "RegnNameSet is null\n";
+  else
+    OSv2 << "RegnNameSet is not null\n";
   if (!RegnNameSet){
     OSv2 << "in if\n";
     RegnNameSet = new RegionNameSet();
