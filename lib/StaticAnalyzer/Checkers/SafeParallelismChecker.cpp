@@ -56,10 +56,10 @@ public:
   inline bool encounteredFatalError() { return FatalError; }
 
   /// Visitors
-  bool VisitFunctionDecl(FunctionDecl* D) {
-    const FunctionDecl* Definition;
+  bool VisitFunctionDecl(FunctionDecl *D) {
+    const FunctionDecl *Definition;
     if (D->hasBody(Definition)) {
-      Stmt* S = Definition->getBody();
+      Stmt *S = Definition->getBody();
       assert(S);
 
       StmtVisitorT StmtVisitor(Definition, S, true);
@@ -193,6 +193,6 @@ public:
 }; // end class SafeParallelismChecker
 } // end unnamed namespace
 
-void ento::registerSafeParallelismChecker(CheckerManager &mgr) {
-  mgr.registerChecker<SafeParallelismChecker>();
+void ento::registerSafeParallelismChecker(CheckerManager &Mgr) {
+  Mgr.registerChecker<SafeParallelismChecker>();
 }
