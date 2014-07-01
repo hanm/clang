@@ -261,12 +261,17 @@ public:
 class VarEffectSummary : public EffectSummary {
   // TODO: add field to store solution of inference
   // ConcreteEffectSummary* Concrete;  // Commented out to remove warning.
+  EffectInclusionConstraint *InclCons;
+
 public:
   // Constructors
-  VarEffectSummary() : EffectSummary(ESK_Var) {}
+  VarEffectSummary()
+                  : EffectSummary(ESK_Var),
+                    InclCons(0) {}
 
   VarEffectSummary(const VarEffectSummary &VES)
-                  : EffectSummary(ESK_Var) {}
+                  : EffectSummary(ESK_Var),
+                    InclCons(VES.InclCons) {}
 
   virtual VarEffectSummary *clone() const {
     return new VarEffectSummary(*this);
@@ -292,6 +297,18 @@ public:
 
   virtual ~VarEffectSummary() {};
   virtual term_t getPLTerm() const;
+
+  void setInclusionConstraint(EffectInclusionConstraint *EIC) {
+    InclCons = EIC;
+  }
+
+  EffectInclusionConstraint *getInclusionConstraint() const {
+    return InclCons;
+  }
+
+  bool hasInclusionConstraint() const {
+    return (InclCons == 0) ? false : true;
+  }
 }; // end class VarEffectSummary
 
 

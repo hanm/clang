@@ -59,6 +59,7 @@ namespace asap {
 class AnnotationScheme;
 class ASaPType;
 class Effect;
+class EffectInclusionConstraint;
 class EffectVector;
 class EffectSummary;
 class NamedRplElement;

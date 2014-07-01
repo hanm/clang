@@ -101,19 +101,19 @@ class SymbolTable {
   /// such as int or pointers.
   const ParameterVector *BuiltinDefaultRegionParameterVec;
 
-  unsigned long ParamIdNumber;
-  unsigned long RegionIdNumber;
-  unsigned long DeclIdNumber;
+  unsigned long ParamIDNumber;
+  unsigned long RegionIDNumber;
+  unsigned long DeclIDNumber;
 
   // Private Methods
   /// \brief Return the next unused ID number. Used to encode names into Prolog.
-  inline unsigned long getNextUniqueParamID() { return ParamIdNumber++; }
+  inline unsigned long getNextUniqueParamID() { return ParamIDNumber++; }
 
   /// \brief Return the next unused ID number. Used to encode names into Prolog.
-  inline unsigned long getNextUniqueRegionID() { return RegionIdNumber++; }
+  inline unsigned long getNextUniqueRegionID() { return RegionIDNumber++; }
 
   /// \brief Return the next unused ID number. Used to encode names into Prolog.
-  inline unsigned long getNextUniqueDeclID() { return DeclIdNumber++; }
+  inline unsigned long getNextUniqueDeclID() { return DeclIDNumber++; }
 
   inline StringRef addFreshName(StringRef SRef) {
     std::string *S = new std::string(SRef.str());
@@ -122,7 +122,11 @@ class SymbolTable {
     return Result;
   }
 
+  bool addInclusionConstraint(const FunctionDecl *FunD,
+                              EffectInclusionConstraint *EIC);
 
+  void assertzHasEffectSummary(const NamedDecl *NDec,
+                               const ConcreteEffectSummary *EffSum) const;
 public:
   // Static Constants
   static const StarRplElement *STAR_RplElmt;
@@ -260,15 +264,16 @@ public:
   inline StringRef makeFreshDeclName(const std::string &Name) {
     std::stringstream ss;
     ss << "d" << getNextUniqueDeclID();
-       //<< "_" << Name;
     return addFreshName(ss.str());
   }
 
-  inline void addInclusionConstraint(EffectInclusionConstraint* EIC){
+  inline void addInclusionConstraint(EffectInclusionConstraint *EIC) {
+    assert(EIC && "Internal Error: unexpected null-pointer");
     InclusionConstraints.insert(EIC);
+    addInclusionConstraint(EIC->getDef(), EIC);
   }
 
-  inline void addNIConstraint(EffectNIConstraint* NIC){
+  inline void addNIConstraint(EffectNIConstraint *NIC) {
     NIConstraints.insert(NIC);
   }
 
@@ -347,6 +352,7 @@ public:
   // Adders.
   void addRegionName(llvm::StringRef Name, llvm::StringRef PrologName);
   void addParameterName(llvm::StringRef Name, llvm::StringRef PrologName);
+  bool addInclusionConstraint(EffectInclusionConstraint *EIC);
 
   // Deleters
   inline void deleteEffectSummary();
