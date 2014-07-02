@@ -149,8 +149,8 @@ public:
   /// would produce a trivial matcher that will either always or never match.
   /// Such matchers are excluded from code completion results.
   virtual bool isConvertibleTo(
-      ast_type_traits::ASTNodeKind Kind, unsigned *Specificity = 0,
-      ast_type_traits::ASTNodeKind *LeastDerivedKind = 0) const = 0;
+      ast_type_traits::ASTNodeKind Kind, unsigned *Specificity = nullptr,
+      ast_type_traits::ASTNodeKind *LeastDerivedKind = nullptr) const = 0;
 
   /// Returns whether the matcher will, given a matcher of any type T, yield a
   /// matcher of type T.
@@ -158,10 +158,10 @@ public:
 };
 
 inline bool isRetKindConvertibleTo(
-    llvm::ArrayRef<ast_type_traits::ASTNodeKind> RetKinds,
+    ArrayRef<ast_type_traits::ASTNodeKind> RetKinds,
     ast_type_traits::ASTNodeKind Kind, unsigned *Specificity,
     ast_type_traits::ASTNodeKind *LeastDerivedKind) {
-  for (llvm::ArrayRef<ast_type_traits::ASTNodeKind>::const_iterator
+  for (ArrayRef<ast_type_traits::ASTNodeKind>::const_iterator
            i = RetKinds.begin(),
            e = RetKinds.end();
        i != e; ++i) {
@@ -199,8 +199,8 @@ public:
   /// \param ArgKinds The types of the arguments this matcher takes.
   FixedArgCountMatcherDescriptor(
       MarshallerType Marshaller, void (*Func)(), StringRef MatcherName,
-      llvm::ArrayRef<ast_type_traits::ASTNodeKind> RetKinds,
-      llvm::ArrayRef<ArgKind> ArgKinds)
+      ArrayRef<ast_type_traits::ASTNodeKind> RetKinds,
+      ArrayRef<ArgKind> ArgKinds)
       : Marshaller(Marshaller), Func(Func), MatcherName(MatcherName),
         RetKinds(RetKinds.begin(), RetKinds.end()),
         ArgKinds(ArgKinds.begin(), ArgKinds.end()) {}
@@ -646,7 +646,7 @@ MatcherDescriptor *makeMatcherAutoMarshall(ReturnType (*Func)(),
   BuildReturnTypeVector<ReturnType>::build(RetTypes);
   return new FixedArgCountMatcherDescriptor(
       matcherMarshall0<ReturnType>, reinterpret_cast<void (*)()>(Func),
-      MatcherName, RetTypes, llvm::ArrayRef<ArgKind>());
+      MatcherName, RetTypes, None);
 }
 
 /// \brief 1-arg overload

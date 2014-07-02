@@ -186,8 +186,14 @@ void DiagnosticRenderer::emitStoredDiagnostic(StoredDiagnostic &Diag) {
   emitDiagnostic(Diag.getLocation(), Diag.getLevel(), Diag.getMessage(),
                  Diag.getRanges(), Diag.getFixIts(),
                  Diag.getLocation().isValid() ? &Diag.getLocation().getManager()
-                                              : 0,
+                                              : nullptr,
                  &Diag);
+}
+
+void DiagnosticRenderer::emitBasicNote(StringRef Message) {
+  emitDiagnosticMessage(
+      SourceLocation(), PresumedLoc(), DiagnosticsEngine::Note, Message,
+      ArrayRef<CharSourceRange>(), nullptr, DiagOrStoredDiag());
 }
 
 /// \brief Prints an include stack when appropriate for a particular
@@ -505,9 +511,4 @@ DiagnosticNoteRenderer::emitBuildingModuleLocation(SourceLocation Loc,
   else
     Message << "while building module '" << ModuleName << ":";
   emitNote(Loc, Message.str(), &SM);
-}
-
-
-void DiagnosticNoteRenderer::emitBasicNote(StringRef Message) {
-  emitNote(SourceLocation(), Message, 0);  
 }

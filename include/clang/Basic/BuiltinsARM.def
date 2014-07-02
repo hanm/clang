@@ -24,12 +24,17 @@ BUILTIN(__builtin_arm_qsub, "iii", "nc")
 BUILTIN(__builtin_arm_ssat, "iiUi", "nc")
 BUILTIN(__builtin_arm_usat, "UiUiUi", "nc")
 
+// Bit manipulation
+BUILTIN(__builtin_arm_rbit, "UiUi", "nc")
+
 // Store and load exclusive
 BUILTIN(__builtin_arm_ldrexd, "LLUiv*", "")
 BUILTIN(__builtin_arm_strexd, "iLLUiv*", "")
 
 BUILTIN(__builtin_arm_ldrex, "v.", "t")
+BUILTIN(__builtin_arm_ldaex, "v.", "t")
 BUILTIN(__builtin_arm_strex, "i.", "t")
+BUILTIN(__builtin_arm_stlex, "i.", "t")
 BUILTIN(__builtin_arm_clrex, "v", "")
 
 // VFP
