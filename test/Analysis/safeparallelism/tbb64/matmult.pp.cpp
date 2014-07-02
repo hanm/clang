@@ -14572,7 +14572,7 @@ typedef struct
     int __mask_was_saved;
   } __cancel_jmp_buf[1];
   void *__pad[4];
-} __pthread_unwind_buf_t __attribute__ ((__aligned__));
+} __pthread_unwind_buf_t; // __attribute__ ((__aligned__));
 # 524 "/usr/include/pthread.h" 3 4
 struct __pthread_cleanup_frame
 {
