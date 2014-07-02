@@ -33,6 +33,7 @@ def SectionDocs : Documentation {
 The ``section`` attribute allows you to specify a specific section a
 global variable or function should be in after translation.
   }];
+  let Heading = "section (gnu::section, __declspec(allocate))";
 }
 
 def TLSModelDocs : Documentation {
@@ -166,7 +167,7 @@ the type.
 
 The enable_if expression is evaluated as if it were the body of a
 bool-returning constexpr function declared with the arguments of the function
-it is being applied to, then called with the parameters at the callsite. If the
+it is being applied to, then called with the parameters at the call site. If the
 result is false or could not be determined through constant expression
 evaluation, then this overload will not be chosen and the provided string may
 be used in a diagnostic if the compile fails as a result.
@@ -368,6 +369,15 @@ gets possibly modified by some optimizations into code similar to this:
 
 where the call to "nodupfunc" is duplicated and sunk into the two branches
 of the condition.
+  }];
+}
+
+def NoSplitStackDocs : Documentation {
+  let Category = DocCatFunction;
+  let Content = [{
+The ``no_split_stack`` attribute disables the emission of the split stack
+preamble for a particular function. It has no effect if ``-fsplit-stack``
+is not specified.
   }];
 }
 
@@ -624,7 +634,7 @@ def SetTypestateDocs : Documentation {
   let Category = DocCatConsumed;
   let Content = [{
 Annotate methods that transition an object into a new state with
-``__attribute__((set_typestate(new_state)))``.  The new new state must be
+``__attribute__((set_typestate(new_state)))``.  The new state must be
 unconsumed, consumed, or unknown.
   }];
 }
@@ -868,6 +878,15 @@ expression is compared to the type tag.  There are two supported flags:
   }];
 }
 
+def FlattenDocs : Documentation {
+  let Category = DocCatFunction;
+  let Content = [{
+The ``flatten`` attribute causes calls within the attributed function to
+be inlined unless it is impossible to do so, for example if the body of the
+callee is unavailable or if the callee has the ``noinline`` attribute.
+  }];
+}
+
 def FormatDocs : Documentation {
   let Category = DocCatFunction;
   let Content = [{
@@ -893,7 +912,7 @@ Clang implements two kinds of checks with this attribute.
    Clang implements this mostly the same way as GCC, but there is a difference
    for functions that accept a ``va_list`` argument (for example, ``vprintf``).
    GCC does not emit ``-Wformat-nonliteral`` warning for calls to such
-   fuctions.  Clang does not warn if the format string comes from a function
+   functions.  Clang does not warn if the format string comes from a function
    parameter, where the function is annotated with a compatible attribute,
    otherwise it warns.  For example:
 
@@ -993,3 +1012,15 @@ This attribute is incompatible with the ``always_inline`` attribute.
   }];
 }
 
+def LoopHintDocs : Documentation {
+  let Category = DocCatStmt;
+  let Content = [{
+The ``#pragma clang loop`` directive allows loop optimization hints to be
+specified for the subsequent loop. The directive allows vectorization,
+interleaving, and unrolling to be enabled or disabled. Vector width as well
+as interleave and unrolling count can be manually specified. See
+`language extensions
+<http://clang.llvm.org/docs/LanguageExtensions.html#extensions-for-loop-hint-optimizations>`_
+for details.
+  }];
+}

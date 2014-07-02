@@ -71,11 +71,11 @@ static RValue PerformReturnAdjustment(CodeGenFunction &CGF,
                                       const ThunkInfo &Thunk) {
   // Emit the return adjustment.
   bool NullCheckValue = !ResultType->isReferenceType();
-  
-  llvm::BasicBlock *AdjustNull = 0;
-  llvm::BasicBlock *AdjustNotNull = 0;
-  llvm::BasicBlock *AdjustEnd = 0;
-  
+
+  llvm::BasicBlock *AdjustNull = nullptr;
+  llvm::BasicBlock *AdjustNotNull = nullptr;
+  llvm::BasicBlock *AdjustEnd = nullptr;
+
   llvm::Value *ReturnValue = RV.getScalarVal();
 
   if (NullCheckValue) {
@@ -159,7 +159,7 @@ void CodeGenFunction::GenerateVarArgsThunk(
   // with "this".
   llvm::Value *ThisPtr = &*AI;
   llvm::BasicBlock *EntryBB = Fn->begin();
-  llvm::Instruction *ThisStore = 0;
+  llvm::Instruction *ThisStore = nullptr;
   for (llvm::BasicBlock::iterator I = EntryBB->begin(), E = EntryBB->end();
        I != E; I++) {
     if (isa<llvm::StoreInst>(I) && I->getOperand(0) == ThisPtr) {
@@ -382,12 +382,14 @@ void CodeGenVTables::emitThunk(GlobalDecl GD, const ThunkInfo &Thunk,
     // FIXME: Do something better here; GenerateVarArgsThunk is extremely ugly.
     if (!UseAvailableExternallyLinkage) {
       CodeGenFunction(CGM).GenerateVarArgsThunk(ThunkFn, FnInfo, GD, Thunk);
-      CGM.getCXXABI().setThunkLinkage(ThunkFn, ForVTable);
+      CGM.getCXXABI().setThunkLinkage(ThunkFn, ForVTable, GD,
+                                      !Thunk.Return.isEmpty());
     }
   } else {
     // Normal thunk body generation.
     CodeGenFunction(CGM).GenerateThunk(ThunkFn, FnInfo, GD, Thunk);
-    CGM.getCXXABI().setThunkLinkage(ThunkFn, ForVTable);
+    CGM.getCXXABI().setThunkLinkage(ThunkFn, ForVTable, GD,
+                                    !Thunk.Return.isEmpty());
   }
 }
 
@@ -429,12 +431,10 @@ void CodeGenVTables::EmitThunks(GlobalDecl GD)
     emitThunk(GD, (*ThunkInfoVector)[I], /*ForVTable=*/false);
 }
 
-llvm::Constant *
-CodeGenVTables::CreateVTableInitializer(const CXXRecordDecl *RD,
-                                        const VTableComponent *Components, 
-                                        unsigned NumComponents,
-                                const VTableLayout::VTableThunkTy *VTableThunks,
-                                        unsigned NumVTableThunks) {
+llvm::Constant *CodeGenVTables::CreateVTableInitializer(
+    const CXXRecordDecl *RD, const VTableComponent *Components,
+    unsigned NumComponents, const VTableLayout::VTableThunkTy *VTableThunks,
+    unsigned NumVTableThunks, llvm::Constant *RTTI) {
   SmallVector<llvm::Constant *, 64> Inits;
 
   llvm::Type *Int8PtrTy = CGM.Int8PtrTy;
@@ -442,17 +442,14 @@ CodeGenVTables::CreateVTableInitializer(const CXXRecordDecl *RD,
   llvm::Type *PtrDiffTy = 
     CGM.getTypes().ConvertType(CGM.getContext().getPointerDiffType());
 
-  QualType ClassType = CGM.getContext().getTagDeclType(RD);
-  llvm::Constant *RTTI = CGM.GetAddrOfRTTIDescriptor(ClassType);
-  
   unsigned NextVTableThunkIndex = 0;
-  
-  llvm::Constant *PureVirtualFn = 0, *DeletedVirtualFn = 0;
+
+  llvm::Constant *PureVirtualFn = nullptr, *DeletedVirtualFn = nullptr;
 
   for (unsigned I = 0; I != NumComponents; ++I) {
     VTableComponent Component = Components[I];
 
-    llvm::Constant *Init = 0;
+    llvm::Constant *Init = nullptr;
 
     switch (Component.getKind()) {
     case VTableComponent::CK_VCallOffset:
@@ -592,13 +589,14 @@ CodeGenVTables::GenerateConstructionVTable(const CXXRecordDecl *RD,
   // V-tables are always unnamed_addr.
   VTable->setUnnamedAddr(true);
 
+  llvm::Constant *RTTI = CGM.GetAddrOfRTTIDescriptor(
+      CGM.getContext().getTagDeclType(Base.getBase()));
+
   // Create and set the initializer.
-  llvm::Constant *Init = 
-    CreateVTableInitializer(Base.getBase(), 
-                            VTLayout->vtable_component_begin(), 
-                            VTLayout->getNumVTableComponents(),
-                            VTLayout->vtable_thunk_begin(),
-                            VTLayout->getNumVTableThunks());
+  llvm::Constant *Init = CreateVTableInitializer(
+      Base.getBase(), VTLayout->vtable_component_begin(),
+      VTLayout->getNumVTableComponents(), VTLayout->vtable_thunk_begin(),
+      VTLayout->getNumVTableThunks(), RTTI);
   VTable->setInitializer(Init);
   
   return VTable;
@@ -617,7 +615,7 @@ CodeGenModule::getVTableLinkage(const CXXRecordDecl *RD) {
   if (const CXXMethodDecl *keyFunction = Context.getCurrentKeyFunction(RD)) {
     // If this class has a key function, use that to determine the
     // linkage of the vtable.
-    const FunctionDecl *def = 0;
+    const FunctionDecl *def = nullptr;
     if (keyFunction->hasBody(def))
       keyFunction = cast<CXXMethodDecl>(def);
     
@@ -651,18 +649,31 @@ CodeGenModule::getVTableLinkage(const CXXRecordDecl *RD) {
   // internal linkage.
   if (Context.getLangOpts().AppleKext)
     return llvm::Function::InternalLinkage;
-  
+
+  llvm::GlobalVariable::LinkageTypes DiscardableODRLinkage =
+      llvm::GlobalValue::LinkOnceODRLinkage;
+  llvm::GlobalVariable::LinkageTypes NonDiscardableODRLinkage =
+      llvm::GlobalValue::WeakODRLinkage;
+  if (RD->hasAttr<DLLExportAttr>()) {
+    // Cannot discard exported vtables.
+    DiscardableODRLinkage = NonDiscardableODRLinkage;
+  } else if (RD->hasAttr<DLLImportAttr>()) {
+    // Imported vtables are available externally.
+    DiscardableODRLinkage = llvm::GlobalVariable::AvailableExternallyLinkage;
+    NonDiscardableODRLinkage = llvm::GlobalVariable::AvailableExternallyLinkage;
+  }
+
   switch (RD->getTemplateSpecializationKind()) {
   case TSK_Undeclared:
   case TSK_ExplicitSpecialization:
   case TSK_ImplicitInstantiation:
-    return llvm::GlobalVariable::LinkOnceODRLinkage;
+    return DiscardableODRLinkage;
 
   case TSK_ExplicitInstantiationDeclaration:
     llvm_unreachable("Should not have been asked to emit this");
 
   case TSK_ExplicitInstantiationDefinition:
-      return llvm::GlobalVariable::WeakODRLinkage;
+    return NonDiscardableODRLinkage;
   }
 
   llvm_unreachable("Invalid TemplateSpecializationKind!");

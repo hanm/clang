@@ -11,6 +11,7 @@
 #include "InputInfo.h"
 #include "ToolChains.h"
 #include "clang/Basic/Version.h"
+#include "clang/Config/config.h"
 #include "clang/Driver/Action.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/DriverDiagnostic.h"
@@ -20,6 +21,7 @@
 #include "clang/Driver/ToolChain.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Option/Arg.h"
@@ -32,14 +34,11 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/PrettyStackTrace.h"
+#include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/raw_ostream.h"
 #include <map>
 #include <memory>
-
-// FIXME: It would prevent us from including llvm-config.h
-// if config.h were included before system_error.h.
-#include "clang/Config/config.h"
 
 using namespace clang::driver;
 using namespace clang;
@@ -53,8 +52,8 @@ Driver::Driver(StringRef ClangExecutable,
     UseStdLib(true), DefaultTargetTriple(DefaultTargetTriple),
     DefaultImageName("a.out"),
     DriverTitle("clang LLVM compiler"),
-    CCPrintOptionsFilename(0), CCPrintHeadersFilename(0),
-    CCLogDiagnosticsFilename(0),
+    CCPrintOptionsFilename(nullptr), CCPrintHeadersFilename(nullptr),
+    CCLogDiagnosticsFilename(nullptr),
     CCCPrintBindings(false),
     CCPrintHeaders(false), CCLogDiagnostics(false),
     CCGenDiagnostics(false), CCCGenericGCCName(""), CheckInputsExist(true),
@@ -152,12 +151,13 @@ InputArgList *Driver::ParseArgStrings(ArrayRef<const char *> ArgList) {
 // option we used to determine the final phase.
 phases::ID Driver::getFinalPhase(const DerivedArgList &DAL, Arg **FinalPhaseArg)
 const {
-  Arg *PhaseArg = 0;
+  Arg *PhaseArg = nullptr;
   phases::ID FinalPhase;
 
-  // -{E,M,MM} and /P only run the preprocessor.
+  // -{E,EP,P,M,MM} only run the preprocessor.
   if (CCCIsCPP() ||
       (PhaseArg = DAL.getLastArg(options::OPT_E)) ||
+      (PhaseArg = DAL.getLastArg(options::OPT__SLASH_EP)) ||
       (PhaseArg = DAL.getLastArg(options::OPT_M, options::OPT_MM)) ||
       (PhaseArg = DAL.getLastArg(options::OPT__SLASH_P))) {
     FinalPhase = phases::Preprocess;
@@ -419,7 +419,6 @@ void Driver::generateCompilationDiagnostics(Compilation &C,
   // Suppress driver output and emit preprocessor output to temp file.
   Mode = CPPMode;
   CCGenDiagnostics = true;
-  C.getArgs().AddFlagArg(0, Opts->getOption(options::OPT_frewrite_includes));
 
   // Save the original job command(s).
   std::string Cmd;
@@ -520,16 +519,25 @@ void Driver::generateCompilationDiagnostics(Compilation &C,
     for (ArgStringList::const_iterator it = Files.begin(), ie = Files.end();
          it != ie; ++it) {
       Diag(clang::diag::note_drv_command_failed_diag_msg) << *it;
+      std::string Script = StringRef(*it).rsplit('.').first;
+      // In some cases (modules) we'll dump extra data to help with reproducing
+      // the crash into a directory next to the output.
+      SmallString<128> VFS;
+      if (llvm::sys::fs::exists(Script + ".cache")) {
+        Diag(clang::diag::note_drv_command_failed_diag_msg)
+            << Script + ".cache";
+        VFS = llvm::sys::path::filename(Script + ".cache");
+        llvm::sys::path::append(VFS, "vfs", "vfs.yaml");
+      }
 
       std::string Err;
-      std::string Script = StringRef(*it).rsplit('.').first;
       Script += ".sh";
       llvm::raw_fd_ostream ScriptOS(Script.c_str(), Err, llvm::sys::fs::F_Excl);
       if (!Err.empty()) {
         Diag(clang::diag::note_drv_command_failed_diag_msg)
           << "Error generating run script: " + Script + " " + Err;
       } else {
-        // Append the new filename with correct preprocessed suffix.
+        // Replace the original filename with the preprocessed one.
         size_t I, E;
         I = Cmd.find("-main-file-name ");
         assert (I != std::string::npos && "Expected to find -main-file-name");
@@ -542,6 +550,9 @@ void Driver::generateCompilationDiagnostics(Compilation &C,
         E = I + OldFilename.size();
         I = Cmd.rfind(" ", I) + 1;
         Cmd.replace(I, E - I, NewFilename.data(), NewFilename.size());
+        // Add the VFS overlay to the reproduction script.
+        I += NewFilename.size();
+        Cmd.insert(I, std::string(" -ivfsoverlay ") + VFS.c_str());
         ScriptOS << Cmd;
         Diag(clang::diag::note_drv_command_failed_diag_msg) << Script;
       }
@@ -599,7 +610,7 @@ int Driver::ExecuteCompilation(const Compilation &C,
     // Print extra information about abnormal failures, if possible.
     //
     // This is ad-hoc, but we don't want to be excessively noisy. If the result
-    // status was 1, assume the command failed normally. In particular, if it 
+    // status was 1, assume the command failed normally. In particular, if it
     // was the compiler then assume it gave a reasonable error code. Failures
     // in other tools are less common, and they generally have worse
     // diagnostics, so always print the diagnostic there.
@@ -951,6 +962,9 @@ static bool DiagnoseInputExistence(const Driver &D, const DerivedArgList &Args,
   if (llvm::sys::fs::exists(Twine(Path)))
     return true;
 
+  if (D.IsCLMode() && llvm::sys::Process::FindInEnvPath("LIB", Value))
+    return true;
+
   D.Diag(clang::diag::err_drv_no_such_file) << Path.str();
   return false;
 }
@@ -962,7 +976,7 @@ void Driver::BuildInputs(const ToolChain &TC, DerivedArgList &Args,
   // argument used to set the type; we only want to claim the type when we
   // actually use it, so we warn about unused -x arguments.
   types::ID InputType = types::TY_Nothing;
-  Arg *InputTypeArg = 0;
+  Arg *InputTypeArg = nullptr;
 
   // The last /TC or /TP option sets the input type to C or C++ globally.
   if (Arg *TCTP = Args.getLastArg(options::OPT__SLASH_TC,
@@ -1267,7 +1281,8 @@ Action *Driver::ConstructPhaseAction(const ArgList &Args, phases::ID Phase,
     } else {
       OutputTy = Input->getType();
       if (!Args.hasFlag(options::OPT_frewrite_includes,
-                        options::OPT_fno_rewrite_includes, false))
+                        options::OPT_fno_rewrite_includes, false) &&
+          !CCGenDiagnostics)
         OutputTy = types::getPreprocessedType(OutputTy);
       assert(OutputTy != types::TY_INVALID &&
              "Cannot preprocess this input type!");
@@ -1341,7 +1356,7 @@ void Driver::BuildJobs(Compilation &C) const {
 
     if (NumOutputs > 1) {
       Diag(clang::diag::err_drv_output_argument_with_multiple_files);
-      FinalOutput = 0;
+      FinalOutput = nullptr;
     }
   }
 
@@ -1366,7 +1381,7 @@ void Driver::BuildJobs(Compilation &C) const {
     //
     // FIXME: This is a hack; find a cleaner way to integrate this into the
     // process.
-    const char *LinkingOutput = 0;
+    const char *LinkingOutput = nullptr;
     if (isa<LipoJobAction>(A)) {
       if (FinalOutput)
         LinkingOutput = FinalOutput->getValue();
@@ -1376,7 +1391,7 @@ void Driver::BuildJobs(Compilation &C) const {
 
     InputInfo II;
     BuildJobsForAction(C, A, &C.getDefaultToolChain(),
-                       /*BoundArch*/0,
+                       /*BoundArch*/nullptr,
                        /*AtTopLevel*/ true,
                        /*MultipleArchs*/ ArchNames.size() > 1,
                        /*LinkingOutput*/ LinkingOutput,
@@ -1433,7 +1448,7 @@ void Driver::BuildJobs(Compilation &C) const {
 static const Tool *SelectToolForJob(Compilation &C, const ToolChain *TC,
                                     const JobAction *JA,
                                     const ActionList *&Inputs) {
-  const Tool *ToolForJob = 0;
+  const Tool *ToolForJob = nullptr;
 
   // See if we should look for a compiler with an integrated assembler. We match
   // bottom up, so what we are actually looking for is an assembler job with a
@@ -1449,7 +1464,7 @@ static const Tool *SelectToolForJob(Compilation &C, const ToolChain *TC,
     const Tool *Compiler =
       TC->SelectTool(cast<JobAction>(**Inputs->begin()));
     if (!Compiler)
-      return NULL;
+      return nullptr;
     if (Compiler->hasIntegratedAssembler()) {
       Inputs = &(*Inputs)[0]->getInputs();
       ToolForJob = Compiler;
@@ -1573,7 +1588,7 @@ void Driver::BuildJobsForAction(Compilation &C,
 static const char *MakeCLOutputFilename(const ArgList &Args, StringRef ArgValue,
                                         StringRef BaseName, types::ID FileType) {
   SmallString<128> Filename = ArgValue;
-  
+
   if (ArgValue.empty()) {
     // If the argument is empty, output to BaseName in the current dir.
     Filename = BaseName;
@@ -1616,7 +1631,10 @@ const char *Driver::GetNamedOutputPath(Compilation &C,
   if (C.getArgs().hasArg(options::OPT__SLASH_P)) {
     assert(AtTopLevel && isa<PreprocessJobAction>(JA));
     StringRef BaseName = llvm::sys::path::filename(BaseInput);
-    return C.addResultFile(MakeCLOutputFilename(C.getArgs(), "", BaseName,
+    StringRef NameArg;
+    if (Arg *A = C.getArgs().getLastArg(options::OPT__SLASH_Fi))
+      NameArg = A->getValue();
+    return C.addResultFile(MakeCLOutputFilename(C.getArgs(), NameArg, BaseName,
                                                 types::TY_PP_C), &JA);
   }
 
@@ -1825,8 +1843,7 @@ std::string Driver::GetProgramPath(const char *Name,
 std::string Driver::GetTemporaryPath(StringRef Prefix, const char *Suffix)
   const {
   SmallString<128> Path;
-  llvm::error_code EC =
-      llvm::sys::fs::createTemporaryFile(Prefix, Suffix, Path);
+  std::error_code EC = llvm::sys::fs::createTemporaryFile(Prefix, Suffix, Path);
   if (EC) {
     Diag(clang::diag::err_unable_to_make_temp) << EC.message();
     return "";
