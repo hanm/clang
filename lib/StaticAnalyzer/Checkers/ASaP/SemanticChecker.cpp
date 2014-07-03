@@ -210,6 +210,7 @@ emitUnknownNumberOfRegionParamsForType(const Decl *D) {
   llvm::raw_string_ostream strbuf(sbuf);
   D->print(strbuf, Ctx.getPrintingPolicy());
 
+  OS << "DEBUG:: " << strbuf.str() << ": " << BugName << "\n";
   helperEmitDeclarationWarning(Checker, BR, D, strbuf.str(), BugName);
 }
 
