@@ -123,11 +123,11 @@ public:
 }; // end class CheckGlobalsAnnotationScheme
 
 // Insert effect summary variables and rpl variables wherever they are missing.
-class InferenceAnnotationScheme : public ParametricAnnotationScheme {
+class InferenceAnnotationScheme : public SimpleAnnotationScheme {
 public:
   // Constructor
   InferenceAnnotationScheme(SymbolTable &SymT)
-                           : ParametricAnnotationScheme(SymT) {}
+                           : SimpleAnnotationScheme(SymT) {}
   // Destructor
   virtual ~InferenceAnnotationScheme() {}
 

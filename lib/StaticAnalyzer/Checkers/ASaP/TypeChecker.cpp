@@ -1145,9 +1145,10 @@ void TypeBuilderVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
     AssignmentCheckerVisitor ACV(Def, Exp->getArraySize());
   }
   // invoke the assignment checker on the (implicit) constructor call
-  AssignmentCheckerVisitor(Def,
-                           const_cast<CXXConstructExpr*>
-                                       (Exp->getConstructExpr()));
+  if (CXXConstructExpr *ConsExp = const_cast<CXXConstructExpr*>
+                                            (Exp->getConstructExpr())) {
+    AssignmentCheckerVisitor(Def, ConsExp);
+  }
 }
 
 void TypeBuilderVisitor::VisitAtomicExpr(AtomicExpr *Exp) {
