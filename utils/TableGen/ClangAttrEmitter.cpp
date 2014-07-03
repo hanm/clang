@@ -485,8 +485,8 @@ namespace {
     }
     void writeValue(raw_ostream &OS) const override {
       OS << "\";\n";
-      OS << "    assert(is" << getLowerName() << "Expr && " << getLowerName()
-         << "Expr != nullptr);\n";
+      OS << "    if (is" <<  getLowerName() << "Expr && " << getLowerName()
+         << "Expr != nullptr)\n";
       OS << "    " << getLowerName() << "Expr->printPretty(OS, 0, Policy);\n";
       OS << "    OS << \"";
     }
