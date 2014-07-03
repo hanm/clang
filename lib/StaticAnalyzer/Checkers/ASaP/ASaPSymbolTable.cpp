@@ -148,6 +148,9 @@ ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
   if (isNonPointerScalarType(QT)) {
     OSv2 << "DEBUG:: getRegionParamCount::isNonPointerScalarType\n";
     return ResultTriplet(RK_OK, 1, 0);
+  } else if (QT->isAtomicType()) {
+    const AtomicType *AT = QT->getAs<AtomicType>();
+    return getRegionParamCount(AT->getValueType());
   } else if (QT->isArrayType()) {
     OSv2 << "DEBUG:: getRegionParamCount::isArrayType\n";
     // It is not allowed to use getAs<T> with T = ArrayType,
@@ -199,6 +202,12 @@ ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
          << QT.getAsString() << "\n";
     OSv2 << "DEBUG:: QT.dump:\n";
     QT.dump();
+    OSv2 << "isAtomicType = " << QT->isAtomicType() << "\n";
+    OSv2 << "isBuiltinType = " << QT->isBuiltinType() << "\n";
+    //OSv2 << "isSpecificBuiltinType = " << QT->isSpecificBuiltinType() << "\n";
+    OSv2 << "isPlaceholderType = " << QT->isPlaceholderType() << "\n";
+    //OSv2 << "isSpecificPlaceholderType = " << QT->isSpecificPlaceholderType() << "\n";
+
     // This should not happen: unknown number of region arguments for type
     return ResultTriplet(RK_ERROR, 0, 0);
   }
