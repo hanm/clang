@@ -57,7 +57,8 @@ class ASaPSemanticCheckerTraverser :
   void addToMap(Decl *D, RplVector *RplVec, QualType QT);
   void addASaPTypeToMap(ValueDecl *ValD, ASaPType *T);
   void addASaPTypeToMap(ValueDecl *D, RplVector *RV, Rpl *InRpl);
-  void addASaPBaseTypeToMap(CXXRecordDecl *CXXRD, QualType QT, RplVector *RplVec);
+  void addASaPBaseTypeToMap(CXXRecordDecl *Derived,
+                            QualType BaseQT, RplVector *RplVec);
 
   /// \brief Emit error for misplaced region parameter within RPL.
   void emitMisplacedRegionParameter(const Decl *D,

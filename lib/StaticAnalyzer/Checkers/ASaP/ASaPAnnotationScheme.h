@@ -51,6 +51,7 @@ public:
   virtual AnnotationSet makeReturnType(const FunctionDecl *D, long ArgNum) = 0;
 
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D) = 0;
+  virtual RplVector *makeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) = 0;
 
 protected:
   AnnotationSet helperMakeClassParams(const RecordDecl *D);
@@ -59,6 +60,7 @@ protected:
   AnnotationSet helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT);
   AnnotationSet helperMakeWritesLocalEffectSummary(const FunctionDecl *D);
   AnnotationSet helperMakeVarType(const ValueDecl *D, long ArgNum);
+  RplVector *helperMakeBaseTypeArgs(const RecordDecl *Derived, long ArgNum);
 
 };
 
@@ -79,7 +81,7 @@ public:
   virtual AnnotationSet makeReturnType(const FunctionDecl *D, long ArgNum);
 
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
-
+  virtual RplVector *makeBaseTypeArgs(const RecordDecl *Derived, long ArgNum);
 }; // end class ParametricAnnotationScheme
 
 class SimpleAnnotationScheme : public AnnotationScheme {
@@ -99,7 +101,7 @@ public:
   virtual AnnotationSet makeReturnType(const FunctionDecl *D, long ArgNum);
 
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
-
+  virtual RplVector *makeBaseTypeArgs(const RecordDecl *Derived, long ArgNum);
 }; // end class SimpleAnnotationScheme
 
 class CheckGlobalsAnnotationScheme : public AnnotationScheme {
@@ -119,15 +121,15 @@ public:
   virtual AnnotationSet makeReturnType(const FunctionDecl *D, long ArgNum);
 
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
-
+  virtual RplVector *makeBaseTypeArgs(const RecordDecl *Derived, long ArgNum);
 }; // end class CheckGlobalsAnnotationScheme
 
 // Insert effect summary variables and rpl variables wherever they are missing.
-class InferenceAnnotationScheme : public SimpleAnnotationScheme {
+class InferenceAnnotationScheme : public ParametricAnnotationScheme {
 public:
   // Constructor
   InferenceAnnotationScheme(SymbolTable &SymT)
-                           : SimpleAnnotationScheme(SymT) {}
+                           : ParametricAnnotationScheme(SymT) {}
   // Destructor
   virtual ~InferenceAnnotationScheme() {}
 
@@ -142,7 +144,8 @@ public:
 
   // Methods (Overridden)
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
-
+  //virtual AnnotationSet makeBaseTypeArgs(const RecordDecl *Base,
+  //                                       const RecordDecl *Derived);
 }; // end class CheckGlobalsAnnotationScheme
 
 } // end namespace asap

@@ -110,6 +110,7 @@ helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT) {
   return Result;
 
 }
+
 inline AnnotationSet AnnotationScheme::
 helperMakeClassParams(const RecordDecl *D) {
   AnnotationSet Result;
@@ -117,6 +118,19 @@ helperMakeClassParams(const RecordDecl *D) {
 
   ParamRplElement Param(ParamName, ParamName);
   Result.ParamVec = new ParameterVector(Param);
+  return Result;
+}
+
+RplVector *AnnotationScheme::
+helperMakeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) {
+  RplVector *Result = 0;
+  const ParameterVector *ParamV = SymT.getParameterVector(Derived);
+  if (ParamV && ParamV->size() > 0) {
+    Result = new RplVector();
+    for(int I = 0; I < ArgNum; ++I) {
+      Result->push_back(Rpl(*ParamV->front()));
+    }
+  }
   return Result;
 }
 
@@ -184,6 +198,11 @@ makeEffectSummary(const FunctionDecl *D) {
   return helperMakeWritesLocalEffectSummary(D);
 }
 
+RplVector *ParametricAnnotationScheme::
+makeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) {
+  return helperMakeBaseTypeArgs(Derived, ArgNum);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 AnnotationSet SimpleAnnotationScheme::
@@ -221,6 +240,11 @@ makeReturnType(const FunctionDecl *D, long ArgNum) {
 AnnotationSet SimpleAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
   return helperMakeWritesLocalEffectSummary(D);
+}
+
+RplVector *SimpleAnnotationScheme::
+makeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) {
+  return helperMakeBaseTypeArgs(Derived, ArgNum);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -271,6 +295,11 @@ makeEffectSummary(const FunctionDecl *D) {
   Effect ReadsGlobal(Effect::EK_ReadsEffect, &GlobalRpl);
   CES->insert(ReadsGlobal);
   return Result;
+}
+
+RplVector *CheckGlobalsAnnotationScheme::
+makeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) {
+  return helperMakeBaseTypeArgs(Derived, ArgNum);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

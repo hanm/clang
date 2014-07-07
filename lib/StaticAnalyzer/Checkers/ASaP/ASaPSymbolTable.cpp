@@ -780,6 +780,14 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
   }
 }
 
+RplVector *SymbolTable::
+makeDefaultBaseArgs(QualType BaseQT, const RecordDecl *Derived) {
+  ResultTriplet ResTrip = getRegionParamCount(BaseQT);
+  assert(ResTrip.ResKin == RK_OK && "Expected to know the region params of the base type");
+  long NumArgs = ResTrip.NumArgs;
+  return AnnotScheme->makeBaseTypeArgs(Derived, NumArgs);
+}
+
 void SymbolTable::createSymbolTableEntry(const Decl *D) {
   assert(!SymTable[D] && "Internal Error: trying to create duplicate entry");
   StringRef Name;
