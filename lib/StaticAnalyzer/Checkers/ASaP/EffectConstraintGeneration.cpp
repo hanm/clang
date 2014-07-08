@@ -373,6 +373,7 @@ void EffectConstraintVisitor::checkEffectCoverage() {
   } // end for all collected effects, check effect coverage
   OS << "DEBUG:: effect check (DONE)\n";
   if (Result == RK_DUNNO) {
+    EC->makeMinimal();
     SymT.addInclusionConstraint(EC);
   } else {
     if (LHS->size() == 0 && isa<VarEffectSummary>(RHS)) {

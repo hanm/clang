@@ -674,15 +674,18 @@ void SymbolTable::solveInclusionConstraints() {
   } // end for-all symbol table entries
   OSv2 << "DEBUG:: Done emmitting rgn_param facts, gonna do esi_constraints next\n";
 
-  unsigned Num=1;
   //loop to call esi_collect (effect inference)
   for (InclusionConstraintsSetT::iterator
           I = InclusionConstraints.begin(),
           E = InclusionConstraints.end();
        I != E; ++I) {
-    assert((*I)->getDef());
-    StringRef FName = getPrologName((*I)->getDef());
-    OSv2 << "****" << FName << "*****"<< "\n";
+    const FunctionDecl *FunD = (*I)->getDef();
+    assert(FunD && "Internal Error: Effect Inclusion Constraint without matching FunctionDecl");
+    StringRef FName = getPrologName(FunD);
+
+    OSv2 << "DEBUG:: **** Invoking inference for method '"
+         << FunD->getNameAsString() << "' (Prolog Name: "
+         << FName << ") ****\n";
 
     std::string EVstr;
     llvm::raw_string_ostream EV(EVstr);
@@ -712,7 +715,6 @@ void SymbolTable::solveInclusionConstraints() {
     OSv2 << "result is "<< Solution << "\n";
 
     emitConstraintSolution(*I, Solution);
-    ++Num;
   }
 }
 

@@ -290,6 +290,26 @@ void EffectVector::substitute(const SubstitutionVector *SubV, int N) {
   }
 }
 
+void EffectVector::makeMinimal() {
+  VectorT::iterator I = begin(); // not a const iterator
+  while (I != end()) { // end is not loop invariant
+    bool found = false;
+    for (VectorT::iterator J = begin(); J != end(); ++J) {
+      if (I != J && (*I)->isSubEffectOf(**J)) {
+        found = true;
+        break;
+      }
+    }
+    if (found) {
+      //bool Success = take(*I);
+      //assert(Success && "Internal Error: failed to minimize EffectVector");
+      I = erase(I);
+      //I = begin();
+    } else {
+      ++I;
+    }
+  }
+}
 //////////////////////////////////////////////////////////////////////////
 // EffectSummary
 

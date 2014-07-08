@@ -161,6 +161,7 @@ public:
   void substitute(const Substitution *S, int N);
   void substitute(const SubstitutionVector *SubV, int N);
 
+  void makeMinimal();
 }; // end class EffectVector
 
 

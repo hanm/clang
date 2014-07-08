@@ -41,6 +41,7 @@ class EffectInclusionConstraint {
   const Stmt *getS() const {return S;}
   void print();
   term_t getPLTerm();
+  void makeMinimal();
 };
 
 } // End namespace asap.

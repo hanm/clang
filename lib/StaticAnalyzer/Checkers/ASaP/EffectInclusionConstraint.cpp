@@ -81,5 +81,10 @@ term_t EffectInclusionConstraint::getPLTerm() {
   return ESITerm;
 }
 
+void EffectInclusionConstraint::makeMinimal() {
+  if (LHS)
+    LHS->makeMinimal();
+}
+
 }
 }
