@@ -4090,8 +4090,7 @@ Decl *ASTNodeImporter::VisitClassTemplateSpecializationDecl(
   // Try to find an existing specialization with these template arguments.
   void *InsertPos = nullptr;
   ClassTemplateSpecializationDecl *D2
-    = ClassTemplate->findSpecialization(TemplateArgs.data(), 
-                                        TemplateArgs.size(), InsertPos);
+    = ClassTemplate->findSpecialization(TemplateArgs, InsertPos);
   if (D2) {
     // We already have a class template specialization with these template
     // arguments.
@@ -4284,7 +4283,7 @@ Decl *ASTNodeImporter::VisitVarTemplateSpecializationDecl(
   // Try to find an existing specialization with these template arguments.
   void *InsertPos = nullptr;
   VarTemplateSpecializationDecl *D2 = VarTemplate->findSpecialization(
-      TemplateArgs.data(), TemplateArgs.size(), InsertPos);
+      TemplateArgs, InsertPos);
   if (D2) {
     // We already have a variable template specialization with these template
     // arguments.
@@ -4923,8 +4922,7 @@ FileID ASTImporter::Import(FileID FromID) {
     llvm::MemoryBuffer *ToBuf
       = llvm::MemoryBuffer::getMemBufferCopy(FromBuf->getBuffer(),
                                              FromBuf->getBufferIdentifier());
-    ToID = ToSM.createFileIDForMemBuffer(ToBuf,
-                                    FromSLoc.getFile().getFileCharacteristic());
+    ToID = ToSM.createFileID(ToBuf, FromSLoc.getFile().getFileCharacteristic());
   }
   
   

@@ -47,6 +47,7 @@ class CXXRecordDecl;
 class Decl;
 class DeclaratorDecl;
 class Expr;
+class ExprIterator;
 class FunctionDecl;
 class ParmVarDecl;
 class Stmt;
@@ -58,6 +59,7 @@ namespace asap {
 class AnnotationScheme;
 class ASaPType;
 class Effect;
+class EffectInclusionConstraint;
 class EffectVector;
 class EffectSummary;
 class NamedRplElement;

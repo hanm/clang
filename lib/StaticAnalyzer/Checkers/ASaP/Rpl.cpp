@@ -211,6 +211,7 @@ bool Rpl::RplRef::isDisjointRight(RplRef &That) {
   }
 }
 
+
 ///////////////////////////////////////////////////////////////////////////////
 // end Rpl::RplRef; start Rpl
 
@@ -230,7 +231,7 @@ term_t Rpl::getRplElementsPLTerm() const {
 
 term_t Rpl::getPLTerm() const {
   term_t Result = PL_new_term_ref();
-  functor_t RplFunctor = PL_new_functor(PL_new_atom("rpl"), 2);
+  functor_t RplFunctor = PL_new_functor(PL_new_atom(PL_Rpl.c_str()), 2);
   // 1. build RPL element list
   term_t RplElList = getRplElementsPLTerm();
   // 2. build (empty) substitution list
@@ -242,13 +243,19 @@ term_t Rpl::getPLTerm() const {
   return Result;
 }
 
+inline bool Rpl::isPrivate() const {
+  return (this->RplElements.size()==1 &&
+      this->RplElements[0] == SymbolTable::LOCAL_RplElmt);
+}
+
 bool Rpl::isDisjoint(const Rpl &That) const {
   RplRef LHS1(*this);
   RplRef RHS1(That);
   RplRef LHS2(*this);
   RplRef RHS2(That);
 
-  return LHS1.isDisjointLeft(RHS1) || LHS2.isDisjointRight(RHS2);
+  return isPrivate() || That.isPrivate()
+         || LHS1.isDisjointLeft(RHS1) || LHS2.isDisjointRight(RHS2);
 }
 ///////////////////////////////////////////////////////////////////////////////
 ////   Rpl
@@ -589,6 +596,19 @@ const NamedRplElement *RegionNameSet::lookup (StringRef Name) {
       return El;
   }
   return 0;
+}
+
+void RegionNameSet::assertzProlog() const {
+  for (SetT::iterator I = begin(), E = end();
+        I != E; ++I) {
+    const NamedRplElement *El = *I;
+    term_t RegionT = PL_new_term_ref();
+    functor_t RNFunctor =
+      PL_new_functor(PL_new_atom(PL_RgnName.c_str()), 1);
+    int Res = PL_cons_functor(RegionT, RNFunctor, El->getPLTerm());
+    assert(Res && "Failed to create 'rgn_name' Prolog term");
+    assertzTermProlog(RegionT, "Failed to assert 'rgn_name' to Prolog facts");
+  }
 }
 
 } // End namespace asap.

@@ -58,10 +58,10 @@ public:
   inline bool encounteredFatalError() { return FatalError; }
 
   /// Visitors
-  bool VisitFunctionDecl(FunctionDecl* D) {
-    const FunctionDecl* Definition;
+  bool VisitFunctionDecl(FunctionDecl *D) {
+    const FunctionDecl *Definition;
     if (D->hasBody(Definition)) {
-      Stmt* S = Definition->getBody();
+      Stmt *S = Definition->getBody();
       assert(S);
 
       StmtVisitorT StmtVisitor(Definition, S, true);
@@ -75,6 +75,7 @@ public:
 
 class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
+
 
 public:
   void checkASTDecl(const TranslationUnitDecl *TUDeclConst,
@@ -90,7 +91,6 @@ public:
 
     char* Argv[4] = {Libpl, G32, L32, T32};
     int Argc = 4;
-
     PL_initialise(Argc, Argv);
     //PL_action(PL_ACTION_DEBUG);
     //PL_action(PL_ACTION_TRACE);
@@ -111,6 +111,7 @@ public:
     os << "DEBUG:: asap-default-scheme = " << SchemeStr << "\n";
 
     AnnotationScheme *AnnotScheme = 0;
+    bool DoInference = false;
     if (SchemeStr.compare("simple") == 0) {
       AnnotScheme = new SimpleAnnotationScheme(SymT);
     } else if (SchemeStr.compare("param") == 0) {
@@ -119,6 +120,7 @@ public:
       AnnotScheme = new CheckGlobalsAnnotationScheme(SymT);
     } else if (SchemeStr.compare("inference") == 0) {
       AnnotScheme = new InferenceAnnotationScheme(SymT);
+      DoInference = true;
     } else {
       // ERROR TODO
       llvm::errs() << "ERROR: Invalid argument to command-line option -asap-default-scheme\n";
@@ -127,7 +129,7 @@ public:
 
     if (!Error) {
       SymT.setAnnotationScheme(AnnotScheme);
-      runCheckers(TUDecl);
+      runCheckers(TUDecl, DoInference);
     }
 
 
@@ -136,7 +138,7 @@ public:
     PL_cleanup(0);
   }
 
-  void runCheckers(TranslationUnitDecl *TUDecl) const {
+  void runCheckers(TranslationUnitDecl *TUDecl, bool DoInference) const {
     os << "DEBUG:: starting ASaP TBB Parallelism Detection!\n";
     DetectTBBParallelism DetectTBBPar;
     DetectTBBPar.TraverseDecl(TUDecl);
@@ -187,44 +189,47 @@ public:
       return;
     }
     // Check that Effect Summaries cover effects
+    os << "DEBUG:: starting ASaP Effect Constraint Generator\n";
     //StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker;
     StmtVisitorInvoker<EffectConstraintVisitor> EffectChecker;
     EffectChecker.TraverseDecl(TUDecl);
     os << "##############################################\n";
-    os << "DEBUG:: done running ASaP Constraint Generator\n\n";
+    os << "DEBUG:: done running ASaP Effect Constraint Generator\n\n";
     if (EffectChecker.encounteredFatalError()) {
       os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;
     }
 
-    // Make sure asap.pl exists at the expected location.
-    FILE *File = fopen("/opt/lib/asap.pl", "r");
-    if (!File) {
-      fclose(File);
-      assert(File && "pl file does not exist");
-    }
-    // Consult the asap.pl file
-    predicate_t Consult = PL_predicate("consult",1,"user");
-    term_t Plfile=PL_new_term_ref();
-    PL_put_atom_chars(Plfile, "/opt/lib/asap.pl");
-    PL_call_predicate(NULL, PL_Q_NORMAL, Consult, Plfile);
+    if (DoInference) {
+      // Make sure asap.pl exists at the expected location.
+      FILE *File = fopen("/opt/lib/asap.pl", "r");
+      if (!File) {
+        fclose(File);
+        assert(File && "Prolog rules file does not exist");
+      }
+      // Consult the asap.pl file
+      predicate_t Consult = PL_predicate("consult", 1, "user");
+      term_t Plfile = PL_new_term_ref();
+      PL_put_atom_chars(Plfile, "/opt/lib/asap.pl");
+      PL_call_predicate(NULL, PL_Q_NORMAL, Consult, Plfile);
 
-    SymbolTable::Table->solveInclusionConstraints();
-
-    os << "DEBUG:: starting ASaP Non-Interference Checking\n";
-    StmtVisitorInvoker<NonInterferenceChecker> NonIChecker;
-    NonIChecker.TraverseDecl(TUDecl);
-    os << "##############################################\n";
-    os << "DEBUG:: done running ASaP Non-Interference Checking\n\n";
-    if (NonIChecker.encounteredFatalError()) {
-      os << "DEBUG:: NON-INTERFERENCE CHECKING ENCOUNTERED FATAL ERROR!! STOPPING\n";
-      return;
-    }
-
+      SymbolTable::Table->solveInclusionConstraints();
+    } else {
+      os << "DEBUG:: starting ASaP Non-Interference Checking\n";
+      StmtVisitorInvoker<NonInterferenceChecker> NonIChecker;
+      NonIChecker.TraverseDecl(TUDecl);
+      os << "##############################################\n";
+      os << "DEBUG:: done running ASaP Non-Interference Checking\n\n";
+      if (NonIChecker.encounteredFatalError()) {
+        os << "DEBUG:: NON-INTERFERENCE CHECKING ENCOUNTERED FATAL ERROR!! STOPPING\n";
+        return;
+      }
+    } // end else (!DoInference)
   }
+
 }; // end class SafeParallelismChecker
 } // end unnamed namespace
 
-void ento::registerSafeParallelismChecker(CheckerManager &mgr) {
-  mgr.registerChecker<SafeParallelismChecker>();
+void ento::registerSafeParallelismChecker(CheckerManager &Mgr) {
+  Mgr.registerChecker<SafeParallelismChecker>();
 }

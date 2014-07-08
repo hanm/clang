@@ -16,16 +16,23 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "clang/AST/Attr.h"
+#include "clang/AST/Decl.h"
+#include "clang/AST/DeclCXX.h"
+#include "clang/AST/Expr.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 
+#include "ASaPSymbolTable.h"
 #include "ASaPType.h"
 #include "ASaPUtil.h"
+#include "Rpl.h"
+#include "Substitution.h"
+#include "TypeChecker.h"
 
 namespace clang {
 namespace asap {
 
-static StringRef BugCategory = "Safe Parallelism";
+static const StringRef BugCategory = "Safe Parallelism";
 
 #ifdef ASAP_DEBUG
 raw_ostream &os = llvm::errs();
@@ -147,6 +154,116 @@ void assertzTermProlog(term_t Fact, StringRef ErrMsg) {
   assert(Rval && ErrMsg.data());
 }
 
+void buildTypeSubstitution(const SymbolTable &SymT,
+                           const RecordDecl *ClassD,
+                           const ASaPType *Typ,
+                           SubstitutionVector &SubV) {
+  if (!ClassD || !Typ)
+    return;
+
+  // Set up Substitution Vector
+  const ParameterVector *PV = SymT.getParameterVector(ClassD);
+  SubV.add(Typ, PV);
+}
+
+void buildSingleParamSubstitution(
+        const FunctionDecl *Def,
+        SymbolTable &SymT,
+        ParmVarDecl *Param, Expr *Arg,
+        const ParameterSet &ParamSet, // Set of fn & class region params
+        SubstitutionVector &SubV) {
+  *SymbolTable::VB.OS << "DEBUG::  buildSingleParamSubstitution BEGIN\n";
+  // if the function parameter has region argument that is a region
+  // parameter, infer a substitution based on the type of the function argument
+  const ASaPType *ParamType = SymT.getType(Param);
+  if (!ParamType)
+    return;
+  const RplVector *ParamArgV = ParamType->getArgV();
+  if (!ParamArgV)
+    return;
+  TypeBuilderVisitor TBV(Def, Arg);
+  const ASaPType *ArgType = TBV.getType();
+  if (!ArgType)
+    return;
+  const RplVector *ArgArgV = ArgType->getArgV();
+  if (!ArgArgV)
+    return;
+  // For each element of ArgV if it's a simple arg, check if it's
+  // a function region param
+  for(RplVector::const_iterator
+        ParamI = ParamArgV->begin(), ParamE = ParamArgV->end(),
+        ArgI = ArgArgV->begin(), ArgE = ArgArgV->end();
+      ParamI != ParamE && ArgI != ArgE; ++ParamI, ++ArgI) {
+    const Rpl *ParamR = *ParamI;
+    assert(ParamR && "RplVector should not contain null Rpl pointer");
+    if (ParamR->length() < 1)
+      continue;
+    if (ParamR->length() > 1)
+      // In this case, we need to implement type unification
+      // of ParamR and ArgR = *ArgI or allow explicitly giving
+      // the substitution in an annotation at the call-site
+      continue;
+    const RplElement *Elmt = ParamR->getFirstElement();
+    assert(Elmt && "Rpl should not contain null RplElement pointer");
+    if (! ParamSet.hasElement(Elmt))
+      continue;
+    // Ok find the argument
+    Substitution Sub(Elmt, *ArgI);
+    *SymbolTable::VB.OS << "DEBUG::buildSingleParamSubstitution: adding Substitution = "
+       << Sub.toString() << "\n";
+    SubV.push_back(&Sub);
+    //OS << "DEBUG:: added function param sub: " << Sub.toString() << "\n";
+  }
+  *SymbolTable::VB.OS << "DEBUG::  DONE buildSingleParamSubstitution \n";
+}
+
+void buildParamSubstitutions(
+        const FunctionDecl *Def,
+        SymbolTable &SymT,
+        const FunctionDecl *CalleeDecl,
+        ExprIterator ArgI, ExprIterator ArgE,
+        const ParameterSet &ParamSet,
+        SubstitutionVector &SubV) {
+  assert(CalleeDecl);
+  FunctionDecl::param_const_iterator ParamI, ParamE;
+  *SymbolTable::VB.OS << "DEBUG:: buildParamSUbstitutions... BEGIN!\n";
+
+  for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
+      ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
+    Expr *ArgExpr = *ArgI;
+    ParmVarDecl *ParamDecl = *ParamI;
+    buildSingleParamSubstitution(Def, SymT, ParamDecl, ArgExpr, ParamSet, SubV);
+  }
+  *SymbolTable::VB.OS << "DEBUG:: DONE buildParamSUbstitutions\n";
+}
+
+void tryBuildParamSubstitutions(
+        const FunctionDecl *Def,
+        SymbolTable &SymT,
+        const FunctionDecl *CalleeDecl,
+        ExprIterator ArgI, ExprIterator ArgE,
+        SubstitutionVector &SubV) {
+  assert(CalleeDecl);
+  ParameterSet *ParamSet = new ParameterSet();
+  assert(ParamSet);
+  // Build SubV for function region params
+  const ParameterVector *ParamV = SymT.getParameterVector(CalleeDecl);
+  if (ParamV && ParamV->size() > 0) {
+    ParamV->addToParamSet(ParamSet);
+  }
+  // if isa<CXXMethodDecl>CalleeDecl -> add Class parameters to set
+  if (const CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(CalleeDecl)) {
+    const CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
+    ParamV = SymT.getParameterVector(Rec);
+    if (ParamV && ParamV->size() > 0) {
+      ParamV->addToParamSet(ParamSet);
+    }
+  }
+  if (ParamSet->size() > 0) {
+    buildParamSubstitutions(Def, SymT, CalleeDecl, ArgI, ArgE, *ParamSet, SubV);
+  }
+  delete ParamSet;
+}
 
 } // end namespace asap
 } // end namespace clang

@@ -56,7 +56,7 @@ AssignmentCheckerVisitor::AssignmentCheckerVisitor(
   Stmt *S,
   bool VisitCXXInitializer
   ) : BaseClass(Def),
-      Type(0), SubV(0) {
+      Type(0) {
 
     OS << "DEBUG:: ******** INVOKING AssignmentCheckerVisitor...(VisitInit="
        << (VisitCXXInitializer?"ture":"false") << ")\n";
@@ -98,11 +98,8 @@ ASaPType *AssignmentCheckerVisitor::stealType() {
 void AssignmentCheckerVisitor::
 VisitCallExpr(CallExpr *Exp) {
   if (!Exp->getBuiltinCallee()) {
-    assert(!SubV);
-    SubV = new SubstitutionVector();
-    typecheckCallExpr(Exp, *SubV);
-    delete SubV;
-    SubV = 0;
+    SubstitutionVector SubV;
+    typecheckCallExpr(Exp, SubV);
   }
 }
 
@@ -171,11 +168,8 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
             break; // VD->getInit() could be a ParenListExpr or perhaps some
                    // other Expr
           assert(Exp);
-          assert(!SubV);
-          SubV = new SubstitutionVector();
-          typecheckCXXConstructExpr(VD, Exp, *SubV);
-          delete SubV;
-          SubV = 0;
+          SubstitutionVector SubV;
+          typecheckCXXConstructExpr(VD, Exp, SubV);
           break;
         }
       }
@@ -337,12 +331,9 @@ VisitCXXConstructExpr(CXXConstructExpr *Exp) {
   OS << "DEBUG:: Visiting CXXConstructExpr: ";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-  assert(!SubV);
-  SubV = new SubstitutionVector();
+  SubstitutionVector SubV;
   typecheckParamAssignments(Exp->getConstructor(),
-                            Exp->arg_begin(), Exp->arg_end(), *SubV);
-  delete SubV;
-  SubV = 0;
+                            Exp->arg_begin(), Exp->arg_end(), SubV);
 }
 
 void AssignmentCheckerVisitor::
@@ -407,45 +398,14 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
                           ExprIterator ArgI,
                           ExprIterator ArgE,
                           SubstitutionVector &SubV) {
-  assert(CalleeDecl);
-  ParameterSet *ParamSet = new ParameterSet();
-  assert(ParamSet);
-  // Build SubV for function region params
-  const ParameterVector *ParamV = SymT.getParameterVector(CalleeDecl);
-  // FIXME: if isa<CXXMethodDecl>CalleeDecl -> add Class parameters to vector
-  if (ParamV && ParamV->size() > 0) {
-    ParamV->addToParamSet(ParamSet);
-  }
-  if (CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(CalleeDecl)) {
-    CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
-    ParamV = SymT.getParameterVector(Rec);
-    if (ParamV && ParamV->size() > 0) {
-      ParamV->addToParamSet(ParamSet);
-    }
-  }
-  if (ParamSet->size() > 0) {
-    buildParamSubstitutions(CalleeDecl, ArgI, ArgE, *ParamSet, SubV);
-  }
-  delete ParamSet;
+
+  tryBuildParamSubstitutions(Def, SymT, CalleeDecl, ArgI, ArgE, SubV);
 
   OS << "DEBUG:: CALLING typecheckParamAssignments\n";
   FunctionDecl::param_iterator
     ParamI = CalleeDecl->param_begin(),
     ParamE = CalleeDecl->param_end();
 
-  if (CalleeDecl->isOverloadedOperator()) {
-    if (isa<CXXMethodDecl>(CalleeDecl)) {
-      // if the overloaded operator is a member function, it's 1st
-      // (implicit) argument is 'this' which doesn't have a corresponding
-      // parameter, so skip it!
-      assert(ArgI!=ArgE);
-      OS << "DEBUG:: Callee is Overloaded Operator -> skipping 1st arg:";
-      ArgI->printPretty(OS, 0, Ctx.getPrintingPolicy());
-      OS << ", with Type: " << ArgI->getType().getAsString();
-      OS << "\n";
-      ++ArgI;
-    }
-  }
   for(; ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
     Expr *ArgExpr = *ArgI;
     ParmVarDecl *ParamDecl = *ParamI;
@@ -469,9 +429,9 @@ typecheckCXXConstructExpr(VarDecl *VarD,
   RecordDecl *ClassDecl = dyn_cast<RecordDecl>(ClassDeclContext);
   assert(ClassDecl);
   // Set up Substitution Vector
-  const ParameterVector *PV = SymT.getParameterVector(ClassDecl);
   const ASaPType *T = SymT.getType(VarD);
-  buildSubstitutionVector(T,PV,SubV);
+  buildTypeSubstitution(SymT, ClassDecl, T, SubV);
+
   typecheckParamAssignments(ConstrDecl, Exp->arg_begin(), Exp->arg_end(), SubV);
   OS << "DEBUG:: DONE with typecheckCXXConstructExpr\n";
 
@@ -541,7 +501,7 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
     // Build substitution for class region parameter(s)
     const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
     ASaPType *T = TBV.getType();
-    buildSubstitutionVector(T,ParamV,SubV);
+    SubV.add(T, ParamV);
 
     unsigned NumArgs = Exp->getNumArgs();
     unsigned NumParams = FunD->getNumParams();
@@ -554,7 +514,23 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
     assert((FunD->isVariadic() || NumParams == NumArgs ||
           NumParams+((FunD->isOverloadedOperator()) ? 1 : 0) == NumArgs) &&
           "Unexpected number of arguments to a call expresion");
-    typecheckParamAssignments(FunD, Exp->arg_begin(), Exp->arg_end(), SubV);
+
+    if (FunD->isOverloadedOperator()
+        && isa<CXXMethodDecl>(FunD)) {
+      // if the overloaded operator is a member function, it's 1st
+      // (implicit) argument is 'this' which doesn't have a corresponding
+      // parameter, so skip it!
+
+      CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(FunD);
+      assert(CXXCalleeDecl && "Internal Error: Expected isa<CXXMethodDecl>(CalleeDecl)");
+      CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
+      TypeBuilderVisitor TBV(Def, Exp->getArg(0));
+      ASaPType *Typ = TBV.getType();
+      buildTypeSubstitution(SymT, Rec, Typ, SubV);
+      typecheckParamAssignments(FunD, Exp->arg_begin()+1, Exp->arg_end(), SubV);
+    } else {
+      typecheckParamAssignments(FunD, Exp->arg_begin(), Exp->arg_end(), SubV);
+    }
     OS << "DEBUG:: DONE typecheckCallExpr\n";
 
     // Now set Type to the return type of this call
@@ -575,83 +551,6 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionVector &SubV) {
     // TODO
   }
 } // End typecheckCallExpr
-
-void AssignmentCheckerVisitor::
-buildSubstitutionVector(const ASaPType *Typ,
-                        const ParameterVector *ParamV,
-                        SubstitutionVector &SubV) {
-  if (Typ && ParamV && ParamV->size() > 0) {
-    for (unsigned int I = 0; I < ParamV->size(); ++I) {
-      const ParamRplElement *ParamEl = ParamV->getParamAt(I);
-      const Rpl *R = Typ->getSubstArg(I);
-      Substitution Sub(ParamEl, R);
-      OS << "DEBUG:: ConstructExpr Substitution = " << Sub.toString() << "\n";
-      SubV.push_back(&Sub);
-    }
-  }
-}
-
-void AssignmentCheckerVisitor::
-buildParamSubstitutions(const FunctionDecl *CalleeDecl,
-                        ExprIterator ArgI, ExprIterator ArgE,
-                        const ParameterSet &ParamSet,
-                        SubstitutionVector &SubV) {
-  assert(CalleeDecl);
-  FunctionDecl::param_const_iterator ParamI, ParamE;
-  for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
-      ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
-    Expr *ArgExpr = *ArgI;
-    ParmVarDecl *ParamDecl = *ParamI;
-    buildSingleParamSubstitution(ParamDecl, ArgExpr, ParamSet, SubV);
-  }
-}
-
-void AssignmentCheckerVisitor::
-buildSingleParamSubstitution(
-    ParmVarDecl *Param, Expr *Arg,
-    const ParameterSet &ParamSet, // Set of fn & class region params
-    SubstitutionVector &SubV) {
-  // if the function parameter has region argument that is a region
-  // parameter, infer a substitution based on the type of the function argument
-  const ASaPType *ParamType = SymT.getType(Param);
-  if (!ParamType)
-    return;
-  const RplVector *ParamArgV = ParamType->getArgV();
-  if (!ParamArgV)
-    return;
-  TypeBuilderVisitor TBV(Def, Arg);
-  const ASaPType *ArgType = TBV.getType();
-  if (!ArgType)
-    return;
-  const RplVector *ArgArgV = ArgType->getArgV();
-  if (!ArgArgV)
-    return;
-  // For each element of ArgV if it's a simple arg, check if it's
-  // a function region param
-  for(RplVector::const_iterator
-        ParamI = ParamArgV->begin(), ParamE = ParamArgV->end(),
-        ArgI = ArgArgV->begin(), ArgE = ArgArgV->end();
-      ParamI != ParamE && ArgI != ArgE; ++ParamI, ++ArgI) {
-    const Rpl *ParamR = *ParamI;
-    assert(ParamR && "RplVector should not contain null Rpl pointer");
-    if (ParamR->length() < 1)
-      continue;
-    if (ParamR->length() > 1)
-      // In this case, we need to implement type unification
-      // of ParamR and ArgR = *ArgI or allow explicitly giving
-      // the substitution in an annotation at the call-site
-      continue;
-    const RplElement *Elmt = ParamR->getFirstElement();
-    assert(Elmt && "Rpl should not contain null RplElement pointer");
-    if (! ParamSet.hasElement(Elmt))
-      continue;
-    // Ok find the argument
-    Substitution Sub(Elmt, *ArgI);
-    SubV.push_back(&Sub);
-    OS << "DEBUG:: added function param sub: " << Sub.toString() << "\n";
-  }
-}
-
 
 //////////////////////////////////////////////////////////////////////////
 // TypeBuilderVisitor
@@ -1246,9 +1145,10 @@ void TypeBuilderVisitor::VisitCXXNewExpr(CXXNewExpr *Exp) {
     AssignmentCheckerVisitor ACV(Def, Exp->getArraySize());
   }
   // invoke the assignment checker on the (implicit) constructor call
-  AssignmentCheckerVisitor(Def,
-                           const_cast<CXXConstructExpr*>
-                                       (Exp->getConstructExpr()));
+  if (CXXConstructExpr *ConsExp = const_cast<CXXConstructExpr*>
+                                            (Exp->getConstructExpr())) {
+    AssignmentCheckerVisitor(Def, ConsExp);
+  }
 }
 
 void TypeBuilderVisitor::VisitAtomicExpr(AtomicExpr *Exp) {

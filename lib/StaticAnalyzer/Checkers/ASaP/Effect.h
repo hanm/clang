@@ -95,6 +95,10 @@ public:
     return (Kind == EK_NoEffect) ? true : false;
   }
 
+  inline bool isCompound() const {
+    return (Kind == EK_InvocEffect);
+  }
+
   /// \brief Returns true iff this effect has RPL argument.
   inline bool hasRplArgument() const { return !isNoEffect(); }
   /// \brief Returns true if this effect is atomic.
@@ -137,9 +141,6 @@ public:
   /// \brief true iff this # That
   bool isNonInterfering(const Effect &That) const;
 
-  /// \brief Returns covering effect in effect summary or null.
-  //const Effect *isCoveredBy(const EffectSummary &ES);
-  //  EffectSummary::Trivalent isCoveredBy(const EffectSummary &ES);
 }; // end class Effect
 
 
@@ -160,6 +161,7 @@ public:
   void substitute(const Substitution *S, int N);
   void substitute(const SubstitutionVector *SubV, int N);
 
+  void makeMinimal();
 }; // end class EffectVector
 
 
@@ -209,7 +211,8 @@ public:
   EffectSummary(SummaryKind SK) : Kind(SK) {}
   virtual EffectSummary *clone() const = 0;
   virtual ~EffectSummary() {};
-};
+  virtual term_t getPLTerm() const = 0;
+}; // end class EffectSummary
 
 #ifndef EFFECT_SUMMARY_SIZE
   #define EFFECT_SUMMARY_SIZE 8
@@ -253,17 +256,23 @@ public:
   virtual void substitute(const SubstitutionVector *SubV);
 
   virtual ~ConcreteEffectSummary() {};
+  virtual term_t getPLTerm() const;
 }; // end class ConcreteEffectSummary
 
 class VarEffectSummary : public EffectSummary {
   // TODO: add field to store solution of inference
   // ConcreteEffectSummary* Concrete;  // Commented out to remove warning.
+  EffectInclusionConstraint *InclCons;
+
 public:
   // Constructors
-  VarEffectSummary() : EffectSummary(ESK_Var) {}
+  VarEffectSummary()
+                  : EffectSummary(ESK_Var),
+                    InclCons(0) {}
 
   VarEffectSummary(const VarEffectSummary &VES)
-                  : EffectSummary(ESK_Var) {}
+                  : EffectSummary(ESK_Var),
+                    InclCons(VES.InclCons) {}
 
   virtual VarEffectSummary *clone() const {
     return new VarEffectSummary(*this);
@@ -288,6 +297,19 @@ public:
   }
 
   virtual ~VarEffectSummary() {};
+  virtual term_t getPLTerm() const;
+
+  void setInclusionConstraint(EffectInclusionConstraint *EIC) {
+    InclCons = EIC;
+  }
+
+  EffectInclusionConstraint *getInclusionConstraint() const {
+    return InclCons;
+  }
+
+  bool hasInclusionConstraint() const {
+    return (InclCons == 0) ? false : true;
+  }
 }; // end class VarEffectSummary
 
 

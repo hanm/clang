@@ -56,11 +56,12 @@ void Substitution::set(const RplElement *FromEl, const Rpl *ToRpl) {
 }
 term_t Substitution::getPLTerm() const {
   term_t Result = PL_new_term_ref();
-  functor_t SubFunctor = PL_new_functor(PL_new_atom("param_sub"), 2);
+  functor_t SubFunctor =
+    PL_new_functor(PL_new_atom(PL_ParamSub.c_str()), 2);
   assert(FromEl && "Subtitution missing left hand side");
   assert(ToRpl && "Substitution missing right hand side");
   int Res = PL_cons_functor(Result, SubFunctor,
-                            FromEl->getPLTerm(), 
+                            FromEl->getPLTerm(),
                             ToRpl->getRplElementsPLTerm());
   assert(Res && "Failed to create prolog term_t for Substitution");
   return Result;
@@ -127,6 +128,20 @@ void SubstitutionVector::push_back_vec(const SubstitutionVector *SubV) {
     for(VectorT::const_iterator I = SubV->begin(), E = SubV->end();
         I != E; ++I) {
       this->push_back(*I);
+    }
+  }
+}
+
+void SubstitutionVector::add(const ASaPType *Typ,
+                             const ParameterVector *ParamV) {
+  if (Typ && ParamV && ParamV->size() > 0) {
+    for (unsigned int I = 0; I < ParamV->size(); ++I) {
+      const ParamRplElement *ParamEl = ParamV->getParamAt(I);
+      const Rpl *R = Typ->getSubstArg(I);
+      if (ParamEl && R) {
+        Substitution Sub(ParamEl, R);
+        push_back(&Sub);
+      }
     }
   }
 }

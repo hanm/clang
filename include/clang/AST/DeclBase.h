@@ -397,6 +397,8 @@ public:
 
   bool isInAnonymousNamespace() const;
 
+  bool isInStdNamespace() const;
+
   ASTContext &getASTContext() const LLVM_READONLY;
 
   void setAccess(AccessSpecifier AS) {
@@ -999,7 +1001,7 @@ public:
   void print(raw_ostream &OS) const override;
 };
 
-typedef llvm::MutableArrayRef<NamedDecl*> DeclContextLookupResult;
+typedef MutableArrayRef<NamedDecl *> DeclContextLookupResult;
 
 typedef ArrayRef<NamedDecl *> DeclContextLookupConstResult;
 
@@ -1156,6 +1158,8 @@ public:
   bool isNamespace() const {
     return DeclKind == Decl::Namespace;
   }
+
+  bool isStdNamespace() const;
 
   bool isInlineNamespace() const;
 

@@ -109,6 +109,13 @@ public:
     }
   }
 
+  typename VectorT::iterator erase (typename VectorT::iterator I) {
+    ElmtTyp *Elm = *I;
+    I = VectorT::erase(I);
+    delete Elm;
+    return I;
+  }
+
   term_t getPLTerm() const {
     term_t Result = PL_new_term_ref();
     PL_put_nil(Result);
@@ -131,7 +138,6 @@ private:
 
   void append(size_t NumInputs, const ElmtTyp &Elt); // NOT IMPLEMENTED
 
-  typename VectorT::iterator erase (typename VectorT::iterator I);  // NOT IMPLEMENTED
   typename VectorT::iterator erase (typename VectorT::iterator S, typename VectorT::iterator E);  // NOT IMPLEMENTED
 
   typename VectorT::iterator insert (typename VectorT::iterator I, const ElmtTyp &Elt);  // NOT IMPLEMENTED

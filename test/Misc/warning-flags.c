@@ -45,6 +45,7 @@ CHECK-NEXT:   pp_pragma_sysheader_in_main_file
 CHECK-NEXT:   w_asm_qualifier_ignored
 CHECK-NEXT:   warn_accessor_property_type_mismatch
 CHECK-NEXT:   warn_anon_bitfield_width_exceeds_type_size
+CHECK-NEXT:   warn_arcmt_nsalloc_realloc
 CHECK-NEXT:   warn_asm_label_on_auto_decl
 CHECK-NEXT:   warn_bitfield_width_exceeds_type_size
 CHECK-NEXT:   warn_braces_around_scalar_init
@@ -113,7 +114,6 @@ CHECK-NEXT:   warn_redeclaration_without_attribute_prev_attribute_ignored
 CHECK-NEXT:   warn_register_objc_catch_parm
 CHECK-NEXT:   warn_related_result_type_compatibility_class
 CHECK-NEXT:   warn_related_result_type_compatibility_protocol
-CHECK-NEXT:   warn_static_non_static
 CHECK-NEXT:   warn_template_export_unsupported
 CHECK-NEXT:   warn_template_spec_extra_headers
 CHECK-NEXT:   warn_tentative_incomplete_array

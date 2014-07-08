@@ -101,16 +101,19 @@ class SymbolTable {
   /// such as int or pointers.
   const ParameterVector *BuiltinDefaultRegionParameterVec;
 
-  unsigned long ParamIdNumber;
-  unsigned long RegionIdNumber;
-  unsigned long RVIdNumber;
+  unsigned long ParamIDNumber;
+  unsigned long RegionIDNumber;
+  unsigned long DeclIDNumber;
 
   // Private Methods
   /// \brief Return the next unused ID number. Used to encode names into Prolog.
-  inline unsigned long getNextUniqueParamID() { return ParamIdNumber++; }
+  inline unsigned long getNextUniqueParamID() { return ParamIDNumber++; }
 
   /// \brief Return the next unused ID number. Used to encode names into Prolog.
-  inline unsigned long getNextUniqueRegionID() { return RegionIdNumber++; }
+  inline unsigned long getNextUniqueRegionID() { return RegionIDNumber++; }
+
+  /// \brief Return the next unused ID number. Used to encode names into Prolog.
+  inline unsigned long getNextUniqueDeclID() { return DeclIDNumber++; }
 
   inline unsigned long getNextUniqueRVID() { return RVIdNumber++; }
 
@@ -121,16 +124,21 @@ class SymbolTable {
     return Result;
   }
 
+  bool addInclusionConstraint(const FunctionDecl *FunD,
+                              EffectInclusionConstraint *EIC);
 
+  void assertzHasEffectSummary(const NamedDecl *NDec,
+                               const ConcreteEffectSummary *EffSum) const;
 public:
-
   // Static Constants
   static const StarRplElement *STAR_RplElmt;
   static const SpecialRplElement *ROOT_RplElmt;
   static const SpecialRplElement *LOCAL_RplElmt;
   static const SpecialRplElement *GLOBAL_RplElmt;
   static const SpecialRplElement *IMMUTABLE_RplElmt;
+  static const ConcreteEffectSummary *PURE_EffSum;
   static const Effect *WritesLocal;
+
   // Unique globally accessible symbol table
   static SymbolTable *Table;
   static VisitorBundle VB;
@@ -182,6 +190,7 @@ public:
   const InheritanceMapT *getInheritanceMap(const CXXRecordDecl *D) const;
   const InheritanceMapT *getInheritanceMap(QualType QT) const;
   const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;
+  const StringRef getPrologName(const Decl *D) const;
 
   inline const SpecificNIChecker *getNIChecker(const FunctionDecl *FD) const {
     return ParTable.lookup(FD);
@@ -261,17 +270,22 @@ public:
     return addFreshName(ss.str());
   }
 
-  inline void addInclusionConstraint(EffectInclusionConstraint* EIC){
+  inline void addInclusionConstraint(EffectInclusionConstraint *EIC) {
+    assert(EIC && "Internal Error: unexpected null-pointer");
     InclusionConstraints.insert(EIC);
+    addInclusionConstraint(EIC->getDef(), EIC);
   }
 
-  inline void addNIConstraint(EffectNIConstraint* NIC){
+  inline void addNIConstraint(EffectNIConstraint *NIC) {
     NIConstraints.insert(NIC);
   }
 
   void solveInclusionConstraints();
   // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
+  RplVector *makeDefaultBaseArgs(const RecordDecl *Derived, long NumArgs);
+
+  void createSymbolTableEntry(const Decl *D);
 
   Rpl* createFreshRplVar(){
     return new Rpl(0);
@@ -290,6 +304,7 @@ public:
 class SymbolTableEntry {
   friend class SymbolTable;
   // Fields
+  StringRef PrologName;
   ASaPType *Typ;
   ParameterVector *ParamVec;
   RegionNameSet *RegnNameSet;
@@ -309,7 +324,7 @@ class SymbolTableEntry {
   void computeInheritanceSubVec();
 
 public:
-  SymbolTableEntry();
+  SymbolTableEntry(StringRef PrologName);
   ~SymbolTableEntry();
 
   // Predicates.
@@ -325,6 +340,7 @@ public:
   inline const RegionNameSet *getRegionNameSet() const { return RegnNameSet; }
   inline const EffectSummary *getEffectSummary() const { return EffSum; }
   inline const InheritanceMapT *getInheritanceMap() const { return InheritanceMap; }
+  inline const StringRef getPrologName() const { return PrologName; }
 
   // Setters.
   inline void setType(ASaPType *T) { Typ = T; }
@@ -340,6 +356,7 @@ public:
   // Adders.
   void addRegionName(llvm::StringRef Name, llvm::StringRef PrologName);
   void addParameterName(llvm::StringRef Name, llvm::StringRef PrologName);
+  bool addInclusionConstraint(EffectInclusionConstraint *EIC);
 
   // Deleters
   inline void deleteEffectSummary();
@@ -350,9 +367,7 @@ public:
                          SubstitutionVector *&SubV);
 
   const SubstitutionVector *getSubVec(const RecordDecl *Base) const;
-
   const SubstitutionVector *getInheritanceSubVec();
-
 
 protected:
   inline EffectSummary *getNonConstEffectSummary() const { return EffSum; }

@@ -9,7 +9,7 @@ public:
 
 // A. SINGLE INHERITANCE
 // A.1 missing, wrong and duplicate base_arg annotations
-class [[asap::param("Class")]] derived1 : public base { // expected-warning{{missing base_arg attribute}}
+class [[asap::param("Class")]] derived1 : public base { 
 };
 
 class [[asap::param("Class"), asap::base_arg("base", "Class")]] derived2
@@ -22,8 +22,7 @@ class [[asap::param("Class"),
 derived3 : public base {
 };
 
-class [[asap::param("Class"),
-        asap::base_arg("case", "Class")]]   // expected-warning{{first argument must refer to direct base class}} 
+class [[asap::base_arg("case", "Class")]]   // expected-warning{{first argument must refer to direct base class}} 
 derived4 : public base { // expected-warning{{missing base_arg attribute}}
 };
 

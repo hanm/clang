@@ -135,21 +135,21 @@ addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
 }
 
 void ASaPSemanticCheckerTraverser::
-addASaPBaseTypeToMap(CXXRecordDecl *CXXRD,
+addASaPBaseTypeToMap(CXXRecordDecl *Derived,
                      QualType BaseQT, RplVector *RplVec) {
   OS << "DEBUG:: Adding Base class to inheritance Map!\n"
      << "      BASE=" << BaseQT.getAsString() << "\n"
-     << "   DERIVED=" << CXXRD->getQualifiedNameAsString() << "\n";
+     << "   DERIVED=" << Derived->getQualifiedNameAsString() << "\n";
 
-  const RecordType *RT = BaseQT->getAs<RecordType>();
-  assert(RT);
-  RecordDecl *BaseD = RT->getDecl();
-  assert(BaseD);
+  const RecordType *BaseT = BaseQT->getAs<RecordType>();
+  assert(BaseT && "Internal Error: unexpected null-pointer for Base Type");
+  RecordDecl *BaseD = BaseT->getDecl();
+  assert(BaseD && "Internal Error: unexpected null-pointer for Base Declaration");
 
   const ParameterVector *ParV = SymT.getParameterVector(BaseD);
   assert(ParV && "Base class has an uninitialized ParamVec");
 
-  const ParameterVector *DerivedParV = SymT.getParameterVector(CXXRD);
+  const ParameterVector *DerivedParV = SymT.getParameterVector(Derived);
   assert(DerivedParV && "Derived class has an uninitialized ParamVec");
 
   SubstitutionVector *SubV = new SubstitutionVector();
@@ -160,7 +160,7 @@ addASaPBaseTypeToMap(CXXRecordDecl *CXXRD,
     SubV->buildSubstitutionVector(ParV, RplVec);
   } // else the Substitution Vector stays empty.
 
-  SymT.addBaseTypeAndSub(CXXRD, BaseD, SubV);
+  SymT.addBaseTypeAndSub(Derived, BaseD, SubV);
 }
 
 void ASaPSemanticCheckerTraverser::
@@ -210,6 +210,7 @@ emitUnknownNumberOfRegionParamsForType(const Decl *D) {
   llvm::raw_string_ostream strbuf(sbuf);
   D->print(strbuf, Ctx.getPrintingPolicy());
 
+  OS << "DEBUG:: " << strbuf.str() << ": " << BugName << "\n";
   helperEmitDeclarationWarning(Checker, BR, D, strbuf.str(), BugName);
 }
 
@@ -281,6 +282,7 @@ void ASaPSemanticCheckerTraverser::
 emitMissingBaseArgAttribute(const Decl *D, StringRef BaseClass) {
   FatalError = true;
   StringRef BugName = "missing base_arg attribute";
+  OS << "DEBUG:: missing base_arg attribute\n";
   helperEmitDeclarationWarning(Checker, BR, D, BaseClass, BugName);
 
 }
@@ -749,7 +751,8 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
   for (CXXRecordDecl::base_class_const_iterator
           I = D->bases_begin(), E = D->bases_end();
        I!=E; ++I) {
-    std::string BaseClassStr = (*I).getType().getAsString();
+    QualType BaseQT = (*I).getType();
+    std::string BaseClassStr = BaseQT.getAsString();
     OS << "DEBUG::: BaseClass = " << BaseClassStr << "\n";
     std::string prefix("class ");
     if (!BaseClassStr.compare(0, prefix.length(), prefix)) {
@@ -760,7 +763,7 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
 
     // Check if the base class takes no region arguments
     ResultTriplet ResTriplet =
-      SymT.getRegionParamCount((*I).getType());
+      SymT.getRegionParamCount(BaseQT);
     // If the base type is a template type variable, skip the check.
     // We will only check fully instantiated template code.
     if (ResTriplet.ResKin==RK_VAR)
@@ -769,12 +772,18 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
     assert(ResTriplet.ResKin==RK_OK && "Unknown number of region parameters");
     if (ResTriplet.NumArgs==0) {
       // add an empty substitution to the inheritance map
-      addASaPBaseTypeToMap(D, (*I).getType(), 0);
+      addASaPBaseTypeToMap(D, BaseQT, 0);
     } else {
       const RegionBaseArgAttr *Att = findBaseArg(D, BaseClassStr);
       if (!Att) {
-        emitMissingBaseArgAttribute(D, BaseClassStr);
-        // TODO: add default instead of giving error
+        OS << "DEBUG:: NumArgs = " << ResTriplet.NumArgs << "\n";
+
+        RplVector *RplVec = SymT.makeDefaultBaseArgs(D, ResTriplet.NumArgs);
+        if (RplVec) {
+          addASaPBaseTypeToMap(D,BaseQT,RplVec);
+        } else {
+          emitMissingBaseArgAttribute(D, BaseClassStr);
+        }
       }
     }
   }

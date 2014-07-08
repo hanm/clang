@@ -140,6 +140,15 @@ llvm::GlobalVariable *CodeGenPGO::buildDataVar() {
   Data->setSection(getDataSection(CGM));
   Data->setAlignment(8);
 
+  // Hide all these symbols so that we correctly get a copy for each
+  // executable.  The profile format expects names and counters to be
+  // contiguous, so references into shared objects would be invalid.
+  if (!llvm::GlobalValue::isLocalLinkage(VarLinkage)) {
+    Name->setVisibility(llvm::GlobalValue::HiddenVisibility);
+    Data->setVisibility(llvm::GlobalValue::HiddenVisibility);
+    RegionCounters->setVisibility(llvm::GlobalValue::HiddenVisibility);
+  }
+
   // Make sure the data doesn't get deleted.
   CGM.addUsedGlobal(Data);
   return Data;
@@ -828,7 +837,8 @@ void CodeGenPGO::assignRegionCounters(const Decl *D, llvm::Function *Fn) {
     emitCounterVariables();
   }
   if (PGOReader) {
-    loadRegionCounts(PGOReader);
+    SourceManager &SM = CGM.getContext().getSourceManager();
+    loadRegionCounts(PGOReader, SM.isInMainFile(D->getLocation()));
     computeRegionCounts(D);
     applyFunctionAttributes(PGOReader, Fn);
   }
@@ -903,16 +913,17 @@ void CodeGenPGO::emitCounterIncrement(CGBuilderTy &Builder, unsigned Counter) {
   Builder.CreateStore(Count, Addr);
 }
 
-void CodeGenPGO::loadRegionCounts(llvm::IndexedInstrProfReader *PGOReader) {
-  CGM.getPGOStats().Visited++;
+void CodeGenPGO::loadRegionCounts(llvm::IndexedInstrProfReader *PGOReader,
+                                  bool IsInMainFile) {
+  CGM.getPGOStats().addVisited(IsInMainFile);
   RegionCounts.reset(new std::vector<uint64_t>);
   uint64_t Hash;
   if (PGOReader->getFunctionCounts(getFuncName(), Hash, *RegionCounts)) {
-    CGM.getPGOStats().Missing++;
+    CGM.getPGOStats().addMissing(IsInMainFile);
     RegionCounts.reset();
   } else if (Hash != FunctionHash ||
              RegionCounts->size() != NumRegionCounters) {
-    CGM.getPGOStats().Mismatched++;
+    CGM.getPGOStats().addMismatched(IsInMainFile);
     RegionCounts.reset();
   }
 }

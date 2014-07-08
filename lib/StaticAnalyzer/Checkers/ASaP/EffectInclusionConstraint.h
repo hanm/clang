@@ -15,6 +15,7 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_EFFECT_INCLUSION_CONSTRAINT_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_EFFECT_INCLUSION_CONSTRAINT_H
 
+#include <SWI-Prolog.h>
 
 #include "ASaPFwdDecl.h"
 #include "Effect.h"
@@ -30,15 +31,17 @@ class EffectInclusionConstraint {
   const Stmt *S;
 
  public:
-  EffectInclusionConstraint(const EffectSummary* Rhs,
-                            const FunctionDecl* Def,
-                            const Stmt* S);
-  void addEffect(Effect* Eff);
-  EffectVector* getLHS()  {return LHS;}
-  const EffectSummary* getRHS() const {return RHS;}
-  const FunctionDecl* getDef() const {return Def;}
-  const Stmt* getS() const {return S;}
+  EffectInclusionConstraint(const EffectSummary *Rhs,
+                            const FunctionDecl *Def,
+                            const Stmt *S);
+  void addEffect(Effect *Eff);
+  EffectVector *getLHS()  {return LHS;}
+  const EffectSummary *getRHS() const {return RHS;}
+  const FunctionDecl *getDef() const {return Def;}
+  const Stmt *getS() const {return S;}
   void print();
+  term_t getPLTerm();
+  void makeMinimal();
 };
 
 } // End namespace asap.
