@@ -280,8 +280,7 @@ public:
   void solveInclusionConstraints();
   // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
-  RplVector *makeDefaultBaseArgs(QualType BaseQT,
-                                 const RecordDecl *Derived);
+  RplVector *makeDefaultBaseArgs(const RecordDecl *Derived, long NumArgs);
 
   void createSymbolTableEntry(const Decl *D);
 

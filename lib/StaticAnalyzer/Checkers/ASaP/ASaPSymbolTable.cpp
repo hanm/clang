@@ -781,10 +781,7 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
 }
 
 RplVector *SymbolTable::
-makeDefaultBaseArgs(QualType BaseQT, const RecordDecl *Derived) {
-  ResultTriplet ResTrip = getRegionParamCount(BaseQT);
-  assert(ResTrip.ResKin == RK_OK && "Expected to know the region params of the base type");
-  long NumArgs = ResTrip.NumArgs;
+makeDefaultBaseArgs(const RecordDecl *Derived, long NumArgs) {
   return AnnotScheme->makeBaseTypeArgs(Derived, NumArgs);
 }
 

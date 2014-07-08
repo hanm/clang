@@ -125,6 +125,15 @@ RplVector *AnnotationScheme::
 helperMakeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) {
   RplVector *Result = 0;
   const ParameterVector *ParamV = SymT.getParameterVector(Derived);
+  OSv2 << "DEBUG:: helperMakeBaseTypeArgs:: ParamV = " << ParamV << "\n";
+  if (ParamV) {
+    OSv2 << "   (size=" << ParamV->size() << ") \n";
+    OSv2 << "   "; ParamV->print(OSv2); OSv2 << "\n";
+  }
+  OSv2 << "        Derived:";
+  Derived->print(OSv2);
+  OSv2 << "\n";
+
   if (ParamV && ParamV->size() > 0) {
     Result = new RplVector();
     for(int I = 0; I < ArgNum; ++I) {
@@ -138,11 +147,40 @@ helperMakeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) {
 AnnotationSet ParametricAnnotationScheme::
 makeClassParams(const RecordDecl *D) {
   // we don't need a class parameter if the class has no fields
-  AnnotationSet Result;
-  if (D->field_empty())
-    return Result;
-  else
+  bool GenerateParam = false;
+  if (!D->field_empty()) {
+    GenerateParam = true;
+  } else {
+    if (const CXXRecordDecl *CXXD = dyn_cast<CXXRecordDecl>(D)) {
+      if (const CXXRecordDecl *CXXDef = CXXD->getDefinition()) {
+        for (CXXRecordDecl::base_class_const_iterator
+               I = CXXDef->bases_begin(), E = CXXDef->bases_end();
+             I!=E; ++I) {
+          QualType BaseQT = (*I).getType();
+          // Check if the base class takes no region arguments
+          ResultTriplet ResTriplet =
+            SymT.getRegionParamCount(BaseQT);
+          // If the base type is a template type variable, skip the check.
+          // We will only check fully instantiated template code.
+          if (ResTriplet.ResKin!=RK_OK)
+            continue;
+
+          assert(ResTriplet.ResKin==RK_OK && "Unknown number of region parameters");
+          if (ResTriplet.NumArgs>0) {
+            GenerateParam = true;
+            break;
+          }
+        } // end for-all base classes
+      }
+    }
+  }
+
+  if (GenerateParam) {
     return helperMakeClassParams(D);
+  } else {
+    AnnotationSet Result;
+    return Result;
+  }
 }
 
 AnnotationSet ParametricAnnotationScheme::
@@ -157,9 +195,9 @@ makeStackType(const VarDecl *D, long ArgNum) {
 
 AnnotationSet ParametricAnnotationScheme::
 makeFieldType(const FieldDecl *D, long ArgNum) {
-  assert(D);
+  assert(D && "Internal Error: Unexpected null-pointer declaration.");
   const RecordDecl *ReD = D->getParent();
-  assert(ReD);
+  assert(ReD && "Internal Error: Unexpected null-pointer enclosing class declaration");
   const ParameterVector *ParamV = SymT.getParameterVector(ReD);
 
   AnnotationSet Result;

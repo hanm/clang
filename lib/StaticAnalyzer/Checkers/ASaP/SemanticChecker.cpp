@@ -282,6 +282,7 @@ void ASaPSemanticCheckerTraverser::
 emitMissingBaseArgAttribute(const Decl *D, StringRef BaseClass) {
   FatalError = true;
   StringRef BugName = "missing base_arg attribute";
+  OS << "DEBUG:: missing base_arg attribute\n";
   helperEmitDeclarationWarning(Checker, BR, D, BaseClass, BugName);
 
 }
@@ -762,7 +763,7 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
 
     // Check if the base class takes no region arguments
     ResultTriplet ResTriplet =
-      SymT.getRegionParamCount((*I).getType());
+      SymT.getRegionParamCount(BaseQT);
     // If the base type is a template type variable, skip the check.
     // We will only check fully instantiated template code.
     if (ResTriplet.ResKin==RK_VAR)
@@ -775,12 +776,14 @@ checkBaseSpecifierArgs(CXXRecordDecl *D) {
     } else {
       const RegionBaseArgAttr *Att = findBaseArg(D, BaseClassStr);
       if (!Att) {
-        //emitMissingBaseArgAttribute(D, BaseClassStr);
-        RplVector *RplVec = SymT.makeDefaultBaseArgs(BaseQT, D);
-        if (RplVec)
+        OS << "DEBUG:: NumArgs = " << ResTriplet.NumArgs << "\n";
+
+        RplVector *RplVec = SymT.makeDefaultBaseArgs(D, ResTriplet.NumArgs);
+        if (RplVec) {
           addASaPBaseTypeToMap(D,BaseQT,RplVec);
-        else
+        } else {
           emitMissingBaseArgAttribute(D, BaseClassStr);
+        }
       }
     }
   }
