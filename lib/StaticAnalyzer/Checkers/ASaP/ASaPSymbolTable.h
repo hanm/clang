@@ -104,6 +104,7 @@ class SymbolTable {
   unsigned long ParamIDNumber;
   unsigned long RegionIDNumber;
   unsigned long DeclIDNumber;
+  unsigned long RVIDNumber;
 
   // Private Methods
   /// \brief Return the next unused ID number. Used to encode names into Prolog.
@@ -115,7 +116,7 @@ class SymbolTable {
   /// \brief Return the next unused ID number. Used to encode names into Prolog.
   inline unsigned long getNextUniqueDeclID() { return DeclIDNumber++; }
 
-  inline unsigned long getNextUniqueRVID() { return RVIdNumber++; }
+  inline unsigned long getNextUniqueRVID() { return RVIDNumber++; }
 
   inline StringRef addFreshName(StringRef SRef) {
     std::string *S = new std::string(SRef.str());
@@ -259,6 +260,13 @@ public:
   inline StringRef makeFreshRegionName(const std::string &Name) {
     std::stringstream ss;
     ss << "r" << getNextUniqueRegionID()
+       << "_" << Name;
+    return addFreshName(ss.str());
+  }
+
+  inline StringRef makeFreshDeclName(const std::string &Name) {
+    std::stringstream ss;
+    ss << "r" << getNextUniqueDeclID()
        << "_" << Name;
     return addFreshName(ss.str());
   }
