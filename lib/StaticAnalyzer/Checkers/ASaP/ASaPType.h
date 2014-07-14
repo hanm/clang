@@ -19,6 +19,7 @@
 #include "clang/AST/Type.h"
 
 #include "ASaPFwdDecl.h"
+#include "ASaPUtil.h"
 #include "ASaPInheritanceMap.h"
 
 namespace clang {
@@ -107,12 +108,12 @@ public:
   std::string toString() const;
   /// \brief Returns true when 'this' can be assigned to That
   // Note: That=LHS and this=RHS
-  bool isAssignableTo(const ASaPType &That, SymbolTable &SymT,
+  Trivalent isAssignableTo(const ASaPType &That, SymbolTable &SymT,
                       ASTContext &Ctx, bool IsInit = false) const;
   /// \brief true when when cast is successful
   bool implicitCastToBase(QualType BaseQT, SymbolTable &SymT);
   /// \brief  true when 'this' is a subtype (derived type) of 'that'.
-  bool isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const;
+  Trivalent isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const;
   /// \brief Joins this to That (by modifying this).
   /// Join returns the smallest common supertype (Base Type).
   void join(ASaPType *That);

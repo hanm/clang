@@ -93,7 +93,7 @@ ASaPType::ASaPType(QualType QT, const InheritanceMapT *InheritanceMap,
                    : QT(QT), InheritanceMap(InheritanceMap) {
   // 1. Set InRpl & ArgV.
   if (InRpl)
-    this->InRpl = new Rpl(*InRpl);
+    this->InRpl = InRpl->clone();
   else
     this->InRpl = 0;
   if (ArgV)
@@ -112,7 +112,7 @@ ASaPType::ASaPType(const ASaPType &T)
   this->QT = T.QT;
   // 2. Copy InRpl
   if (T.InRpl)
-    this->InRpl = new Rpl(*T.InRpl);
+    this->InRpl = T.InRpl->clone();
   else
     this->InRpl = 0;
   // 3. Copy ArgV
@@ -293,7 +293,7 @@ std::string ASaPType::toString() const {
   return std::string(OS.str());
 }
 
-bool ASaPType::
+Trivalent ASaPType::
 isAssignableTo(const ASaPType &That, SymbolTable &SymT,
                ASTContext &Ctx, bool IsInit) const {
   OSv2 << "DEBUG:: isAssignable [IsInit=" << IsInit
@@ -322,7 +322,7 @@ isAssignableTo(const ASaPType &That, SymbolTable &SymT,
   return ThisCopy.isSubtypeOf(ThatCopy, SymT);
 }
 
-bool ASaPType::
+Trivalent ASaPType::
 isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const {
   if (! areUnqualQTsEqual(QT, That.QT) ) {
     /// Typechecking has passed so we assume that this->QT <= that->QT
@@ -334,22 +334,33 @@ isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const {
       // both null or both non-null
       assert((ThisCopy.InRpl && ThatCopy.InRpl) ||
              (ThisCopy.InRpl==0 && ThatCopy.InRpl==0));
-
+      Trivalent Result = ThisCopy.isSubtypeOf(ThatCopy, SymT);
+      if (Result != RK_TRUE)
+        return Result; // RK_FALSE or RK_DUNNO
+      // Invariant: ThisCopy.isSubtypeOf(ThatCopy,SymT) == RK_TRUE
+      if (ThisCopy.InRpl == 0 && ThatCopy.InRpl == 0)
+        return RK_TRUE;
+      if (ThisCopy.InRpl && ThatCopy.InRpl)
+        return ThisCopy.InRpl->isIncludedIn(*ThatCopy.InRpl);
+      // else
+      return RK_FALSE;
+      /*
       return (ThisCopy.isSubtypeOf(ThatCopy, SymT)) &&
               ((ThisCopy.InRpl == 0 && ThatCopy.InRpl == 0)
                || (ThisCopy.InRpl && ThatCopy.InRpl &&
                    ThisCopy.InRpl->isIncludedIn(*ThatCopy.InRpl)));
+                   */
     } else if (isDerivedFrom(QT, That.QT)) {
       //assert(isDerivedFrom(QT, That.QT));
       ASaPType ThisCopy(*this);
       if (!ThisCopy.implicitCastToBase(That.QT, SymT))
-        return false;
+        return RK_FALSE;
       else
         return ThisCopy.ArgV->isIncludedIn(*That.ArgV);
     } else {
       // this may happen in the case of an unsafe implicit cast,
       // in particular casting from function to function pointer.
-      return false;
+      return RK_FALSE;
     }
   }
   /// Note that we're ignoring InRpl on purpose.
@@ -430,7 +441,7 @@ void ASaPType::join(ASaPType *That) {
   if (this->InRpl)
     this->InRpl->join(That->InRpl);
   else if (That->InRpl)
-    this->InRpl = new Rpl(*That->InRpl);
+    this->InRpl = That->InRpl->clone();
   // else this->InRpl = That->InRpl == null. Nothing to do.
 
   if (this->ArgV)

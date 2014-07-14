@@ -22,20 +22,20 @@
 namespace clang {
 namespace asap {
 
-Effect::Effect(EffectKind EK, const Rpl* R, const Attr* A)
+Effect::Effect(EffectKind EK, const Rpl *R, const Attr *A)
   : Kind(EK), Attribute(A), Exp(0), SubV(0), FunD(0) {
-  this->R = (R) ? new Rpl(*R) : 0;
+  this->R = (R) ? R->clone() : 0;
 }
 
-Effect::Effect(EffectKind EK, const Rpl* R,  const Expr* E)
+Effect::Effect(EffectKind EK, const Rpl *R,  const Expr *E)
   : Kind(EK), Exp(E), SubV(0), FunD(0) {
-  this->R = (R) ? new Rpl(*R) : 0;
+  this->R = (R) ? R->clone() : 0;
 }
 
 
 Effect::Effect(const Effect &E)
   : Kind(E.Kind), Attribute(E.Attribute), Exp(E.Exp), FunD(E.FunD) {
-  R = (E.R) ? new Rpl(*E.R) : 0;
+  R = (E.R) ? E.R->clone() : 0;
   SubV = new SubstitutionVector();
   SubV->push_back_vec(E.SubV);
 }
@@ -71,12 +71,17 @@ void Effect::substitute(const SubstitutionVector *S) {
 
 }
 
-bool Effect::isSubEffectOf(const Effect &That) const {
-  bool Result;
-  Result= (isNoEffect() || (isSubEffectKindOf(That) &&
-                 R->isIncludedIn(*(That.R))));
+Trivalent Effect::isSubEffectOf(const Effect &That) const {
+  Trivalent Result;
+  if (isNoEffect()) {
+    Result = RK_TRUE;
+  } else if (isSubEffectKindOf(That)) {
+    Result = R->isIncludedIn(*(That.R));
+  } else {
+    Result = RK_FALSE;
+  }
   OSv2  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
-    << That.toString() << ")=" << (Result ? "true" : "false") << "\n";
+    << That.toString() << ")=" << (Result==RK_TRUE ? "true" : "false-or-dunno") << "\n";
   return Result;
 }
 
@@ -113,10 +118,10 @@ bool Effect::isSubEffectKindOf(const Effect &E) const {
   return Result;
 }
 
-bool Effect::isNonInterfering(const Effect &That) const {
+Trivalent Effect::isNonInterfering(const Effect &That) const {
   switch (Kind) {
   case EK_NoEffect:
-    return true;
+    return RK_TRUE;
     break;
   case EK_ReadsEffect:
   case EK_AtomicReadsEffect:
@@ -124,7 +129,7 @@ bool Effect::isNonInterfering(const Effect &That) const {
     case EK_NoEffect:
     case EK_ReadsEffect:
     case EK_AtomicReadsEffect:
-      return true;
+      return RK_TRUE;
       break;
     case EK_AtomicWritesEffect:
     case EK_WritesEffect:
@@ -133,27 +138,27 @@ bool Effect::isNonInterfering(const Effect &That) const {
       return R->isDisjoint(*That.R);
     case EK_InvocEffect:
       // TODO
-      return false;
+      return RK_FALSE;
     }
     break;
   case EK_WritesEffect:
   case EK_AtomicWritesEffect:
-    if (That.Kind == EK_NoEffect)
-      return true;
-    else {
+    if (That.Kind == EK_NoEffect) {
+      return RK_TRUE;
+    } else {
       assert(R && "Internal ERROR: missing Rpl in non-pure Effect");
       // FIXME That.R might be null if it is an invocation effect
       assert(That.R && "Internal ERROR: missing Rpl in non-pure Effect");
       return R->isDisjoint(*That.R);
     }
   case EK_InvocEffect:
-    if (That.Kind == EK_NoEffect)
-      return true;
-    else {
+    if (That.Kind == EK_NoEffect) {
+      return RK_TRUE;
+    } else {
       // TODO
-      return false;
+      return RK_FALSE;
     }
-  }
+  } // end switch(Kind)
 }
 
 bool Effect::printEffectKind(raw_ostream &OS) const {
@@ -295,7 +300,7 @@ void EffectVector::makeMinimal() {
   while (I != end()) { // end is not loop invariant
     bool found = false;
     for (VectorT::iterator J = begin(); J != end(); ++J) {
-      if (I != J && (*I)->isSubEffectOf(**J)) {
+      if (I != J && (*I)->isSubEffectOf(**J) == RK_TRUE) {
         found = true;
         break;
       }
@@ -324,7 +329,7 @@ std::string EffectSummary::toString(std::string Separator,
 //ConcreteEffectSummary
 Trivalent ConcreteEffectSummary::covers(const Effect *Eff) const {
   assert(Eff);
-  if (Eff->isSubEffectOf(*SymbolTable::WritesLocal))
+  if (Eff->isSubEffectOf(*SymbolTable::WritesLocal) == RK_TRUE)
     return RK_TRUE;
   if (Eff->isNoEffect())
     return RK_TRUE;
@@ -333,45 +338,48 @@ Trivalent ConcreteEffectSummary::covers(const Effect *Eff) const {
     return RK_TRUE;
   }
 
+  Trivalent Result = RK_FALSE;
   SetT::const_iterator I = begin(), E = end();
   for(; I != E; ++I) {
-    if (Eff->isSubEffectOf(*(*I)))
+    Trivalent Tmp = Eff->isSubEffectOf(*(*I));
+    if (Tmp == RK_TRUE) {
       return RK_TRUE;
+    } else if (Tmp == RK_DUNNO) {
+      Result = RK_DUNNO;
+    }
   }
-  return RK_FALSE;
+  return Result;
 }
 
 
-Trivalent ConcreteEffectSummary::covers(const
-EffectSummary *Sum) const {
+Trivalent ConcreteEffectSummary::covers(const EffectSummary *Sum) const {
   if (!Sum)
     return RK_TRUE;
   if (isa<VarEffectSummary>(Sum))
     return RK_DUNNO;
-  const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);
+  const ConcreteEffectSummary *CES = dyn_cast<ConcreteEffectSummary>(Sum);
   assert(CES && "Expected Sum would either be Var or Concrete");
-  bool Dunno=false;
+
+  Trivalent Result = RK_TRUE;
   SetT::const_iterator I = CES->begin(), E = CES->end();
   for(; I != E; ++I) {
-    Trivalent RK=this->covers(*I);
-    if (RK==RK_FALSE)
+    Trivalent Tmp = this->covers(*I);
+    if (Tmp == RK_FALSE) {
       return RK_FALSE;
-    else if(RK==RK_DUNNO)
-      Dunno=true;
+    } else if (Tmp == RK_DUNNO) {
+      Result = RK_DUNNO;
+    }
   }
-  if(Dunno)
-    return RK_DUNNO;
-  return RK_TRUE;
+  return Result;
 }
 
 
-Trivalent ConcreteEffectSummary::isNonInterfering(const Effect *Eff)
-const {
+Trivalent ConcreteEffectSummary::isNonInterfering(const Effect *Eff) const {
   if (!Eff || Eff->isNoEffect())
     return RK_TRUE;
   SetT::const_iterator I = begin(), E = end();
   for(; I != E; ++I) {
-    if (!Eff->isNonInterfering(*(*I)))
+    if (Eff->isNonInterfering(*(*I)) == RK_FALSE)
       return RK_FALSE;
   }
   return RK_TRUE;
@@ -386,17 +394,16 @@ isNonInterfering(const EffectSummary *Sum) const {
     return RK_DUNNO;
   const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);
   assert(CES && "Expected Sum would either be Var or Concrete");
-  bool Dunno=false;
+
+  Trivalent Result = RK_TRUE;
   SetT::const_iterator I = CES->begin(), E = CES->end();
   for(; I != E; ++I) {
-    if (this->isNonInterfering(*I)==RK_FALSE)
+    if (this->isNonInterfering(*I) == RK_FALSE)
       return RK_FALSE;
-    else if (this->isNonInterfering(*I)==RK_DUNNO)
-      Dunno=true;
+    else if (this->isNonInterfering(*I) == RK_DUNNO)
+      Result = RK_DUNNO;
   }
-  if(Dunno)
-    return RK_DUNNO;
-  return RK_TRUE;
+  return Result;
 }
 
 void ConcreteEffectSummary::makeMinimal(EffectCoverageVector &ECV) {
@@ -404,7 +411,7 @@ void ConcreteEffectSummary::makeMinimal(EffectCoverageVector &ECV) {
   while (I != end()) { // EffectSum.end() is not loop invariant
     bool found = false;
     for (SetT::iterator J = begin(); J != end(); ++J) {
-      if (I != J && (*I)->isSubEffectOf(*(*J))) {
+      if (I != J && (*I)->isSubEffectOf(*(*J)) == RK_TRUE) {
         //emitEffectCovered(D, *I, *J);
         ECV.push_back(new std::pair<const Effect*,
                                     const Effect*>(new Effect(*(*I)),

@@ -38,7 +38,8 @@ static const std::string PL_InvokesEffect = "invokes";
 
 static const std::string PL_EffectSummary = "effect_summary";
 static const std::string PL_EffectVar = "effect_var";
-static const std::string PL_Rpl = "rpl";
+static const std::string PL_ConcreteRpl = "rpl";
+static const std::string PL_VarRpl = "var_rpl";
 static const std::string PL_ParamSub = "param_sub";
 
 static const std::string PL_ESIConstraint = "esi_constraint";
@@ -62,14 +63,16 @@ struct VisitorBundle {
   raw_ostream *OS;
 };
 
-enum Trivalent{
+enum Trivalent {
   //True
-  RK_TRUE,
+  RK_TRUE = 0,
   //False
   RK_FALSE,
   //Don't know
   RK_DUNNO
 };
+
+Trivalent Bool2Trivalent(bool B);
 
 /// \brief Issues Warning: '<str>': <bugName> on Declaration.
 void helperEmitDeclarationWarning(const CheckerBase *Checker,

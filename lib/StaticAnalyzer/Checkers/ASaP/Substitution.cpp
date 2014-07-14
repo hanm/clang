@@ -29,7 +29,7 @@ Substitution::Substitution(const RplElement *FromEl, const Rpl *ToRpl) :
   FromEl(FromEl) {
   assert(FromEl);
   if (ToRpl)
-    this->ToRpl = new Rpl(*ToRpl);
+    this->ToRpl = ToRpl->clone();
   else
     this->ToRpl = 0;
 }
@@ -38,7 +38,7 @@ Substitution::Substitution(const Substitution &Sub) :
   FromEl(Sub.FromEl) {
   assert(FromEl);
   if (Sub.ToRpl)
-    this->ToRpl = new Rpl(*Sub.ToRpl);
+    this->ToRpl = Sub.ToRpl->clone();
   else
     this->ToRpl = 0;
 }
@@ -50,7 +50,7 @@ Substitution::~Substitution() {
 void Substitution::set(const RplElement *FromEl, const Rpl *ToRpl) {
   this->FromEl = FromEl;
   if (ToRpl)
-    this->ToRpl = new Rpl(*ToRpl);
+    this->ToRpl = ToRpl->clone();
   else
     this->ToRpl = 0;
 }

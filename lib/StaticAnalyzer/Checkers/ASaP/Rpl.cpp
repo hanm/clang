@@ -22,6 +22,14 @@
 
 namespace clang {
 namespace asap {
+
+///////////////////////////////////////////////////////////////////////////////
+//// Rpl
+
+/// Static
+const StringRef Rpl::RPL_LIST_SEPARATOR = ",";
+const StringRef Rpl::RPL_NAME_SPEC = "::";
+
 /// Static
 std::pair<StringRef, StringRef> Rpl::splitRpl(StringRef &String) {
   size_t Idx = 0;
@@ -41,12 +49,55 @@ std::pair<StringRef, StringRef> Rpl::splitRpl(StringRef &String) {
                                            String.slice(Idx+1, String.size()));
 }
 
+bool Rpl::isValidRegionName(const llvm::StringRef& Str) {
+  // false if it is one of the Special Rpl Elements
+  // => it is not allowed to redeclare them
+  if (SymbolTable::isSpecialRplElement(Str))
+    return false;
 
+  // must start with [_a-zA-Z]
+  const char c = Str.front();
+  if (c != '_' &&
+    !( c >= 'a' && c <= 'z') &&
+    !( c >= 'A' && c <= 'Z'))
+    return false;
+  // all remaining characters must be in [_a-zA-Z0-9]
+  for (size_t i=0; i < Str.size(); i++) {
+    const char c = Str[i];
+    if (c != '_' &&
+      !( c >= 'a' && c <= 'z') &&
+      !( c >= 'A' && c <= 'Z') &&
+      !( c >= '0' && c <= '9'))
+      return false;
+  }
+  return true;
+}
 
-/// Static
-const StringRef Rpl::RPL_LIST_SEPARATOR = ",";
-const StringRef Rpl::RPL_NAME_SPEC = "::";
+/// Member functions
+inline void Rpl::addSubstitution(const Substitution *S) {
+  if (!S)
+    return;
+  if (!SubV)
+    SubV = new SubstitutionVector();
+  SubV->push_back(S);
+}
 
+term_t Rpl::getSubVPLTerm() const {
+  if (SubV) {
+    return SubV->getPLTerm();
+  } else {
+    term_t SubList = PL_new_term_ref();
+    PL_put_nil(SubList);
+    return SubList;
+  }
+}
+
+Rpl::~Rpl() {
+  delete SubV;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//// RplDomain
 
 RplDomain::RplDomain(RegionNameVector *RV, const ParameterVector *PV, RplDomain *P){
   Regions = RV;
@@ -75,39 +126,15 @@ void RplDomain::print (llvm::raw_ostream& OS) {
   OS << "----------------------------\n";
 }
 
-bool Rpl::isValidRegionName(const llvm::StringRef& Str) {
-  // false if it is one of the Special Rpl Elements
-  // => it is not allowed to redeclare them
-  if (SymbolTable::isSpecialRplElement(Str))
-    return false;
-
-  // must start with [_a-zA-Z]
-  const char c = Str.front();
-  if (c != '_' &&
-    !( c >= 'a' && c <= 'z') &&
-    !( c >= 'A' && c <= 'Z'))
-    return false;
-  // all remaining characters must be in [_a-zA-Z0-9]
-  for (size_t i=0; i < Str.size(); i++) {
-    const char c = Str[i];
-    if (c != '_' &&
-      !( c >= 'a' && c <= 'z') &&
-      !( c >= 'A' && c <= 'Z') &&
-      !( c >= '0' && c <= '9'))
-      return false;
-  }
-  return true;
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 //// RplRef
 
-Rpl::RplRef::RplRef(const Rpl& R) : rpl(R) {
+ConcreteRpl::RplRef::RplRef(const ConcreteRpl &R) : rpl(R) {
   firstIdx = 0;
   lastIdx = rpl.RplElements.size()-1;
 }
 /// Printing (Rpl Ref)
-void Rpl::RplRef::print(llvm::raw_ostream& OS) const {
+void ConcreteRpl::RplRef::print(llvm::raw_ostream &OS) const {
   int I = firstIdx;
   for (; I < lastIdx; ++I) {
     OS << rpl.RplElements[I]->getName() << RPL_SPLIT_CHARACTER;
@@ -117,14 +144,14 @@ void Rpl::RplRef::print(llvm::raw_ostream& OS) const {
     OS << rpl.RplElements[I]->getName();
 }
 
-std::string Rpl::RplRef::toString() {
+std::string ConcreteRpl::RplRef::toString() {
   std::string SBuf;
   llvm::raw_string_ostream OS(SBuf);
   print(OS);
   return std::string(OS.str());
 }
 
-bool Rpl::RplRef::isUnder(RplRef& RHS) {
+bool ConcreteRpl::RplRef::isUnder(RplRef &RHS) {
   OSv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
         << this->toString() << ", " << RHS.toString() << ")\n";
   /// R <= Root
@@ -143,7 +170,7 @@ bool Rpl::RplRef::isUnder(RplRef& RHS) {
   // TODO z-regions
 }
 
-bool Rpl::RplRef::isIncludedIn(RplRef& RHS) {
+bool ConcreteRpl::RplRef::isIncludedIn(RplRef &RHS) {
   OSv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef]("
         << this->toString() << ", " << RHS.toString() << ")\n";
   if (RHS.isEmpty()) {
@@ -167,7 +194,7 @@ bool Rpl::RplRef::isIncludedIn(RplRef& RHS) {
   }
 }
 
-bool Rpl::RplRef::isDisjointLeft(RplRef &That) {
+bool ConcreteRpl::RplRef::isDisjointLeft(RplRef &That) {
   if (this->isEmpty()) {
     if (That.isEmpty())
       return false;
@@ -189,7 +216,7 @@ bool Rpl::RplRef::isDisjointLeft(RplRef &That) {
   }
 }
 
-bool Rpl::RplRef::isDisjointRight(RplRef &That) {
+bool ConcreteRpl::RplRef::isDisjointRight(RplRef &That) {
   if (this->isEmpty()) {
     if (That.isEmpty())
       return false;
@@ -211,11 +238,10 @@ bool Rpl::RplRef::isDisjointRight(RplRef &That) {
   }
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-// end Rpl::RplRef; start Rpl
+// end ConcreteRpl::RplRef; start ConcreteRpl
 
-term_t Rpl::getRplElementsPLTerm() const {
+term_t ConcreteRpl::getRplElementsPLTerm() const {
   term_t RplElList = PL_new_term_ref();
   PL_put_nil(RplElList);
   int Res = 0;
@@ -229,9 +255,9 @@ term_t Rpl::getRplElementsPLTerm() const {
   return RplElList;
 }
 
-term_t Rpl::getPLTerm() const {
+term_t ConcreteRpl::getPLTerm() const {
   term_t Result = PL_new_term_ref();
-  functor_t RplFunctor = PL_new_functor(PL_new_atom(PL_Rpl.c_str()), 2);
+  functor_t RplFunctor = PL_new_functor(PL_new_atom(PL_ConcreteRpl.c_str()), 2);
   // 1. build RPL element list
   term_t RplElList = getRplElementsPLTerm();
   // 2. build (empty) substitution list
@@ -243,23 +269,12 @@ term_t Rpl::getPLTerm() const {
   return Result;
 }
 
-inline bool Rpl::isPrivate() const {
+inline bool ConcreteRpl::isPrivate() const {
   return (this->RplElements.size()==1 &&
       this->RplElements[0] == SymbolTable::LOCAL_RplElmt);
 }
 
-bool Rpl::isDisjoint(const Rpl &That) const {
-  RplRef LHS1(*this);
-  RplRef RHS1(That);
-  RplRef LHS2(*this);
-  RplRef RHS2(That);
-
-  return isPrivate() || That.isPrivate()
-         || LHS1.isDisjointLeft(RHS1) || LHS2.isDisjointRight(RHS2);
-}
-///////////////////////////////////////////////////////////////////////////////
-////   Rpl
-void Rpl::print(raw_ostream &OS) const {
+void ConcreteRpl::print(raw_ostream &OS) const {
   RplElementVectorTy::const_iterator I = RplElements.begin();
   RplElementVectorTy::const_iterator E = RplElements.end();
   for (; I < E-1; I++) {
@@ -270,47 +285,76 @@ void Rpl::print(raw_ostream &OS) const {
     OS << (*I)->getName();
 }
 
-std::string Rpl::toString() const {
+std::string ConcreteRpl::toString() const {
   std::string SBuf;
   llvm::raw_string_ostream OS(SBuf);
   print(OS);
   return std::string(OS.str());
 }
 
-bool Rpl::isUnder(const Rpl& That) const {
-  const CaptureRplElement *cap = dyn_cast<CaptureRplElement>(RplElements.front());
-  if (cap) {
-    cap->upperBound().isUnder(That);
+Trivalent ConcreteRpl::isUnder(const Rpl &That) const {
+  /*const CaptureRplElement *Cap = dyn_cast<CaptureRplElement>(RplElements.front());
+  if (Cap) {
+    return Cap->upperBound().isUnder(That);
+  }*/
+  // else
+  if (isa<VarRpl>(&That)) {
+    return RK_DUNNO;
   }
-
-  RplRef* LHS = new RplRef(*this);
-  RplRef* RHS = new RplRef(That);
-  bool Result = LHS->isIncludedIn(*RHS);
+  // else
+  const ConcreteRpl *ConcThat = dyn_cast<ConcreteRpl>(&That);
+  assert(ConcThat && "Unexpected kind of RPL");
+  RplRef *LHS = new RplRef(*this);
+  RplRef *RHS = new RplRef(*ConcThat);
+  Trivalent Result = Bool2Trivalent(LHS->isUnder(*RHS));
   delete LHS; delete RHS;
   return Result;
 }
 
-bool Rpl::isIncludedIn(const Rpl& That) const {
-  const CaptureRplElement *cap = dyn_cast<CaptureRplElement>(RplElements.front());
+Trivalent ConcreteRpl::isIncludedIn(const Rpl &That) const {
+  /*const CaptureRplElement *cap = dyn_cast<CaptureRplElement>(RplElements.front());
   if (cap) {
-    cap->upperBound().isIncludedIn(That);
+    return cap->upperBound().isIncludedIn(That);
+  }*/
+  if (isa<VarRpl>(&That)) {
+    return RK_DUNNO;
   }
-
-  RplRef* LHS = new RplRef(*this);
-  RplRef* RHS = new RplRef(That);
-  bool Result = LHS->isIncludedIn(*RHS);
+  // else
+  const ConcreteRpl *ConcThat = dyn_cast<ConcreteRpl>(&That);
+  assert(ConcThat && "Unexpected kind of RPL");
+  RplRef *LHS = new RplRef(*this);
+  RplRef *RHS = new RplRef(*ConcThat);
+  Trivalent Result = Bool2Trivalent(LHS->isIncludedIn(*RHS));
   delete LHS; delete RHS;
   OSv2 << "DEBUG:: ~~~~~ isIncludedIn[RPL](" << this->toString()
     << "[" << this << "], " << That.toString() << "[" << &That
-    << "])=" << (Result ? "true" : "false") << "\n";
+    << "])=" << (Result==RK_TRUE ? "true" : "false-or-dunno") << "\n";
   return Result;
 }
 
-void Rpl::substitute(const Substitution *S) {
+Trivalent ConcreteRpl::isDisjoint(const Rpl &That) const {
+  if (isa<VarRpl>(&That)) {
+    return RK_DUNNO;
+  }
+  // else
+  const ConcreteRpl *ConcThat = dyn_cast<ConcreteRpl>(&That);
+  assert(ConcThat && "Unexpected kind of RPL");
+
+  RplRef LHS1(*this);
+  RplRef RHS1(*ConcThat);
+  RplRef LHS2(*this);
+  RplRef RHS2(*ConcThat);
+
+  return Bool2Trivalent(isPrivate() || ConcThat->isPrivate()
+         || LHS1.isDisjointLeft(RHS1) || LHS2.isDisjointRight(RHS2));
+}
+
+void ConcreteRpl::substitute(const Substitution *S) {
   if (!S || !S->getFrom() || !S->getTo())
     return; // Nothing to do.
   const RplElement &FromEl = *S->getFrom();
   const Rpl &ToRpl = *S->getTo();
+
   os << "DEBUG:: before substitution(" << FromEl.getName() << "<-";
   ToRpl.print(os);
   os <<"): ";
@@ -320,15 +364,20 @@ void Rpl::substitute(const Substitution *S) {
   /// A parameter is only allowed at the head of an Rpl
   RplElementVectorTy::iterator I = RplElements.begin();
   if (*(*I) == FromEl) {
-    OSv2 << "DEBUG:: found '" << FromEl.getName()
-      << "' replaced with '" ;
-    ToRpl.print(OSv2);
-    I = RplElements.erase(I);
-    I = RplElements.insert(I, ToRpl.RplElements.begin(),
-      ToRpl.RplElements.end());
-    OSv2 << "' == '";
-    print(OSv2);
-    OSv2 << "'\n";
+    if (const ConcreteRpl *ConcToRpl = dyn_cast<ConcreteRpl>(&ToRpl)) {
+      OSv2 << "DEBUG:: found '" << FromEl.getName()
+        << "' replaced with '" ;
+      ToRpl.print(OSv2);
+      I = RplElements.erase(I);
+      I = RplElements.insert(I, ConcToRpl->RplElements.begin(),
+                                ConcToRpl->RplElements.end());
+      OSv2 << "' == '";
+      print(OSv2);
+      OSv2 << "'\n";
+    } else {
+      assert(isa<VarRpl>(&ToRpl) && "Unexpected kind of Rpl");
+      addSubstitution(S);
+    }
   }
   os << "DEBUG:: after substitution(" << FromEl.getName() << "<-";
   ToRpl.print(os);
@@ -337,32 +386,36 @@ void Rpl::substitute(const Substitution *S) {
   os << "\n";
 }
 
-inline void Rpl::appendRplTail(Rpl* That) {
+inline void ConcreteRpl::appendRplTail(ConcreteRpl *That) {
   if (!That)
     return;
   if (That->length()>1)
     RplElements.append(That->length()-1, (*(That->RplElements.begin() + 1)));
 }
 
-Rpl *Rpl::upperBound() {
+/*Rpl *ConcreteRpl::upperBound() {
   if (isEmpty() || !isa<CaptureRplElement>(RplElements.front()))
     return this;
   // else
-  Rpl* upperBound = & dyn_cast<CaptureRplElement>(RplElements.front())->upperBound();
+  ConcreteRpl *upperBound = dyn_cast<CaptureRplElement>(RplElements.front())->upperBound();
   upperBound->appendRplTail(this);
   return upperBound;
-}
+}*/
 
-void Rpl::join(Rpl* That) {
+void ConcreteRpl::join(Rpl *That) {
   if (!That)
     return;
-  Rpl Result;
+
+  assert(isa<ConcreteRpl>(That) && "Unsupported join of Concrete with non-Concrete Rpl");
+  ConcreteRpl *ConcThat = dyn_cast<ConcreteRpl>(That);
+
+  ConcreteRpl Result;
   // join from the left
   RplElementVectorTy::const_iterator
     ThisI = this->RplElements.begin(),
-    ThatI = That->RplElements.begin(),
+    ThatI = ConcThat->RplElements.begin(),
     ThisE = this->RplElements.end(),
-    ThatE = That->RplElements.end();
+    ThatE = ConcThat->RplElements.end();
   for ( ; ThisI != ThisE && ThatI != ThatE && (*ThisI == *ThatI);
     ++ThisI, ++ThatI) {
       Result.appendElement(*ThisI);
@@ -371,13 +424,13 @@ void Rpl::join(Rpl* That) {
     // put a star in the middle and join from the right
     assert(ThatI != ThatE);
     Result.appendElement(SymbolTable::STAR_RplElmt);
-    Result.FullySpecified = false;
+    Result.setFullySpecified(RK_FALSE);
     // count how many elements from the right we will need to append
     RplElementVectorTy::const_reverse_iterator
       ThisI = this->RplElements.rbegin(),
-      ThatI = That->RplElements.rbegin(),
+      ThatI = ConcThat->RplElements.rbegin(),
       ThisE = this->RplElements.rend(),
-      ThatE = That->RplElements.rend();
+      ThatE = ConcThat->RplElements.rend();
     int ElNum = 0;
     for(; ThisI != ThisE && ThatI != ThatE && (*ThisI == *ThatI);
         ++ThisI, ++ThatI, ++ElNum);
@@ -388,13 +441,77 @@ void Rpl::join(Rpl* That) {
     }
   }
   // return
-  this->RplElements = Result.RplElements;
+  this->RplElements = Result.RplElements; // vector copy operation
   return;
 }
 
-Rpl *Rpl::capture() {
+/*Rpl *Rpl::capture() {
   if (this->isFullySpecified()) return this;
   else return new Rpl(*new CaptureRplElement(*this));
+}*/
+
+///////////////////////////////////////////////////////////////////////////////
+//// VarRpl
+
+Trivalent VarRpl::isUnder(const Rpl &That) const {
+  if (this == &That)
+    return RK_TRUE;
+  else
+    return RK_DUNNO;
+}
+
+Trivalent VarRpl::isIncludedIn(const Rpl &That) const {
+  if (this == &That)
+    return RK_TRUE;
+  else
+    return RK_DUNNO;
+}
+
+Trivalent VarRpl::isDisjoint(const Rpl &That) const {
+  if (this == &That)
+    return RK_FALSE;
+  else
+    return RK_DUNNO;
+}
+
+void VarRpl::join(Rpl *That) {
+  assert(false && "join operation not yet supported for VarRpl type");
+}
+
+void VarRpl::substitute(const Substitution *S) {
+  addSubstitution(S);
+}
+
+void VarRpl::print(raw_ostream &OS) const {
+  //OS << Name;
+}
+
+std::string VarRpl::toString() const {
+  std::string SBuf;
+  llvm::raw_string_ostream OS(SBuf);
+  print(OS);
+  return std::string(OS.str());
+}
+
+term_t VarRpl::getPLTerm() const {
+  term_t Result = PL_new_term_ref();
+  functor_t RplFunctor = PL_new_functor(PL_new_atom(PL_VarRpl.c_str()), 1 /*2*/);
+  // Name TODO
+  //term_t RplName
+
+  // Subs
+  term_t SubList = getSubVPLTerm();
+  // Build functor term
+  int Res = PL_cons_functor(Result, RplFunctor, /*RplName,*/ SubList);
+  assert(Res && "Failed to create prolog term_t for RPL");
+  return Result;
+}
+
+term_t VarRpl::getRplElementsPLTerm() const {
+  term_t RplElList = PL_new_term_ref();
+  PL_put_nil(RplElList);
+  // TODO : Add RPLVAR unique name to list
+  return RplElList;
 }
 ///////////////////////////////////////////////////////////////////////////////
 //// ParameterSet
@@ -457,7 +574,7 @@ RplVector::RplVector(const ParameterVector &ParamVec) {
         E = ParamVec.end();
       I != E; ++I) {
     if (*I) {
-      Rpl Param(**I);
+      ConcreteRpl Param(**I);
       push_back(Param);
     }
   }
@@ -498,8 +615,8 @@ void RplVector::join(RplVector *That) {
 }
 
 /// \brief Return true when this is included in That, false otherwise.
-bool RplVector::isIncludedIn (const RplVector &That) const {
-  bool Result = true;
+Trivalent RplVector::isIncludedIn (const RplVector &That) const {
+  Trivalent Result = RK_TRUE;
   assert(That.size() == this->size());
 
   VectorT::const_iterator
@@ -512,12 +629,16 @@ bool RplVector::isIncludedIn (const RplVector &That) const {
         ++ThatI, ++ThisI) {
     Rpl *LHS = *ThisI;
     Rpl *RHS = *ThatI;
-    if (!LHS->isIncludedIn(*RHS)) {
-      Result = false;
+    Trivalent V = LHS->isIncludedIn(*RHS);
+    if (V == RK_FALSE) {
+      Result = RK_FALSE;
       break;
+    } else if (V == RK_DUNNO) {
+      Result = RK_DUNNO;
     }
   }
-  OSv2 << "DEBUG:: [" << this->toString() << "] is " << (Result?"":"not ")
+  OSv2 << "DEBUG:: [" << this->toString() << "] is "
+      << (Result==RK_TRUE?"":"(possibly) not ")
       << "included in [" << That.toString() << "]\n";
   return Result;
 }

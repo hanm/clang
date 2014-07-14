@@ -65,9 +65,9 @@ public:
   void VisitDeclStmt(DeclStmt *S);
 
 private:
-  bool typecheck(const ASaPType *LHSType,
-                 const ASaPType *RHSType,
-                 bool IsInit = false);
+  Trivalent typecheck(const ASaPType *LHSType,
+                      const ASaPType *RHSType,
+                      bool IsInit = false);
   // These typecheck and build functions below should be static but then
   // would not be able to print debug information...
   bool typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,

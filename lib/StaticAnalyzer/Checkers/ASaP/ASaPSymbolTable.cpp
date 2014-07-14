@@ -69,7 +69,7 @@ void SymbolTable::Initialize(VisitorBundle &VisB) {
     Effect Pure(Effect::EK_NoEffect,0);
     PURE_EffSum = new ConcreteEffectSummary(Pure);
 
-    Rpl R(*LOCAL_RplElmt);
+    ConcreteRpl R(*LOCAL_RplElmt);
     R.appendElement(STAR_RplElmt);
     WritesLocal = new Effect(Effect::EK_WritesEffect, &R);
     Table = new SymbolTable();
@@ -378,7 +378,7 @@ RplDomain *SymbolTable::buildDomain(const Decl *D) {
     else
       DC = DC->getParent();
   }
-  
+
   return 0;
 }
 

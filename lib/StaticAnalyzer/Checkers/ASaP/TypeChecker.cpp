@@ -177,12 +177,12 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
   } // end for each declaration
 }
 
-bool AssignmentCheckerVisitor::
+Trivalent AssignmentCheckerVisitor::
 typecheck(const ASaPType *LHSType, const ASaPType *RHSType, bool IsInit) {
   if (!LHSType)
-    return true; // LHS has no region info (e.g., type cast). Don't type check
+    return RK_TRUE; // LHS has no region info (e.g., type cast). Don't type check
   if (!RHSType)
-    return true; // RHS has no region info && Clang has done typechecking
+    return RK_TRUE; // RHS has no region info && Clang has done typechecking
   else { // RHSType != null
     OS << "DEBUG:: RHS isDependentType? "
        << (RHSType->getQT()->isDependentType() ? "true" : "false") << "\n";
@@ -278,10 +278,13 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
 
   // allow RHSType to be NULL, e.g., we don't create ASaP Types for constants
   // because they don't have any interesting regions to typecheck.
-  if (!typecheck(LHSType, RHSType, false)) {
+  Trivalent TypChkRes = typecheck(LHSType, RHSType, false);
+  if (TypChkRes == RK_FALSE) {
     OS << "DEBUG:: invalid assignment: gonna emit an error\n";
     helperEmitInvalidExplicitAssignmentWarning(E, LHSType, RHSType);
     FatalError = true;
+  } else if (TypChkRes == RK_DUNNO) {
+    // TODO: emit constraint
   }
 
   // The type of the assignment is the type of the LHS. Set it in case
@@ -318,10 +321,14 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   ASaPType *LHSType = new ASaPType(*FunType);
   LHSType = LHSType->getReturnType();
   ASaPType *RHSType = TBVR.getType();
-  if (!typecheck(LHSType, RHSType, true)) {
+
+  Trivalent TypChkRes = typecheck(LHSType, RHSType, true);
+  if (TypChkRes == RK_FALSE) {
     OS << "DEBUG:: invalid assignment: gonna emit an error\n";
     helperEmitInvalidReturnTypeWarning(Ret, LHSType, RHSType);
     FatalError = true;
+  } else if (TypChkRes == RK_DUNNO) {
+    // TODO: gen constraint
   }
   delete LHSType;
 }
@@ -342,11 +349,14 @@ helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init) {
   const ASaPType *LHSType = SymT.getType(VD);
   ASaPType *RHSType = TBVR.getType();
   //OS << "DEBUG:: gonna call typecheck(LHS,RHS, IsInit=true\n";
-  if (!typecheck(LHSType, RHSType, true)) {
+  Trivalent TypChkRes = typecheck(LHSType, RHSType, true);
+  if (TypChkRes == RK_FALSE) {
     OS << "DEBUG:: invalid assignment: gonna emit an error\n";
     //  Fixme pass VS as arg instead of Init
     helperEmitInvalidInitializationWarning(Init, LHSType, RHSType);
     FatalError = true;
+  } else if (TypChkRes == RK_DUNNO) {
+    // TODO: gen constraint
   }
 }
 
@@ -373,7 +383,8 @@ typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
     OS << "DEBUG:: DONE performing substitution\n";
   }
   ASaPType *RHSType = TBVR.getType();
-  if (!typecheck(LHSType, RHSType, true)) {
+  Trivalent TypChkRes = typecheck(LHSType, RHSType, true);
+  if (TypChkRes == RK_FALSE) {
     OS << "DEBUG:: invalid argument to parameter assignment: "
       << "gonna emit an error\n";
     OS << "DEBUG:: Param:";
@@ -386,6 +397,8 @@ typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
     helperEmitInvalidArgToFunctionWarning(Arg, LHSType, RHSType);
     FatalError = true;
     Result = false;
+  } else if (TypChkRes == RK_DUNNO) {
+    // TODO: gen constraints.
   }
   delete LHSTypeMod;
   OS << "DEBUG:: DONE with typeckeckSingleParamAssignment. Result="
@@ -633,7 +646,7 @@ void TypeBuilderVisitor::setType(const ValueDecl *D) {
 void TypeBuilderVisitor::helperVisitLogicalExpression(Expr *Exp) {
   if (! Exp->getType()->isDependentType() ) {
     assert(!Type && "Type must be null");
-    Rpl LOCALRpl(*SymbolTable::LOCAL_RplElmt);
+    ConcreteRpl LOCALRpl(*SymbolTable::LOCAL_RplElmt);
     QualType QT = Exp->getType();
     OS << "DEBUG:: QT = ";
     QT.print(OS, Ctx.getPrintingPolicy());

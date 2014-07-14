@@ -567,7 +567,7 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *Att,
   }
   bool Result = true;
   int Count = 0;
-  Rpl *R = new Rpl();
+  ConcreteRpl *R = new ConcreteRpl();
 
   while(RplStr.size() > 0) { /// for all RPL elements of the RPL
     const RplElement *RplEl = 0;
@@ -632,7 +632,7 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *Att,
     } else { // RplEl != NULL
       OS << "DEBUG:: found RplElement:" << RplEl->getName() << "\n";
       if (Count>0 && (isa<ParamRplElement>(RplEl)
-        || isa<CaptureRplElement>(RplEl))) {
+        /*|| isa<CaptureRplElement>(RplEl)*/)) {
           /// Error: region parameter is only allowed at the head of an Rpl
           emitMisplacedRegionParameter(D, Att, Head);
       } else
@@ -909,7 +909,7 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
   /// B.1 Check ReturnType
   bool Success = checkRpls<RegionArgAttr>(D); // ReturnType
   if (Success) {
-    Rpl Local(*SymbolTable::LOCAL_RplElmt);
+    ConcreteRpl Local(*SymbolTable::LOCAL_RplElmt);
     checkTypeRegionArgs(D, &Local); // check return type
   }
 
@@ -1052,7 +1052,7 @@ bool ASaPSemanticCheckerTraverser::VisitVarDecl(VarDecl *D) {
       (D->isStaticLocal() || D->isStaticDataMember()
         || D->getDeclContext()->isFileContext()) ? SymbolTable::GLOBAL_RplElmt
                                                  : SymbolTable::LOCAL_RplElmt;
-    Rpl Default(*DefaultEl);
+    ConcreteRpl Default(*DefaultEl);
     checkTypeRegionArgs(D, &Default);
   }
 

@@ -48,6 +48,10 @@ raw_ostream &OSv2 = llvm::nulls();
 
 using llvm::raw_string_ostream;
 
+Trivalent Bool2Trivalent(bool B) {
+  return B==true ? RK_TRUE : RK_FALSE;
+}
+
 void helperEmitDeclarationWarning(const CheckerBase *Checker,
                                   BugReporter &BR,
                                   const Decl *D,
@@ -194,7 +198,10 @@ void buildSingleParamSubstitution(
         ParamI = ParamArgV->begin(), ParamE = ParamArgV->end(),
         ArgI = ArgArgV->begin(), ArgE = ArgArgV->end();
       ParamI != ParamE && ArgI != ArgE; ++ParamI, ++ArgI) {
-    const Rpl *ParamR = *ParamI;
+
+    assert(isa<ConcreteRpl>(*ParamI) && "ParamI should be of type ConcreteRpl");
+    const ConcreteRpl *ParamR = dyn_cast<ConcreteRpl>(*ParamI);
+
     assert(ParamR && "RplVector should not contain null Rpl pointer");
     if (ParamR->length() < 1)
       continue;
@@ -205,7 +212,7 @@ void buildSingleParamSubstitution(
       continue;
     const RplElement *Elmt = ParamR->getFirstElement();
     assert(Elmt && "Rpl should not contain null RplElement pointer");
-    if (! ParamSet.hasElement(Elmt))
+    if (!ParamSet.hasElement(Elmt))
       continue;
     // Ok find the argument
     Substitution Sub(Elmt, *ArgI);

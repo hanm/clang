@@ -295,8 +295,8 @@ public:
 
   void createSymbolTableEntry(const Decl *D);
 
-  Rpl* createFreshRplVar(){
-    return new Rpl(0);
+  VarRpl *createFreshRplVar(){
+    return new VarRpl();
   }
 
   inline AnnotationSet makeDefaultClassParams(RecordDecl *RecD) {

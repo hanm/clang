@@ -31,13 +31,13 @@ public:
   typedef llvm::SmallVector<ElmtTyp*, SIZE> VectorT;
 
   // Constructors
-  OwningVector() {}
+  OwningVector() : VectorT() {}
 
-  OwningVector(const ElmtTyp &E) {
+  OwningVector(const ElmtTyp &E) : VectorT() {
     push_back(new ElmtTyp(E));
   }
 
-  OwningVector(const ElmtTyp *E) {
+  OwningVector(const ElmtTyp *E) : VectorT() {
     if (E)
       push_back(new ElmtTyp(*E));
   }

@@ -21,6 +21,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "ASaPFwdDecl.h"
 #include "ASaPUtil.h"
 #include "OwningPtrSet.h"
 #include "OwningVector.h"
@@ -191,16 +192,60 @@ public:
 
 ///-////////////////////////////////////////
 
-class Effect;
-
-
 class Rpl {
 public:
 
   enum RplKind {
-    RPL_CONCRETE,
-    RPL_VAR
+    RPLK_Concrete,
+    RPLK_Var
   };
+
+private:
+  const RplKind Kind;
+  Trivalent FullySpecified;
+  SubstitutionVector *SubV;
+
+public:
+  Rpl(RplKind K, Trivalent FullySpecified)
+     : Kind(K), FullySpecified(FullySpecified), SubV(0) {}
+  Rpl(const Rpl &That)
+      : Kind(That.Kind),
+        FullySpecified(That.FullySpecified),
+        SubV(That.SubV) {}
+
+  virtual Rpl *clone() const = 0;
+
+  virtual ~Rpl();
+
+  RplKind getKind() const { return Kind; }
+  Trivalent isFullySpecified() const { return FullySpecified; }
+  void setFullySpecified(Trivalent V) { FullySpecified = V; }
+
+  bool operator != (const RplElement &That) const {
+    return !(*this==That);
+  }
+
+  void addSubstitution(const Substitution *S);
+  term_t getSubVPLTerm() const;
+
+  // Nesting (Under)
+  /// \brief Returns true iff this is under That
+  virtual Trivalent isUnder(const Rpl &That) const = 0;
+
+  // Inclusion
+  /// \brief Returns true iff this RPL is included in That
+  virtual Trivalent isIncludedIn(const Rpl &That) const = 0;
+
+  /// \brief Returns true iff this RPL is disjoint from That
+  virtual Trivalent isDisjoint(const Rpl &That) const = 0;
+
+  virtual std::string toString() const = 0;
+  virtual void print(llvm::raw_ostream &OS) const = 0;
+  virtual void join(Rpl *That) = 0;
+  virtual void substitute(const Substitution *S) = 0;
+  virtual bool operator == (const RplElement &That) const = 0;
+  virtual term_t getPLTerm() const = 0;
+  virtual term_t getRplElementsPLTerm() const = 0;
 
   /// Static Constants
   static const char RPL_SPLIT_CHARACTER = ':';
@@ -211,6 +256,13 @@ public:
   /// \brief Return true when input is a valid region name or param declaration
   static bool isValidRegionName(const StringRef& s);
 
+  /// \brief Returns two StringRefs delimited by the first occurrence
+  /// of the RPL_SPLIT_CHARACTER.
+  static std::pair<StringRef, StringRef> splitRpl(StringRef &String);
+
+}; // end class Rpl
+
+class ConcreteRpl : public Rpl {
 
 private:
 #ifndef RPL_ELEMENT_VECTOR_SIZE
@@ -222,11 +274,7 @@ typedef llvm::SmallVector<const RplElement*,
   /// Fields
   /// Note: RplElements are not owned by Rpl class.
   /// They are *NOT* destroyed with the Rpl.
-  const RplKind Kind;
-  bool FullySpecified;
   RplElementVectorTy RplElements;
-
-  RplDomain *Domain;
 
   /// RplRef class
   // We use the RplRef class, friends with Rpl to efficiently perform
@@ -234,11 +282,11 @@ typedef llvm::SmallVector<const RplElement*,
   class RplRef {
     long firstIdx;
     long lastIdx;
-    const Rpl& rpl;
+    const ConcreteRpl& rpl;
 
   public:
     /// Constructor
-    RplRef(const Rpl& R);
+    RplRef(const ConcreteRpl& R);
 
     /// Printing (Rpl Ref)
     void print(llvm::raw_ostream& OS) const;
@@ -279,46 +327,35 @@ typedef llvm::SmallVector<const RplElement*,
   ///////////////////////////////////////////////////////////////////////////
   public:
   /// Constructors
-  Rpl() :  Kind(RPL_CONCRETE), FullySpecified(true) {}
+  ConcreteRpl() :  Rpl(RPLK_Concrete, RK_TRUE) {}
 
-  Rpl(int dummy) : Kind(RPL_VAR) {//making an Rpl var
-  }
-
-  Rpl(const RplElement &Elm)
-     : Kind(RPL_CONCRETE), FullySpecified(Elm.isFullySpecified()), Domain(0) {
+  ConcreteRpl(const RplElement &Elm)
+             : Rpl(RPLK_Concrete, Bool2Trivalent(Elm.isFullySpecified())) {
     RplElements.push_back(&Elm);
   }
 
   /// Copy Constructor
-  Rpl(const Rpl &That)
-     : Kind(That.Kind),
-       FullySpecified(That.FullySpecified),
-       RplElements(That.RplElements), Domain(0) {}
-
-  /// \brief Returns two StringRefs delimited by the first occurrence
-  /// of the RPL_SPLIT_CHARACTER.
-  static std::pair<StringRef, StringRef> splitRpl(StringRef &String);
+  ConcreteRpl(const ConcreteRpl &That)
+             : Rpl(That), RplElements(That.RplElements) {}
 
   /// \brief Print the Rpl to an output stream.
-  void print(llvm::raw_ostream &OS) const;
+  virtual void print(llvm::raw_ostream &OS) const;
   /// \brief Print the Rpl to a string.
-  std::string toString() const;
+  virtual std::string toString() const;
 
-  RplKind getKind() const { return Kind; }
-  inline void setDomain(RplDomain *D) { Domain = D;}
-  inline RplDomain* getDomain() { return Domain;}
+  //RplKind getKind() const { return Kind; }
 
   /// \brief Return a Prolog term for the Rpl.
-  term_t getPLTerm() const;
-  term_t getRplElementsPLTerm() const;
+  virtual term_t getPLTerm() const;
+  virtual term_t getRplElementsPLTerm() const;
 
   // Getters
   /// \brief Returns the last of the RPL elements of this RPL.
-  inline const RplElement* getLastElement() const {
+  inline const RplElement *getLastElement() const {
     return RplElements.back();
   }
   /// \brief Returns the first of the RPL elements of this RPL.
-  inline const RplElement* getFirstElement() const {
+  inline const RplElement *getFirstElement() const {
     return RplElements.front();
   }
 
@@ -328,44 +365,48 @@ typedef llvm::SmallVector<const RplElement*,
   }
   // Setters
   /// \brief Appends an RPL element to this RPL.
-  inline void appendElement(const RplElement* RplElm) {
+  inline void appendElement(const RplElement *RplElm) {
     if (RplElm) {
       RplElements.push_back(RplElm);
-      if (RplElm->isFullySpecified() == false)
-        FullySpecified = false;
+      if (!RplElm->isFullySpecified()) {
+        setFullySpecified(RK_FALSE);
+      }
     }
   }
   // Predicates
-  inline bool isFullySpecified() { return FullySpecified; }
+  //inline bool isFullySpecified() { return FullySpecified; }
   inline bool isEmpty() { return RplElements.empty(); }
   bool isPrivate() const;
 
+  virtual Rpl *clone() const {
+    return new ConcreteRpl(*this);
+  }
   // Nesting (Under)
   /// \brief Returns true iff this is under That
-  bool isUnder(const Rpl &That) const;
+  virtual Trivalent isUnder(const Rpl &That) const;
 
   // Inclusion
   /// \brief Returns true iff this RPL is included in That
-  bool isIncludedIn(const Rpl &That) const;
+  virtual Trivalent isIncludedIn(const Rpl &That) const;
 
   /// \brief Returns true iff this RPL is disjoint from That
-  bool isDisjoint(const Rpl &That) const;
+  virtual Trivalent isDisjoint(const Rpl &That) const;
 
   // Substitution (Rpl)
   /// \brief this[FromEl <- ToRpl]
   //void substitute(const RplElement& FromEl, const Rpl& ToRpl);
-  void substitute(const Substitution *S);
+  virtual void substitute(const Substitution *S);
 
   /// \brief Append to this RPL the argument Rpl but without its head element.
-  void appendRplTail(Rpl* That);
+  void appendRplTail(ConcreteRpl *That);
 
   /// \brief Return the upper bound of an RPL (different when RPL is captured).
-  Rpl *upperBound();
+  //ConcreteRpl *upperBound();
 
   /// \brief Join this to That (by modifying this).
-  void join(Rpl* That);
+  virtual void join(Rpl *That);
 
-  bool operator == (const RplElement &That) const {
+  virtual bool operator == (const RplElement &That) const {
     if (RplElements.size() == 1 &&
         *RplElements[0] == That)
       return true;
@@ -373,32 +414,83 @@ typedef llvm::SmallVector<const RplElement*,
       return false;
   }
 
-  bool operator != (const RplElement &That) const {
-    return !(*this==That);
-  }
   // Capture
   // TODO: caller must deallocate Rpl and its element
-  Rpl *capture();
-}; // end class Rpl
+  //Rpl *capture();
 
+  static bool classof(const Rpl *R) {
+    return R->getKind() == RPLK_Concrete;
+  }
+}; // end class ConcreteRpl
+
+
+class VarRpl : public Rpl {
+private:
+  // StringRef Name
+  RplDomain *Domain;
+
+public:
+  VarRpl()
+        : Rpl(RPLK_Var, RK_DUNNO), Domain(0) {}
+
+  VarRpl(const VarRpl &That)
+        : Rpl(That), Domain(That.Domain) {}
+
+  virtual Rpl *clone() const {
+    return new VarRpl(*this);
+  }
+
+  inline void setDomain(RplDomain *D) { Domain = D;}
+  inline RplDomain* getDomain() { return Domain;}
+
+  /// \brief Print the Rpl to an output stream.
+  virtual void print(llvm::raw_ostream &OS) const;
+  /// \brief Print the Rpl to a string.
+  virtual std::string toString() const;
+
+  // Nesting (Under)
+  /// \brief Returns true iff this is under That
+  virtual Trivalent isUnder(const Rpl &That) const;
+
+  // Inclusion
+  /// \brief Returns true iff this RPL is included in That
+  virtual Trivalent isIncludedIn(const Rpl &That) const;
+
+  /// \brief Returns true iff this RPL is disjoint from That
+  virtual Trivalent isDisjoint(const Rpl &That) const;
+
+  virtual void join(Rpl *That);
+  virtual void substitute(const Substitution *S);
+  virtual term_t getPLTerm() const;
+  virtual term_t getRplElementsPLTerm() const;
+
+  virtual bool operator == (const RplElement &That) const {
+      return false;
+  }
+
+  static bool classof(const Rpl *R) {
+    return R->getKind() == RPLK_Var;
+  }
+}; // end class VarRpl
 //////////////////////////////////////////////////////////////////////////
 
-class CaptureRplElement : public RplElement {
+/*class CaptureRplElement : public RplElement {
   /// Fields
-  Rpl& includedIn;
+  Rpl &includedIn;
 
 public:
   /// Constructor
   CaptureRplElement(Rpl& includedIn) : RplElement(RK_Capture),
                                        includedIn(includedIn)
-  { /*assert(includedIn.isFullySpecified() == false);*/ }
+  { //assert(includedIn.isFullySpecified() == false);
+  }
   virtual ~CaptureRplElement() {}
   /// Methods
   virtual StringRef getName() const { return "rho"; }
 
   virtual bool isFullySpecified() const { return false; }
 
-  Rpl& upperBound() const { return includedIn; }
+  ConcreteRpl& upperBound() const { return includedIn; }
 
   virtual term_t getPLTerm() const {
     term_t Result = PL_new_term_ref();
@@ -410,7 +502,7 @@ public:
     return R->getKind() == RK_Capture;
   }
 }; // end class CaptureRplElement
-
+*/
 
 //////////////////////////////////////////////////////////////////////////
 #ifndef PARAM_VECTOR_SIZE
@@ -496,14 +588,41 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
   public:
   /// Constructor
   RplVector() : BaseClass() {}
-  RplVector(const Rpl &R) : BaseClass(R) {}
+  RplVector(const Rpl &R) {
+    push_back(R);
+  }
+
+  RplVector(const RplVector &From) : OwningVector() {
+    for (typename VectorT::const_iterator
+            I = From.VectorT::begin(),
+            E = From.VectorT::end();
+         I != E; ++I) {
+      push_back(*I); // push_back makes a copy of *I
+    }
+  }
+
+
+  bool push_back (const Rpl *E) {
+    if (E) {
+      VectorT::push_back(E->clone());
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  void push_back (const Rpl &E) {
+    VectorT::push_back(E.clone());
+  }
+
+
 
   RplVector(const ParameterVector &ParamVec);
 
   /// \brief Add the argument RPL to the front of the RPL vector.
   inline void push_front (const Rpl *R) {
     assert(R);
-    VectorT::insert(begin(), new Rpl(*R));
+    VectorT::insert(begin(), R->clone());
   }
   /// \brief Remove and return the first RPL in the vector.
   inline std::unique_ptr<Rpl> deref() { return pop_front(); }
@@ -521,7 +640,7 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
   void join(RplVector *That);
 
   /// \brief Return true when this is included in That, false otherwise.
-  bool isIncludedIn (const RplVector &That) const;
+  Trivalent isIncludedIn (const RplVector &That) const;
 
   /// \brief Substitution this[FromEl <- ToRpl] (over RPL vector)
   void substitute(const Substitution *S);

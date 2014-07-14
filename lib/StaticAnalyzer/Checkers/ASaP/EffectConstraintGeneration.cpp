@@ -109,11 +109,11 @@ EffectConstraintVisitor::EffectConstraintVisitor (
         SubVec->print(OS);
       OS << " \n";
 
-      Trivalent RK=SubstOVRDSum->covers(DerivedSum);
-      if(RK==RK_FALSE) {
+      Trivalent RK = SubstOVRDSum->covers(DerivedSum);
+      if (RK == RK_FALSE) {
         emitOverridenVirtualFunctionMustCoverEffectsOfChildren(OverriddenMethod, CXXD);
       }
-      else if (RK==RK_DUNNO){//TODO
+      else if (RK == RK_DUNNO){//TODO
         assert(false && "found a variable effect summary");
       }
       //deallocate SubstOVRDSum

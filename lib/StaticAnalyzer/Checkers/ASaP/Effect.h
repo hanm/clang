@@ -30,7 +30,7 @@ namespace clang {
 namespace asap {
 
 
-class Effect{
+class Effect {
 public:
   enum EffectKind {
     /// pure = no effect
@@ -136,10 +136,10 @@ public:
   ///  RPL1 c= RPL2   E1 c= E2
   /// ~~~~~~~~~~~~~~~~~~~~~~~~~
   ///    E1(RPL1) <= E2(RPL2)
-  bool isSubEffectOf(const Effect &That) const;
+  Trivalent isSubEffectOf(const Effect &That) const;
 
   /// \brief true iff this # That
-  bool isNonInterfering(const Effect &That) const;
+  Trivalent isNonInterfering(const Effect &That) const;
 
 }; // end class Effect
 

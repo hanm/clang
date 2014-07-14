@@ -31,7 +31,7 @@ helperMakeGlobalType(const ValueDecl *D, long ArgNum) {
 
   RplVector RplV;
   for (int I = 0; I < ArgNum; ++I) {
-    RplV.push_back(Rpl(*SymbolTable::GLOBAL_RplElmt));
+    RplV.push_back(ConcreteRpl(*SymbolTable::GLOBAL_RplElmt));
   }
   Result.T = new ASaPType(D->getType(), SymT.getInheritanceMap(D), &RplV);
   return Result;
@@ -43,11 +43,11 @@ helperMakeLocalType(const ValueDecl *D, long ArgNum) {
   int I = 0;
   RplVector RplV;
   if (!D->getType()->isReferenceType()) {
-    RplV.push_back(Rpl(*SymbolTable::LOCAL_RplElmt));
+    RplV.push_back(ConcreteRpl(*SymbolTable::LOCAL_RplElmt));
     I++;
   }
   for (; I < ArgNum; ++I) {
-    RplV.push_back(Rpl(*SymbolTable::GLOBAL_RplElmt));
+    RplV.push_back(ConcreteRpl(*SymbolTable::GLOBAL_RplElmt));
   }
   Result.T = new ASaPType(D->getType(), SymT.getInheritanceMap(D), &RplV);
   return Result;
@@ -59,16 +59,15 @@ helperMakeVarType(const ValueDecl *D, long ArgNum) {
   //assert(false && "method not implemented yet");
   RplVector RplVec;
   for (int I = 0; I < ArgNum; ++I) {
-    // TODO
     // 1. Create new RplVarElement
-    Rpl* RplVar = SymT.createFreshRplVar();
+    VarRpl *RplVar = SymT.createFreshRplVar();
     RplDomain *Dm = SymT.buildDomain(D);
     OSv2 << "Printing domain ....\n";
     Dm->print(OSv2);
     RplVar->setDomain(Dm);
 
     // 2. Push it back
-    RplVec.push_back(Rpl(*RplVar));
+    RplVec.push_back(RplVar);
   }
   Result.T = new ASaPType(D->getType(), SymT.getInheritanceMap(D), &RplVec);
   return Result;
@@ -78,7 +77,7 @@ inline AnnotationSet AnnotationScheme::
 helperMakeWritesLocalEffectSummary(const FunctionDecl *D) {
   AnnotationSet Result;
   // Writes Local
-  Rpl LocalRpl(*SymbolTable::LOCAL_RplElmt);
+  ConcreteRpl LocalRpl(*SymbolTable::LOCAL_RplElmt);
   Effect WritesLocal(Effect::EK_WritesEffect, &LocalRpl);
   Result.EffSum = new ConcreteEffectSummary(WritesLocal);
 
@@ -98,13 +97,13 @@ helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT) {
   if (QT->isScalarType()) {
     // 1st Arg = Local, then create a new parameter for each subsequent one
     I = 1;
-    RplV.push_back(Rpl(*SymbolTable::LOCAL_RplElmt));
+    RplV.push_back(ConcreteRpl(*SymbolTable::LOCAL_RplElmt));
   }
   for (; I < ArgNum; ++I) {
     StringRef ParamName = SymT.makeFreshParamName(D->getNameAsString());
     ParamRplElement Param(ParamName, ParamName);
     Result.ParamVec->push_back(Param); // makes a (persistent) copy of Param
-    RplV.push_back(Rpl(*Result.ParamVec->back())); // use the persistent copy
+    RplV.push_back(ConcreteRpl(*Result.ParamVec->back())); // use the persistent copy
   }
   Result.T = new ASaPType(D->getType(), SymT.getInheritanceMap(D), &RplV);
   return Result;
@@ -137,7 +136,7 @@ helperMakeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) {
   if (ParamV && ParamV->size() > 0) {
     Result = new RplVector();
     for(int I = 0; I < ArgNum; ++I) {
-      Result->push_back(Rpl(*ParamV->front()));
+      Result->push_back(ConcreteRpl(*ParamV->front()));
     }
   }
   return Result;
@@ -211,7 +210,7 @@ makeFieldType(const FieldDecl *D, long ArgNum) {
 
   const ParamRplElement &Param = *ParamV->getParamAt(0);
   for (int I = 0; I < ArgNum; ++I) {
-    RplV.push_back(Rpl(Param));
+    RplV.push_back(ConcreteRpl(Param));
   }
   Result.T = new ASaPType(D->getType(), SymT.getInheritanceMap(D), &RplV);
   return Result;
@@ -323,13 +322,13 @@ AnnotationSet CheckGlobalsAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
   AnnotationSet Result;
   // Writes Local
-  Rpl LocalRpl(*SymbolTable::LOCAL_RplElmt);
+  ConcreteRpl LocalRpl(*SymbolTable::LOCAL_RplElmt);
   Effect WritesLocal(Effect::EK_WritesEffect, &LocalRpl);
   ConcreteEffectSummary *CES = new ConcreteEffectSummary(WritesLocal);
   Result.EffSum = CES;
 
   // Reads Global
-  Rpl GlobalRpl(*SymbolTable::GLOBAL_RplElmt);
+  ConcreteRpl GlobalRpl(*SymbolTable::GLOBAL_RplElmt);
   Effect ReadsGlobal(Effect::EK_ReadsEffect, &GlobalRpl);
   CES->insert(ReadsGlobal);
   return Result;
