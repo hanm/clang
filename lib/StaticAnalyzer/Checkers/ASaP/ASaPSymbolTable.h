@@ -31,8 +31,7 @@
 #include "ASaPUtil.h"
 #include "ASaPFwdDecl.h"
 #include "ASaPInheritanceMap.h"
-#include "EffectInclusionConstraint.h"
-#include "EffectNIConstraint.h"
+#include "Constraints.h"
 #include "OwningPtrSet.h"
 #include "Rpl.h"
 
@@ -59,15 +58,17 @@ public:
     ResKin(ReKi), NumArgs(NumA), DeclNotVis(D) {}
 };
 #ifndef NUM_OF_CONSTRAINTS
-  #define NUM_OF_CONSTRAINTS 10
+  #define NUM_OF_CONSTRAINTS 100
 #endif
 class SymbolTable {
   typedef llvm::DenseMap<const Decl*, SymbolTableEntry*>  SymbolTableMapT;
   typedef llvm::DenseMap<const FunctionDecl*,
                           const SpecificNIChecker*> ParallelismMapT;
   typedef OwningPtrSet<std::string, 1024> FreshNamesSetT;
-  typedef OwningPtrSet<clang::asap::EffectInclusionConstraint, NUM_OF_CONSTRAINTS> InclusionConstraintsSetT;
-  typedef OwningPtrSet<clang::asap::EffectNIConstraint, NUM_OF_CONSTRAINTS> NIConstraintsSetT;
+  //typedef OwningPtrSet<clang::asap::Constraint, NUM_OF_CONSTRAINTS> ConstraintsSetT;
+  typedef llvm::SmallPtrSet<Constraint*, NUM_OF_CONSTRAINTS> ConstraintsSetT;
+
+  //typedef OwningPtrSet<clang::asap::EffectNIConstraint, NUM_OF_CONSTRAINTS> NIConstraintsSetT;
 
   /// \brief Symbol Table Map
   SymbolTableMapT SymTable;
@@ -85,10 +86,10 @@ class SymbolTable {
   FreshNamesSetT FreshNames;
 
   /// \brief Set of all effect inclusion constraints generated
-  InclusionConstraintsSetT InclusionConstraints;
+  ConstraintsSetT ConstraintSet;
 
   /// \brief Set of all non-interference constraints generated
-  NIConstraintsSetT NIConstraints;
+  //NIConstraintsSetT NIConstraints;
 
   AnnotationScheme *AnnotScheme;
   static int Initialized;
@@ -105,18 +106,30 @@ class SymbolTable {
   unsigned long RegionIDNumber;
   unsigned long DeclIDNumber;
   unsigned long RVIDNumber;
+  unsigned long ConstraintIDNumber;
 
   // Private Methods
-  /// \brief Return the next unused ID number. Used to encode names into Prolog.
+  /// \brief Return the next unused parameter ID number.
+  /// Used to encode names into Prolog.
   inline unsigned long getNextUniqueParamID() { return ParamIDNumber++; }
 
-  /// \brief Return the next unused ID number. Used to encode names into Prolog.
+  /// \brief Return the next unused region ID number.
+  /// Used to encode names into Prolog.
   inline unsigned long getNextUniqueRegionID() { return RegionIDNumber++; }
 
-  /// \brief Return the next unused ID number. Used to encode names into Prolog.
+  /// \brief Return the next unused declaration ID number.
+  /// Used to encode names into Prolog.
   inline unsigned long getNextUniqueDeclID() { return DeclIDNumber++; }
 
+  /// \brief Return the next unused VarRpl ID number.
+  /// Used to encode VarRpl names into Prolog.
   inline unsigned long getNextUniqueRVID() { return RVIDNumber++; }
+
+  /// \brief Return the next unused Constraint ID number.
+  /// Used to encode Constraints into Prolog.
+  inline unsigned long getNextUniqueConstraintID() {
+    return ConstraintIDNumber++;
+  }
 
   inline StringRef addFreshName(StringRef SRef) {
     std::string *S = new std::string(SRef.str());
@@ -278,15 +291,29 @@ public:
     return addFreshName(ss.str());
   }
 
-  inline void addInclusionConstraint(EffectInclusionConstraint *EIC) {
-    assert(EIC && "Internal Error: unexpected null-pointer");
-    InclusionConstraints.insert(EIC);
-    addInclusionConstraint(EIC->getDef(), EIC);
+  inline StringRef makeFreshConstraintName() {
+    std::stringstream ss;
+    ss << PL_ConstraintPrefix << "_" << getNextUniqueConstraintID();
+    return addFreshName(ss.str());
   }
 
-  inline void addNIConstraint(EffectNIConstraint *NIC) {
-    NIConstraints.insert(NIC);
+  inline void addConstraint(Constraint *Cons) {
+    assert(Cons && "Internal Error: unexpected null-pointer");
+    ConstraintSet.insert(Cons);
+    if (EffectInclusionConstraint *EIC =
+          dyn_cast<EffectInclusionConstraint>(Cons)) {
+      addInclusionConstraint(EIC->getDef(), EIC);
+    }
   }
+
+  /*inline void addInclusionConstraint(EffectInclusionConstraint *EIC) {
+    addConstraint(EIC);
+    addInclusionConstraint(EIC->getDef(), EIC);
+  }*/
+
+  /*inline void addNIConstraint(EffectNIConstraint *NIC) {
+    NIConstraints.insert(NIC);
+  }*/
 
   void solveInclusionConstraints();
   // Default annotations

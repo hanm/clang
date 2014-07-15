@@ -28,6 +28,8 @@ namespace asap {
   // Static Constant Strings
 static const std::string PL_RgnName = "rgn_name";
 static const std::string PL_RgnParam = "rgn_param";
+static const std::string PL_HasEffSum = "has_effect_summary";
+static const std::string PL_UnNamedDecl = "unnamed";
 
 static const std::string PL_NoEffect = "pure";
 static const std::string PL_ReadsEffect = "reads";
@@ -42,10 +44,14 @@ static const std::string PL_ConcreteRpl = "rpl";
 static const std::string PL_VarRpl = "var_rpl";
 static const std::string PL_ParamSub = "param_sub";
 
+/// \brief Rpl Inclusion Constraint
+static const std::string PL_RIConstraint = "ri_constraint";
+/// \brief Effect Summary Inclusion Constraint
 static const std::string PL_ESIConstraint = "esi_constraint";
-static const std::string PL_HasEffSum = "has_effect_summary";
+/// \brief Effect Non Interference Constraint
+static const std::string PL_ENIConstraint = "eni_constraint";
 
-static const std::string PL_UnNamedDecl = "unnamed";
+static const std::string PL_ConstraintPrefix = "constraint";
 
 
 #define ASAP_DEBUG

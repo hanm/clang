@@ -19,7 +19,7 @@
 
 #include "ASaPFwdDecl.h"
 #include "ASaPGenericStmtVisitor.h"
-#include "EffectInclusionConstraint.h"
+#include "Constraints.h"
 #include "Effect.h"
 
 namespace clang {

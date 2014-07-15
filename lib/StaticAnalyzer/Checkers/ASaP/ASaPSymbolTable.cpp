@@ -692,46 +692,48 @@ void SymbolTable::solveInclusionConstraints() {
   OSv2 << "DEBUG:: Done emmitting rgn_param facts, gonna do esi_constraints next\n";
 
   //loop to call esi_collect (effect inference)
-  for (InclusionConstraintsSetT::iterator
-          I = InclusionConstraints.begin(),
-          E = InclusionConstraints.end();
+  for (ConstraintsSetT::iterator
+          I = ConstraintSet.begin(),
+          E = ConstraintSet.end();
        I != E; ++I) {
-    const FunctionDecl *FunD = (*I)->getDef();
-    assert(FunD && "Internal Error: Effect Inclusion Constraint without matching FunctionDecl");
-    StringRef FName = getPrologName(FunD);
+    if (EffectInclusionConstraint *EIC = dyn_cast<EffectInclusionConstraint>(*I)) {
+      const FunctionDecl *FunD = EIC->getDef();
+      assert(FunD && "Internal Error: Effect Inclusion Constraint without matching FunctionDecl");
+      StringRef FName = getPrologName(FunD);
 
-    OSv2 << "DEBUG:: **** Invoking inference for method '"
-         << FunD->getNameAsString() << "' (Prolog Name: "
-         << FName << ") ****\n";
+      OSv2 << "DEBUG:: **** Invoking inference for method '"
+          << FunD->getNameAsString() << "' (Prolog Name: "
+          << FName << ") ****\n";
 
-    std::string EVstr;
-    llvm::raw_string_ostream EV(EVstr);
+      std::string EVstr;
+      llvm::raw_string_ostream EV(EVstr);
 
-    EV << "ev" << FName;
+      EV << "ev" << FName;
 
-    term_t LHS = (*I)->getLHS()->getPLTerm();
+      term_t LHS = EIC->getLHS()->getPLTerm();
 
-    predicate_t ESI1 = PL_predicate("esi_collect",4,"user");
-    term_t H0 = PL_new_term_refs(4);
-    term_t H1 = H0 + 1;
-    term_t H2 = H0 + 2;
-    term_t H3 = H0 + 3;
-    PL_put_atom_chars(H0,EV.str().c_str());
-    PL_put_atom_chars(H1,FName.data());
+      predicate_t ESI1 = PL_predicate("esi_collect",4,"user");
+      term_t H0 = PL_new_term_refs(4);
+      term_t H1 = H0 + 1;
+      term_t H2 = H0 + 2;
+      term_t H3 = H0 + 3;
+      PL_put_atom_chars(H0,EV.str().c_str());
+      PL_put_atom_chars(H1,FName.data());
 
-    PL_put_term(H2,LHS);
-    PL_put_variable(H3);
+      PL_put_term(H2,LHS);
+      PL_put_variable(H3);
 
-    int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, ESI1, H0);
+      int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, ESI1, H0);
 
-    assert(Rval && "Effect Inference Failed");
+      assert(Rval && "Effect Inference Failed");
 
-    char* Solution;
-    int Res=PL_get_chars(H3, &Solution, CVT_WRITE|BUF_RING);
-    assert(Res && "Failed to read solution from Prolog");
-    OSv2 << "result is "<< Solution << "\n";
+      char* Solution;
+      int Res=PL_get_chars(H3, &Solution, CVT_WRITE|BUF_RING);
+      assert(Res && "Failed to read solution from Prolog");
+      OSv2 << "result is "<< Solution << "\n";
 
-    emitConstraintSolution(*I, Solution);
+      emitConstraintSolution(EIC, Solution);
+    }
   }
 }
 

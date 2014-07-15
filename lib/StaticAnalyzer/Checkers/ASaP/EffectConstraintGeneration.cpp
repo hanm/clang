@@ -23,7 +23,7 @@
 #include "ASaPType.h"
 #include "ASaPUtil.h"
 #include "Effect.h"
-#include "EffectInclusionConstraint.h"
+#include "Constraints.h"
 #include "EffectConstraintGeneration.h"
 #include "Rpl.h"
 #include "Substitution.h"
@@ -63,7 +63,8 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   assert(EffSummary);
 
   //create a constraint object
-  EC = new EffectInclusionConstraint(EffSummary, Def, S);
+  EC = new EffectInclusionConstraint(SymT.makeFreshConstraintName(),
+                                     EffSummary, Def, S);
 
   if (VisitCXXInitializer) {
     if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
@@ -374,7 +375,7 @@ void EffectConstraintVisitor::checkEffectCoverage() {
   OS << "DEBUG:: effect check (DONE)\n";
   if (Result == RK_DUNNO) {
     EC->makeMinimal();
-    SymT.addInclusionConstraint(EC);
+    SymT.addConstraint(EC);
   } else {
     if (LHS->size() == 0 && isa<VarEffectSummary>(RHS)) {
       // Replace RHS with 'no_effect'

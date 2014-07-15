@@ -58,6 +58,7 @@ namespace asap {
 
 class AnnotationScheme;
 class ASaPType;
+class ConcreteEffectSummary;
 class Effect;
 class EffectInclusionConstraint;
 class EffectVector;

@@ -286,10 +286,11 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
           emitInterferingEffects(Exp, *(*I), *(*J));
           Result = false;
         }
-        else if (RK==RK_DUNNO){
+        else if (RK == RK_DUNNO){
           //assert(false && "Found variable effect summary");
-          EffectNIConstraint* NIC = new EffectNIConstraint(*I, *J);
-          SymbolTable::Table->addNIConstraint(NIC);
+          StringRef Name = SymbolTable::Table->makeFreshConstraintName();
+          EffectNIConstraint *NIC = new EffectNIConstraint(Name, *I, *J);
+          SymbolTable::Table->addConstraint(NIC);
         }
       }
       ++J;
@@ -348,10 +349,11 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
     emitInterferingEffects(Exp, *ES, *ES);
     Result = false;
   }
-  else if (RK==RK_DUNNO) {
+  else if (RK == RK_DUNNO) {
     //    assert(false && "Found variable effect summary");
-    EffectNIConstraint* NIC = new EffectNIConstraint(ESptr, ESptr);
-    SymbolTable::Table->addNIConstraint(NIC);
+    StringRef Name = SymbolTable::Table->makeFreshConstraintName();
+    EffectNIConstraint *NIC = new EffectNIConstraint(Name, ESptr, ESptr);
+    SymbolTable::Table->addConstraint(NIC);
   }
   // 4. Check effect coverage
   const EffectSummary *DefES = SymbolTable::Table->getEffectSummary(Def);
@@ -398,10 +400,11 @@ bool TBBParallelForIndexNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
     emitInterferingEffects(Exp, *ES, *ES);
     Result = false;
   }
-  else if (RK==RK_DUNNO) {
+  else if (RK == RK_DUNNO) {
     //assert(false && "Found variable effect summary");
-    EffectNIConstraint* NIC = new EffectNIConstraint(ESptr, ESptr);
-    SymbolTable::Table->addNIConstraint(NIC);
+    StringRef Name = SymbolTable::Table->makeFreshConstraintName();
+    EffectNIConstraint *NIC = new EffectNIConstraint(Name, ESptr, ESptr);
+    SymbolTable::Table->addConstraint(NIC);
   }
   // 4. Check effect coverage
   const EffectSummary *DefES = SymbolTable::Table->getEffectSummary(Def);
