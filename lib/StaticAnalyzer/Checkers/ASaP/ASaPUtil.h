@@ -70,15 +70,16 @@ struct VisitorBundle {
 };
 
 enum Trivalent {
-  //True
-  RK_TRUE = 0,
   //False
-  RK_FALSE,
+  RK_FALSE = false,
+  //True
+  RK_TRUE = true,
   //Don't know
   RK_DUNNO
 };
 
-Trivalent Bool2Trivalent(bool B);
+Trivalent boolToTrivalent(bool B);
+Trivalent trivalentAND(Trivalent A, Trivalent B);
 
 /// \brief Issues Warning: '<str>': <bugName> on Declaration.
 void helperEmitDeclarationWarning(const CheckerBase *Checker,

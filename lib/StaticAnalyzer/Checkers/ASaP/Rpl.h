@@ -330,7 +330,7 @@ typedef llvm::SmallVector<const RplElement*,
   ConcreteRpl() :  Rpl(RPLK_Concrete, RK_TRUE) {}
 
   ConcreteRpl(const RplElement &Elm)
-             : Rpl(RPLK_Concrete, Bool2Trivalent(Elm.isFullySpecified())) {
+             : Rpl(RPLK_Concrete, boolToTrivalent(Elm.isFullySpecified())) {
     RplElements.push_back(&Elm);
   }
 

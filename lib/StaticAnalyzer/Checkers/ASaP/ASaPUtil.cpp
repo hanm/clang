@@ -48,8 +48,18 @@ raw_ostream &OSv2 = llvm::nulls();
 
 using llvm::raw_string_ostream;
 
-Trivalent Bool2Trivalent(bool B) {
+Trivalent boolToTrivalent(bool B) {
   return B==true ? RK_TRUE : RK_FALSE;
+}
+
+Trivalent trivalentAND(Trivalent A, Trivalent B) {
+  if (A == RK_FALSE || B == RK_FALSE)
+    return RK_FALSE;
+  // else
+  else if (A == RK_DUNNO || B == RK_DUNNO)
+    return RK_DUNNO;
+  else
+    return RK_TRUE;
 }
 
 void helperEmitDeclarationWarning(const CheckerBase *Checker,

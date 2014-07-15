@@ -335,13 +335,15 @@ isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const {
       assert((ThisCopy.InRpl && ThatCopy.InRpl) ||
              (ThisCopy.InRpl==0 && ThatCopy.InRpl==0));
       Trivalent Result = ThisCopy.isSubtypeOf(ThatCopy, SymT);
-      if (Result != RK_TRUE)
-        return Result; // RK_FALSE or RK_DUNNO
-      // Invariant: ThisCopy.isSubtypeOf(ThatCopy,SymT) == RK_TRUE
+      if (Result == RK_FALSE)
+        return Result; // RK_FALSE
+      // Invariant: ThisCopy.isSubtypeOf(ThatCopy,SymT) == RK_TRUE || RK_DUNNO
       if (ThisCopy.InRpl == 0 && ThatCopy.InRpl == 0)
-        return RK_TRUE;
-      if (ThisCopy.InRpl && ThatCopy.InRpl)
-        return ThisCopy.InRpl->isIncludedIn(*ThatCopy.InRpl);
+        return Result;
+      if (ThisCopy.InRpl && ThatCopy.InRpl) {
+        Trivalent InclRes = ThisCopy.InRpl->isIncludedIn(*ThatCopy.InRpl);
+        return trivalentAND(Result, InclRes);
+      }
       // else
       return RK_FALSE;
       /*

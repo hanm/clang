@@ -306,7 +306,7 @@ Trivalent ConcreteRpl::isUnder(const Rpl &That) const {
   assert(ConcThat && "Unexpected kind of RPL");
   RplRef *LHS = new RplRef(*this);
   RplRef *RHS = new RplRef(*ConcThat);
-  Trivalent Result = Bool2Trivalent(LHS->isUnder(*RHS));
+  Trivalent Result = boolToTrivalent(LHS->isUnder(*RHS));
   delete LHS; delete RHS;
   return Result;
 }
@@ -317,6 +317,9 @@ Trivalent ConcreteRpl::isIncludedIn(const Rpl &That) const {
     return cap->upperBound().isIncludedIn(That);
   }*/
   if (isa<VarRpl>(&That)) {
+    StringRef Name = SymbolTable::Table->makeFreshConstraintName();
+    RplInclusionConstraint *RIC = new RplInclusionConstraint(Name, this, &That);
+    SymbolTable::Table->addConstraint(RIC);
     return RK_DUNNO;
   }
   // else
@@ -324,7 +327,7 @@ Trivalent ConcreteRpl::isIncludedIn(const Rpl &That) const {
   assert(ConcThat && "Unexpected kind of RPL");
   RplRef *LHS = new RplRef(*this);
   RplRef *RHS = new RplRef(*ConcThat);
-  Trivalent Result = Bool2Trivalent(LHS->isIncludedIn(*RHS));
+  Trivalent Result = boolToTrivalent(LHS->isIncludedIn(*RHS));
   delete LHS; delete RHS;
   OSv2 << "DEBUG:: ~~~~~ isIncludedIn[RPL](" << this->toString()
     << "[" << this << "], " << That.toString() << "[" << &That
@@ -345,7 +348,7 @@ Trivalent ConcreteRpl::isDisjoint(const Rpl &That) const {
   RplRef LHS2(*this);
   RplRef RHS2(*ConcThat);
 
-  return Bool2Trivalent(isPrivate() || ConcThat->isPrivate()
+  return boolToTrivalent(isPrivate() || ConcThat->isPrivate()
          || LHS1.isDisjointLeft(RHS1) || LHS2.isDisjointRight(RHS2));
 }
 
@@ -463,8 +466,12 @@ Trivalent VarRpl::isUnder(const Rpl &That) const {
 Trivalent VarRpl::isIncludedIn(const Rpl &That) const {
   if (this == &That)
     return RK_TRUE;
-  else
+  else {
+    StringRef Name = SymbolTable::Table->makeFreshConstraintName();
+    RplInclusionConstraint *RIC = new RplInclusionConstraint(Name, this, &That);
+    SymbolTable::Table->addConstraint(RIC);
     return RK_DUNNO;
+  }
 }
 
 Trivalent VarRpl::isDisjoint(const Rpl &That) const {
