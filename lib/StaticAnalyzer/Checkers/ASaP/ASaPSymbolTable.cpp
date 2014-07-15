@@ -359,14 +359,16 @@ RplDomain *SymbolTable::buildDomain(const Decl *D) {
     if (EnclosingDecl){
       //add fresh region variable name to enclosing scope
       const NamedDecl* ND = dyn_cast<NamedDecl>(D);
-      assert(ND);
+      assert(ND && "Internal Error: Expected NamedDecl declaration");
       const ValueDecl* VD = dyn_cast<ValueDecl>(ND);
       if(VD){
         OSv2 << "value decl\n";
         StringRef Name = ND->getName();
-        OSv2 << "before makeFresghRVName "<<Name<<"\n";
+        OSv2 << "before makeFresghRVName "<< Name <<"\n";
         StringRef RV = makeFreshRVName(Name);
-        OSv2 << "after makeFreshRVName " <<RV<<" \n";
+        OSv2 << "after makeFreshRVName " << RV <<" \n";
+        assert(SymTable[EnclosingDecl] && 
+               "SymTable entry for EnclosingDecl does not exist");
         SymTable[EnclosingDecl]->addRegionName(Name, RV);
       }
       else
