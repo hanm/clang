@@ -7,13 +7,13 @@ class [[asap::param("class")]] point  {
 
 public:
     point() {}
-    point(double x, double y) : m_x(x), m_y(y) {} //expected-warning{{Inferred Effect Summary for point: [reads(rpl([rLOCAL],[])),reads(rpl([rLOCAL],[]))]}}
+    point(double x, double y) : m_x(x), m_y(y) {} //expected-warning{{Inferred Effect Summary for point: [reads(rpl([rLOCAL],[]))]}}
  
     [[asap::param("Q")]]//, asap::reads("Q")]] 
     point(const point &p [[asap::arg("Q")]]
         )
         : m_x(p.m_x), m_y(p.m_y)
-      {} //expected-warning{{Inferred Effect Summary for point: [reads(rpl([p1_Q],[])),reads(rpl([p1_Q],[]))]}}
+      {} //expected-warning{{Inferred Effect Summary for point: [reads(rpl([p1_Q],[]))]}}
 
     point &operator= [[asap::arg("class"), asap::param("P"), asap::reads("P"), asap::writes("class")]] (
         const point &p [[asap::arg("P")]]
@@ -25,7 +25,7 @@ public:
         }
 
     void set /*[[asap::writes("class")]]*/ (double x_in, double y_in)
-      { //expected-warning{{Inferred Effect Summary for set: [reads(rpl([rLOCAL],[])),writes(rpl([p0_class],[])),reads(rpl([rLOCAL],[])),writes(rpl([p0_class],[]))]}}
+      { //expected-warning{{Inferred Effect Summary for set: [reads(rpl([rLOCAL],[])),writes(rpl([p0_class],[]))]}}
         m_x = x_in;
         m_y = y_in;
         }
@@ -69,7 +69,7 @@ public:
    
     // Add a link to the start of the chain
     void add_link /*[[asap::writes("P")]]*/ (const point &pos[[asap::arg("P")]]) 
-        {//expected-warning{{Inferred Effect Summary for add_link: [reads(rpl([p5_P],[])),writes(rpl([p5_P],[])),reads(rpl([p5_P],[])),reads(rpl([p5_P],[])),writes(rpl([p5_P],[]))]}}
+        {//expected-warning{{Inferred Effect Summary for add_link: [writes(rpl([p5_P],[]))]}}
         link *new_start[[asap::arg("P, P")]] = new link(pos);
         new_start->next = start;
         start = new_start;
