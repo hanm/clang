@@ -7,7 +7,7 @@ class [[asap::param("class")]] point  {
 
 public:
     point() {}
-    point(double x, double y) : m_x(x), m_y(y) {} //expected-warning{{Inferred Effect Summary for point: [reads(rpl([rLOCAL],[])),reads(rpl([rLOCAL],[]))]}}
+    point(double x, double y) : m_x(x), m_y(y) {} //expected-warning{{Inferred Effect Summary for point: [reads(rpl([rLOCAL],[]))]}}
  
     [[asap::param("Q"), asap::reads("Q")]] point(
         const point &p [[asap::arg("Q")]]
