@@ -92,6 +92,13 @@ term_t Rpl::getSubVPLTerm() const {
   }
 }
 
+std::string Rpl::toString() const {
+  std::string SBuf;
+  llvm::raw_string_ostream OS(SBuf);
+  print(OS);
+  return std::string(OS.str());
+}
+
 Rpl::~Rpl() {
   delete SubV;
 }
@@ -110,7 +117,7 @@ void RplDomain::addRegion(NamedRplElement *R){
 }
 
 
-void RplDomain::print (llvm::raw_ostream& OS) {
+void RplDomain::print (llvm::raw_ostream &OS) const {
   OS << "----------------------------\n";
   OS << "Params: \n";
   if(Params)
@@ -144,7 +151,7 @@ void ConcreteRpl::RplRef::print(llvm::raw_ostream &OS) const {
     OS << rpl.RplElements[I]->getName();
 }
 
-std::string ConcreteRpl::RplRef::toString() {
+std::string ConcreteRpl::RplRef::toString() const {
   std::string SBuf;
   llvm::raw_string_ostream OS(SBuf);
   print(OS);
@@ -277,19 +284,13 @@ inline bool ConcreteRpl::isPrivate() const {
 void ConcreteRpl::print(raw_ostream &OS) const {
   RplElementVectorTy::const_iterator I = RplElements.begin();
   RplElementVectorTy::const_iterator E = RplElements.end();
-  for (; I < E-1; I++) {
-    OS << (*I)->getName() << Rpl::RPL_SPLIT_CHARACTER;
-  }
-  // print last element
-  if (I < E)
+  if (I != E) {
     OS << (*I)->getName();
-}
-
-std::string ConcreteRpl::toString() const {
-  std::string SBuf;
-  llvm::raw_string_ostream OS(SBuf);
-  print(OS);
-  return std::string(OS.str());
+    ++I;
+  }
+  for (; I != E; ++I) {
+    OS << Rpl::RPL_SPLIT_CHARACTER << (*I)->getName();
+  }
 }
 
 Trivalent ConcreteRpl::isUnder(const Rpl &That) const {
@@ -318,7 +319,7 @@ Trivalent ConcreteRpl::isIncludedIn(const Rpl &That) const {
   }*/
   if (isa<VarRpl>(&That)) {
     StringRef Name = SymbolTable::Table->makeFreshConstraintName();
-    RplInclusionConstraint *RIC = new RplInclusionConstraint(Name, this, &That);
+    RplInclusionConstraint *RIC = new RplInclusionConstraint(Name, *this, That);
     SymbolTable::Table->addConstraint(RIC);
     return RK_DUNNO;
   }
@@ -468,7 +469,7 @@ Trivalent VarRpl::isIncludedIn(const Rpl &That) const {
     return RK_TRUE;
   else {
     StringRef Name = SymbolTable::Table->makeFreshConstraintName();
-    RplInclusionConstraint *RIC = new RplInclusionConstraint(Name, this, &That);
+    RplInclusionConstraint *RIC = new RplInclusionConstraint(Name, *this, That);
     SymbolTable::Table->addConstraint(RIC);
     return RK_DUNNO;
   }
@@ -490,14 +491,7 @@ void VarRpl::substitute(const Substitution *S) {
 }
 
 void VarRpl::print(raw_ostream &OS) const {
-  //OS << Name;
-}
-
-std::string VarRpl::toString() const {
-  std::string SBuf;
-  llvm::raw_string_ostream OS(SBuf);
-  print(OS);
-  return std::string(OS.str());
+  OS << Name;
 }
 
 term_t VarRpl::getPLTerm() const {
@@ -660,13 +654,14 @@ void RplVector::substitute(const Substitution *S) {
 
 void RplVector::print(llvm::raw_ostream &OS) const {
   VectorT::const_iterator I = begin(), E = end();
-  for(; I < E-1; ++I) {
+  if (I != E) {
     (*I)->print(OS);
-    OS << ", ";
+    ++I;
   }
-  // print last one
-  if (I != E)
+  for(; I < E; ++I) {
+    OS << ", ";
     (*I)->print(OS);
+  }
 }
 
 //static

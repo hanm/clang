@@ -433,7 +433,7 @@ helperMissingRegionArgs(NamedDecl *D, const Attr* Att,
   if (!RplVec && ValD) {
     // 1. if no args were given -> try to use defaults
     AnnotationSet AnSe = SymT.makeDefaultType(ValD, ParamCount);
-
+    assert(AnSe.T && "Internal Error: could not create default type");
     OS << "DEBUG:: Default type created:" << AnSe.T->toString()
         << "  for decl(" << ValD << "): ";
     ValD->print(OS, Ctx.getPrintingPolicy());

@@ -44,7 +44,7 @@ helperMakeLocalType(const ValueDecl *D, long ArgNum) {
   RplVector RplV;
   if (!D->getType()->isReferenceType()) {
     RplV.push_back(ConcreteRpl(*SymbolTable::LOCAL_RplElmt));
-    I++;
+    ++I;
   }
   for (; I < ArgNum; ++I) {
     RplV.push_back(ConcreteRpl(*SymbolTable::GLOBAL_RplElmt));
@@ -60,11 +60,17 @@ helperMakeVarType(const ValueDecl *D, long ArgNum) {
   RplVector RplVec;
   for (int I = 0; I < ArgNum; ++I) {
     // 1. Create new RplVarElement
-    VarRpl *RplVar = SymT.createFreshRplVar();
+    VarRpl *RplVar = SymT.createFreshRplVar(D);
+    OSv2 << "DEBUG:: RplVar = " << RplVar->toString() << "\n";
+    Rpl *Rpl = RplVar;
+    OSv2 << "DEBUG:: Rpl = " << Rpl->toString() << "\n";
+
     RplDomain *Dm = SymT.buildDomain(D);
-    OSv2 << "Printing domain ....\n";
-    Dm->print(OSv2);
-    RplVar->setDomain(Dm);
+    if (Dm) {
+      OSv2 << "Printing domain ....\n";
+      Dm->print(OSv2);
+      RplVar->setDomain(Dm);
+    }
 
     // 2. Push it back
     RplVec.push_back(RplVar);

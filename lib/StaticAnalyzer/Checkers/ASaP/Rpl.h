@@ -40,7 +40,7 @@ public:
   RplDomain(RegionNameVector *RV, const ParameterVector *PV, RplDomain *Parent);
   void addRegion(NamedRplElement *R);
 
-  void print (llvm::raw_ostream& OS);
+  void print (llvm::raw_ostream &OS) const;
 };
 
 class RplElement {
@@ -239,7 +239,7 @@ public:
   /// \brief Returns true iff this RPL is disjoint from That
   virtual Trivalent isDisjoint(const Rpl &That) const = 0;
 
-  virtual std::string toString() const = 0;
+  std::string toString() const;
   virtual void print(llvm::raw_ostream &OS) const = 0;
   virtual void join(Rpl *That) = 0;
   virtual void substitute(const Substitution *S) = 0;
@@ -290,7 +290,7 @@ typedef llvm::SmallVector<const RplElement*,
 
     /// Printing (Rpl Ref)
     void print(llvm::raw_ostream& OS) const;
-    std::string toString();
+    std::string toString() const;
 
     /// Getters
     inline const RplElement* getFirstElement() const {
@@ -340,10 +340,6 @@ typedef llvm::SmallVector<const RplElement*,
 
   /// \brief Print the Rpl to an output stream.
   virtual void print(llvm::raw_ostream &OS) const;
-  /// \brief Print the Rpl to a string.
-  virtual std::string toString() const;
-
-  //RplKind getKind() const { return Kind; }
 
   /// \brief Return a Prolog term for the Rpl.
   virtual term_t getPLTerm() const;
@@ -426,15 +422,15 @@ typedef llvm::SmallVector<const RplElement*,
 
 class VarRpl : public Rpl {
 private:
-  // StringRef Name
+  StringRef Name;
   RplDomain *Domain;
 
 public:
-  VarRpl()
-        : Rpl(RPLK_Var, RK_DUNNO), Domain(0) {}
+  VarRpl(StringRef ID)
+        : Rpl(RPLK_Var, RK_DUNNO), Name(ID), Domain(0) {}
 
   VarRpl(const VarRpl &That)
-        : Rpl(That), Domain(That.Domain) {}
+        : Rpl(That), Name(That.Name), Domain(That.Domain) {}
 
   virtual Rpl *clone() const {
     return new VarRpl(*this);
@@ -445,8 +441,6 @@ public:
 
   /// \brief Print the Rpl to an output stream.
   virtual void print(llvm::raw_ostream &OS) const;
-  /// \brief Print the Rpl to a string.
-  virtual std::string toString() const;
 
   // Nesting (Under)
   /// \brief Returns true iff this is under That

@@ -279,7 +279,7 @@ public:
 
   inline StringRef makeFreshDeclName(const std::string &Name) {
     std::stringstream ss;
-    ss << "r" << getNextUniqueDeclID()
+    ss << "d" << getNextUniqueDeclID()
        << "_" << Name;
     return addFreshName(ss.str());
   }
@@ -322,9 +322,7 @@ public:
 
   void createSymbolTableEntry(const Decl *D);
 
-  VarRpl *createFreshRplVar(){
-    return new VarRpl();
-  }
+  VarRpl *createFreshRplVar(const ValueDecl *D);
 
   inline AnnotationSet makeDefaultClassParams(RecordDecl *RecD) {
     return AnnotScheme->makeClassParams(RecD);

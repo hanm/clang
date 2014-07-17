@@ -37,18 +37,16 @@ term_t RplInclusionConstraint::getPLTerm() const {
   functor_t RICFunctor =
     PL_new_functor(PL_new_atom(PL_RIConstraint.c_str()), 3);
   int Res = PL_cons_functor(RICTerm, RICFunctor, getIDPLTerm(),
-                            LHS->getPLTerm(), RHS->getPLTerm());
+                            LHS.getPLTerm(), RHS.getPLTerm());
   assert(Res && "Failed to build 'esi_constraint' Prolog term");
 
   return RICTerm;
 }
 
 void RplInclusionConstraint::print(llvm::raw_ostream &OS) const {
-  assert(LHS && "Unexpected null-pointer in LHS of RplInclusionConstraint");
-  assert(RHS && "Unexpected null-pointer in RHS of RplInclusionConstraint");
   OS << "RplInclusionConstraint: "
-     << LHS->toString() << " <=(Incl) "
-     << RHS->toString();
+     << LHS.toString() << " <=(Incl) "
+     << RHS.toString();
 }
 
 //////////////////////////////////////////////////////////////////////////

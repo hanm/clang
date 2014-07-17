@@ -348,6 +348,8 @@ RegionNameVector *SymbolTable::getRegionNameVector(const Decl *D) const {
 }
 
 RplDomain *SymbolTable::buildDomain(const Decl *D) {
+  // TODO: don't return null!
+  return 0;
   //add region names from D to RNV
   OSv2 << "in buildDomain\n";
   RegionNameVector *RNV = getRegionNameVector(D);
@@ -367,7 +369,7 @@ RplDomain *SymbolTable::buildDomain(const Decl *D) {
         OSv2 << "before makeFresghRVName "<< Name <<"\n";
         StringRef RV = makeFreshRVName(Name);
         OSv2 << "after makeFreshRVName " << RV <<" \n";
-        assert(SymTable[EnclosingDecl] && 
+        assert(SymTable[EnclosingDecl] &&
                "SymTable entry for EnclosingDecl does not exist");
         SymTable[EnclosingDecl]->addRegionName(Name, RV);
       }
@@ -653,7 +655,7 @@ static void emitConstraintSolution(EffectInclusionConstraint *EC,
 
 void SymbolTable::solveInclusionConstraints() {
   //PL_action(PL_ACTION_TRACE);
-  //iterate through symbol table entries and add facts
+  //iterate through symbol table entries and emit facts
   for (SymbolTableMapT::const_iterator
          MI = SymTable.begin(),
          ME = SymTable.end();
@@ -693,6 +695,20 @@ void SymbolTable::solveInclusionConstraints() {
   } // end for-all symbol table entries
   OSv2 << "DEBUG:: Done emmitting rgn_param facts, gonna do esi_constraints next\n";
 
+  // Emit Constraints
+  for (ConstraintsSetT::iterator
+          I = ConstraintSet.begin(),
+          E = ConstraintSet.end();
+       I != E; ++I) {
+    if (!isa<EffectInclusionConstraint>(*I)) {
+      OSv2 << "DEBUG:: Will assert Constraint to Prolog: " << (*I)->toString() << "\n";
+      OSv2 << "here\n";
+      term_t Term = (*I)->getPLTerm();
+      OSv2 << "DEBUG:: build term for constraint...\n";
+      assertzTermProlog(Term, "Failed to assert constraint to Prolog facts");
+      OSv2 << "DEBUG:: Asserted Constraint to Prolog: " << (*I)->toString() << "\n";
+    }
+  }
   //loop to call esi_collect (effect inference)
   for (ConstraintsSetT::iterator
           I = ConstraintSet.begin(),
@@ -729,8 +745,8 @@ void SymbolTable::solveInclusionConstraints() {
 
       assert(Rval && "Effect Inference Failed");
 
-      char* Solution;
-      int Res=PL_get_chars(H3, &Solution, CVT_WRITE|BUF_RING);
+      char *Solution;
+      int Res = PL_get_chars(H3, &Solution, CVT_WRITE|BUF_RING);
       assert(Res && "Failed to read solution from Prolog");
       OSv2 << "result is "<< Solution << "\n";
 
@@ -818,6 +834,14 @@ void SymbolTable::createSymbolTableEntry(const Decl *D) {
   }
   SymTable[D] = new SymbolTableEntry(Name);
 }
+
+VarRpl *SymbolTable::createFreshRplVar(const ValueDecl *D) {
+  StringRef Name = makeFreshRVName(D->getNameAsString().data());
+  OSv2 << "DEBUG:: VarRpl Fresh Name created: " << Name << "\n";
+  // TODO: generate Domain for RplVar
+  return new VarRpl(Name);
+}
+
 
 //////////////////////////////////////////////////////////////////////////
 // SymbolTableEntry

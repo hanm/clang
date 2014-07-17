@@ -202,7 +202,7 @@ int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp)
       OS << "DEBUG:: Adding Effect "<< E.toString() << "to " <<
         EC->getDef()->getNameAsString() << "\n";
       EC->addEffect(&E);
-      EC->print();
+      EC->print(OS);
       EffectNr++;
     }
     T1->deref();
@@ -217,7 +217,7 @@ int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp)
       OS << "DEBUG:: Adding Effect "<< E.toString() << "to " <<
         EC->getDef()->getNameAsString() << "\n";
       EC->addEffect(&E);
-      EC->print();
+      EC->print(OS);
       EffectNr++;
     } else {
       OS << "DEBUG:: NOT Adding Effect (InRpl=NULL)\n";

@@ -57,13 +57,13 @@ public:
 
 // class that represents an Rpl inclusion constraint.
 class RplInclusionConstraint : public Constraint {
-  const Rpl *LHS;
-  const Rpl *RHS;
+  const Rpl &LHS;
+  const Rpl &RHS;
 
 public:
-  RplInclusionConstraint(StringRef ID, const Rpl *LHS, const Rpl *RHS)
+  RplInclusionConstraint(StringRef ID, const Rpl &LHS, const Rpl &RHS)
                         : Constraint(CK_RplInclusion, ID),
-                          LHS(LHS), RHS(RHS) {}
+                          LHS(*LHS.clone()), RHS(*RHS.clone()) {}
 
   virtual term_t getPLTerm() const;
   virtual void print(llvm::raw_ostream &OS) const;
