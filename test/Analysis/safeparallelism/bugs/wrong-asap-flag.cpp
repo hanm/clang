@@ -1,11 +1,6 @@
-// RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker -analyzer-config -asap-default-scheme=param %s -verify
-// NUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker -analyzer-config -asap-default-scheme=effect-inference %s -verify
-// expected-no-diagnostics
+// RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker -analyzer-config -asap-default-scheme=parametric %s -verify
 
-#if 0
-#  include <tbb/tbb.h>
-#else
-  namespace tbb {
+  namespace tbb { // expected-warning{{Invalid argument to command-line flag -asap-default-scheme}}
     template<typename Func0, typename Func1>
     void parallel_invoke//[[asap::param("P1,P2")]]
                         (const Func0& f0 /*[[asap::arg("P1")]]*/,
@@ -14,7 +9,6 @@
         //f1();
     }
   } // end namespace
-#endif
 
 class [[asap::param("R")]] IntersectInvoker {
 

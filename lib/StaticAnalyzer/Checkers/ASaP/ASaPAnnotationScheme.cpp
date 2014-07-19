@@ -346,7 +346,14 @@ makeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+AnnotationSet EffectInferenceAnnotationScheme::
+makeEffectSummary(const FunctionDecl *D) {
+  AnnotationSet Result;
+  Result.EffSum = new VarEffectSummary();
+  return Result;
+}
 
+///////////////////////////////////////////////////////////////////////////////
 AnnotationSet InferenceAnnotationScheme::
 makeGlobalType(const VarDecl *D, long ArgNum) {
   return helperMakeVarType(D, ArgNum);

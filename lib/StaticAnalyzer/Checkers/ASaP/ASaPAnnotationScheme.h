@@ -124,6 +124,20 @@ public:
   virtual RplVector *makeBaseTypeArgs(const RecordDecl *Derived, long ArgNum);
 }; // end class CheckGlobalsAnnotationScheme
 
+// Insert effect summary variables wherever they are missing.
+class EffectInferenceAnnotationScheme : public ParametricAnnotationScheme {
+public:
+  // Constructor
+  EffectInferenceAnnotationScheme(SymbolTable &SymT)
+                                 : ParametricAnnotationScheme(SymT) {}
+  // Destructor
+  virtual ~EffectInferenceAnnotationScheme() {}
+
+  // Methods (Overridden)
+  virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
+}; // end class EffectInferenceAnnotationScheme
+
+
 // Insert effect summary variables and rpl variables wherever they are missing.
 class InferenceAnnotationScheme : public ParametricAnnotationScheme {
 public:
@@ -144,8 +158,6 @@ public:
 
   // Methods (Overridden)
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
-  //virtual AnnotationSet makeBaseTypeArgs(const RecordDecl *Base,
-  //                                       const RecordDecl *Derived);
 }; // end class CheckGlobalsAnnotationScheme
 
 } // end namespace asap
