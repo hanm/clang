@@ -342,33 +342,7 @@ makeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/*AnnotationSet InferenceAnnotationScheme::
-makeGlobalType(const VarDecl *D, long ArgNum) {
-  return helperMakeVarType(D, ArgNum);
-}
-
-AnnotationSet InferenceAnnotationScheme::
-makeStackType(const VarDecl *D, long ArgNum) {
-  return helperMakeVarType(D, ArgNum);
-}
-
-AnnotationSet InferenceAnnotationScheme::
-makeFieldType(const FieldDecl *D, long ArgNum) {
-  return helperMakeVarType(D, ArgNum);
-}
-
-AnnotationSet InferenceAnnotationScheme::
-makeParamType(const ParmVarDecl *D, long ArgNum) {
-  return helperMakeVarType(D, ArgNum);
-
-}
-
-AnnotationSet InferenceAnnotationScheme::
-makeReturnType(const FunctionDecl *D, long ArgNum) {
-  return helperMakeVarType(D, ArgNum);
-}*/
-
-AnnotationSet InferenceAnnotationScheme::
+AnnotationSet EffectInferenceAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
   AnnotationSet Result;
   Result.EffSum = new VarEffectSummary();

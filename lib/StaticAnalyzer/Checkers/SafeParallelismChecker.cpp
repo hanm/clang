@@ -15,6 +15,7 @@
 #include <stdio.h>
 
 #include "ClangSACheckers.h"
+#include "clang/AST/DeclBase.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
@@ -78,6 +79,7 @@ class  SafeParallelismChecker
 
 
 public:
+
   void checkASTDecl(const TranslationUnitDecl *TUDeclConst,
                     AnalysisManager &Mgr,
                     BugReporter &BR) const {
@@ -111,25 +113,34 @@ public:
     os << "DEBUG:: asap-default-scheme = " << SchemeStr << "\n";
 
     AnnotationScheme *AnnotScheme = 0;
-    bool DoInference = false;
+    bool DoEffectInference = false;
     if (SchemeStr.compare("simple") == 0) {
       AnnotScheme = new SimpleAnnotationScheme(SymT);
     } else if (SchemeStr.compare("param") == 0) {
       AnnotScheme = new ParametricAnnotationScheme(SymT);
     } else if (SchemeStr.compare("global") == 0) {
       AnnotScheme = new CheckGlobalsAnnotationScheme(SymT);
-    } else if (SchemeStr.compare("inference") == 0) {
-      AnnotScheme = new InferenceAnnotationScheme(SymT);
-      DoInference = true;
+    } else if (SchemeStr.compare("effect-inference") == 0) {
+      AnnotScheme = new EffectInferenceAnnotationScheme(SymT);
+      DoEffectInference = true;
     } else {
-      // ERROR TODO
-      llvm::errs() << "ERROR: Invalid argument to command-line option -asap-default-scheme\n";
+      StringRef BugName = "Invalid argument to command-line flag -asap-default-scheme  flag";
+      os << "DEBUG:: Here1 \n";
+      assert(TUDecl->noload_decls_begin() != TUDecl->noload_decls_end());
+      DeclContext::decl_iterator I = TUDecl->decls_begin(),
+                    E = TUDecl->decls_end();
+      while (I != E && (*I)->getLocation().isInvalid()) {
+        ++I;
+      }
+      assert(I!=E);
+      Decl *D = *I;
+      helperEmitDeclarationWarning(this, BR, D, SchemeStr, BugName);
       Error = true;
     }
 
     if (!Error) {
       SymT.setAnnotationScheme(AnnotScheme);
-      runCheckers(TUDecl, DoInference);
+      runCheckers(TUDecl, DoEffectInference);
     }
 
 
@@ -138,7 +149,7 @@ public:
     PL_cleanup(0);
   }
 
-  void runCheckers(TranslationUnitDecl *TUDecl, bool DoInference) const {
+  void runCheckers(TranslationUnitDecl *TUDecl, bool DoEffectInference) const {
     os << "DEBUG:: starting ASaP TBB Parallelism Detection!\n";
     DetectTBBParallelism DetectTBBPar;
     DetectTBBPar.TraverseDecl(TUDecl);
@@ -200,7 +211,7 @@ public:
       return;
     }
 
-    if (DoInference) {
+    if (DoEffectInference) {
       // Make sure asap.pl exists at the expected location.
       FILE *File = fopen("/opt/lib/asap.pl", "r");
       if (!File) {
@@ -224,7 +235,7 @@ public:
         os << "DEBUG:: NON-INTERFERENCE CHECKING ENCOUNTERED FATAL ERROR!! STOPPING\n";
         return;
       }
-    } // end else (!DoInference)
+    } // end else (!DoEffectInference)
   }
 
 }; // end class SafeParallelismChecker
