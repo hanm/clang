@@ -54,16 +54,28 @@ void RplInclusionConstraint::print(llvm::raw_ostream &OS) const {
 
 EffectInclusionConstraint::
 EffectInclusionConstraint(StringRef ID,
+                          const ConcreteEffectSummary *Lhs,
                           const EffectSummary *Rhs,
                           const FunctionDecl *Def,
                           const Stmt *S)
                          : Constraint(CK_EffectInclusion, ID),
                            RHS(Rhs), Def(Def), S(S) {
   LHS = new EffectVector();
+  if (Lhs) {
+    LHS->addEffects(*Lhs);
+  }
 }
 
-void EffectInclusionConstraint::addEffect(Effect *Eff) {
+EffectInclusionConstraint::~EffectInclusionConstraint() {
+  delete LHS;
+}
+
+void EffectInclusionConstraint::addEffect(const Effect *Eff) {
   LHS->push_back(Eff);
+}
+
+void EffectInclusionConstraint::addEffects(const ConcreteEffectSummary &ES) {
+  LHS->addEffects(ES);
 }
 
 term_t EffectInclusionConstraint::getPLTerm() const {

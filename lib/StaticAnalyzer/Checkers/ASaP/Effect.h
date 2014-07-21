@@ -119,8 +119,7 @@ public:
   inline SourceLocation getLocation() const {
     return Attribute->getLocation();
   }
-  inline const Expr *getExp() const {return Exp; }
-
+  inline const Expr *getExp() const { return Exp; }
 
   inline SubstitutionVector *getSubV() const { return SubV; }
   inline const FunctionDecl *getDecl() const { return FunD; }
@@ -140,6 +139,9 @@ public:
 
   /// \brief true iff this # That
   Trivalent isNonInterfering(const Effect &That) const;
+
+private:
+  Trivalent isInvokeNonInterfering(const Effect &That) const;
 
 }; // end class Effect
 
@@ -162,6 +164,8 @@ public:
   void substitute(const SubstitutionVector *SubV, int N);
 
   void makeMinimal();
+  void addEffects(const ConcreteEffectSummary &ES);
+
 }; // end class EffectVector
 
 
@@ -192,6 +196,7 @@ public:
   virtual  Trivalent isNonInterfering(const Effect *Eff) const {return RK_DUNNO;}
   /// \brief Returns true iff 'this' is non-interfering with 'Sum'
   virtual  Trivalent isNonInterfering(const EffectSummary *Sum) const {return RK_DUNNO;}
+
   typedef llvm::SmallVector<std::pair<const Effect*, const Effect*> *, 8>
       EffectCoverageVector;
 
@@ -230,12 +235,7 @@ public:
   virtual ConcreteEffectSummary *clone() const {
     return new ConcreteEffectSummary(*this);
   }
-  ///
-  static bool classof(const EffectSummary *ES) {
-    return ES->getSummaryKind() == ESK_Concrete;
-  }
   /// \brief Returns the effect that covers Eff or null otherwise.
-  // const Effect *covers(const Effect *Eff) const;
   virtual Trivalent covers(const Effect *Eff) const;
   /// \brief Returns true iff 'this' covers 'Sum'
   virtual Trivalent covers(const EffectSummary *Sum) const;
@@ -257,6 +257,10 @@ public:
 
   virtual ~ConcreteEffectSummary() {};
   virtual term_t getPLTerm() const;
+  ///
+  static bool classof(const EffectSummary *ES) {
+    return ES->getSummaryKind() == ESK_Concrete;
+  }
 }; // end class ConcreteEffectSummary
 
 class VarEffectSummary : public EffectSummary {
@@ -278,22 +282,19 @@ public:
     return new VarEffectSummary(*this);
   }
 
-  static bool classof(const EffectSummary *ES) {
-    return ES->getSummaryKind() == ESK_Var;
-  }
-  virtual void print(raw_ostream &OS, std::string Separator="\n",
-		     bool PrintLastSeparator=true) const;
+  virtual void print(raw_ostream &OS,
+                     std::string Separator="\n",
+                     bool PrintLastSeparator=true) const;
+
   virtual void makeMinimal(EffectCoverageVector &ECV) {
     //nothing to do
   }
 
   virtual void substitute(const Substitution *Sub) {
-     //TODO
-     //Store these subtitutions?
+    assert(false && "Enexpected substitution on VarEffectSummary");
   }
   virtual void substitute(const SubstitutionVector *SubV) {
-     //TODO
-     //Store these subtitutions?
+    assert(false && "Enexpected substitution on VarEffectSummary");
   }
 
   virtual ~VarEffectSummary() {};
@@ -310,6 +311,11 @@ public:
   bool hasInclusionConstraint() const {
     return (InclCons == 0) ? false : true;
   }
+
+  static bool classof(const EffectSummary *ES) {
+    return ES->getSummaryKind() == ESK_Var;
+  }
+
 }; // end class VarEffectSummary
 
 

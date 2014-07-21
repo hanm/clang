@@ -40,11 +40,11 @@ Effect::Effect(const Effect &E)
   SubV->push_back_vec(E.SubV);
 }
 
-Effect::Effect(EffectKind EK, const Expr* E,
-               const FunctionDecl* FunD,
-               const SubstitutionVector* SV)
+Effect::Effect(EffectKind EK, const Expr *E,
+               const FunctionDecl *FunD,
+               const SubstitutionVector *SV)
               : Kind(EK), R(0), Exp(E), FunD(FunD) {
-  SubV=new SubstitutionVector();
+  SubV = new SubstitutionVector();
   SubV->push_back_vec(SV);
 }
 
@@ -81,7 +81,8 @@ Trivalent Effect::isSubEffectOf(const Effect &That) const {
     Result = RK_FALSE;
   }
   OSv2  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
-    << That.toString() << ")=" << (Result==RK_TRUE ? "true" : "false-or-dunno") << "\n";
+    << That.toString() << ")="
+    << (Result==RK_TRUE ? "true" : "false-or-dunno") << "\n";
   return Result;
 }
 
@@ -137,8 +138,7 @@ Trivalent Effect::isNonInterfering(const Effect &That) const {
       assert(That.R && "Internal ERROR: missing Rpl in non-pure Effect");
       return R->isDisjoint(*That.R);
     case EK_InvocEffect:
-      // TODO
-      return RK_FALSE;
+      return That.isNonInterfering(*this);
     }
     break;
   case EK_WritesEffect:
@@ -155,10 +155,24 @@ Trivalent Effect::isNonInterfering(const Effect &That) const {
     if (That.Kind == EK_NoEffect) {
       return RK_TRUE;
     } else {
-      // TODO
-      return RK_FALSE;
+      return isInvokeNonInterfering(That);
     }
   } // end switch(Kind)
+}
+
+Trivalent Effect::isInvokeNonInterfering(const Effect &That) const {
+  assert(EK_InvocEffect && "Internal Error: isInvokeNonInterfering "
+                           "called on non invoke effect");
+  const EffectSummary *ES = SymbolTable::Table->getEffectSummary(FunD);
+  assert(ES && "Internal Error: invoke effect declaration without effect summary");
+  if (const ConcreteEffectSummary *CES = dyn_cast<ConcreteEffectSummary>(ES)) {
+    ConcreteEffectSummary CESTmp(*CES);
+    CESTmp.substitute(SubV); // apply substitutions
+    return CESTmp.isNonInterfering(&That);
+  } else {
+    assert(isa<VarEffectSummary>(ES) && "Internal Error: unexpected kind of effect summary");
+    return RK_DUNNO;
+  }
 }
 
 bool Effect::printEffectKind(raw_ostream &OS) const {
@@ -315,6 +329,14 @@ void EffectVector::makeMinimal() {
     }
   }
 }
+
+void EffectVector::addEffects(const ConcreteEffectSummary &ES) {
+  for(ConcreteEffectSummary::SetT::const_iterator I = ES.begin(), E = ES.end();
+        I != E; ++ I) {
+    push_back(*I);
+  }
+}
+
 //////////////////////////////////////////////////////////////////////////
 // EffectSummary
 
@@ -329,26 +351,45 @@ std::string EffectSummary::toString(std::string Separator,
 //ConcreteEffectSummary
 Trivalent ConcreteEffectSummary::covers(const Effect *Eff) const {
   assert(Eff);
-  if (Eff->isSubEffectOf(*SymbolTable::WritesLocal) == RK_TRUE)
-    return RK_TRUE;
-  if (Eff->isNoEffect())
-    return RK_TRUE;
-  // if the Eff pointer is included in the set, return it
-  if (count(const_cast<Effect*>(Eff))) {
-    return RK_TRUE;
-  }
-
   Trivalent Result = RK_FALSE;
-  SetT::const_iterator I = begin(), E = end();
-  for(; I != E; ++I) {
-    Trivalent Tmp = Eff->isSubEffectOf(*(*I));
-    if (Tmp == RK_TRUE) {
+  if (!Eff->isCompound()) {
+    if (Eff->isSubEffectOf(*SymbolTable::WritesLocal) == RK_TRUE)
       return RK_TRUE;
-    } else if (Tmp == RK_DUNNO) {
-      Result = RK_DUNNO;
+    if (Eff->isNoEffect())
+      return RK_TRUE;
+    // if the Eff pointer is included in the set, return it
+    if (count(const_cast<Effect*>(Eff))) {
+      return RK_TRUE;
     }
-  }
-  return Result;
+
+    SetT::const_iterator I = begin(), E = end();
+    for(; I != E; ++I) {
+      Trivalent Tmp = Eff->isSubEffectOf(*(*I));
+      if (Tmp == RK_TRUE) {
+        return RK_TRUE;
+      } else if (Tmp == RK_DUNNO) {
+        Result = RK_DUNNO;
+      }
+    }
+    return Result;
+  } else { // EFf is a compound effect (i.e. an invocation)
+    const FunctionDecl *FunD = Eff->getDecl();
+    const EffectSummary *ES = SymbolTable::Table->getEffectSummary(FunD);
+    SubstitutionVector *SubV = Eff->getSubV();
+    assert(SubV && "Internal Error: unexpected null-ptr");
+
+    if (!ES)
+      return RK_TRUE;
+    if (isa<VarEffectSummary>(ES))
+      return RK_DUNNO;
+
+    const ConcreteEffectSummary *CES =
+                  dyn_cast<ConcreteEffectSummary>(ES);
+    assert(CES && "Expected either Var or Concrete Summary");
+    ConcreteEffectSummary FunEffects(*CES);
+    FunEffects.substitute(SubV);
+    return covers(&FunEffects);
+  } // end if Eff is a compound effect
 }
 
 

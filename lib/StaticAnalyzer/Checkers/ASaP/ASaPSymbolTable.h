@@ -200,6 +200,7 @@ public:
 
   /// \brief Returns the effect summmary for D or null.
   const EffectSummary *getEffectSummary(const Decl *D) const;
+  EffectInclusionConstraint *getEffectInclusionConstraint(const Decl *D) const;
   const InheritanceMapT *getInheritanceMap(const ValueDecl *D) const;
   const InheritanceMapT *getInheritanceMap(const CXXRecordDecl *D) const;
   const InheritanceMapT *getInheritanceMap(QualType QT) const;
@@ -258,8 +259,12 @@ public:
 
   bool addParallelFun(const FunctionDecl *D, const SpecificNIChecker *NIC);
 
+  void updateEffectInclusionConstraint(const FunctionDecl *Def,
+                                       ConcreteEffectSummary &CES);
+
+
   /// \brief Get parameter vector from Clang::Type
-  const ParameterVector *getParameterVectorFromQualType(QualType QT);
+  const ParameterVector *getParameterVectorFromQualType(QualType QT) const;
 
   const SubstitutionVector *getInheritanceSubVec(QualType QT);
 
@@ -297,23 +302,7 @@ public:
     return addFreshName(ss.str());
   }
 
-  inline void addConstraint(Constraint *Cons) {
-    assert(Cons && "Internal Error: unexpected null-pointer");
-    ConstraintSet.insert(Cons);
-    if (EffectInclusionConstraint *EIC =
-          dyn_cast<EffectInclusionConstraint>(Cons)) {
-      addInclusionConstraint(EIC->getDef(), EIC);
-    }
-  }
-
-  /*inline void addInclusionConstraint(EffectInclusionConstraint *EIC) {
-    addConstraint(EIC);
-    addInclusionConstraint(EIC->getDef(), EIC);
-  }*/
-
-  /*inline void addNIConstraint(EffectNIConstraint *NIC) {
-    NIConstraints.insert(NIC);
-  }*/
+  void addConstraint(Constraint *Cons);
 
   void solveInclusionConstraints();
   // Default annotations
@@ -373,6 +362,7 @@ public:
   inline const ParameterVector *getParameterVector() const { return ParamVec; }
   inline const RegionNameSet *getRegionNameSet() const { return RegnNameSet; }
   inline const EffectSummary *getEffectSummary() const { return EffSum; }
+  EffectInclusionConstraint *getEffectInclusionConstraint () const;
   inline const InheritanceMapT *getInheritanceMap() const { return InheritanceMap; }
   inline const StringRef getPrologName() const { return PrologName; }
   inline RplDomain *getRplDomain() { return RplDom; }

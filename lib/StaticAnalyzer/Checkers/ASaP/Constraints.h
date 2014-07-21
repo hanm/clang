@@ -82,17 +82,20 @@ class EffectInclusionConstraint : public Constraint {
 
  public:
   EffectInclusionConstraint(StringRef ID,
+                            const ConcreteEffectSummary *Lhs,
                             const EffectSummary *Rhs,
                             const FunctionDecl *Def,
                             const Stmt *S);
 
-  virtual ~EffectInclusionConstraint() {}
+  virtual ~EffectInclusionConstraint();
 
-  void addEffect(Effect *Eff);
-  EffectVector *getLHS()  {return LHS;}
-  const EffectSummary *getRHS() const {return RHS;}
-  const FunctionDecl *getDef() const {return Def;}
-  const Stmt *getS() const {return S;}
+  void addEffect(const Effect *Eff);
+  void addEffects(const ConcreteEffectSummary &ES);
+
+  EffectVector *getLHS() { return LHS; }
+  const EffectSummary *getRHS() const { return RHS; }
+  const FunctionDecl *getDef() const { return Def; }
+  const Stmt *getS() const { return S; }
   void makeMinimal();
 
   virtual term_t getPLTerm() const;

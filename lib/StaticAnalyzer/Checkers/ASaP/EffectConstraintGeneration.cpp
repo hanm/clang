@@ -64,7 +64,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
 
   //create a constraint object
   EC = new EffectInclusionConstraint(SymT.makeFreshConstraintName(),
-                                     EffSummary, Def, S);
+                                     0, EffSummary, Def, S);
 
   if (VisitCXXInitializer) {
     if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
@@ -265,8 +265,7 @@ void EffectConstraintVisitor::checkEffectCoverage() {
 
   // for all effects in LHS
   for (EffectVector::const_iterator
-         I = LHS->begin(),
-         E = LHS->end();
+         I = LHS->begin(), E = LHS->end();
        I != E; ++I ) {
     const Effect *Eff = (*I);
     OS << "### "; Eff->print(OS); OS << "\n";
@@ -276,8 +275,8 @@ void EffectConstraintVisitor::checkEffectCoverage() {
       Trivalent RK = RHS->covers(Eff);
 
       if (RK == RK_FALSE) {
-        const Expr* Exp=Eff->getExp();
-        const Decl* D = 0;
+        const Expr *Exp=Eff->getExp();
+        const Decl *D = 0;
 
         if (const MemberExpr *MemEx = dyn_cast<const MemberExpr>(Exp)) {
           D = MemEx->getMemberDecl();
@@ -347,8 +346,8 @@ void EffectConstraintVisitor::checkEffectCoverage() {
         OS << "======= EK_InvocEffect -before call to applyTo()\n";
         SubV->applyTo(&Eff2);
         OS << "======= EK_InvocEffect -before call to isCovered by\n";
-        Trivalent RK=RHS->covers(&Eff2);
-        if(RK==RK_FALSE){
+        Trivalent RK = RHS->covers(&Eff2);
+        if (RK == RK_FALSE) {
           OS << "DEBUG:: effect not covered: Expr = ";
           Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
           OS << "\n";
@@ -362,10 +361,10 @@ void EffectConstraintVisitor::checkEffectCoverage() {
           std::string Str = Eff2.toString();
           emitEffectNotCoveredWarning(Exp, FunD, Str);
           Result = RK_FALSE;
-        }
-        else if (RK == RK_DUNNO && Result != RK_FALSE) {
+          // don't break; we want to emit errors about all uncovered effects
+        } else if (RK == RK_DUNNO && Result != RK_FALSE) {
           Result = RK_DUNNO;
-          break;
+          // don't break; we might find an RK_FALSE subsequently
         }
       } // end for all effects in concrete effect summary
       if (Result == RK_DUNNO)

@@ -208,10 +208,7 @@ private:
 public:
   Rpl(RplKind K, Trivalent FullySpecified)
      : Kind(K), FullySpecified(FullySpecified), SubV(0) {}
-  Rpl(const Rpl &That)
-      : Kind(That.Kind),
-        FullySpecified(That.FullySpecified),
-        SubV(That.SubV) {}
+  Rpl(const Rpl &That);
 
   virtual Rpl *clone() const = 0;
 

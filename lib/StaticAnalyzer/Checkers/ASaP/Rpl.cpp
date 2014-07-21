@@ -99,6 +99,18 @@ std::string Rpl::toString() const {
   return std::string(OS.str());
 }
 
+Rpl::Rpl(const Rpl &That)
+        : Kind(That.Kind),
+          FullySpecified(That.FullySpecified) {
+  if (That.SubV) {
+    SubV = new SubstitutionVector(*That.SubV);
+  } else {
+    SubV = 0;
+  }
+
+}
+
+
 Rpl::~Rpl() {
   delete SubV;
 }

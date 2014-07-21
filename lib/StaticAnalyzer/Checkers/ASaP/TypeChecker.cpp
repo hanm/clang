@@ -400,6 +400,7 @@ typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
   } else if (TypChkRes == RK_DUNNO) {
     // TODO: gen constraints.
   }
+  OS << "DEBUG:: Gonna delete LHSTypeMod\n";
   delete LHSTypeMod;
   OS << "DEBUG:: DONE with typeckeckSingleParamAssignment. Result="
      << Result <<"\n";

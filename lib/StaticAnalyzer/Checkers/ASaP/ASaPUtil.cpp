@@ -208,28 +208,26 @@ void buildSingleParamSubstitution(
         ParamI = ParamArgV->begin(), ParamE = ParamArgV->end(),
         ArgI = ArgArgV->begin(), ArgE = ArgArgV->end();
       ParamI != ParamE && ArgI != ArgE; ++ParamI, ++ArgI) {
-
-    assert(isa<ConcreteRpl>(*ParamI) && "ParamI should be of type ConcreteRpl");
-    const ConcreteRpl *ParamR = dyn_cast<ConcreteRpl>(*ParamI);
-
-    assert(ParamR && "RplVector should not contain null Rpl pointer");
-    if (ParamR->length() < 1)
-      continue;
-    if (ParamR->length() > 1)
-      // In this case, we need to implement type unification
-      // of ParamR and ArgR = *ArgI or allow explicitly giving
-      // the substitution in an annotation at the call-site
-      continue;
-    const RplElement *Elmt = ParamR->getFirstElement();
-    assert(Elmt && "Rpl should not contain null RplElement pointer");
-    if (!ParamSet.hasElement(Elmt))
-      continue;
-    // Ok find the argument
-    Substitution Sub(Elmt, *ArgI);
-    *SymbolTable::VB.OS << "DEBUG::buildSingleParamSubstitution: adding Substitution = "
-       << Sub.toString() << "\n";
-    SubV.push_back(&Sub);
-    //OS << "DEBUG:: added function param sub: " << Sub.toString() << "\n";
+    if (const ConcreteRpl *ParamR = dyn_cast<ConcreteRpl>(*ParamI)) {
+      assert(ParamR && "RplVector should not contain null Rpl pointer");
+      if (ParamR->length() < 1)
+        continue;
+      if (ParamR->length() > 1)
+        // In this case, we need to implement type unification
+        // of ParamR and ArgR = *ArgI or allow explicitly giving
+        // the substitution in an annotation at the call-site
+        continue;
+      const RplElement *Elmt = ParamR->getFirstElement();
+      assert(Elmt && "Rpl should not contain null RplElement pointer");
+      if (!ParamSet.hasElement(Elmt))
+        continue;
+      // Ok find the argument
+      Substitution Sub(Elmt, *ArgI);
+      *SymbolTable::VB.OS << "DEBUG::buildSingleParamSubstitution: adding Substitution = "
+        << Sub.toString() << "\n";
+      SubV.push_back(&Sub);
+      //OS << "DEBUG:: added function param sub: " << Sub.toString() << "\n";
+    }
   }
   *SymbolTable::VB.OS << "DEBUG::  DONE buildSingleParamSubstitution \n";
 }
@@ -280,6 +278,15 @@ void tryBuildParamSubstitutions(
     buildParamSubstitutions(Def, SymT, CalleeDecl, ArgI, ArgE, *ParamSet, SubV);
   }
   delete ParamSet;
+}
+
+Stmt *getBody(const FunctionDecl *D) {
+  const FunctionDecl *Definition;
+  if (D->hasBody(Definition)) {
+    return Definition->getBody();
+  } else {
+    return 0;
+  }
 }
 
 } // end namespace asap

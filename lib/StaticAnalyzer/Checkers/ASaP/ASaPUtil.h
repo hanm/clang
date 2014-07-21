@@ -139,12 +139,13 @@ void buildParamSubstitutions(const FunctionDecl *Def,
                              const ParameterSet &ParamSet,
                              SubstitutionVector &SubV);
 
-void tryBuildParamSubstitutions(
-        const FunctionDecl *Def,
-        SymbolTable &SymT,
-        const FunctionDecl *CalleeDecl,
-        ExprIterator ArgI, ExprIterator ArgE,
-        SubstitutionVector &SubV);
+void tryBuildParamSubstitutions(const FunctionDecl *Def,
+                                SymbolTable &SymT,
+                                const FunctionDecl *CalleeDecl,
+                                ExprIterator ArgI, ExprIterator ArgE,
+                                SubstitutionVector &SubV);
+
+Stmt *getBody(const FunctionDecl *D);
 
 } // end namespace asap
 } // end namespace clang

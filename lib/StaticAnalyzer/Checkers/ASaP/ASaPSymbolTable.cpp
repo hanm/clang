@@ -377,10 +377,10 @@ RplDomain *SymbolTable::buildDomain(const Decl *D) {
         OSv2 << "not a value decl\n";
 
       RplDomain *Parent = SymTable[EnclosingDecl]->getRplDomain();
-        
+
       if (!Parent)
         Parent = buildDomain(EnclosingDecl);
-     
+
       RplDomain *Result = new RplDomain(RNV, PV, Parent);
       assert(SymTable[D] && "SymTable entry for declation does not exist");
       SymTable[D]->setRplDomain(Result);
@@ -398,6 +398,13 @@ const EffectSummary *SymbolTable::getEffectSummary(const Decl *D) const {
     return 0;
   else
     return SymTable.lookup(D)->getEffectSummary();
+}
+
+EffectInclusionConstraint *SymbolTable::getEffectInclusionConstraint(const Decl *D) const {
+  if (!SymTable.lookup(D))
+    return 0;
+  else
+    return SymTable.lookup(D)->getEffectInclusionConstraint();
 }
 
 bool SymbolTable::setType(const Decl* D, ASaPType *T) {
@@ -590,6 +597,19 @@ addParallelFun(const FunctionDecl *D, const SpecificNIChecker *NIC) {
   }
 }
 
+void SymbolTable::updateEffectInclusionConstraint(const FunctionDecl *Def,
+                                                  ConcreteEffectSummary &CES) {
+  EffectInclusionConstraint *EIC = getEffectInclusionConstraint(Def);
+  if (EIC) {
+    EIC->addEffects(CES);
+  } else {
+    EIC = new EffectInclusionConstraint(makeFreshConstraintName(),
+                                        &CES, getEffectSummary(Def),
+                                        Def, getBody(Def));
+    addConstraint(EIC);
+  }
+}
+
 bool SymbolTable::addInclusionConstraint(const FunctionDecl *FunD,
                                          EffectInclusionConstraint *EIC) {
   if (!SymTable.lookup(FunD))
@@ -611,7 +631,7 @@ assertzHasEffectSummary(const NamedDecl *NDec,
   assertzTermProlog(HasEffSumT, "Failed to assert 'has_effect_summary' to Prolog facts");
 }
 
-const ParameterVector *SymbolTable::getParameterVectorFromQualType(QualType QT) {
+const ParameterVector *SymbolTable::getParameterVectorFromQualType(QualType QT) const {
   const ParameterVector *ParamVec = 0;
   if (QT->isReferenceType()) {
     ParamVec = getParameterVectorFromQualType(QT->getPointeeType());
@@ -643,8 +663,8 @@ getInheritanceSubVec(QualType QT) {
 
 static void emitConstraintSolution(EffectInclusionConstraint *EC,
                                    char* Solution){
-  const FunctionDecl *Func=EC->getDef();
-  const Stmt  *S=EC->getS();
+  const FunctionDecl *Func = EC->getDef();
+  const Stmt  *S = EC->getS();
   StringRef BugName = "Effect Inclusion Constraint Solution";
 
   std::string BugStr;
@@ -658,6 +678,15 @@ static void emitConstraintSolution(EffectInclusionConstraint *EC,
                              SymbolTable::VB.AC,
                              S, Func, Str, BugName, false);
 
+}
+
+void SymbolTable::addConstraint(Constraint *Cons) {
+  assert(Cons && "Internal Error: unexpected null-pointer");
+  ConstraintSet.insert(Cons);
+  if (EffectInclusionConstraint *EIC =
+        dyn_cast<EffectInclusionConstraint>(Cons)) {
+    addInclusionConstraint(EIC->getDef(), EIC);
+  }
 }
 
 void SymbolTable::solveInclusionConstraints() {
@@ -885,8 +914,7 @@ addToParameterVector(ParameterVector *&PV) {
   }
 }
 
-const NamedRplElement *SymbolTableEntry::
-lookupRegionName(StringRef Name) {
+const NamedRplElement *SymbolTableEntry::lookupRegionName(StringRef Name) {
   if (!RegnNameSet)
     return 0;
   return RegnNameSet->lookup(Name);
@@ -899,8 +927,7 @@ lookupParameterName(StringRef Name) {
   return ParamVec->lookup(Name);
 }
 
-void SymbolTableEntry::
-addRegionName(StringRef Name, StringRef PrologName) {
+void SymbolTableEntry::addRegionName(StringRef Name, StringRef PrologName) {
   OSv2 << "in addRegionName 1\n";
   OSv2 << "before check\n";
   if(RegnNameSet == NULL)
@@ -919,8 +946,7 @@ addRegionName(StringRef Name, StringRef PrologName) {
   OSv2 << "addRegionName is done\n";
 }
 
-void SymbolTableEntry::
-addParameterName(StringRef Name, StringRef PrologName) {
+void SymbolTableEntry::addParameterName(StringRef Name, StringRef PrologName) {
   if (!ParamVec)
     ParamVec = new ParameterVector();
 
@@ -931,19 +957,27 @@ bool SymbolTableEntry::addInclusionConstraint(EffectInclusionConstraint *EIC) {
   if (!EffSum || !isa<VarEffectSummary>(EffSum))
     return false;
   VarEffectSummary *VES = dyn_cast<VarEffectSummary>(EffSum);
+  assert(VES && "Internal Error: unexpected kind of effect summary");
   VES->setInclusionConstraint(EIC);
   return true;
 }
 
-void SymbolTableEntry::
-deleteEffectSummary() {
+EffectInclusionConstraint *SymbolTableEntry::getEffectInclusionConstraint() const {
+  if (!EffSum || !isa<VarEffectSummary>(EffSum))
+    return 0;
+  VarEffectSummary *VES = dyn_cast<VarEffectSummary>(EffSum);
+  assert(VES && "Internal Error: unexpected kind of effect summary");
+  return VES->getInclusionConstraint();
+}
+
+void SymbolTableEntry::deleteEffectSummary() {
   delete EffSum;
   EffSum = 0;
 }
 
-bool SymbolTableEntry::
-addBaseTypeAndSub(const RecordDecl *BaseRD, SymbolTableEntry *BaseTE,
-                  SubstitutionVector *&SubV) {
+bool SymbolTableEntry::addBaseTypeAndSub(const RecordDecl *BaseRD,
+                                         SymbolTableEntry *BaseTE,
+                                         SubstitutionVector *&SubV) {
   // If we're not adding a substitution then skip it altogether.
   if (!SubV)
     return true;
@@ -964,8 +998,7 @@ getSubVec(const RecordDecl *Base) const {
   return (*InheritanceMap)[Base].second;
 }
 
-void SymbolTableEntry::
-computeInheritanceSubVec() {
+void SymbolTableEntry::computeInheritanceSubVec() {
 
   if (!ComputedInheritanceSubVec
       && InheritanceMap && InheritanceMap->size() > 0) {
@@ -992,8 +1025,7 @@ computeInheritanceSubVec() {
   ComputedInheritanceSubVec = true;
 }
 
-const SubstitutionVector *SymbolTableEntry::
-getInheritanceSubVec() {
+const SubstitutionVector *SymbolTableEntry::getInheritanceSubVec() {
   if (!InheritanceMap)
     return 0;
   if (!ComputedInheritanceSubVec)
