@@ -342,6 +342,7 @@ class SymbolTableEntry {
   ParameterVector *ParamVec;
   RegionNameSet *RegnNameSet;
   EffectSummary *EffSum;
+  RplDomain *RplDom;
 
   /// \brief Inheritance map for declaration
   InheritanceMapT *InheritanceMap;
@@ -374,6 +375,7 @@ public:
   inline const EffectSummary *getEffectSummary() const { return EffSum; }
   inline const InheritanceMapT *getInheritanceMap() const { return InheritanceMap; }
   inline const StringRef getPrologName() const { return PrologName; }
+  inline RplDomain *getRplDomain() { return RplDom; }
 
   // Setters.
   inline void setType(ASaPType *T) { Typ = T; }
@@ -381,6 +383,7 @@ public:
   void addToParameterVector(ParameterVector *&PV);
   inline void setRegionNameSet(RegionNameSet *RNS) { RegnNameSet = RNS; }
   inline void setEffectSummary(EffectSummary *ES) { EffSum = ES; }
+  inline void setRplDomain(RplDomain *RplD) { RplDom = RplD; }
 
   // Lookup.
   const NamedRplElement *lookupRegionName(llvm::StringRef Name);

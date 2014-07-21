@@ -371,13 +371,20 @@ RplDomain *SymbolTable::buildDomain(const Decl *D) {
         OSv2 << "after makeFreshRVName " << RV <<" \n";
         assert(SymTable[EnclosingDecl] &&
                "SymTable entry for EnclosingDecl does not exist");
-        SymTable[EnclosingDecl]->addRegionName(Name, RV);
+        SymTable[EnclosingDecl]->addRegionName(RV, RV);
       }
       else
         OSv2 << "not a value decl\n";
-      OSv2 << "Before recursive call to buildDomain\n";
-      RplDomain *Parent = buildDomain(EnclosingDecl);
-      return new RplDomain(RNV, PV, Parent);
+
+      RplDomain *Parent = SymTable[EnclosingDecl]->getRplDomain();
+        
+      if (!Parent)
+        Parent = buildDomain(EnclosingDecl);
+     
+      RplDomain *Result = new RplDomain(RNV, PV, Parent);
+      assert(SymTable[D] && "SymTable entry for declation does not exist");
+      SymTable[D]->setRplDomain(Result);
+      return Result;
     }
     else
       DC = DC->getParent();
