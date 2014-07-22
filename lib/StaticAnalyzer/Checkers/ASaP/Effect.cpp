@@ -418,12 +418,16 @@ Trivalent ConcreteEffectSummary::covers(const EffectSummary *Sum) const {
 Trivalent ConcreteEffectSummary::isNonInterfering(const Effect *Eff) const {
   if (!Eff || Eff->isNoEffect())
     return RK_TRUE;
+  Trivalent Result = RK_TRUE;
   SetT::const_iterator I = begin(), E = end();
   for(; I != E; ++I) {
-    if (Eff->isNonInterfering(*(*I)) == RK_FALSE)
+    Trivalent TmpRes = Eff->isNonInterfering(*(*I));
+    if (TmpRes == RK_FALSE)
       return RK_FALSE;
+    else if (TmpRes == RK_DUNNO)
+      Result = RK_DUNNO;
   }
-  return RK_TRUE;
+  return Result;
 
 }
 
@@ -439,9 +443,10 @@ isNonInterfering(const EffectSummary *Sum) const {
   Trivalent Result = RK_TRUE;
   SetT::const_iterator I = CES->begin(), E = CES->end();
   for(; I != E; ++I) {
-    if (this->isNonInterfering(*I) == RK_FALSE)
+    Trivalent TmpRes = this->isNonInterfering(*I);
+    if (TmpRes == RK_FALSE)
       return RK_FALSE;
-    else if (this->isNonInterfering(*I) == RK_DUNNO)
+    else if (TmpRes == RK_DUNNO)
       Result = RK_DUNNO;
   }
   return Result;

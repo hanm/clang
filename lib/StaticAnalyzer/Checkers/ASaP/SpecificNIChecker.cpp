@@ -249,15 +249,22 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
     EffectSummaryVector::iterator J = I+1;
     while (J != E) {
       if((*I)){
+        OS << "DEBUG:: checking non-interference between:\n"
+           << (*I)->toString() << " and " << (*J)->toString() << "\n";
         Trivalent RK = (*I)->isNonInterfering(*J);
+        OS << "DEBUG:: Non-Interference check returned: ";
         if (RK == RK_FALSE) {
+          OS << "False\n";
           assert(*J);
           emitInterferingEffects(Exp, *(*I), *(*J));
           Result = false;
         } else if (RK == RK_DUNNO) {
+          OS << "DUNNO\n";
           StringRef Name = SymT->makeFreshConstraintName();
           EffectNIConstraint *NIC = new EffectNIConstraint(Name, *I, *J);
           SymT->addConstraint(NIC);
+        } else {
+          OS << "True\n";
         }
       }
       ++J;

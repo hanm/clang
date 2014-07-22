@@ -304,7 +304,10 @@ public:
 
   void addConstraint(Constraint *Cons);
 
-  void solveInclusionConstraints();
+  void emitFacts() const;
+  void emitConstraints() const;
+  void solveConstraints() const;
+
   // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
   RplVector *makeDefaultBaseArgs(const RecordDecl *Derived, long NumArgs);

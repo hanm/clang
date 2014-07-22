@@ -237,7 +237,7 @@ public:
   virtual Trivalent isDisjoint(const Rpl &That) const = 0;
 
   std::string toString() const;
-  virtual void print(llvm::raw_ostream &OS) const = 0;
+  virtual void print(llvm::raw_ostream &OS) const;
   virtual void join(Rpl *That) = 0;
   virtual void substitute(const Substitution *S) = 0;
   virtual bool operator == (const RplElement &That) const = 0;

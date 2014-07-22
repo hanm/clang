@@ -99,6 +99,12 @@ std::string Rpl::toString() const {
   return std::string(OS.str());
 }
 
+void Rpl::print(llvm::raw_ostream &OS) const {
+  if (SubV) {
+    SubV->print(OS);
+  }
+}
+
 Rpl::Rpl(const Rpl &That)
         : Kind(That.Kind),
           FullySpecified(That.FullySpecified) {
@@ -301,8 +307,10 @@ void ConcreteRpl::print(raw_ostream &OS) const {
     ++I;
   }
   for (; I != E; ++I) {
-    OS << Rpl::RPL_SPLIT_CHARACTER << (*I)->getName();
+    OS << Rpl::RPL_SPLIT_CHARACTER
+       << (*I)->getName();
   }
+  Rpl::print(OS);
 }
 
 Trivalent ConcreteRpl::isUnder(const Rpl &That) const {
@@ -504,6 +512,7 @@ void VarRpl::substitute(const Substitution *S) {
 
 void VarRpl::print(raw_ostream &OS) const {
   OS << Name;
+  Rpl::print(OS);
 }
 
 term_t VarRpl::getPLTerm() const {

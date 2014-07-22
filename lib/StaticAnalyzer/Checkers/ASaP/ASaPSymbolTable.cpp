@@ -135,7 +135,8 @@ isSpecialRplElement(const llvm::StringRef& Str) {
 /// Non-Static Functions
 SymbolTable::SymbolTable()
     : AnnotScheme(0), ParamIDNumber(0),
-      RegionIDNumber(0), DeclIDNumber(0) {
+      RegionIDNumber(0), DeclIDNumber(0),
+      RVIDNumber(0), ConstraintIDNumber(0) {
   // FIXME: make this static like the other default Regions etc
   ParamRplElement Param("P","p");
   BuiltinDefaultRegionParameterVec = new ParameterVector(Param);
@@ -689,7 +690,7 @@ void SymbolTable::addConstraint(Constraint *Cons) {
   }
 }
 
-void SymbolTable::solveInclusionConstraints() {
+void SymbolTable::emitFacts() const {
   //PL_action(PL_ACTION_TRACE);
   //iterate through symbol table entries and emit facts
   for (SymbolTableMapT::const_iterator
@@ -729,8 +730,11 @@ void SymbolTable::solveInclusionConstraints() {
       } // end isa<VarEffectSummary>
     }
   } // end for-all symbol table entries
-  OSv2 << "DEBUG:: Done emmitting rgn_param facts, gonna do esi_constraints next\n";
+  OSv2 << "DEBUG:: Done emmitting facts to Prolog\n";
+}
 
+void SymbolTable::emitConstraints() const {
+  //PL_action(PL_ACTION_TRACE);
   // Emit Constraints
   for (ConstraintsSetT::iterator
           I = ConstraintSet.begin(),
@@ -745,6 +749,11 @@ void SymbolTable::solveInclusionConstraints() {
       OSv2 << "DEBUG:: Asserted Constraint to Prolog: " << (*I)->toString() << "\n";
     }
   }
+}
+
+void SymbolTable::solveConstraints() const {
+  emitFacts();
+  emitConstraints();
   //loop to call esi_collect (effect inference)
   for (ConstraintsSetT::iterator
           I = ConstraintSet.begin(),

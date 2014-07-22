@@ -155,6 +155,8 @@ public:
 
   void runCheckers(TranslationUnitDecl *TUDecl,
                    bool DoEffectInference, bool DoFullInference) const {
+    assert(!(DoEffectInference && DoFullInference) &&
+           "Either effect or full inference can be performed");
     os << "DEBUG:: starting ASaP TBB Parallelism Detection!\n";
     DetectTBBParallelism DetectTBBPar;
     DetectTBBPar.TraverseDecl(TUDecl);
@@ -217,19 +219,8 @@ public:
     }
 
     if (DoEffectInference) {
-      // Make sure asap.pl exists at the expected location.
-      FILE *File = fopen("/opt/lib/asap.pl", "r");
-      if (!File) {
-        fclose(File);
-        assert(File && "Prolog rules file does not exist");
-      }
-      // Consult the asap.pl file
-      predicate_t Consult = PL_predicate("consult", 1, "user");
-      term_t Plfile = PL_new_term_ref();
-      PL_put_atom_chars(Plfile, "/opt/lib/asap.pl");
-      PL_call_predicate(NULL, PL_Q_NORMAL, Consult, Plfile);
-
-      SymbolTable::Table->solveInclusionConstraints();
+      setupProlog();
+      SymbolTable::Table->solveConstraints();
     } else {
       os << "DEBUG:: starting ASaP Non-Interference Checking\n";
       StmtVisitorInvoker<NonInterferenceChecker> NonIChecker;
@@ -241,9 +232,25 @@ public:
         return;
       }
       if (DoFullInference) {
+        setupProlog();
+        SymbolTable::Table->solveConstraints();
         // TODO
       }
     } // end else (!DoEffectInference)
+  }
+
+  void setupProlog() const {
+    // Make sure asap.pl exists at the expected location.
+    FILE *File = fopen("/opt/lib/asap.pl", "r");
+    if (!File) {
+      fclose(File);
+      assert(File && "Prolog rules file does not exist");
+    }
+    // Consult the asap.pl file
+    predicate_t Consult = PL_predicate("consult", 1, "user");
+    term_t Plfile = PL_new_term_ref();
+    PL_put_atom_chars(Plfile, "/opt/lib/asap.pl");
+    PL_call_predicate(NULL, PL_Q_NORMAL, Consult, Plfile);
   }
 
 }; // end class SafeParallelismChecker
