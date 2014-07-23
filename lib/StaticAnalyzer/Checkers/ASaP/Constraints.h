@@ -57,16 +57,17 @@ public:
 
 // class that represents an Rpl inclusion constraint.
 class RplInclusionConstraint : public Constraint {
-  const Rpl &LHS;
-  const Rpl &RHS;
+  const Rpl *LHS;
+  const Rpl *RHS;
 
 public:
   RplInclusionConstraint(StringRef ID, const Rpl &LHS, const Rpl &RHS)
                         : Constraint(CK_RplInclusion, ID),
-                          LHS(*LHS.clone()), RHS(*RHS.clone()) {}
+                          LHS(LHS.clone()), RHS(RHS.clone()) {}
 
   virtual term_t getPLTerm() const;
   virtual void print(llvm::raw_ostream &OS) const;
+  virtual ~RplInclusionConstraint();
 
   static bool classof(const Constraint *C) {
     return C->getKind() == CK_RplInclusion;
@@ -114,14 +115,15 @@ class EffectNIConstraint : public Constraint {
 
  public:
   EffectNIConstraint(StringRef ID,
-                     const EffectSummary *ES1,
-                     const EffectSummary *ES2);
+                     const EffectSummary &ES1,
+                     const EffectSummary &ES2);
 
   const EffectSummary *getLHS() { return LHS; }
   const EffectSummary *getRHS() { return RHS; }
 
   virtual term_t getPLTerm() const;
   virtual void print(llvm::raw_ostream &OS) const;
+  virtual ~EffectNIConstraint();
 
   static bool classof(const Constraint *C) {
     return C->getKind() == CK_EffectNonInterference;

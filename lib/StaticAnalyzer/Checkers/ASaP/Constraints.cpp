@@ -37,7 +37,7 @@ term_t RplInclusionConstraint::getPLTerm() const {
   functor_t RICFunctor =
     PL_new_functor(PL_new_atom(PL_RIConstraint.c_str()), 3);
   int Res = PL_cons_functor(RICTerm, RICFunctor, getIDPLTerm(),
-                            LHS.getPLTerm(), RHS.getPLTerm());
+                            LHS->getPLTerm(), RHS->getPLTerm());
   assert(Res && "Failed to build 'esi_constraint' Prolog term");
 
   return RICTerm;
@@ -45,10 +45,14 @@ term_t RplInclusionConstraint::getPLTerm() const {
 
 void RplInclusionConstraint::print(llvm::raw_ostream &OS) const {
   OS << "RplInclusionConstraint: "
-     << LHS.toString() << " <=(Incl) "
-     << RHS.toString();
+     << LHS->toString() << " <=(Incl) "
+     << RHS->toString();
 }
 
+RplInclusionConstraint::~RplInclusionConstraint() {
+  delete LHS;
+  delete RHS;
+}
 //////////////////////////////////////////////////////////////////////////
 //  EffectInclusionConstraint
 
@@ -139,8 +143,12 @@ void EffectInclusionConstraint::makeMinimal() {
 //  EffectNIConstraint
 
 EffectNIConstraint::
-EffectNIConstraint(StringRef ID, const EffectSummary *ES1, const EffectSummary *ES2)
-                  : Constraint(CK_EffectNonInterference, ID), LHS(ES1), RHS(ES2) {}
+EffectNIConstraint( StringRef ID,
+                    const EffectSummary &ES1,
+                    const EffectSummary &ES2)
+                  : Constraint(CK_EffectNonInterference, ID),
+                    LHS(ES1.clone()),
+                    RHS(ES2.clone()) {}
 
 term_t EffectNIConstraint::getPLTerm() const {
   term_t ENITerm = PL_new_term_ref();
@@ -161,6 +169,11 @@ void EffectNIConstraint::print(llvm::raw_ostream &OS) const {
   assert(RHS && "Unexpected null-pointer RHS in EffectNIConstraint");
   OS << "EffectNonInterferenceConstraint: "
      << LHS->toString() << " # " << RHS->toString();
+}
+
+EffectNIConstraint::~EffectNIConstraint() {
+  delete LHS;
+  delete RHS;
 }
 
 } // end namespace asap

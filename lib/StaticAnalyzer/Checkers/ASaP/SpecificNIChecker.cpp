@@ -261,7 +261,7 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
         } else if (RK == RK_DUNNO) {
           OS << "DUNNO\n";
           StringRef Name = SymT->makeFreshConstraintName();
-          EffectNIConstraint *NIC = new EffectNIConstraint(Name, *I, *J);
+          EffectNIConstraint *NIC = new EffectNIConstraint(Name, **I, **J);
           SymT->addConstraint(NIC);
         } else {
           OS << "True\n";
@@ -332,7 +332,7 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   } else if (RK == RK_DUNNO) {
     //    assert(false && "Found variable effect summary");
     StringRef Name = SymT->makeFreshConstraintName();
-    EffectNIConstraint *NIC = new EffectNIConstraint(Name, ESptr, ESptr);
+    EffectNIConstraint *NIC = new EffectNIConstraint(Name, *ESptr, *ESptr);
     SymT->addConstraint(NIC);
   }
   // 4. Check effect coverage
@@ -385,7 +385,7 @@ bool TBBParallelForIndexNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   } else if (RK == RK_DUNNO) {
     //assert(false && "Found variable effect summary");
     StringRef Name = SymT->makeFreshConstraintName();
-    EffectNIConstraint *NIC = new EffectNIConstraint(Name, ESptr, ESptr);
+    EffectNIConstraint *NIC = new EffectNIConstraint(Name, *ESptr, *ESptr);
     SymT->addConstraint(NIC);
   }
   // 4. Check effect coverage
