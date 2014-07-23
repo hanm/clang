@@ -196,7 +196,7 @@ public:
   /// \brief Returns the region names declarations for D or null.
   const RegionNameSet *getRegionNameSet(const Decl *D) const;
   RegionNameVector *getRegionNameVector(const Decl *D) const;
-  RplDomain *buildDomain(const Decl *D) ;
+  RplDomain *buildDomain(const ValueDecl *D) ;
 
   /// \brief Returns the effect summmary for D or null.
   const EffectSummary *getEffectSummary(const Decl *D) const;
@@ -206,6 +206,7 @@ public:
   const InheritanceMapT *getInheritanceMap(QualType QT) const;
   const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;
   const StringRef getPrologName(const Decl *D) const;
+  const RplDomain *getRplDomain(const Decl *D);
 
   inline const SpecificNIChecker *getNIChecker(const FunctionDecl *FD) const {
     return ParTable.lookup(FD);
@@ -250,7 +251,7 @@ public:
 
   bool hasBase(const Decl *D, const RecordDecl *Base) const;
   /// \brief Adds a region name to declaration D. Return false if name exists.
-  bool addRegionName(const Decl *D, llvm::StringRef Name);
+  bool addRegionName(const Decl *D, llvm::StringRef Name, bool MakePrologName = true);
   /// \brief Adds a region parameter to D. Return false if name exists.
   bool addParameterName(const Decl *D, llvm::StringRef Name);
 
@@ -329,6 +330,7 @@ public:
 class SymbolTableEntry {
   friend class SymbolTable;
   // Fields
+  /// \brief Unique name for declaration used for prolog
   StringRef PrologName;
   ASaPType *Typ;
   ParameterVector *ParamVec;
@@ -350,7 +352,7 @@ class SymbolTableEntry {
   void computeInheritanceSubVec();
 
 public:
-  SymbolTableEntry(StringRef PrologName);
+  SymbolTableEntry(StringRef PrologName, const RplDomain *ParentDom = 0);
   ~SymbolTableEntry();
 
   // Predicates.

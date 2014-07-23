@@ -62,16 +62,6 @@ helperMakeVarType(const ValueDecl *D, long ArgNum) {
     // 1. Create new RplVarElement
     VarRpl *RplVar = SymT.createFreshRplVar(D);
     OSv2 << "DEBUG:: RplVar = " << RplVar->toString() << "\n";
-    Rpl *Rpl = RplVar;
-    OSv2 << "DEBUG:: Rpl = " << Rpl->toString() << "\n";
-
-    RplDomain *Dm = SymT.buildDomain(D);
-    if (Dm) {
-      OSv2 << "Printing domain ....\n";
-      Dm->print(OSv2);
-      RplVar->setDomain(Dm);
-    }
-
     // 2. Push it back
     RplVec.push_back(RplVar);
   }

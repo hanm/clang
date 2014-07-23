@@ -74,22 +74,12 @@ bool Rpl::isValidRegionName(const llvm::StringRef& Str) {
 }
 
 /// Member functions
-inline void Rpl::addSubstitution(const Substitution *S) {
-  if (!S)
-    return;
-  if (!SubV)
-    SubV = new SubstitutionVector();
-  SubV->push_back(S);
+inline void Rpl::addSubstitution(const Substitution &S) {
+  SubV.push_back(S);
 }
 
 term_t Rpl::getSubVPLTerm() const {
-  if (SubV) {
-    return SubV->getPLTerm();
-  } else {
-    term_t SubList = PL_new_term_ref();
-    PL_put_nil(SubList);
-    return SubList;
-  }
+    return SubV.getPLTerm();
 }
 
 std::string Rpl::toString() const {
@@ -100,57 +90,67 @@ std::string Rpl::toString() const {
 }
 
 void Rpl::print(llvm::raw_ostream &OS) const {
-  if (SubV) {
-    SubV->print(OS);
+  if (SubV.size() > 0) {
+    SubV.print(OS);
   }
 }
 
 Rpl::Rpl(const Rpl &That)
         : Kind(That.Kind),
           FullySpecified(That.FullySpecified) {
-  if (That.SubV) {
-    SubV = new SubstitutionVector(*That.SubV);
-  } else {
-    SubV = 0;
-  }
-
-}
-
-
-Rpl::~Rpl() {
-  delete SubV;
+  SubV = That.SubV;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 //// RplDomain
 
-RplDomain::RplDomain(RegionNameVector *RV, const ParameterVector *PV, RplDomain *P){
-  Regions = RV;
+RplDomain::RplDomain(RegionNameVector *RV,
+                     const ParameterVector *PV,
+                     const RplDomain *P) {
+  if (RV) {
+    Regions = new RegionNameVector(*RV);
+  } else {
+    Regions = new RegionNameVector();
+  }
   Params = PV;
   Parent = P;
 }
 
-void RplDomain::addRegion(NamedRplElement *R){
+RplDomain::RplDomain(const RplDomain &Dom)
+                    : Params(Dom.Params), Parent(Dom.Parent) {
+  if (Dom.Regions) {
+    Regions = new RegionNameVector(*Dom.Regions);
+  } else {
+    Regions = new RegionNameVector();
+  }
+}
+void RplDomain::addRegion(const NamedRplElement &R) {
   Regions->push_back(R);
 }
 
 
 void RplDomain::print (llvm::raw_ostream &OS) const {
-  OS << "----------------------------\n";
-  OS << "Params: \n";
-  if(Params)
+  OS << "{";
+  if (Params && Params->size() > 0) {
+    OS << "params[[";
     Params->print(OS);
-  OS << "\n";
-  OS << "Regions: \n";
-  if(Regions)
+    OS << "]], ";
+  }
+  if (Regions && Regions->size() > 0) {
+    OS << "regions[[";
     Regions->print(OS);
-  OS << "\n";
-  OS << "**Parent**\n";
-  if (Parent)
+    OS << "]], ";
+  }
+  if (Parent) {
+    OS << "parent";
     Parent->print(OS);
-  OS << "----------------------------\n";
+  }
+  OS << "}";
 }
 
+RplDomain::~RplDomain() {
+  delete Regions;
+}
 ///////////////////////////////////////////////////////////////////////////////
 //// RplRef
 
@@ -286,8 +286,7 @@ term_t ConcreteRpl::getPLTerm() const {
   // 1. build RPL element list
   term_t RplElList = getRplElementsPLTerm();
   // 2. build (empty) substitution list
-  term_t SubList = PL_new_term_ref();
-  PL_put_nil(SubList);
+  term_t SubList = getSubVPLTerm();
   // 3. combine the two lists into a functor term
   int Res = PL_cons_functor(Result, RplFunctor, RplElList, SubList);
   assert(Res && "Failed to create prolog term_t for RPL");
@@ -400,7 +399,7 @@ void ConcreteRpl::substitute(const Substitution *S) {
       OSv2 << "'\n";
     } else {
       assert(isa<VarRpl>(&ToRpl) && "Unexpected kind of Rpl");
-      addSubstitution(S);
+      addSubstitution(*S);
     }
   }
   os << "DEBUG:: after substitution(" << FromEl.getName() << "<-";
@@ -507,24 +506,26 @@ void VarRpl::join(Rpl *That) {
 }
 
 void VarRpl::substitute(const Substitution *S) {
-  addSubstitution(S);
+  if (S)
+    addSubstitution(*S);
 }
 
 void VarRpl::print(raw_ostream &OS) const {
-  OS << Name;
+  OS << "VarRpl:" << Name;
   Rpl::print(OS);
+  if (Domain)
+    Domain->print(OS);
 }
 
 term_t VarRpl::getPLTerm() const {
   term_t Result = PL_new_term_ref();
-  functor_t RplFunctor = PL_new_functor(PL_new_atom(PL_VarRpl.c_str()), 1 /*2*/);
-  // Name TODO
-  //term_t RplName
-
+  functor_t RplFunctor = PL_new_functor(PL_new_atom(PL_VarRpl.c_str()), 2);
+  // Name
+  term_t RplElList = getRplElementsPLTerm();
   // Subs
   term_t SubList = getSubVPLTerm();
   // Build functor term
-  int Res = PL_cons_functor(Result, RplFunctor, /*RplName,*/ SubList);
+  int Res = PL_cons_functor(Result, RplFunctor, RplElList, SubList);
   assert(Res && "Failed to create prolog term_t for RPL");
   return Result;
 }
@@ -532,7 +533,11 @@ term_t VarRpl::getPLTerm() const {
 term_t VarRpl::getRplElementsPLTerm() const {
   term_t RplElList = PL_new_term_ref();
   PL_put_nil(RplElList);
-  // TODO : Add RPLVAR unique name to list
+  term_t RplEl = PL_new_term_ref();
+  PL_put_atom_chars(RplEl, Name.data());
+  bool Res = PL_cons_list(RplElList, RplEl, RplElList);
+  assert(Res && "Failed to add RPL element to Prolog list term");
+
   return RplElList;
 }
 ///////////////////////////////////////////////////////////////////////////////
@@ -586,6 +591,36 @@ void ParameterVector::take(ParameterVector *&PV) {
   delete PV;
   PV = 0;
 }
+
+void ParameterVector::print (llvm::raw_ostream& OS) const {
+  if(size() <= 0)
+    return;
+
+  VectorT::const_iterator I = begin(), E = end();
+  if (I != E) {
+    const ParamRplElement *El = *I;
+    OS << El->getName();
+    ++I;
+  }
+  for(; I != E; ++I) {
+    const ParamRplElement *El = *I;
+    OS << ", " << El->getName();
+  }
+}
+
+void ParameterVector::assertzProlog () const {
+  for (ParameterVector::const_iterator
+          PI = begin(), PE = end();
+        PI != PE; ++PI) {
+    term_t ParamT = PL_new_term_ref();
+    functor_t RPFunctor =
+      PL_new_functor(PL_new_atom(PL_RgnParam.c_str()), 1);
+    int Res = PL_cons_functor(ParamT, RPFunctor, (*PI)->getPLTerm());
+    assert(Res && "Failed to create 'rgn_param' Prolog term");
+    assertzTermProlog(ParamT,"Failed to assert 'rgn_param' to Prolog facts");
+  }
+}
+
 
 ///////////////////////////////////////////////////////////////////////////////
 //// RplVector

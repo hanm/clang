@@ -25,6 +25,7 @@
 #include "ASaPUtil.h"
 #include "OwningPtrSet.h"
 #include "OwningVector.h"
+#include "Substitution.h"
 
 namespace clang {
 namespace asap {
@@ -32,13 +33,17 @@ namespace asap {
 class RegionNameVector;
 
 class RplDomain {
-  RegionNameVector *Regions;
-  const ParameterVector *Params;
-  RplDomain *Parent;
+  RegionNameVector *Regions;     // owned
+  const ParameterVector *Params; // not owned
+  const RplDomain *Parent;       // not owned
 
 public:
-  RplDomain(RegionNameVector *RV, const ParameterVector *PV, RplDomain *Parent);
-  void addRegion(NamedRplElement *R);
+  RplDomain(RegionNameVector *RV,
+            const ParameterVector *PV,
+            const RplDomain *Parent);
+  RplDomain(const RplDomain &Dom);
+  virtual ~RplDomain();
+  void addRegion(const NamedRplElement &R);
 
   void print (llvm::raw_ostream &OS) const;
 };
@@ -203,16 +208,15 @@ public:
 private:
   const RplKind Kind;
   Trivalent FullySpecified;
-  SubstitutionVector *SubV;
+  SubstitutionVector SubV;
 
 public:
   Rpl(RplKind K, Trivalent FullySpecified)
-     : Kind(K), FullySpecified(FullySpecified), SubV(0) {}
+     : Kind(K), FullySpecified(FullySpecified) {}
   Rpl(const Rpl &That);
-
+  virtual ~Rpl() {}
   virtual Rpl *clone() const = 0;
 
-  virtual ~Rpl();
 
   RplKind getKind() const { return Kind; }
   Trivalent isFullySpecified() const { return FullySpecified; }
@@ -222,7 +226,7 @@ public:
     return !(*this==That);
   }
 
-  void addSubstitution(const Substitution *S);
+  void addSubstitution(const Substitution &S);
   term_t getSubVPLTerm() const;
 
   // Nesting (Under)
@@ -423,8 +427,8 @@ private:
   RplDomain *Domain;
 
 public:
-  VarRpl(StringRef ID)
-        : Rpl(RPLK_Var, RK_DUNNO), Name(ID), Domain(0) {}
+  VarRpl(StringRef ID, RplDomain *Dom)
+        : Rpl(RPLK_Var, RK_DUNNO), Name(ID), Domain(Dom) {}
 
   VarRpl(const VarRpl &That)
         : Rpl(That), Name(That.Name), Domain(That.Domain) {}
@@ -433,7 +437,7 @@ public:
     return new VarRpl(*this);
   }
 
-  inline void setDomain(RplDomain *D) { Domain = D;}
+  //inline void setDomain(RplDomain *D) { Domain = D;}
   inline RplDomain* getDomain() { return Domain;}
 
   /// \brief Print the Rpl to an output stream.
@@ -536,35 +540,9 @@ public:
 
   void take(ParameterVector *&PV);
 
-  void print (llvm::raw_ostream& OS) const {
-    // OS << "Printing Params vector..."<< size() <<"\n";
-    if(!size())
-      return;
-    VectorT::const_iterator I = begin(), E = end();
-    if (I != E){
-      const ParamRplElement *El = *I;
-      OS << El->getName();
-      ++I;
-    }
-    for(; I != E; ++I) {
-      const ParamRplElement *El = *I;
-      OS << ", " << El->getName();
-    }
-    OS << "\n";
-  }
+  void print (llvm::raw_ostream& OS) const;
 
-  void assertzProlog () const {
-    for (ParameterVector::const_iterator
-           PI = begin(), PE = end();
-         PI != PE; ++PI) {
-      term_t ParamT = PL_new_term_ref();
-      functor_t RPFunctor =
-        PL_new_functor(PL_new_atom(PL_RgnParam.c_str()), 1);
-      int Res = PL_cons_functor(ParamT, RPFunctor, (*PI)->getPLTerm());
-      assert(Res && "Failed to create 'rgn_param' Prolog term");
-      assertzTermProlog(ParamT,"Failed to assert 'rgn_param' to Prolog facts");
-    }
-  }
+  void assertzProlog () const;
 
 }; // end class ParameterVector
 

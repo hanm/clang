@@ -279,8 +279,7 @@ const ParameterVector *SymbolTable::getParameterVector(const Decl *D) const {
     return SymTable.lookup(D)->getParameterVector();
 }
 
-const InheritanceMapT *SymbolTable::
-getInheritanceMap(QualType QT) const {
+const InheritanceMapT *SymbolTable::getInheritanceMap(QualType QT) const {
   const InheritanceMapT *Result = 0;
   // QT might be a pointer or reference, so follow it
   while (QT->isPointerType() || QT->isReferenceType()) {
@@ -348,50 +347,31 @@ RegionNameVector *SymbolTable::getRegionNameVector(const Decl *D) const {
   }
 }
 
-RplDomain *SymbolTable::buildDomain(const Decl *D) {
-  // TODO: don't return null!
-  return 0;
-  //add region names from D to RNV
-  OSv2 << "in buildDomain\n";
-  RegionNameVector *RNV = getRegionNameVector(D);
-  const ParameterVector *PV = getParameterVector(D);
+const RplDomain *SymbolTable::getRplDomain(const Decl *D) {
+  if (!SymTable.lookup(D))
+    return 0;
+  return SymTable[D]->getRplDomain();
+}
+
+RplDomain *SymbolTable::buildDomain(const ValueDecl *D) {
   const DeclContext *DC = D->getDeclContext();
-  while (DC){
-    OSv2 << "in while loop\n";
-    const Decl *EnclosingDecl = getDeclFromContext(DC);
-    if (EnclosingDecl){
-      //add fresh region variable name to enclosing scope
-      const NamedDecl* ND = dyn_cast<NamedDecl>(D);
-      assert(ND && "Internal Error: Expected NamedDecl declaration");
-      const ValueDecl* VD = dyn_cast<ValueDecl>(ND);
-      if(VD){
-        OSv2 << "value decl\n";
-        StringRef Name = ND->getName();
-        OSv2 << "before makeFresghRVName "<< Name <<"\n";
-        StringRef RV = makeFreshRVName(Name);
-        OSv2 << "after makeFreshRVName " << RV <<" \n";
-        assert(SymTable[EnclosingDecl] &&
-               "SymTable entry for EnclosingDecl does not exist");
-        SymTable[EnclosingDecl]->addRegionName(RV, RV);
-      }
-      else
-        OSv2 << "not a value decl\n";
-
-      RplDomain *Parent = SymTable[EnclosingDecl]->getRplDomain();
-
-      if (!Parent)
-        Parent = buildDomain(EnclosingDecl);
-
-      RplDomain *Result = new RplDomain(RNV, PV, Parent);
-      assert(SymTable[D] && "SymTable entry for declation does not exist");
-      SymTable[D]->setRplDomain(Result);
-      return Result;
-    }
-    else
-      DC = DC->getParent();
+  const Decl *EnclosingDecl = getDeclFromContext(DC);
+  //add fresh region name to enclosing scope
+  StringRef Name;
+  if (const NamedDecl *ND = dyn_cast<NamedDecl>(D)) {
+    Name = ND->getNameAsString();
+  } else {
+    Name = "";
   }
+  StringRef RegName = makeFreshRegionName(Name);
+  bool Res = addRegionName(EnclosingDecl, RegName, false);
+  assert(Res && "Internal Error: failed to add fresh region name");
 
-  return 0;
+  const RplDomain *ParentDom = getRplDomain(EnclosingDecl);
+  if (ParentDom)
+    return new RplDomain(*ParentDom);
+  else
+    return 0;
 }
 
 const EffectSummary *SymbolTable::getEffectSummary(const Decl *D) const {
@@ -409,7 +389,7 @@ EffectInclusionConstraint *SymbolTable::getEffectInclusionConstraint(const Decl 
 }
 
 bool SymbolTable::setType(const Decl* D, ASaPType *T) {
-  if (!SymTable[D])
+  if (!SymTable.lookup(D))
     createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasType())
@@ -421,7 +401,7 @@ bool SymbolTable::setType(const Decl* D, ASaPType *T) {
 }
 
 bool SymbolTable::initParameterVector(const Decl *D) {
-  if (!SymTable[D])
+  if (!SymTable.lookup(D))
     createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasParameterVector())
@@ -433,7 +413,7 @@ bool SymbolTable::initParameterVector(const Decl *D) {
 }
 
 bool SymbolTable::setParameterVector(const Decl *D, ParameterVector *PV) {
-  if (!SymTable[D])
+  if (!SymTable.lookup(D))
     createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasParameterVector())
@@ -445,7 +425,7 @@ bool SymbolTable::setParameterVector(const Decl *D, ParameterVector *PV) {
 }
 
 bool SymbolTable::addToParameterVector(const Decl *D, ParameterVector *&PV) {
-  if (!SymTable[D])
+  if (!SymTable.lookup(D))
     createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   SymTable[D]->addToParameterVector(PV);
@@ -453,7 +433,7 @@ bool SymbolTable::addToParameterVector(const Decl *D, ParameterVector *&PV) {
 }
 
 bool SymbolTable::setRegionNameSet(const Decl *D, RegionNameSet *RNS) {
-  if (!SymTable[D])
+  if (!SymTable.lookup(D))
     createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasRegionNameSet())
@@ -465,7 +445,7 @@ bool SymbolTable::setRegionNameSet(const Decl *D, RegionNameSet *RNS) {
 }
 
 bool SymbolTable::setEffectSummary(const Decl *D, EffectSummary *ES) {
-  if (!SymTable[D])
+  if (!SymTable.lookup(D))
     createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasEffectSummary())
@@ -477,10 +457,10 @@ bool SymbolTable::setEffectSummary(const Decl *D, EffectSummary *ES) {
 }
 
 bool SymbolTable::setEffectSummary(const Decl *D, const Decl *Dfrom) {
-  if (!SymTable[Dfrom] || !SymTable[Dfrom]->hasEffectSummary())
+  if (!SymTable.lookup(Dfrom) || !SymTable[Dfrom]->hasEffectSummary())
     return false;
 
-  if (!SymTable[D])
+  if (!SymTable.lookup(D))
     createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasEffectSummary())
@@ -494,7 +474,7 @@ bool SymbolTable::setEffectSummary(const Decl *D, const Decl *Dfrom) {
 }
 
 void SymbolTable::resetEffectSummary(const Decl *D, const EffectSummary *ES) {
-  if (!SymTable[D])
+  if (!SymTable.lookup(D))
     createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasEffectSummary())
@@ -549,13 +529,19 @@ bool SymbolTable::hasBase(const Decl *D, const RecordDecl *Base) const {
   return (SymTable.lookup(D)->getSubVec(Base) == 0)? false : true;
 }
 
-bool SymbolTable::addRegionName(const Decl *D, StringRef Name) {
+bool SymbolTable::addRegionName(const Decl *D,
+                                StringRef Name,
+                                bool MakePrologName) {
   if (hasRegionOrParameterName(D, Name))
     return false;
   if (!SymTable.lookup(D))
     createSymbolTableEntry(D);
-  StringRef PrologName = makeFreshRegionName(Name);
-  SymTable[D]->addRegionName(Name, PrologName);
+  if (MakePrologName) {
+    StringRef PrologName = makeFreshRegionName(Name);
+    SymTable[D]->addRegionName(Name, PrologName);
+  } else {
+    SymTable[D]->addRegionName(Name, Name);
+  }
   return true;
 }
 
@@ -700,12 +686,17 @@ void SymbolTable::emitFacts() const {
 
     const Decl *Dec = (*MI).first;
     const SymbolTableEntry *Entry = (*MI).second;
+    assert(Dec && Entry);
 
     if (Entry->hasParameterVector()) {
+      OSv2 << "DEBUG:: gonna assert a parameter vector\n";
       Entry->getParameterVector()->assertzProlog();
+      OSv2 << "DEBUG:: asserted a parameter vector\n";
     }
     if (Entry->getRegionNameSet()) {
+      OSv2 << "DEBUG:: gonna assert a region name set\n";
       Entry->getRegionNameSet()->assertzProlog();
+      OSv2 << "DEBUG:: asserted a region name set\n";
     }
     if (isa<FunctionDecl>(Dec) && Entry->hasEffectSummary()) {
       const EffectSummary *EffSum = Entry->getEffectSummary();
@@ -722,10 +713,14 @@ void SymbolTable::emitFacts() const {
         const VarEffectSummary *VarES = dyn_cast<VarEffectSummary>(EffSum);
         if (VarES->hasInclusionConstraint()) {
           term_t InclConsT = VarES->getInclusionConstraint()->getPLTerm();
+          *VB.OS << "DEBUG:: gonna assert a var effect summary\n";
           assertzTermProlog(InclConsT, "Failed to assert 'esi constraint' to Prolog facts");
+          *VB.OS << "DEBUG:: asserted a var effect summary\n";
         } else {
           // Emit pure effect summary to prolog
+          *VB.OS << "DEBUG:: gonna assert a pure effect summary\n";
           assertzHasEffectSummary(NDec, PURE_EffSum);
+          *VB.OS << "DEBUG:: asserted a pure effect summary\n";
         }
       } // end isa<VarEffectSummary>
     }
@@ -752,8 +747,12 @@ void SymbolTable::emitConstraints() const {
 }
 
 void SymbolTable::solveConstraints() const {
+  OSv2 << "DEBUG:: Gonna emit facts\n";
   emitFacts();
+  OSv2 << "DEBUG:: Done emitting facts\n";
+  OSv2 << "DEBUG:: Gonna emit constraints\n";
   emitConstraints();
+  OSv2 << "DEBUG:: Done emitting constraints\n";
   //loop to call esi_collect (effect inference)
   for (ConstraintsSetT::iterator
           I = ConstraintSet.begin(),
@@ -870,37 +869,52 @@ makeDefaultBaseArgs(const RecordDecl *Derived, long NumArgs) {
 }
 
 void SymbolTable::createSymbolTableEntry(const Decl *D) {
-  assert(!SymTable[D] && "Internal Error: trying to create duplicate entry");
+  assert(!SymTable.lookup(D) && "Internal Error: trying to create duplicate entry");
+  // 1. Make name for decl
   StringRef Name;
   if (const NamedDecl *ND = dyn_cast<NamedDecl>(D)) {
     Name = makeFreshDeclName(ND->getNameAsString());
+    // TODO: update DeclName:StringRef -> Decl Map
   } else {
     Name = PL_UnNamedDecl;
   }
-  SymTable[D] = new SymbolTableEntry(Name);
+  // 2. Compute ParentDom
+  const DeclContext *DC = D->getDeclContext();
+  const Decl *EnclosingDecl = getDeclFromContext(DC);
+  const RplDomain *ParentDom = getRplDomain(EnclosingDecl);
+  SymTable[D] = new SymbolTableEntry(Name, ParentDom);
 }
 
 VarRpl *SymbolTable::createFreshRplVar(const ValueDecl *D) {
   StringRef Name = makeFreshRVName(D->getNameAsString().data());
   OSv2 << "DEBUG:: VarRpl Fresh Name created: " << Name << "\n";
-  // TODO: generate Domain for RplVar
-  return new VarRpl(Name);
+  RplDomain *Dom = buildDomain(D);
+  return new VarRpl(Name, Dom);
 }
 
 
 //////////////////////////////////////////////////////////////////////////
 // SymbolTableEntry
 
-SymbolTableEntry::SymbolTableEntry(StringRef PrologName) :
-    PrologName(PrologName),
-    Typ(0), ParamVec(0), RegnNameSet(0), EffSum(0), InheritanceMap(0),
-    ComputedInheritanceSubVec(false), InheritanceSubVec(0) {}
+SymbolTableEntry::SymbolTableEntry(StringRef PrologName,
+                                   const RplDomain *ParentDom)
+                                  : PrologName(PrologName),
+                                    Typ(0), EffSum(0),
+                                    InheritanceMap(0),
+                                    ComputedInheritanceSubVec(false),
+                                    InheritanceSubVec(0) {
+  ParamVec = new ParameterVector();
+  RegnNameSet = new RegionNameSet();
+  RplDom = new RplDomain(0, ParamVec, ParentDom);
+
+}
 
 SymbolTableEntry::~SymbolTableEntry() {
   delete Typ;
   delete ParamVec;
   delete RegnNameSet;
   delete EffSum;
+  delete RplDom;
   if (InheritanceMap && InheritanceMap->size() > 0) {
     for(InheritanceMapT::iterator
           I = InheritanceMap->begin(), E = InheritanceMap->end();
@@ -938,20 +952,8 @@ lookupParameterName(StringRef Name) {
 
 void SymbolTableEntry::addRegionName(StringRef Name, StringRef PrologName) {
   OSv2 << "in addRegionName 1\n";
-  OSv2 << "before check\n";
-  if(RegnNameSet == NULL)
-    OSv2 << "RegnNameSet is null\n";
-  else
-    OSv2 << "RegnNameSet is not null\n";
-  if (!RegnNameSet){
-    OSv2 << "in if\n";
-    RegnNameSet = new RegionNameSet();
-  }
-  else{
-    OSv2 << "in else\n";
-  }
-  OSv2 << "before insertion\n";
   RegnNameSet->insert(NamedRplElement(Name, PrologName));
+  RplDom->addRegion(NamedRplElement(Name, PrologName));
   OSv2 << "addRegionName is done\n";
 }
 
