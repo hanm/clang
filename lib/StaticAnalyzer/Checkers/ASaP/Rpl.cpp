@@ -104,20 +104,19 @@ Rpl::Rpl(const Rpl &That)
 ///////////////////////////////////////////////////////////////////////////////
 //// RplDomain
 
-RplDomain::RplDomain(RegionNameVector *RV,
-                     const ParameterVector *PV,
-                     const RplDomain *P) {
+RplDomain::RplDomain(StringRef Name, const RegionNameVector *RV,
+                     const ParameterVector *PV, RplDomain *P)
+                    : Name(Name), Params(PV), Parent(P), Used(false) {
   if (RV) {
     Regions = new RegionNameVector(*RV);
   } else {
     Regions = new RegionNameVector();
   }
-  Params = PV;
-  Parent = P;
 }
 
 RplDomain::RplDomain(const RplDomain &Dom)
-                    : Params(Dom.Params), Parent(Dom.Parent) {
+                    : Name(Dom.Name), Params(Dom.Params),
+                      Parent(Dom.Parent), Used(Dom.Used) {
   if (Dom.Regions) {
     Regions = new RegionNameVector(*Dom.Regions);
   } else {
@@ -128,17 +127,22 @@ void RplDomain::addRegion(const NamedRplElement &R) {
   Regions->push_back(R);
 }
 
+void RplDomain::markUsed() {
+  Used = true;
+  if (Parent && !Parent->isUsed())
+    Parent->markUsed();
+}
 
 void RplDomain::print (llvm::raw_ostream &OS) const {
   OS << "{";
-  if (Params && Params->size() > 0) {
-    OS << "params[[";
-    Params->print(OS);
-    OS << "]], ";
-  }
   if (Regions && Regions->size() > 0) {
     OS << "regions[[";
     Regions->print(OS);
+    OS << "]], ";
+  }
+  if (Params && Params->size() > 0) {
+    OS << "params[[";
+    Params->print(OS);
     OS << "]], ";
   }
   if (Parent) {
@@ -146,6 +150,43 @@ void RplDomain::print (llvm::raw_ostream &OS) const {
     Parent->print(OS);
   }
   OS << "}";
+}
+
+//rpl_dom(name, [regions], [params], parent)
+term_t RplDomain::getPLTerm() const {
+  term_t Result = PL_new_term_ref();
+  functor_t DomF = PL_new_functor(PL_new_atom(PL_RplDomain.c_str()),4);
+  // 1. Domain Name
+  term_t DomNam = PL_new_term_ref();
+  PL_put_atom_chars(DomNam, Name.data());
+  // 2. Region name List
+  term_t RegList;
+  if (Regions) {
+    RegList = Regions->getPLTerm();
+  } else {
+    RegList = buildPLEmptyList();
+  }
+  // 3. Parameter list
+  term_t ParamList;
+  if (Params) {
+    ParamList = Params->getPLTerm();
+  } else {
+    ParamList = buildPLEmptyList();
+  }
+  // 4. Parent domain name
+  term_t ParentName = PL_new_term_ref();
+  if (Parent) {
+    PL_put_atom_chars(ParentName, Parent->Name.data());
+  } else {
+    PL_put_atom_chars(ParentName, PL_NullDomain.c_str());
+  }
+  int Res = PL_cons_functor(Result, DomF, DomNam, RegList, ParamList, ParentName);
+  assert(Res && "Failed to create prolog term_t for RplDomain");
+  return Result;
+}
+
+void RplDomain::assertzProlog() const {
+  assertzTermProlog(getPLTerm(), "Failed to assert 'rpl_domain' to Prolog facts");
 }
 
 RplDomain::~RplDomain() {
@@ -267,8 +308,7 @@ bool ConcreteRpl::RplRef::isDisjointRight(RplRef &That) {
 // end ConcreteRpl::RplRef; start ConcreteRpl
 
 term_t ConcreteRpl::getRplElementsPLTerm() const {
-  term_t RplElList = PL_new_term_ref();
-  PL_put_nil(RplElList);
+  term_t RplElList = buildPLEmptyList();
   int Res = 0;
   for (RplElementVectorTy::const_reverse_iterator I = RplElements.rbegin(),
                                                   E = RplElements.rend();
@@ -531,8 +571,7 @@ term_t VarRpl::getPLTerm() const {
 }
 
 term_t VarRpl::getRplElementsPLTerm() const {
-  term_t RplElList = PL_new_term_ref();
-  PL_put_nil(RplElList);
+  term_t RplElList = buildPLEmptyList();
   term_t RplEl = PL_new_term_ref();
   PL_put_atom_chars(RplEl, Name.data());
   bool Res = PL_cons_list(RplElList, RplEl, RplElList);

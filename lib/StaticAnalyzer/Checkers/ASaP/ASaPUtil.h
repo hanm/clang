@@ -42,7 +42,10 @@ static const std::string PL_EffectSummary = "effect_summary";
 static const std::string PL_EffectVar = "effect_var";
 static const std::string PL_ConcreteRpl = "rpl";
 static const std::string PL_VarRpl = "var_rpl";
+static const std::string PL_RplDomain = "rpl_domain";
 static const std::string PL_ParamSub = "param_sub";
+
+static const std::string PL_NullDomain = "null_dom";
 
 /// \brief Rpl Inclusion Constraint
 static const std::string PL_RIConstraint = "ri_constraint";
@@ -120,6 +123,7 @@ void helperEmitInvalidAssignmentWarning(const CheckerBase *Checker,
 const Decl *getDeclFromContext(const DeclContext *DC);
 
 void assertzTermProlog(term_t Fact, StringRef ErrMsg = "");
+term_t buildPLEmptyList();
 
 void buildTypeSubstitution(const SymbolTable &SymT,
                            const RecordDecl *ClassD,

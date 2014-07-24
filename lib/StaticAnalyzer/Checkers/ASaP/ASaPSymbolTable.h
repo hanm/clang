@@ -106,6 +106,7 @@ class SymbolTable {
   unsigned long RegionIDNumber;
   unsigned long DeclIDNumber;
   unsigned long RVIDNumber;
+  unsigned long RplDomIDNumber;
   unsigned long ConstraintIDNumber;
 
   // Private Methods
@@ -124,6 +125,10 @@ class SymbolTable {
   /// \brief Return the next unused VarRpl ID number.
   /// Used to encode VarRpl names into Prolog.
   inline unsigned long getNextUniqueRVID() { return RVIDNumber++; }
+
+  /// \brief Return the next unused RplDomain ID number.
+  /// Used to encode RplDomain names into Prolog.
+  inline unsigned long getNextUniqueRplDomID() { return RplDomIDNumber++; }
 
   /// \brief Return the next unused Constraint ID number.
   /// Used to encode Constraints into Prolog.
@@ -195,7 +200,6 @@ public:
 
   /// \brief Returns the region names declarations for D or null.
   const RegionNameSet *getRegionNameSet(const Decl *D) const;
-  RegionNameVector *getRegionNameVector(const Decl *D) const;
   RplDomain *buildDomain(const ValueDecl *D) ;
 
   /// \brief Returns the effect summmary for D or null.
@@ -206,7 +210,7 @@ public:
   const InheritanceMapT *getInheritanceMap(QualType QT) const;
   const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;
   const StringRef getPrologName(const Decl *D) const;
-  const RplDomain *getRplDomain(const Decl *D);
+  RplDomain *getRplDomain(const Decl *D) const;
 
   inline const SpecificNIChecker *getNIChecker(const FunctionDecl *FD) const {
     return ParTable.lookup(FD);
@@ -297,6 +301,13 @@ public:
     return addFreshName(ss.str());
   }
 
+  inline StringRef makeFreshRplDomName(const std::string &Name) {
+    std::stringstream ss;
+    ss << "rdom" << getNextUniqueRplDomID()
+       << "_" << Name;
+    return addFreshName(ss.str());
+  }
+
   inline StringRef makeFreshConstraintName() {
     std::stringstream ss;
     ss << PL_ConstraintPrefix << "_" << getNextUniqueConstraintID();
@@ -352,7 +363,8 @@ class SymbolTableEntry {
   void computeInheritanceSubVec();
 
 public:
-  SymbolTableEntry(StringRef PrologName, const RplDomain *ParentDom = 0);
+  SymbolTableEntry(StringRef DeclName,
+                   StringRef DomName, RplDomain *ParentDom);
   ~SymbolTableEntry();
 
   // Predicates.
@@ -370,7 +382,7 @@ public:
   EffectInclusionConstraint *getEffectInclusionConstraint () const;
   inline const InheritanceMapT *getInheritanceMap() const { return InheritanceMap; }
   inline const StringRef getPrologName() const { return PrologName; }
-  inline RplDomain *getRplDomain() { return RplDom; }
+  inline RplDomain *getRplDomain() const { return RplDom; }
 
   // Setters.
   inline void setType(ASaPType *T) { Typ = T; }

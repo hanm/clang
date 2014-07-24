@@ -23,6 +23,7 @@
 #include "llvm/ADT/SmallVector.h"
 using llvm::SmallVector;
 
+#include "ASaPUtil.h"
 
 template<typename ElmtTyp, int SIZE>
 class OwningVector : public llvm::SmallVector<ElmtTyp*, SIZE> {
@@ -117,8 +118,7 @@ public:
   }
 
   term_t getPLTerm() const {
-    term_t Result = PL_new_term_ref();
-    PL_put_nil(Result);
+    term_t Result = clang::asap::buildPLEmptyList();
     int Res;
 
     for (typename VectorT::const_reverse_iterator

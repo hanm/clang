@@ -33,19 +33,27 @@ namespace asap {
 class RegionNameVector;
 
 class RplDomain {
+  const StringRef Name;          // unique Prolog Name
   RegionNameVector *Regions;     // owned
   const ParameterVector *Params; // not owned
-  const RplDomain *Parent;       // not owned
+  RplDomain *Parent;             // not owned
+  bool Used;
 
 public:
-  RplDomain(RegionNameVector *RV,
+  RplDomain(StringRef Name,
+            const RegionNameVector *RV,
             const ParameterVector *PV,
-            const RplDomain *Parent);
+            RplDomain *Parent);
   RplDomain(const RplDomain &Dom);
   virtual ~RplDomain();
-  void addRegion(const NamedRplElement &R);
 
+  //StringRef getName() { return Name; }
+  void addRegion(const NamedRplElement &R);
+  bool isUsed() const { return Used; }
+  void markUsed();
   void print (llvm::raw_ostream &OS) const;
+  term_t getPLTerm() const;
+  void assertzProlog() const;
 };
 
 class RplElement {
@@ -428,7 +436,10 @@ private:
 
 public:
   VarRpl(StringRef ID, RplDomain *Dom)
-        : Rpl(RPLK_Var, RK_DUNNO), Name(ID), Domain(Dom) {}
+        : Rpl(RPLK_Var, RK_DUNNO), Name(ID), Domain(Dom) {
+    assert(Dom && "Internal Error: making VarRpl without an RplDomain");
+    Dom->markUsed();
+  }
 
   VarRpl(const VarRpl &That)
         : Rpl(That), Name(That.Name), Domain(That.Domain) {}

@@ -136,7 +136,8 @@ isSpecialRplElement(const llvm::StringRef& Str) {
 SymbolTable::SymbolTable()
     : AnnotScheme(0), ParamIDNumber(0),
       RegionIDNumber(0), DeclIDNumber(0),
-      RVIDNumber(0), ConstraintIDNumber(0) {
+      RVIDNumber(0), RplDomIDNumber(0),
+      ConstraintIDNumber(0) {
   // FIXME: make this static like the other default Regions etc
   ParamRplElement Param("P","p");
   BuiltinDefaultRegionParameterVec = new ParameterVector(Param);
@@ -333,24 +334,10 @@ const RegionNameSet *SymbolTable::getRegionNameSet(const Decl *D) const {
     return SymTable.lookup(D)->getRegionNameSet();
 }
 
-RegionNameVector *SymbolTable::getRegionNameVector(const Decl *D) const {
+RplDomain *SymbolTable::getRplDomain(const Decl *D) const {
   if (!SymTable.lookup(D))
     return 0;
-  else{
-    // This is bad. We are still assuming some order!!
-    const RegionNameSet *RNS=SymTable.lookup(D)->getRegionNameSet();;
-    RegionNameVector *RNV = new RegionNameVector();
-    for (RegionNameSet::iterator It=RNS->begin(); It!=RNS->end(); ++It){
-      RNV->push_back(*It);
-    }
-    return RNV;
-  }
-}
-
-const RplDomain *SymbolTable::getRplDomain(const Decl *D) {
-  if (!SymTable.lookup(D))
-    return 0;
-  return SymTable[D]->getRplDomain();
+  return SymTable.lookup(D)->getRplDomain();
 }
 
 RplDomain *SymbolTable::buildDomain(const ValueDecl *D) {
@@ -689,21 +676,25 @@ void SymbolTable::emitFacts() const {
     assert(Dec && Entry);
 
     if (Entry->hasParameterVector()) {
-      OSv2 << "DEBUG:: gonna assert a parameter vector\n";
+      //OSv2 << "DEBUG:: gonna assert a parameter vector\n";
       Entry->getParameterVector()->assertzProlog();
-      OSv2 << "DEBUG:: asserted a parameter vector\n";
+      //OSv2 << "DEBUG:: asserted a parameter vector\n";
     }
     if (Entry->getRegionNameSet()) {
-      OSv2 << "DEBUG:: gonna assert a region name set\n";
+      //OSv2 << "DEBUG:: gonna assert a region name set\n";
       Entry->getRegionNameSet()->assertzProlog();
-      OSv2 << "DEBUG:: asserted a region name set\n";
+      //OSv2 << "DEBUG:: asserted a region name set\n";
+    }
+    const RplDomain *Dom = Entry->getRplDomain();
+    if (Dom && !Dom->isUsed()) {
+      Dom->assertzProlog();
     }
     if (isa<FunctionDecl>(Dec) && Entry->hasEffectSummary()) {
       const EffectSummary *EffSum = Entry->getEffectSummary();
       assert(isa<NamedDecl>(Dec) && "Internal Error: Expected NamedDecl");
       const NamedDecl *NDec = dyn_cast<NamedDecl>(Dec);
       *VB.OS << "DEBUG:: NamedDecl = " << NDec->getNameAsString()
-            << ", PrologName = " << getPrologName(NDec).data()
+            << ", PrologName = " << getPrologName(NDec)
             << ", EffSum = " << Entry->getEffectSummary()->toString() << "\n";
       if (isa<ConcreteEffectSummary>(EffSum)) {
         const ConcreteEffectSummary *CEffSum =
@@ -713,14 +704,14 @@ void SymbolTable::emitFacts() const {
         const VarEffectSummary *VarES = dyn_cast<VarEffectSummary>(EffSum);
         if (VarES->hasInclusionConstraint()) {
           term_t InclConsT = VarES->getInclusionConstraint()->getPLTerm();
-          *VB.OS << "DEBUG:: gonna assert a var effect summary\n";
+          //*VB.OS << "DEBUG:: gonna assert a var effect summary\n";
           assertzTermProlog(InclConsT, "Failed to assert 'esi constraint' to Prolog facts");
-          *VB.OS << "DEBUG:: asserted a var effect summary\n";
+          //*VB.OS << "DEBUG:: asserted a var effect summary\n";
         } else {
           // Emit pure effect summary to prolog
-          *VB.OS << "DEBUG:: gonna assert a pure effect summary\n";
+          //*VB.OS << "DEBUG:: gonna assert a pure effect summary\n";
           assertzHasEffectSummary(NDec, PURE_EffSum);
-          *VB.OS << "DEBUG:: asserted a pure effect summary\n";
+          //*VB.OS << "DEBUG:: asserted a pure effect summary\n";
         }
       } // end isa<VarEffectSummary>
     }
@@ -737,7 +728,6 @@ void SymbolTable::emitConstraints() const {
        I != E; ++I) {
     if (!isa<EffectInclusionConstraint>(*I)) {
       OSv2 << "DEBUG:: Will assert Constraint to Prolog: " << (*I)->toString() << "\n";
-      OSv2 << "here\n";
       term_t Term = (*I)->getPLTerm();
       OSv2 << "DEBUG:: build term for constraint...\n";
       assertzTermProlog(Term, "Failed to assert constraint to Prolog facts");
@@ -747,12 +737,8 @@ void SymbolTable::emitConstraints() const {
 }
 
 void SymbolTable::solveConstraints() const {
-  OSv2 << "DEBUG:: Gonna emit facts\n";
   emitFacts();
-  OSv2 << "DEBUG:: Done emitting facts\n";
-  OSv2 << "DEBUG:: Gonna emit constraints\n";
   emitConstraints();
-  OSv2 << "DEBUG:: Done emitting constraints\n";
   //loop to call esi_collect (effect inference)
   for (ConstraintsSetT::iterator
           I = ConstraintSet.begin(),
@@ -870,19 +856,16 @@ makeDefaultBaseArgs(const RecordDecl *Derived, long NumArgs) {
 
 void SymbolTable::createSymbolTableEntry(const Decl *D) {
   assert(!SymTable.lookup(D) && "Internal Error: trying to create duplicate entry");
-  // 1. Make name for decl
-  StringRef Name;
-  if (const NamedDecl *ND = dyn_cast<NamedDecl>(D)) {
-    Name = makeFreshDeclName(ND->getNameAsString());
-    // TODO: update DeclName:StringRef -> Decl Map
-  } else {
-    Name = PL_UnNamedDecl;
-  }
+  // 1. Make names for decl and domain
+  StringRef DeclName = makeFreshDeclName("");
+  StringRef DomName = makeFreshRplDomName("");
+  // TODO: update DeclName:StringRef -> Decl Map
+
   // 2. Compute ParentDom
   const DeclContext *DC = D->getDeclContext();
   const Decl *EnclosingDecl = getDeclFromContext(DC);
-  const RplDomain *ParentDom = getRplDomain(EnclosingDecl);
-  SymTable[D] = new SymbolTableEntry(Name, ParentDom);
+  RplDomain *ParentDom = getRplDomain(EnclosingDecl);
+  SymTable[D] = new SymbolTableEntry(DeclName, DomName, ParentDom);
 }
 
 VarRpl *SymbolTable::createFreshRplVar(const ValueDecl *D) {
@@ -896,16 +879,17 @@ VarRpl *SymbolTable::createFreshRplVar(const ValueDecl *D) {
 //////////////////////////////////////////////////////////////////////////
 // SymbolTableEntry
 
-SymbolTableEntry::SymbolTableEntry(StringRef PrologName,
-                                   const RplDomain *ParentDom)
-                                  : PrologName(PrologName),
+SymbolTableEntry::SymbolTableEntry(StringRef DeclName,
+                                   StringRef DomName,
+                                   RplDomain *ParentDom)
+                                  : PrologName(DeclName),
                                     Typ(0), EffSum(0),
                                     InheritanceMap(0),
                                     ComputedInheritanceSubVec(false),
                                     InheritanceSubVec(0) {
   ParamVec = new ParameterVector();
   RegnNameSet = new RegionNameSet();
-  RplDom = new RplDomain(0, ParamVec, ParentDom);
+  RplDom = new RplDomain(DomName, 0, ParamVec, ParentDom);
 
 }
 

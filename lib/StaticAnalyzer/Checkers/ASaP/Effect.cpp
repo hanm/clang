@@ -523,10 +523,8 @@ term_t ConcreteEffectSummary::getPLTerm() const {
   int Res = 0;
   term_t EffectSumT = PL_new_term_ref();
   functor_t EffectSumF = PL_new_functor(PL_new_atom(PL_EffectSummary.c_str()), 2);
-  term_t SimpleL = PL_new_term_ref();
-  PL_put_nil(SimpleL);
-  term_t CompoundL = PL_new_term_ref();
-  PL_put_nil(CompoundL);
+  term_t SimpleL = buildPLEmptyList();
+  term_t CompoundL = buildPLEmptyList();
 
   for(SetT::iterator I = begin(), E = end(); I != E; ++I) {
     Effect *Eff = *I;

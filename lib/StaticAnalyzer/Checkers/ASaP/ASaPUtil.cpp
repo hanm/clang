@@ -168,6 +168,12 @@ void assertzTermProlog(term_t Fact, StringRef ErrMsg) {
   assert(Rval && ErrMsg.data());
 }
 
+term_t buildPLEmptyList() {
+  term_t Result = PL_new_term_ref();
+  PL_put_nil(Result);
+  return Result;
+}
+
 void buildTypeSubstitution(const SymbolTable &SymT,
                            const RecordDecl *ClassD,
                            const ASaPType *Typ,
