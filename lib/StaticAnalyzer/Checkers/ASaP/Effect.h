@@ -300,6 +300,7 @@ public:
 
   virtual ~VarEffectSummary() {};
   virtual term_t getPLTerm() const;
+  term_t getIDPLTerm() const;
 
   void setInclusionConstraint(EffectInclusionConstraint *EIC) {
     InclCons = EIC;

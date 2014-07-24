@@ -550,10 +550,16 @@ void VarEffectSummary::print(raw_ostream &OS,
   OS << "Var Effect Summary";
 }
 
+inline term_t VarEffectSummary::getIDPLTerm() const {
+  term_t IDTerm = PL_new_term_ref();
+  PL_put_atom_chars(IDTerm, ID.data());
+  return IDTerm;
+}
+
 term_t VarEffectSummary::getPLTerm() const {
   term_t EffectSumT = PL_new_term_ref();
   functor_t EffectSumF = PL_new_functor(PL_new_atom(PL_EffectVar.c_str()), 1);
-  int Res = PL_cons_functor(EffectSumT, EffectSumF, "evX");
+  int Res = PL_cons_functor(EffectSumT, EffectSumF, getIDPLTerm());
   assert(Res && "Failed to create 'effect_var' Prolog term");
   return EffectSumT;
 }
