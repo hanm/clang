@@ -592,14 +592,14 @@ bool SymbolTable::addInclusionConstraint(const FunctionDecl *FunD,
 }
 
 void SymbolTable::
-assertzHasEffectSummary(const NamedDecl *NDec,
-                        const ConcreteEffectSummary *EffSum) const {
-  term_t EffSumT = EffSum->getPLTerm();
+assertzHasEffectSummary(const NamedDecl &NDec,
+                        const EffectSummary &EffSum) const {
+  term_t EffSumT = EffSum.getPLTerm();
   term_t HasEffSumT = PL_new_term_ref();
   functor_t HasEffSumF =
       PL_new_functor(PL_new_atom(PL_HasEffSum.c_str()),2);
   term_t NameT = PL_new_term_ref();
-  PL_put_atom_chars(NameT, getPrologName(NDec).data());
+  PL_put_atom_chars(NameT, getPrologName(&NDec).data());
   int Res = PL_cons_functor(HasEffSumT, HasEffSumF, NameT, EffSumT);
   assert(Res && "Failed to build 'has_effect_summary' functor");
   assertzTermProlog(HasEffSumT, "Failed to assert 'has_effect_summary' to Prolog facts");
@@ -696,25 +696,14 @@ void SymbolTable::emitFacts() const {
       *VB.OS << "DEBUG:: NamedDecl = " << NDec->getNameAsString()
             << ", PrologName = " << getPrologName(NDec)
             << ", EffSum = " << Entry->getEffectSummary()->toString() << "\n";
-      if (isa<ConcreteEffectSummary>(EffSum)) {
-        const ConcreteEffectSummary *CEffSum =
-            dyn_cast<ConcreteEffectSummary>(EffSum);
-        assertzHasEffectSummary(NDec, CEffSum);
-      } else if (isa<VarEffectSummary>(EffSum)) {
-        const VarEffectSummary *VarES = dyn_cast<VarEffectSummary>(EffSum);
-        if (VarES->hasInclusionConstraint()) {
-          term_t InclConsT = VarES->getInclusionConstraint()->getPLTerm();
-          //*VB.OS << "DEBUG:: gonna assert a var effect summary\n";
-          assertzTermProlog(InclConsT, "Failed to assert 'esi constraint' to Prolog facts");
-          //*VB.OS << "DEBUG:: asserted a var effect summary\n";
-        } else {
-          // Emit pure effect summary to prolog
-          //*VB.OS << "DEBUG:: gonna assert a pure effect summary\n";
-          assertzHasEffectSummary(NDec, PURE_EffSum);
-          //*VB.OS << "DEBUG:: asserted a pure effect summary\n";
-        }
-      } // end isa<VarEffectSummary>
-    }
+
+      const VarEffectSummary *VarES = dyn_cast<VarEffectSummary>(EffSum);
+      if (VarES && !VarES->hasInclusionConstraint()) {
+        assertzHasEffectSummary(*NDec, *PURE_EffSum);
+      } else {
+        assertzHasEffectSummary(*NDec, *EffSum);
+      }
+    } // end if function declaration with effect summary.
   } // end for-all symbol table entries
   OSv2 << "DEBUG:: Done emmitting facts to Prolog\n";
 }
@@ -726,13 +715,11 @@ void SymbolTable::emitConstraints() const {
           I = ConstraintSet.begin(),
           E = ConstraintSet.end();
        I != E; ++I) {
-    if (!isa<EffectInclusionConstraint>(*I)) {
-      OSv2 << "DEBUG:: Will assert Constraint to Prolog: " << (*I)->toString() << "\n";
-      term_t Term = (*I)->getPLTerm();
-      OSv2 << "DEBUG:: build term for constraint...\n";
-      assertzTermProlog(Term, "Failed to assert constraint to Prolog facts");
-      OSv2 << "DEBUG:: Asserted Constraint to Prolog: " << (*I)->toString() << "\n";
-    }
+    OSv2 << "DEBUG:: Will assert Constraint to Prolog: " << (*I)->toString() << "\n";
+    term_t Term = (*I)->getPLTerm();
+    OSv2 << "DEBUG:: build term for constraint...\n";
+    assertzTermProlog(Term, "Failed to assert constraint to Prolog facts");
+    OSv2 << "DEBUG:: Asserted Constraint to Prolog: " << (*I)->toString() << "\n";
   }
 }
 

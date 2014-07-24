@@ -151,8 +151,8 @@ class SymbolTable {
   bool addInclusionConstraint(const FunctionDecl *FunD,
                               EffectInclusionConstraint *EIC);
 
-  void assertzHasEffectSummary(const NamedDecl *NDec,
-                               const ConcreteEffectSummary *EffSum) const;
+  void assertzHasEffectSummary(const NamedDecl &NDec,
+                               const EffectSummary &EffSum) const;
 public:
   // Static Constants
   static const StarRplElement *STAR_RplElmt;

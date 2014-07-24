@@ -117,12 +117,17 @@ public:
     bool DoFullInference = false;
     if (SchemeStr.compare("simple") == 0) {
       AnnotScheme = new SimpleAnnotationScheme(SymT);
-    } else if (SchemeStr.compare("param") == 0) {
+    } else if (SchemeStr.compare("param") == 0
+              || SchemeStr.compare("parametric") == 0) {
       AnnotScheme = new ParametricAnnotationScheme(SymT);
     } else if (SchemeStr.compare("global") == 0) {
       AnnotScheme = new CheckGlobalsAnnotationScheme(SymT);
-    } else if (SchemeStr.compare("effect-inference") == 0) {
-      AnnotScheme = new EffectInferenceAnnotationScheme(SymT);
+    } else if (SchemeStr.compare("effect-inference") == 0
+              || SchemeStr.compare("simple-effect-inference") == 0) {
+      AnnotScheme = new SimpleEffectInferenceAnnotationScheme(SymT);
+      DoEffectInference = true;
+    } else if (SchemeStr.compare("parametric-effect-inference") == 0) {
+      AnnotScheme = new ParametricEffectInferenceAnnotationScheme(SymT);
       DoEffectInference = true;
     } else if (SchemeStr.compare("inference") == 0) {
       AnnotScheme = new InferenceAnnotationScheme(SymT);
