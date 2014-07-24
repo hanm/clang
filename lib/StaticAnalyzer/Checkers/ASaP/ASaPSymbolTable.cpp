@@ -862,9 +862,11 @@ void SymbolTable::createSymbolTableEntry(const Decl *D) {
   // TODO: update DeclName:StringRef -> Decl Map
 
   // 2. Compute ParentDom
-  const DeclContext *DC = D->getDeclContext();
-  const Decl *EnclosingDecl = getDeclFromContext(DC);
-  RplDomain *ParentDom = getRplDomain(EnclosingDecl);
+  RplDomain *ParentDom = 0;
+  if (const DeclContext *DC = D->getDeclContext()) {
+    const Decl *EnclosingDecl = getDeclFromContext(DC);
+    ParentDom = getRplDomain(EnclosingDecl);
+  }
   SymTable[D] = new SymbolTableEntry(DeclName, DomName, ParentDom);
 }
 
