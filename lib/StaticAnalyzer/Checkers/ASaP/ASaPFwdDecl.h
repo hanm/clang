@@ -59,6 +59,7 @@ namespace asap {
 class AnnotationScheme;
 class ASaPType;
 class ConcreteEffectSummary;
+class ConcreteRpl;
 class Effect;
 class EffectInclusionConstraint;
 class EffectVector;
@@ -79,6 +80,8 @@ class Substitution;
 class SubstitutionVector;
 class SymbolTable;
 class SymbolTableEntry;
+class VarEffectSummary;
+class VarRpl;
 struct VisitorBundle;
 
 } // End namespace asap.

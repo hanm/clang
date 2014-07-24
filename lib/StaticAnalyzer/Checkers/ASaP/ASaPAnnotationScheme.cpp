@@ -339,7 +339,7 @@ makeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) {
 AnnotationSet EffectInferenceAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
   AnnotationSet Result;
-  Result.EffSum = new VarEffectSummary();
+  Result.EffSum = SymT.createFreshEffectSumVar(D);
   return Result;
 }
 
@@ -373,7 +373,7 @@ makeReturnType(const FunctionDecl *D, long ArgNum) {
 AnnotationSet InferenceAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
   AnnotationSet Result;
-  Result.EffSum = new VarEffectSummary();
+  Result.EffSum = SymT.createFreshEffectSumVar(D);
   return Result;
 }
 

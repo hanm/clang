@@ -106,6 +106,7 @@ class SymbolTable {
   unsigned long RegionIDNumber;
   unsigned long DeclIDNumber;
   unsigned long RVIDNumber;
+  unsigned long ESVIDNumber;
   unsigned long RplDomIDNumber;
   unsigned long ConstraintIDNumber;
 
@@ -125,6 +126,10 @@ class SymbolTable {
   /// \brief Return the next unused VarRpl ID number.
   /// Used to encode VarRpl names into Prolog.
   inline unsigned long getNextUniqueRVID() { return RVIDNumber++; }
+
+  /// \brief Return the next unused VarEffectSummary ID number.
+  /// Used to encode VarEffectSummary names into Prolog.
+  inline unsigned long getNextUniqueESVID() { return ESVIDNumber++; }
 
   /// \brief Return the next unused RplDomain ID number.
   /// Used to encode RplDomain names into Prolog.
@@ -301,6 +306,13 @@ public:
     return addFreshName(ss.str());
   }
 
+  inline StringRef makeFreshESVName(const std::string &Name) {
+    std::stringstream ss;
+    ss << "ev" << getNextUniqueESVID()
+       << "_" << Name;
+    return addFreshName(ss.str());
+  }
+
   inline StringRef makeFreshRplDomName(const std::string &Name) {
     std::stringstream ss;
     ss << "rdom" << getNextUniqueRplDomID()
@@ -327,6 +339,8 @@ public:
   void createSymbolTableEntry(const Decl *D);
 
   VarRpl *createFreshRplVar(const ValueDecl *D);
+
+  VarEffectSummary *createFreshEffectSumVar(const FunctionDecl *D);
 
   inline AnnotationSet makeDefaultClassParams(RecordDecl *RecD) {
     return AnnotScheme->makeClassParams(RecD);

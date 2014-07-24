@@ -264,19 +264,20 @@ public:
 }; // end class ConcreteEffectSummary
 
 class VarEffectSummary : public EffectSummary {
+  StringRef ID;
   // TODO: add field to store solution of inference
   // ConcreteEffectSummary* Concrete;  // Commented out to remove warning.
   EffectInclusionConstraint *InclCons;
 
 public:
   // Constructors
-  VarEffectSummary()
+  VarEffectSummary(StringRef ID)
                   : EffectSummary(ESK_Var),
-                    InclCons(0) {}
+                    ID(ID), InclCons(0) {}
 
   VarEffectSummary(const VarEffectSummary &VES)
                   : EffectSummary(ESK_Var),
-                    InclCons(VES.InclCons) {}
+                    ID(VES.ID), InclCons(VES.InclCons) {}
 
   virtual VarEffectSummary *clone() const {
     return new VarEffectSummary(*this);

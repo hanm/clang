@@ -136,8 +136,8 @@ isSpecialRplElement(const llvm::StringRef& Str) {
 SymbolTable::SymbolTable()
     : AnnotScheme(0), ParamIDNumber(0),
       RegionIDNumber(0), DeclIDNumber(0),
-      RVIDNumber(0), RplDomIDNumber(0),
-      ConstraintIDNumber(0) {
+      RVIDNumber(0), ESVIDNumber(0),
+      RplDomIDNumber(0), ConstraintIDNumber(0) {
   // FIXME: make this static like the other default Regions etc
   ParamRplElement Param("P","p");
   BuiltinDefaultRegionParameterVec = new ParameterVector(Param);
@@ -877,7 +877,11 @@ VarRpl *SymbolTable::createFreshRplVar(const ValueDecl *D) {
   return new VarRpl(Name, Dom);
 }
 
-
+VarEffectSummary *SymbolTable::createFreshEffectSumVar(const FunctionDecl *D) {
+  // TODO: use name of D after processing to make it a valid Prolog identifier
+  StringRef Name = makeFreshESVName("");
+  return new VarEffectSummary(Name);
+}
 //////////////////////////////////////////////////////////////////////////
 // SymbolTableEntry
 
