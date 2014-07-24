@@ -138,6 +138,13 @@ helperMakeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) {
   return Result;
 }
 
+inline AnnotationSet AnnotationScheme::
+helperMakeVarEffectSummary(const FunctionDecl *D) {
+  AnnotationSet Result;
+  Result.EffSum = SymT.createFreshEffectSumVar(D);
+  return Result;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 AnnotationSet ParametricAnnotationScheme::
 makeClassParams(const RecordDecl *D) {
@@ -336,11 +343,15 @@ makeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-AnnotationSet EffectInferenceAnnotationScheme::
+AnnotationSet SimpleEffectInferenceAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
-  AnnotationSet Result;
-  Result.EffSum = SymT.createFreshEffectSumVar(D);
-  return Result;
+  return helperMakeVarEffectSummary(D);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+AnnotationSet ParametricEffectInferenceAnnotationScheme::
+makeEffectSummary(const FunctionDecl *D) {
+  return helperMakeVarEffectSummary(D);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -372,9 +383,7 @@ makeReturnType(const FunctionDecl *D, long ArgNum) {
 
 AnnotationSet InferenceAnnotationScheme::
 makeEffectSummary(const FunctionDecl *D) {
-  AnnotationSet Result;
-  Result.EffSum = SymT.createFreshEffectSumVar(D);
-  return Result;
+  return helperMakeVarEffectSummary(D);
 }
 
 } // end namespace asap

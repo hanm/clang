@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker -analyzer-config -asap-default-scheme=parametric %s -verify
+// RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker -analyzer-config -asap-default-scheme=paramedic %s -verify
 
   namespace tbb { // expected-warning{{Invalid argument to command-line flag -asap-default-scheme}}
     template<typename Func0, typename Func1>

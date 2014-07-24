@@ -60,6 +60,7 @@ protected:
   AnnotationSet helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT);
   AnnotationSet helperMakeWritesLocalEffectSummary(const FunctionDecl *D);
   AnnotationSet helperMakeVarType(const ValueDecl *D, long ArgNum);
+  AnnotationSet helperMakeVarEffectSummary(const FunctionDecl *D);
   RplVector *helperMakeBaseTypeArgs(const RecordDecl *Derived, long ArgNum);
 
 };
@@ -125,13 +126,27 @@ public:
 }; // end class CheckGlobalsAnnotationScheme
 
 // Insert effect summary variables wherever they are missing.
-class EffectInferenceAnnotationScheme : public ParametricAnnotationScheme {
+class SimpleEffectInferenceAnnotationScheme : public SimpleAnnotationScheme {
 public:
   // Constructor
-  EffectInferenceAnnotationScheme(SymbolTable &SymT)
+  SimpleEffectInferenceAnnotationScheme(SymbolTable &SymT)
+                                       : SimpleAnnotationScheme(SymT) {}
+  // Destructor
+  virtual ~SimpleEffectInferenceAnnotationScheme() {}
+
+  // Methods (Overridden)
+  virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
+}; // end class EffectInferenceAnnotationScheme
+
+// Insert effect summary variables wherever they are missing.
+class ParametricEffectInferenceAnnotationScheme
+                                  : public ParametricAnnotationScheme {
+public:
+  // Constructor
+  ParametricEffectInferenceAnnotationScheme(SymbolTable &SymT)
                                  : ParametricAnnotationScheme(SymT) {}
   // Destructor
-  virtual ~EffectInferenceAnnotationScheme() {}
+  virtual ~ParametricEffectInferenceAnnotationScheme() {}
 
   // Methods (Overridden)
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
