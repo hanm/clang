@@ -47,6 +47,8 @@ static const std::string PL_ParamSub = "param_sub";
 
 static const std::string PL_NullDomain = "null_dom";
 
+static const std::string PL_InferEffSumPredicate = "infer_es";
+
 /// \brief Rpl Inclusion Constraint
 static const std::string PL_RIConstraint = "ri_constraint";
 /// \brief Effect Summary Inclusion Constraint

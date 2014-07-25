@@ -65,7 +65,7 @@ class [[asap::param("P")]] chain
     link *start [[asap::arg("P, P")]];
 public:
     chain() : start(nullptr) {}
-    /*[[asap::writes("P")]]*/ ~chain() { delete_all(start); } //expected-warning{{Inferred Effect Summary for ~chain: [reads(rpl([rLOCAL],[])),reads(rpl([p5_P],[]))]}}
+    /*[[asap::writes("P")]]*/ ~chain() { delete_all(start); } //expected-warning{{Inferred Effect Summary for ~chain: [reads(rpl([p5_P],[])),reads(rpl([rLOCAL],[]))]}}
    
     // Add a link to the start of the chain
     void add_link /*[[asap::writes("P")]]*/ (const point &pos[[asap::arg("P")]]) 

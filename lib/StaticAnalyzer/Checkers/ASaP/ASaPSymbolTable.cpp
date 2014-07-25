@@ -725,13 +725,19 @@ void SymbolTable::emitConstraints() const {
 
 void SymbolTable::solveConstraints() const {
   emitFacts();
+  //PL_action(PL_ACTION_TRACE);
   emitConstraints();
   //loop to call esi_collect (effect inference)
+
   for (ConstraintsSetT::iterator
           I = ConstraintSet.begin(),
           E = ConstraintSet.end();
        I != E; ++I) {
     if (EffectInclusionConstraint *EIC = dyn_cast<EffectInclusionConstraint>(*I)) {
+      const VarEffectSummary *VES = dyn_cast<VarEffectSummary>(EIC->getRHS());
+      if (!VES)
+        continue; // for simple effect inference we only care about effect
+                  // inclusion constraints with variable effect summary RHS
       const FunctionDecl *FunD = EIC->getDef();
       assert(FunD && "Internal Error: Effect Inclusion Constraint without matching FunctionDecl");
       StringRef FName = getPrologName(FunD);
@@ -740,30 +746,24 @@ void SymbolTable::solveConstraints() const {
           << FunD->getNameAsString() << "' (Prolog Name: "
           << FName << ") ****\n";
 
-      std::string EVstr;
-      llvm::raw_string_ostream EV(EVstr);
-
-      EV << "ev" << FName;
-
-      term_t LHS = EIC->getLHS()->getPLTerm();
-
-      predicate_t ESI1 = PL_predicate("esi_collect",4,"user");
-      term_t H0 = PL_new_term_refs(4);
+      predicate_t InferP = PL_predicate(PL_InferEffSumPredicate.c_str(), 2, "user");
+      term_t H0 = PL_new_term_refs(2);
       term_t H1 = H0 + 1;
-      term_t H2 = H0 + 2;
-      term_t H3 = H0 + 3;
-      PL_put_atom_chars(H0,EV.str().c_str());
-      PL_put_atom_chars(H1,FName.data());
 
-      PL_put_term(H2,LHS);
-      PL_put_variable(H3);
+      const VarEffectSummary *VES = dyn_cast<VarEffectSummary>(EIC->getRHS());
+      assert(VES);
 
-      int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, ESI1, H0);
+      PL_put_term(H0, VES->getIDPLTerm());
+      PL_put_variable(H1);
+
+      int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, InferP, H0);
+
 
       assert(Rval && "Effect Inference Failed");
 
       char *Solution;
-      int Res = PL_get_chars(H3, &Solution, CVT_WRITE|BUF_RING);
+      int Res = PL_get_chars(H1, &Solution, CVT_WRITE|BUF_RING);
+
       assert(Res && "Failed to read solution from Prolog");
       OSv2 << "result is "<< Solution << "\n";
 

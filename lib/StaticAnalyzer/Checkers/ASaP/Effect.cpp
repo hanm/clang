@@ -550,7 +550,7 @@ void VarEffectSummary::print(raw_ostream &OS,
   OS << "Var Effect Summary";
 }
 
-inline term_t VarEffectSummary::getIDPLTerm() const {
+term_t VarEffectSummary::getIDPLTerm() const {
   term_t IDTerm = PL_new_term_ref();
   PL_put_atom_chars(IDTerm, ID.data());
   return IDTerm;
