@@ -216,8 +216,8 @@ ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
   } else {
     OSv2 << "DEBUG:: getRegionParamCount::UnexpectedType!! QT = "
          << QT.getAsString() << "\n";
-    OSv2 << "DEBUG:: QT.dump:\n";
-    QT.dump();
+    //OSv2 << "DEBUG:: QT.dump:\n";
+    //QT.dump();
     OSv2 << "isAtomicType = " << QT->isAtomicType() << "\n";
     OSv2 << "isBuiltinType = " << QT->isBuiltinType() << "\n";
     //OSv2 << "isSpecificBuiltinType = " << QT->isSpecificBuiltinType() << "\n";
@@ -787,10 +787,10 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
     AnnotationSet AnSe = AnnotScheme->makeParamType(ParamD, ParamCount);
     if (AnSe.ParamVec) {
       DeclContext *DC = ParamD->getDeclContext();
-      OSv2 << "DEBUG:: DeclContext:";
-      DC->dumpDeclContext();
-      OSv2 << "\n";
-      OSv2 << "DEBUG:: DeclContext->isFunctionOrMethod = "  << DC->isFunctionOrMethod() << "\n";
+      //OSv2 << "DEBUG:: DeclContext:";
+      //DC->dumpDeclContext();
+      //OSv2 << "\n";
+      //OSv2 << "DEBUG:: DeclContext->isFunctionOrMethod = "  << DC->isFunctionOrMethod() << "\n";
       //assert(DC->isFunctionOrMethod() && "Internal error: ParmVarDecl found "
       //       "outside FunctionDecl Context.");
       if (DC->isFunctionOrMethod()) {
