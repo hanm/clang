@@ -725,7 +725,7 @@ void SymbolTable::emitConstraints() const {
 
 void SymbolTable::solveConstraints() const {
   emitFacts();
-  //PL_action(PL_ACTION_TRACE);
+  PL_action(PL_ACTION_TRACE);
   emitConstraints();
   //loop to call esi_collect (effect inference)
 
@@ -749,9 +749,6 @@ void SymbolTable::solveConstraints() const {
       predicate_t InferP = PL_predicate(PL_InferEffSumPredicate.c_str(), 2, "user");
       term_t H0 = PL_new_term_refs(2);
       term_t H1 = H0 + 1;
-
-      const VarEffectSummary *VES = dyn_cast<VarEffectSummary>(EIC->getRHS());
-      assert(VES);
 
       PL_put_term(H0, VES->getIDPLTerm());
       PL_put_variable(H1);
