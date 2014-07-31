@@ -39,7 +39,6 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   bool VisitCXXInitializer,
   bool HasWriteSemantics
   ) : BaseClass(Def),
-      Checker(SymbolTable::VB.Checker),
       HasWriteSemantics(HasWriteSemantics),
       IsBase(false),
       EffectCount(0),
@@ -121,7 +120,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
       delete(SubstOVRDSum);
     } // end forall method declarations
   }
-  OS << "DEBUG:: ******** DONE INVOKING EffectCheckerVisitor ***\n";
+  OS << "DEBUG:: ******** DONE INVOKING EffectConstraintGeneratorVisitor***\n";
   //delete EffectsTmp;
 }
 
