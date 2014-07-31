@@ -686,23 +686,26 @@ void SymbolTable::emitFacts() const {
       Entry->getRegionNameSet()->assertzProlog();
       //OSv2 << "DEBUG:: asserted a region name set\n";
     }
+
     const RplDomain *Dom = Entry->getRplDomain();
     if (Dom && !Dom->isUsed()) {
       Dom->assertzProlog();
     }
-    if (isa<FunctionDecl>(Dec) && Entry->hasEffectSummary()) {
+
+    const FunctionDecl *FD = dyn_cast<FunctionDecl>(Dec);
+    const FunctionDecl *CanFD = FD ? FD->getCanonicalDecl() : 0;
+    if (FD && FD == CanFD && Entry->hasEffectSummary()) {
       const EffectSummary *EffSum = Entry->getEffectSummary();
-      assert(isa<NamedDecl>(Dec) && "Internal Error: Expected NamedDecl");
-      const NamedDecl *NDec = dyn_cast<NamedDecl>(Dec);
-      *VB.OS << "DEBUG:: NamedDecl = " << NDec->getNameAsString()
-            << ", PrologName = " << getPrologName(NDec)
+      assert(isa<NamedDecl>(FD) && "Internal Error: Expected NamedDecl");
+      *VB.OS << "DEBUG:: NamedDecl = " << FD->getNameAsString()
+            << ", PrologName = " << getPrologName(FD)
             << ", EffSum = " << Entry->getEffectSummary()->toString() << "\n";
 
       const VarEffectSummary *VarES = dyn_cast<VarEffectSummary>(EffSum);
       if (VarES && !VarES->hasInclusionConstraint()) {
-        assertzHasEffectSummary(*NDec, *PURE_EffSum);
+        assertzHasEffectSummary(*FD, *PURE_EffSum);
       } else {
-        assertzHasEffectSummary(*NDec, *EffSum);
+        assertzHasEffectSummary(*FD, *EffSum);
       }
     } // end if function declaration with effect summary.
   } // end for-all symbol table entries
