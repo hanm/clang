@@ -16,7 +16,6 @@
 
 #include "ClangSACheckers.h"
 #include "clang/AST/DeclBase.h"
-#include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
 
@@ -37,41 +36,6 @@ using namespace clang::asap;
 namespace {
 
 using clang::asap::SymbolTable;
-
-/// 1. Wrapper pass that calls a Stmt visitor on each function definition.
-template<typename StmtVisitorT>
-class StmtVisitorInvoker :
-  public RecursiveASTVisitor<StmtVisitorInvoker<StmtVisitorT> > {
-
-private:
-  /// Private Fields
-  bool FatalError;
-
-public:
-  /// Constructor
-  explicit StmtVisitorInvoker() : FatalError(false) {}
-
-  bool shouldVisitTemplateInstantiations() const { return true; }
-  bool shouldVisitImplicitCode() const { return true; }
-  bool shouldWalkTypesOfTypeLocs() const { return true; }
-
-  /// Getters & Setters
-  inline bool encounteredFatalError() { return FatalError; }
-
-  /// Visitors
-  bool VisitFunctionDecl(FunctionDecl *D) {
-    const FunctionDecl *Definition;
-    if (D->hasBody(Definition)) {
-      Stmt *S = Definition->getBody();
-      assert(S);
-
-      StmtVisitorT StmtVisitor(Definition, S, true);
-
-      FatalError |= StmtVisitor.encounteredFatalError();
-    }
-    return true;
-  }
-}; /// class StmtVisitorInvoker
 
 
 class  SafeParallelismChecker

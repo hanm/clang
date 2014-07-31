@@ -20,8 +20,9 @@
 #ifndef LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_GENERIC_STMT_VISITOR_H
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_GENERIC_STMT_VISITOR_H
 
-#include "clang/AST/StmtVisitor.h"
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/RecursiveASTVisitor.h"
+#include "clang/AST/StmtVisitor.h"
 
 #include "ASaPSymbolTable.h"
 #include "ASaPUtil.h"
@@ -29,6 +30,42 @@
 
 namespace clang {
 namespace asap {
+
+/// \brief Wrapper pass that calls a Stmt visitor on each function definition.
+template<typename StmtVisitorT>
+class StmtVisitorInvoker :
+  public RecursiveASTVisitor<StmtVisitorInvoker<StmtVisitorT> > {
+
+private:
+  /// Private Fields
+  bool FatalError;
+
+public:
+  /// Constructor
+  explicit StmtVisitorInvoker() : FatalError(false) {}
+
+  bool shouldVisitTemplateInstantiations() const { return true; }
+  bool shouldVisitImplicitCode() const { return true; }
+  bool shouldWalkTypesOfTypeLocs() const { return true; }
+
+  /// Getters & Setters
+  inline bool encounteredFatalError() { return FatalError; }
+
+  /// Visitors
+  bool VisitFunctionDecl(FunctionDecl *D) {
+    const FunctionDecl *Definition;
+    if (D->hasBody(Definition) && D == Definition) {
+      Stmt *S = Definition->getBody();
+      assert(S);
+
+      StmtVisitorT StmtVisitor(Definition, S, true);
+
+      FatalError |= StmtVisitor.encounteredFatalError();
+    }
+    return true;
+  }
+}; // end class StmtVisitorInvoker
+
 
 /// \brief Generic statement visitor that wraps different customized
 /// check pass.
