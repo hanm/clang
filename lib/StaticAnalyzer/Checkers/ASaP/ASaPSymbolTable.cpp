@@ -656,6 +656,7 @@ static void emitConstraintSolution(EffectInclusionConstraint *EC,
 
 void SymbolTable::addConstraint(Constraint *Cons) {
   assert(Cons && "Internal Error: unexpected null-pointer");
+  OSv2 << "DEBUG:: adding Constraint: " << Cons->toString() << "\n";
   ConstraintSet.insert(Cons);
   if (EffectInclusionConstraint *EIC =
         dyn_cast<EffectInclusionConstraint>(Cons)) {
@@ -725,7 +726,7 @@ void SymbolTable::emitConstraints() const {
 
 void SymbolTable::solveConstraints() const {
   emitFacts();
-  PL_action(PL_ACTION_TRACE);
+  //PL_action(PL_ACTION_TRACE);
   emitConstraints();
   //loop to call esi_collect (effect inference)
 
@@ -840,9 +841,21 @@ makeDefaultBaseArgs(const RecordDecl *Derived, long NumArgs) {
 
 void SymbolTable::createSymbolTableEntry(const Decl *D) {
   assert(!SymTable.lookup(D) && "Internal Error: trying to create duplicate entry");
+  StringRef DeclName;
+  // 0. If this is a type of declaration that has a canonical declaration
+  //    use or create-and-use that declname
+  const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
+  const FunctionDecl *CanFD = FD ? FD->getCanonicalDecl() : 0;
   // 1. Make names for decl and domain
-  StringRef DeclName = makeFreshDeclName("");
   StringRef DomName = makeFreshRplDomName("");
+  if (FD && CanFD != FD) {
+    if (!SymTable.lookup(CanFD)) {
+      createSymbolTableEntry(CanFD);
+    }
+    DeclName = SymTable.lookup(CanFD)->getPrologName();
+  } else {
+    DeclName = makeFreshDeclName("");
+  }
   // TODO: update DeclName:StringRef -> Decl Map
 
   // 2. Compute ParentDom
@@ -866,9 +879,9 @@ VarEffectSummary *SymbolTable::createFreshEffectSumVar(const FunctionDecl *D) {
   StringRef Name = makeFreshESVName("");
   return new VarEffectSummary(Name);
 }
+
 //////////////////////////////////////////////////////////////////////////
 // SymbolTableEntry
-
 SymbolTableEntry::SymbolTableEntry(StringRef DeclName,
                                    StringRef DomName,
                                    RplDomain *ParentDom)
@@ -878,8 +891,8 @@ SymbolTableEntry::SymbolTableEntry(StringRef DeclName,
                                     ComputedInheritanceSubVec(false),
                                     InheritanceSubVec(0) {
   ParamVec = new ParameterVector();
-  RegnNameSet = new RegionNameSet();
   RplDom = new RplDomain(DomName, 0, ParamVec, ParentDom);
+  RegnNameSet = new RegionNameSet();
 
 }
 

@@ -694,9 +694,9 @@ void TypeBuilderVisitor::helperBinAddSub(BinaryOperator* Exp) {
 
 
 
-TypeBuilderVisitor::
-TypeBuilderVisitor (const FunctionDecl *Def, Expr *E)
-  : BaseClass(Def), IsBase(false), DerefNum(0), Type(0) {
+TypeBuilderVisitor::TypeBuilderVisitor(const FunctionDecl *Def, Expr *E)
+                                      : BaseClass(Def), IsBase(false),
+                                        DerefNum(0), Type(0) {
 
   // Detecting options
   WarnUnsafeCasts = Mgr.getAnalyzerOptions().getBooleanOption("-asap-warn-unsafe-casts", false);
