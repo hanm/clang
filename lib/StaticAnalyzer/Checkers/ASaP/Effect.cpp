@@ -547,7 +547,7 @@ term_t ConcreteEffectSummary::getPLTerm() const {
 void VarEffectSummary::print(raw_ostream &OS,
                           std::string Separator,
                           bool PrintLastSeparator) const {
-  OS << "Var Effect Summary";
+  OS << ID << "(Effect Summary Variable)";
 }
 
 term_t VarEffectSummary::getIDPLTerm() const {
