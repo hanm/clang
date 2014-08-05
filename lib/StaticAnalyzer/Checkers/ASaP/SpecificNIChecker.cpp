@@ -211,8 +211,9 @@ getInvokeEffectSummary(const CallExpr *CallExp, Expr *Arg,
   ASaPType *Typ = TBV.getType();
 
   if (Typ) {
-    std::unique_ptr<SubstitutionSet> SubS = Typ->getSubstitutionSet();
-    ES->substitute(SubS.get());
+    std::unique_ptr<SubstitutionVector> SubV =
+      SymbolTable::Table->getSubstitutionVector(*Typ);
+    ES->substitute(SubV.get());
   }
 
   return std::unique_ptr<ConcreteEffectSummary>(ES);

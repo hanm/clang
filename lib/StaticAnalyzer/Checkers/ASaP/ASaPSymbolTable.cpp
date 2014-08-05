@@ -621,7 +621,7 @@ const ParameterVector *SymbolTable::getParameterVectorFromQualType(QualType QT) 
 }
 
 const SubstitutionVector *SymbolTable::
-getInheritanceSubVec(QualType QT) {
+getInheritanceSubVec(QualType QT) const {
   const SubstitutionVector *SubV = 0;
   if (QT->isReferenceType()) {
     SubV = getInheritanceSubVec(QT->getPointeeType());
@@ -633,6 +633,31 @@ getInheritanceSubVec(QualType QT) {
     SubV = 0;
   } /// else result = NULL;
   return SubV;
+}
+
+std::unique_ptr<SubstitutionVector> SymbolTable::
+getSubstitutionVector(const ASaPType &Typ) const {
+  // 1. Inheritance Substitution Vector
+  const SubstitutionVector *InheritanceSubV = getInheritanceSubVec(Typ.getQT());
+  SubstitutionVector *SubV;
+  if (InheritanceSubV)
+    SubV = new SubstitutionVector(*InheritanceSubV);
+  else
+    SubV = new SubstitutionVector();
+  // 2. Type Substitution Set
+  const ParameterVector *ParamV =
+    getParameterVectorFromQualType(Typ.getQT());
+  RplVector RplV;
+  for (size_t I = 0; I < ParamV->size(); ++I) {
+    const Rpl *ToRpl = Typ.getSubstArg(I);
+    assert(ToRpl);
+    RplV.push_back(ToRpl);
+  }
+  SubstitutionSet *SubS = new SubstitutionSet();
+  SubS->buildSubstitutionSet(ParamV, &RplV);
+  SubV->push_back(SubS);
+
+  return std::unique_ptr<SubstitutionVector>(SubV);
 }
 
 static void emitConstraintSolution(EffectInclusionConstraint *EC,

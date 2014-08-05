@@ -165,12 +165,12 @@ void EffectConstraintVisitor::memberSubstitute(const ValueDecl *D) {
 
   EffectsTmp->substitute(InheritanceSubV);
 
-  std::unique_ptr<SubstitutionSet> SubS = T1->getSubstitutionSet();
+  std::unique_ptr<SubstitutionVector> SubV = SymT.getSubstitutionVector(*T1);
   OS << "DEBUG:: before type substitution on LHS\n";
-  if (SubS.get())
-    OS << "DEBUG:: SubS = " << SubS.get()->toString() << "\n";
+  if (SubV.get())
+    OS << "DEBUG:: SubV = " << SubV.get()->toString() << "\n";
 
-  EffectsTmp->substitute(SubS.get());
+  EffectsTmp->substitute(SubV.get());
 
   OS << "   DONE\n";
   delete T1;

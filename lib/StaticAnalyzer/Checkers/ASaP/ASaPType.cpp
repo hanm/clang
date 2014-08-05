@@ -165,22 +165,6 @@ size_t ASaPType::getSubstSize() const {
     return ArgV->size();
 }
 
-std::unique_ptr<SubstitutionSet> ASaPType::getSubstitutionSet() const {
-  const ParameterVector *ParamV =
-    SymbolTable::Table->getParameterVectorFromQualType(QT);
-  RplVector *RplV = new RplVector();
-  for (size_t I = 0; I < ParamV->size(); ++I) {
-    const Rpl *ToRpl = getSubstArg(I);
-    assert(ToRpl);
-    RplV->push_back(ToRpl);
-  }
-
-  SubstitutionSet *SubS = new SubstitutionSet();
-  SubS->buildSubstitutionSet(ParamV, RplV);
-  return std::unique_ptr<SubstitutionSet>(SubS);
-}
-
-
 QualType ASaPType::getQT(int DerefNum) const {
   assert(DerefNum >= 0);
   QualType Result = QT;

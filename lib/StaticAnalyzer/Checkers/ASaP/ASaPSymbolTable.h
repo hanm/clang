@@ -213,8 +213,9 @@ public:
   const InheritanceMapT *getInheritanceMap(const ValueDecl *D) const;
   const InheritanceMapT *getInheritanceMap(const CXXRecordDecl *D) const;
   const InheritanceMapT *getInheritanceMap(QualType QT) const;
+  std::unique_ptr<SubstitutionVector> getSubstitutionVector(const ASaPType &Typ) const;
   const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;
-  const SubstitutionVector *getInheritanceSubVec(QualType QT);
+  const SubstitutionVector *getInheritanceSubVec(QualType QT) const;
   const StringRef getPrologName(const Decl *D) const;
   RplDomain *getRplDomain(const Decl *D) const;
 
