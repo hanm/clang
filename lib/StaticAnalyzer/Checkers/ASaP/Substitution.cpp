@@ -180,10 +180,14 @@ void SubstitutionVector::push_back_vec(const SubstitutionVector *SubV) {
 }
 
 void SubstitutionVector::merge_back(SubstitutionSet *SubS) {
-  if (SubS && size() > 0) {
-    std::unique_ptr<SubstitutionSet> Last = pop_back_val();
-    Last->take(SubS);
-    push_back(Last);
+  if (SubS) {
+    if (size() > 0) {
+      std::unique_ptr<SubstitutionSet> Last = pop_back_val();
+      Last->take(SubS);
+      push_back(Last);
+    } else {
+      push_back(SubS);
+    }
   }
 }
 
