@@ -69,6 +69,29 @@ public:
     return SetT::insert(new T(E));
   }
 
+
+  std::unique_ptr<T> take_one() {
+    if (SetT::size() > 0) {
+      T *Result = *SetT::begin();
+      SetT::erase(*SetT::begin());
+      return std::unique_ptr<T>(Result);
+    } else {
+      return std::unique_ptr<T>();
+    }
+  }
+
+  /// \brief Merge @param OwS into @this. Leaves @param OwS empty.
+  void take(OwningPtrSet<T, SIZE> *OwS) {
+    if (!OwS)
+      return; // nothing to take, all done
+
+    while(OwS->SetT::size() > 0) {
+      std::unique_ptr<T> One = OwS->take_one();
+      SetT::insert(One.release()); // non-cloning push back
+      //front.release(); // release without destroying
+    }
+  }
+
   bool erase(T *E) {
     bool Result = SetT::erase(E);
     if (Result) {
