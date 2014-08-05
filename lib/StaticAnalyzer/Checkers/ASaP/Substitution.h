@@ -136,6 +136,7 @@ public:
   std::string toString() const;
 
   void push_back_vec(const SubstitutionVector *SubV);
+  void merge_back(SubstitutionSet *SubS);
 }; // End class SubstituionVector.
 
 } // end namespace clang

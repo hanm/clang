@@ -155,13 +155,6 @@ term_t SubstitutionSet::getPLTerm() const {
 }
 
 //////////////////////////////////////////////////////////////////////////
-/*void SubstitutionVector::
-buildSubstitutionVector(const ParameterVector *ParV, const RplVector *RplVec) {
-  SubstitutionSet SubS;
-  SubS.buildSubstitutionSet(ParV, RplVec);
-  push_back(SubS);
-}*/
-
 void SubstitutionVector::print(llvm::raw_ostream &OS) const {
   for(VectorT::const_iterator I = begin(), E = end();
       I != E; ++I) {
@@ -183,6 +176,14 @@ void SubstitutionVector::push_back_vec(const SubstitutionVector *SubV) {
         I != E; ++I) {
       this->push_back(*I);
     }
+  }
+}
+
+void SubstitutionVector::merge_back(SubstitutionSet *SubS) {
+  if (SubS && size() > 0) {
+    std::unique_ptr<SubstitutionSet> Last = pop_back_val();
+    Last->take(SubS);
+    push_back(Last);
   }
 }
 
