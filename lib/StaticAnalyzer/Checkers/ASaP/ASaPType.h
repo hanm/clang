@@ -84,8 +84,9 @@ public:
   /// \brief Return the Argument for substitution after DerefNum dereferences.
   /// FIXME: support multiple region parameters per class type.
   const Rpl *getSubstArg(int DerefNum = 0) const;
+  size_t getSubstSize() const;
   /// \brief return the stubstitution vector for this type (create it if needed)
-  std::unique_ptr<SubstitutionVector> getSubstitutionVector() const;
+  std::unique_ptr<SubstitutionSet> getSubstitutionSet() const;
   /// \brief Return the QualType of this ASapType.
   inline QualType getQT() const { return QT; }
   /// \brief Return the QualType of this after DerefNum dereferences.
@@ -119,6 +120,8 @@ public:
   void join(ASaPType *That);
   /// \brief Substitution (ASaPType).
   void substitute(const SubstitutionVector *SubV);
+  /// \brief Substitution (ASaPType).
+  void substitute(const SubstitutionSet *SubV);
   /// \brief Performs substitution on type: this[FromEl <- ToRpl].
   void substitute(const Substitution *S);
 }; // end class ASaPType

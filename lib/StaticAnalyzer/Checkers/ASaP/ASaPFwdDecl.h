@@ -77,6 +77,7 @@ class SpecialRplElement;
 class SpecificNIChecker;
 class StarRplElement;
 class Substitution;
+class SubstitutionSet;
 class SubstitutionVector;
 class SymbolTable;
 class SymbolTableEntry;

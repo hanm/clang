@@ -50,16 +50,6 @@ public:
   /// \brief Build a Prolog term_t for the Substitution object
   term_t getPLTerm() const;
 
-  // Apply
-  /// \brief Apply substitution to type *T, which must implement
-  /// T->substitute(Substitution *)
-  template<typename T>
-  void applyTo(T *X) const {
-    if (X && FromEl && ToRpl) {
-      X->substitute(this);
-    }
-  }
-
   // print
   /// \brief Print Substitution: [From<-To]
   void print(llvm::raw_ostream &OS) const;
@@ -69,21 +59,48 @@ public:
 }; // end class Substitution
 
 //////////////////////////////////////////////////////////////////////////
-// An ordered sequence of substitutions
+// An unordered sequence of substitutions -- only one substitution will
+// succeed per RPL
+#ifndef SUBSTITUTION_SET_SIZE
+  #define SUBSTITUTION_SET_SIZE 4
+#endif
+class SubstitutionSet :
+  public OwningPtrSet<Substitution, SUBSTITUTION_SET_SIZE> {
+
+public:
+  void buildSubstitutionSet(const ParameterVector *ParV,
+                            const RplVector *RplVec);
+
+  void add(const ASaPType *Typ, const ParameterVector *ParamV);
+
+  /// \brief Print Substitution vector.
+  void print(llvm::raw_ostream &OS) const;
+
+  /// \brief Return a string for the Substitution vector.
+  std::string toString() const;
+
+  void applyTo(ConcreteRpl &R) const;
+
+  term_t getPLTerm() const;
+
+}; // end class SubstitutionSet
+
+//////////////////////////////////////////////////////////////////////////
+// An ordered sequence of substitution sets
 #ifndef SUBSTITUTION_VECTOR_SIZE
   #define SUBSTITUTION_VECTOR_SIZE 4
 #endif
 
 class SubstitutionVector :
-  public OwningVector<Substitution, SUBSTITUTION_VECTOR_SIZE> {
+  public OwningVector<SubstitutionSet, SUBSTITUTION_VECTOR_SIZE> {
 
 public:
   // Methods
   /// \brief Given a ParamVec (p_1, p_2, ..., p_n) and
   /// an RplVec (r_1, r_2, ..., r_n),
   /// build a SubstVec (s1, s2, ... s_n), where s_i = (p_i, r_i)
-  void buildSubstitutionVector(const ParameterVector *ParV,
-                                              RplVector *RplVec);
+  //void buildSubstitutionVector(const ParameterVector *ParV,
+  //                             const RplVector *RplVec);
 
   /// \brief Apply substitution vector to type T, which must implement
   /// T->substitute(Subtitution *)
@@ -93,7 +110,8 @@ public:
       for(VectorT::const_iterator I = begin(), E = end();
           I != E; ++I) {
         assert(*I);
-        (*I)->applyTo(X);
+        //(*I)->applyTo(X);
+        X->substitute(*I);
       }
     }
   }
@@ -104,7 +122,8 @@ public:
       for(VectorT::const_reverse_iterator I = rbegin(), E = rend();
           I != E; ++I) {
         assert(*I);
-        (*I)->applyTo(X);
+        //(*I)->applyTo(X);
+        X->substitute(*I);
       }
     }
   }
@@ -117,7 +136,6 @@ public:
   std::string toString() const;
 
   void push_back_vec(const SubstitutionVector *SubV);
-  void add(const ASaPType *Typ, const ParameterVector *ParamV);
 }; // End class SubstituionVector.
 
 } // end namespace clang

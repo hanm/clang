@@ -158,7 +158,14 @@ const Rpl *ASaPType::getSubstArg(int DerefNum) const {
     return this->ArgV->getRplAt(DerefNum);
 }
 
-std::unique_ptr<SubstitutionVector> ASaPType::getSubstitutionVector() const {
+size_t ASaPType::getSubstSize() const {
+  if (InRpl)
+    return ArgV->size() + 1;
+  else
+    return ArgV->size();
+}
+
+std::unique_ptr<SubstitutionSet> ASaPType::getSubstitutionSet() const {
   const ParameterVector *ParamV =
     SymbolTable::Table->getParameterVectorFromQualType(QT);
   RplVector *RplV = new RplVector();
@@ -168,9 +175,9 @@ std::unique_ptr<SubstitutionVector> ASaPType::getSubstitutionVector() const {
     RplV->push_back(ToRpl);
   }
 
-  SubstitutionVector *SubV = new SubstitutionVector();
-  SubV->buildSubstitutionVector(ParamV, RplV);
-  return std::unique_ptr<SubstitutionVector>(SubV);
+  SubstitutionSet *SubS = new SubstitutionSet();
+  SubS->buildSubstitutionSet(ParamV, RplV);
+  return std::unique_ptr<SubstitutionSet>(SubS);
 }
 
 
@@ -394,8 +401,10 @@ bool ASaPType::implicitCastToBase(QualType BaseQT, SymbolTable &SymT) {
        << Paths->front().size() << "\n";
 
   const ParameterVector *ParV = SymT.getParameterVector(DerivedRD);
+  SubstitutionSet SubS;
+  SubS.buildSubstitutionSet(ParV, ArgV);
   SubstitutionVector SubVec;
-  SubVec.buildSubstitutionVector(ParV, ArgV);
+  SubVec.push_back(SubS);
 
   const InheritanceMapT *CurrMap = InheritanceMap;
   for (CXXBasePath::iterator I = Path.begin(), E = Path.end();
@@ -410,9 +419,9 @@ bool ASaPType::implicitCastToBase(QualType BaseQT, SymbolTable &SymT) {
     RecordDecl *BaseRD = BaseRT->getDecl();
     assert(BaseRD);
     IMapPair Pair = CurrMap->lookup(BaseRD);
-    const SubstitutionVector *SV = Pair.second;
+    const SubstitutionSet *SubS = Pair.second;
 
-    SubVec.push_back_vec(SV);
+    SubVec.push_back(SubS);
     // prepare for next iter
     SymbolTableEntry *STE = Pair.first;
     assert(STE);
@@ -456,6 +465,16 @@ void ASaPType::join(ASaPType *That) {
 void ASaPType::substitute(const SubstitutionVector *SubV) {
   if (SubV)
     SubV->applyTo(this);
+}
+
+void ASaPType::substitute(const SubstitutionSet *SubS) {
+  if (!SubS)
+    return;
+
+  if (InRpl)
+    InRpl->substitute(SubS);
+  if (ArgV)
+    ArgV->substitute(SubS);
 }
 
 void ASaPType::substitute(const Substitution *Sub) {

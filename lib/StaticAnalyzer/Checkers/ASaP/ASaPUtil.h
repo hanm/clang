@@ -130,26 +130,26 @@ term_t buildPLEmptyList();
 void buildTypeSubstitution(const SymbolTable &SymT,
                            const RecordDecl *ClassD,
                            const ASaPType *Typ,
-                           SubstitutionVector &SubV);
+                           SubstitutionSet &SubS);
 
 void buildSingleParamSubstitution(const FunctionDecl *Def,
                                   SymbolTable &SymT,
                                   ParmVarDecl *Param, Expr *Arg,
                                   const ParameterSet &ParamSet,
-                                  SubstitutionVector &SubV);
+                                  SubstitutionSet &SubS);
 
 void buildParamSubstitutions(const FunctionDecl *Def,
                              SymbolTable &SymT,
                              const FunctionDecl *CalleeDecl,
                              ExprIterator ArgI, ExprIterator ArgE,
                              const ParameterSet &ParamSet,
-                             SubstitutionVector &SubV);
+                             SubstitutionSet &SubS);
 
 void tryBuildParamSubstitutions(const FunctionDecl *Def,
                                 SymbolTable &SymT,
                                 const FunctionDecl *CalleeDecl,
                                 ExprIterator ArgI, ExprIterator ArgE,
-                                SubstitutionVector &SubV);
+                                SubstitutionSet &SubS);
 
 Stmt *getBody(const FunctionDecl *D);
 

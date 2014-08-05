@@ -41,6 +41,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   ) : BaseClass(Def),
       HasWriteSemantics(HasWriteSemantics),
       IsBase(false),
+      IsCall(false),
       EffectCount(0),
       DerefNum(0),
       IsCoveredBySummary(RK_TRUE) {
@@ -64,7 +65,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   //create a constraint object
   EC = new EffectInclusionConstraint(SymT.makeFreshConstraintName(),
                                      0, EffSummary, Def, S);
-
+  EffectsTmp = new EffectVector();
   if (VisitCXXInitializer) {
     if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
       helperVisitCXXConstructorDecl(D);
@@ -77,21 +78,30 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   OS << "DEBUG:: done running Visit\n";
   if (const CXXMethodDecl *CXXD = dyn_cast<CXXMethodDecl>(Def)) {
     // check overidden methods have an effect summary that covers this one
+    OS << "DEBUG:: here 1\n";
     const EffectSummary *DerivedSum = SymT.getEffectSummary(CXXD);
     assert(DerivedSum);
     const CXXRecordDecl *DerivedClass = CXXD->getParent();
+    OS << "DEBUG:: here 2\n";
 
     for(CXXMethodDecl::method_iterator
         I = CXXD->begin_overridden_methods(),
         E = CXXD->end_overridden_methods();
         I != E; ++I) {
       const CXXMethodDecl* OverriddenMethod = *I; // i.e., base Method
+      OS << "DEBUG:: here 3\n";
 
       const EffectSummary *OverriddenSum = SymT.getEffectSummary(OverriddenMethod);
       assert(OverriddenSum);
+      OS << "DEBUG:: here 4\n";
 
-      const SubstitutionVector *SubVec =SymT.getInheritanceSubVec(DerivedClass);
+      const SubstitutionVector *SubVec = SymT.getInheritanceSubVec(DerivedClass);
+      OS << "DEBUG:: here 5\n";
       EffectSummary *SubstOVRDSum = OverriddenSum->clone();
+      OS << "DEBUG:: here 6\n";
+      OS << "DEBUG:: SubstOVRDSum = " << SubstOVRDSum->toString() << "\n";
+      OS << "DEBUG:: SubVec = " << SubVec->toString() << "\n";
+      OS << "DEBUG:: SubVec size = " << SubVec->size() << "\n";
       SubVec->applyTo(SubstOVRDSum);
 
       OS << "DEBUG:: overidden summary error:\n";
@@ -121,7 +131,8 @@ EffectConstraintVisitor::EffectConstraintVisitor (
     } // end forall method declarations
   }
   OS << "DEBUG:: ******** DONE INVOKING EffectConstraintGeneratorVisitor***\n";
-  //delete EffectsTmp;
+  assert(EffectsTmp && EffectsTmp->size() == 0);
+  delete EffectsTmp;
 }
 
 void EffectConstraintVisitor::memberSubstitute(const ValueDecl *D) {
@@ -149,18 +160,31 @@ void EffectConstraintVisitor::memberSubstitute(const ValueDecl *D) {
       SymT.getInheritanceSubVec(T1->getQT());
   OS << "DEBUG:: before inheritance substitution on LHS (EffectCount="
      << EffectCount << ")\n";
-  EC->getLHS()->substitute(InheritanceSubV, EffectCount);
+  if (InheritanceSubV)
+    OS << "DEBUG:: Inheritance SubV = " << InheritanceSubV->toString() << "\n";
 
-  std::unique_ptr<SubstitutionVector> SubV = T1->getSubstitutionVector();
+  EffectsTmp->substitute(InheritanceSubV);
+
+  std::unique_ptr<SubstitutionSet> SubS = T1->getSubstitutionSet();
   OS << "DEBUG:: before type substitution on LHS\n";
-  EC->getLHS()->substitute(SubV.get(), EffectCount);
+  if (SubS.get())
+    OS << "DEBUG:: SubS = " << SubS.get()->toString() << "\n";
 
-  //OS << "DEBUG:: EC->LHS=" << EC->LHS->
+  EffectsTmp->substitute(SubS.get());
+
   OS << "   DONE\n";
   delete T1;
 }
+void EffectConstraintVisitor::finalizeCollectedEffects(size_t EffectNr) {
+  assert(EffectsTmp && EffectsTmp->size() >= EffectNr
+    && "Internal Error: size of EffectsTmp insufficient");
+  for (size_t I = 0; I < EffectNr; ++I) {
+    std::unique_ptr<Effect> E = EffectsTmp->pop_back_val();
+    EC->addEffect(E);
+  }
+}
 
-int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp) {
+size_t EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr *Exp) {
 
   if (DerefNum < 0)
     return 0;
@@ -184,7 +208,7 @@ int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp)
 
   if (T1->isReferenceType())
     T1->deref();
-  int EffectNr = 0;
+  size_t EffectNr = 0;
 
   OS << "DEBUG:: Type used for collecting effects = "
     << T1->toString(Ctx) << "\n";
@@ -197,10 +221,10 @@ int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp)
     //assert(InRpl);
     if (InRpl) {
       // Arrays may not have an InRpl
-      Effect E(Effect::EK_ReadsEffect, InRpl, exp);
+      Effect E(Effect::EK_ReadsEffect, InRpl, Exp);
       OS << "DEBUG:: Adding Effect "<< E.toString() << "to " <<
         EC->getDef()->getNameAsString() << "\n";
-      EC->addEffect(&E);
+      EffectsTmp->push_back(E);
       EC->print(OS);
       EffectNr++;
     }
@@ -212,10 +236,10 @@ int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp)
       Effect::EK_WritesEffect : Effect::EK_ReadsEffect;
     const Rpl *InRpl = T1->getInRpl();
     if (InRpl) {
-      Effect E(EK, InRpl, exp);
+      Effect E(EK, InRpl, Exp);
       OS << "DEBUG:: Adding Effect "<< E.toString() << "to " <<
         EC->getDef()->getNameAsString() << "\n";
-      EC->addEffect(&E);
+      EffectsTmp->push_back(E);
       EC->print(OS);
       EffectNr++;
     } else {
@@ -223,6 +247,7 @@ int EffectConstraintVisitor::collectEffects(const ValueDecl *D, const Expr* exp)
     }
   }
   delete T1;
+  OS << "DEBUG:: collectEffects returning #Effects = " << EffectNr << "\n";
   return EffectNr;
 }
 
@@ -419,9 +444,22 @@ helperVisitCXXConstructorDecl(const CXXConstructorDecl *D) {
 }
 
 void EffectConstraintVisitor::
+helperVisitCallArguments(ExprIterator I, ExprIterator E) {
+  for (; I != E; ++I) {
+      EffectVector TmpEffs;
+      assert(TmpEffs.size() == 0 && "Internal Error: Size of TmpEffs should be zero");
+      SaveAndRestore<EffectVector*> VisitWithFreshTmpEffVector(EffectsTmp, &TmpEffs);
+      SaveAndRestore<bool> VisitInitWithReadSemantics(HasWriteSemantics, false);
+      SaveAndRestore<int> EffectAccumulate(EffectCount, 0);
+      SaveAndRestore<int> ResetDerefNum(DerefNum,  0);
+      Visit(*I);
+  }
+}
+
+void EffectConstraintVisitor::
 checkCXXConstructExpr(VarDecl *VarD,
                       CXXConstructExpr *Exp,
-                      SubstitutionVector &SubV) {
+                      SubstitutionSet &SubS) {
   // 1. build substitutions
   CXXConstructorDecl *ConstrDecl =  Exp->getConstructor();
   DeclContext *ClassDeclContext = ConstrDecl->getDeclContext();
@@ -430,11 +468,13 @@ checkCXXConstructExpr(VarDecl *VarD,
   assert(ClassDecl);
   // Set up Substitution Vector
   const ASaPType *T = SymT.getType(VarD);
-  buildTypeSubstitution(SymT, ClassDecl, T, SubV);
+  buildTypeSubstitution(SymT, ClassDecl, T, SubS);
   tryBuildParamSubstitutions(Def, SymT, ConstrDecl, Exp->arg_begin(),
-                             Exp->arg_end(), SubV);
+                             Exp->arg_end(), SubS);
 
   // 2. Add effects to tmp effects
+  SubstitutionVector SubV;
+  SubV.push_back(SubS);
   Effect IE(Effect::EK_InvocEffect, Exp, ConstrDecl, &SubV);
   OS << "DEBUG:: Adding invocation Effect "<< IE.toString() << "\n";
   OS << "DEBUG:: Callee = ";
@@ -446,13 +486,7 @@ checkCXXConstructExpr(VarDecl *VarD,
   EC->addEffect(&IE);
 
   // 3. Visit arguments
-  for (ExprIterator I = Exp->arg_begin(), E = Exp->arg_end();
-       I != E; ++I) {
-      SaveAndRestore<bool> VisitInitWithReadSemantics(HasWriteSemantics, false);
-      SaveAndRestore<int> EffectAccumulate(EffectCount, 0);
-      SaveAndRestore<int> ResetDerefNum(DerefNum,  0);
-      Visit(*I);
-  }
+  helperVisitCallArguments(Exp->arg_begin(), Exp->arg_end());
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -470,23 +504,25 @@ void EffectConstraintVisitor::VisitMemberExpr(MemberExpr *Exp) {
   OS << "LV_Valid\n";
   else
   OS << "not LV_Valid\n";*/
-  ValueDecl* VD = Exp->getMemberDecl();
+  ValueDecl *VD = Exp->getMemberDecl();
   VD->print(OS, Ctx.getPrintingPolicy());
   OS << "\n";
 
-  if (IsBase){
+  if (IsBase) {
     memberSubstitute(VD);
   }
 
-  int EffectNr=collectEffects(VD, Exp);
+  size_t EffectNr = collectEffects(VD, Exp);
 
   /// 2.3. Visit Base with read semantics, then restore write semantics
+  bool IsFun = VD->getType()->isFunctionType();
+  SaveAndRestore<bool> VisitCall(IsCall, IsFun);
   SaveAndRestore<bool> VisitBase(IsBase, true);
   SaveAndRestore<int> EffectAccumulate(EffectCount, EffectCount+EffectNr);
   SaveAndRestore<bool> VisitBaseWithReadSemantics(HasWriteSemantics, false);
   SaveAndRestore<int> ResetDerefNum(DerefNum, (Exp->isArrow() ? 1 : 0));
-
   Visit(Exp->getBase());
+  finalizeCollectedEffects(EffectNr);
 }
 
 void EffectConstraintVisitor::VisitUnaryAddrOf(UnaryOperator *E)  {
@@ -594,8 +630,8 @@ void EffectConstraintVisitor::VisitDeclStmt(DeclStmt *S) {
             break; // VD->getInit() could be a ParenListExpr or perhaps some
                    // other Expr
           assert(Exp);
-          SubstitutionVector SubV;
-          checkCXXConstructExpr(VD, Exp, SubV);
+          SubstitutionSet SubS;
+          checkCXXConstructExpr(VD, Exp, SubS);
           break;
         }
       }
@@ -614,19 +650,18 @@ void EffectConstraintVisitor::VisitDeclRefExpr(DeclRefExpr *Exp) {
   if (IsBase){
     memberSubstitute(VD);
   }
-  collectEffects(VD, Exp);
+  size_t EffectNr = collectEffects(VD, Exp);
+  finalizeCollectedEffects(EffectNr);
 }
 
 void EffectConstraintVisitor::VisitCXXThisExpr(CXXThisExpr *E) {
-  //OS << "DEBUG:: visiting 'this' expression\n";
-  //DerefNum = 0;
   OS << "DEBUG:: VisitCXXThisExpr!! :)\n";
   OS << "DEBUG:: Type of 'this' = " << E->getType().getAsString() << "\n";
   const SubstitutionVector *InheritanceSubV =
       SymT.getInheritanceSubVec(E->getType()->getPointeeType());
   if(InheritanceSubV) {
     OS << "DEBUG:: InheritanceSubV.size = " << InheritanceSubV->size() << "\n";
-    EC->getLHS()->substitute(InheritanceSubV, EffectCount);
+    EffectsTmp->substitute(InheritanceSubV);
   }
 
 }
@@ -663,15 +698,8 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
     assert(CalleeDecl && "Internal Error: Expected non-null Callee Declaration");
 
     /// 1. Visit Arguments w. Read semantics
-    {
-      SaveAndRestore<bool> VisitWithReadSemantics(HasWriteSemantics, false);
-      OS << "DEBUG:: Visiting Args with Read semantics.\n";
-      for(ExprIterator I = Exp->arg_begin(), E = Exp->arg_end();
-          I != E; ++I) {
-        Visit(*I);
-      }
-      OS << "DEBUG:: DONE Visiting Args with Read semantics.\n";
-    }
+    helperVisitCallArguments(Exp->arg_begin(), Exp->arg_end());
+    OS << "DEBUG:: DONE Visiting Args with Read semantics.\n";
 
     FunctionDecl *FunD = dyn_cast<FunctionDecl>(CalleeDecl);
     VarDecl *VarD = dyn_cast<VarDecl>(CalleeDecl); // Non-null if calling through fn-ptr
@@ -682,9 +710,8 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
       if (CanD)
         FunD = CanD;
       OS << "DEBUG:: VisitCallExpr::(FunD!=NULL)\n";
-      SubstitutionVector SubV;
-      if (FunD->isOverloadedOperator()
-          && isa<CXXMethodDecl>(FunD)) {
+      SubstitutionSet SubS;
+      if (FunD->isOverloadedOperator() && isa<CXXMethodDecl>(FunD)) {
 
         OS << "DEBUG:: isa<CXXOperatorCallExpr>(Exp) == true\n";
         CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(FunD);
@@ -692,23 +719,27 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
         CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
         TypeBuilderVisitor TBV(Def, Exp->getArg(0));
         ASaPType *Typ = TBV.getType();
-        buildTypeSubstitution(SymT, Rec, Typ, SubV);
+        buildTypeSubstitution(SymT, Rec, Typ, SubS);
         tryBuildParamSubstitutions(Def, SymT, FunD, Exp->arg_begin()+1,
-                                   Exp->arg_end(), SubV);
+                                   Exp->arg_end(), SubS);
       } else {
         tryBuildParamSubstitutions(Def, SymT, FunD, Exp->arg_begin(),
-                                   Exp->arg_end(), SubV);
+                                   Exp->arg_end(), SubS);
       }
 
       /// 2. Add effects to tmp effects
+      SubstitutionVector SubV;
+      SubV.push_back(SubS);
 
       Effect IE(Effect::EK_InvocEffect, Exp, FunD, &SubV);
       OS << "DEBUG:: Adding invocation Effect "<< IE.toString() <<
         "to " << EC->getDef()->getNameAsString() << "\n";
-      EC->addEffect(&IE);
+      EffectsTmp->push_back(IE);
       /// 3. Visit base if it exists
       SaveAndRestore<int> EffectAccumulator(EffectCount, EffectCount+1);
       Visit(Exp->getCallee());
+      std::unique_ptr<Effect> E = EffectsTmp->pop_back_val();
+      EC->addEffect(E);
     // end if (FunD)
     } else { // VarD != null (call through function pointer)
     // TODO
@@ -721,7 +752,7 @@ VisitArraySubscriptExpr(ArraySubscriptExpr *Exp) {
   // 1. Visit index with read semantics
   {
     SaveAndRestore<bool> VisitWithReadSemantics(HasWriteSemantics, false);
-    SaveAndRestore<int> IncreaseDerefNum(DerefNum, 0);
+    SaveAndRestore<int> ResetDerefNum(DerefNum, 0);
     Visit(Exp->getIdx());
   }
   // 2. visit base

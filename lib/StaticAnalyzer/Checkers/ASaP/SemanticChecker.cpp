@@ -152,15 +152,15 @@ addASaPBaseTypeToMap(CXXRecordDecl *Derived,
   const ParameterVector *DerivedParV = SymT.getParameterVector(Derived);
   assert(DerivedParV && "Derived class has an uninitialized ParamVec");
 
-  SubstitutionVector *SubV = new SubstitutionVector();
+  SubstitutionSet *SubS = new SubstitutionSet();
   if (RplVec) {
     assert(ParV->size() == RplVec->size()
           && "Base class and RPL vector must have the same # of region args");
     // Build Substitution Vector
-    SubV->buildSubstitutionVector(ParV, RplVec);
+    SubS->buildSubstitutionSet(ParV, RplVec);
   } // else the Substitution Vector stays empty.
 
-  SymT.addBaseTypeAndSub(Derived, BaseD, SubV);
+  SymT.addBaseTypeAndSub(Derived, BaseD, SubS);
 }
 
 void ASaPSemanticCheckerTraverser::

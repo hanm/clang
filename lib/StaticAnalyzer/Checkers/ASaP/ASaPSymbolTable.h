@@ -214,6 +214,7 @@ public:
   const InheritanceMapT *getInheritanceMap(const CXXRecordDecl *D) const;
   const InheritanceMapT *getInheritanceMap(QualType QT) const;
   const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;
+  const SubstitutionVector *getInheritanceSubVec(QualType QT);
   const StringRef getPrologName(const Decl *D) const;
   RplDomain *getRplDomain(const Decl *D) const;
 
@@ -265,7 +266,7 @@ public:
   bool addParameterName(const Decl *D, llvm::StringRef Name);
 
   bool addBaseTypeAndSub(const Decl *D, const RecordDecl *Base,
-                         SubstitutionVector *&SubV);
+                         SubstitutionSet *&SubS);
 
   bool addParallelFun(const FunctionDecl *D, const SpecificNIChecker *NIC);
 
@@ -276,7 +277,6 @@ public:
   /// \brief Get parameter vector from Clang::Type
   const ParameterVector *getParameterVectorFromQualType(QualType QT) const;
 
-  const SubstitutionVector *getInheritanceSubVec(QualType QT);
 
   inline StringRef makeFreshParamName(const std::string &Name) {
     std::stringstream ss;
@@ -421,9 +421,9 @@ public:
   /// \brief Add an entry to the Inheritance Map
   bool addBaseTypeAndSub(const RecordDecl *BaseRD,
                          SymbolTableEntry *Base,
-                         SubstitutionVector *&SubV);
+                         SubstitutionSet *&SubS);
 
-  const SubstitutionVector *getSubVec(const RecordDecl *Base) const;
+  const SubstitutionSet *getSubstitutionSet(const RecordDecl *Base) const;
   const SubstitutionVector *getInheritanceSubVec();
 
 protected:

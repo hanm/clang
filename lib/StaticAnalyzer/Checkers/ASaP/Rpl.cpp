@@ -75,7 +75,13 @@ bool Rpl::isValidRegionName(const llvm::StringRef& Str) {
 
 /// Member functions
 inline void Rpl::addSubstitution(const Substitution &S) {
-  SubV.push_back(S);
+  SubstitutionSet SubS;
+  SubS.insert(S);
+  SubV.push_back(SubS);
+}
+
+inline void Rpl::addSubstitution(const SubstitutionSet &SubS) {
+  SubV.push_back(SubS);
 }
 
 term_t Rpl::getSubVPLTerm() const {
@@ -412,9 +418,10 @@ Trivalent ConcreteRpl::isDisjoint(const Rpl &That) const {
          || LHS1.isDisjointLeft(RHS1) || LHS2.isDisjointRight(RHS2));
 }
 
-void ConcreteRpl::substitute(const Substitution *S) {
+Trivalent ConcreteRpl::substitute(const Substitution *S) {
+  Trivalent Result = RK_FALSE; // set to true if substitution is
   if (!S || !S->getFrom() || !S->getTo())
-    return; // Nothing to do.
+    return Result; // Nothing to do.
   const RplElement &FromEl = *S->getFrom();
   const Rpl &ToRpl = *S->getTo();
 
@@ -427,6 +434,7 @@ void ConcreteRpl::substitute(const Substitution *S) {
   /// A parameter is only allowed at the head of an Rpl
   RplElementVectorTy::iterator I = RplElements.begin();
   if (*(*I) == FromEl) {
+    Result = RK_TRUE;
     if (const ConcreteRpl *ConcToRpl = dyn_cast<ConcreteRpl>(&ToRpl)) {
       OSv2 << "DEBUG:: found '" << FromEl.getName()
         << "' replaced with '" ;
@@ -447,6 +455,12 @@ void ConcreteRpl::substitute(const Substitution *S) {
   os << "): ";
   print(os);
   os << "\n";
+  return Result;
+}
+
+void ConcreteRpl::substitute(const SubstitutionSet *SubS) {
+  if (SubS)
+    SubS->applyTo(*this);
 }
 
 inline void ConcreteRpl::appendRplTail(ConcreteRpl *That) {
@@ -545,9 +559,18 @@ void VarRpl::join(Rpl *That) {
   assert(false && "join operation not yet supported for VarRpl type");
 }
 
-void VarRpl::substitute(const Substitution *S) {
-  if (S)
+Trivalent VarRpl::substitute(const Substitution *S) {
+  if (S) {
     addSubstitution(*S);
+    return RK_DUNNO;
+  } else {
+    return RK_FALSE;
+  }
+}
+
+void VarRpl::substitute(const SubstitutionSet *SubS) {
+  if (SubS)
+    addSubstitution(*SubS);
 }
 
 void VarRpl::print(raw_ostream &OS) const {
@@ -740,6 +763,14 @@ Trivalent RplVector::isIncludedIn (const RplVector &That) const {
 }
 
 void RplVector::substitute(const Substitution *S) {
+  for(VectorT::const_iterator I = begin(), E = end();
+        I != E; ++I) {
+    if (*I)
+      (*I)->substitute(S);
+  }
+}
+
+void RplVector::substitute(const SubstitutionSet *S) {
   for(VectorT::const_iterator I = begin(), E = end();
         I != E; ++I) {
     if (*I)

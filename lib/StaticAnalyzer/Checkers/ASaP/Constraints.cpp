@@ -78,6 +78,10 @@ void EffectInclusionConstraint::addEffect(const Effect *Eff) {
   LHS->push_back(Eff);
 }
 
+void EffectInclusionConstraint::addEffect(std::unique_ptr<Effect> &Eff) {
+  LHS->push_back(Eff);
+}
+
 void EffectInclusionConstraint::addEffects(const ConcreteEffectSummary &ES) {
   LHS->addEffects(ES);
 }

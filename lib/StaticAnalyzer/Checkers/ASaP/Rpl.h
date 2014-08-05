@@ -235,6 +235,8 @@ public:
   }
 
   void addSubstitution(const Substitution &S);
+  void addSubstitution(const SubstitutionSet &SubS);
+
   term_t getSubVPLTerm() const;
 
   // Nesting (Under)
@@ -251,7 +253,8 @@ public:
   std::string toString() const;
   virtual void print(llvm::raw_ostream &OS) const;
   virtual void join(Rpl *That) = 0;
-  virtual void substitute(const Substitution *S) = 0;
+  virtual Trivalent substitute(const Substitution *S) = 0;
+  virtual void substitute(const SubstitutionSet *SubS) = 0;
   virtual bool operator == (const RplElement &That) const = 0;
   virtual term_t getPLTerm() const = 0;
   virtual term_t getRplElementsPLTerm() const = 0;
@@ -399,8 +402,8 @@ typedef llvm::SmallVector<const RplElement*,
 
   // Substitution (Rpl)
   /// \brief this[FromEl <- ToRpl]
-  //void substitute(const RplElement& FromEl, const Rpl& ToRpl);
-  virtual void substitute(const Substitution *S);
+  virtual Trivalent substitute(const Substitution *S);
+  virtual void substitute(const SubstitutionSet *SubS);
 
   /// \brief Append to this RPL the argument Rpl but without its head element.
   void appendRplTail(ConcreteRpl *That);
@@ -466,7 +469,8 @@ public:
   virtual Trivalent isDisjoint(const Rpl &That) const;
 
   virtual void join(Rpl *That);
-  virtual void substitute(const Substitution *S);
+  virtual Trivalent substitute(const Substitution *S);
+  virtual void substitute(const SubstitutionSet *SubS);
   virtual term_t getPLTerm() const;
   virtual term_t getRplElementsPLTerm() const;
 
@@ -624,6 +628,7 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
 
   /// \brief Substitution this[FromEl <- ToRpl] (over RPL vector)
   void substitute(const Substitution *S);
+  void substitute(const SubstitutionSet *SubS);
   /// \brief Print RPL vector
   void print(llvm::raw_ostream &OS) const;
   /// \brief Return a string for the RPL vector.

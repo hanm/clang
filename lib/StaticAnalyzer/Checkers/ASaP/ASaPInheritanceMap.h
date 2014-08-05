@@ -25,7 +25,7 @@ namespace asap {
 // corresponds to the Decl so we won't have to store a pointer to
 // the SymbolTable from the SymbolTableEntries, in order to resolve
 // the Decls
-typedef std::pair<SymbolTableEntry *, const SubstitutionVector *> IMapPair;
+typedef std::pair<SymbolTableEntry *, const SubstitutionSet *> IMapPair;
 typedef llvm::DenseMap<const RecordDecl *, IMapPair> InheritanceMapT;
 
 } // end namespace asap

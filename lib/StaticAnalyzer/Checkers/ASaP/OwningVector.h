@@ -77,6 +77,10 @@ public:
     VectorT::push_back(new ElmtTyp(E));
   }
 
+  inline void push_back (std::unique_ptr<ElmtTyp> &E) {
+    VectorT::push_back(E.release());
+  }
+
   inline std::unique_ptr<ElmtTyp> pop_back_val() {
     ElmtTyp *Back = VectorT::pop_back_val();
     return std::unique_ptr<ElmtTyp>(Back);

@@ -513,7 +513,7 @@ hasRegionOrParameterName(const Decl *D, StringRef Name) const {
 bool SymbolTable::hasBase(const Decl *D, const RecordDecl *Base) const {
   if (!SymTable.lookup(D) || !SymTable.lookup(Base))
     return false;
-  return (SymTable.lookup(D)->getSubVec(Base) == 0)? false : true;
+  return (SymTable.lookup(D)->getSubstitutionSet(Base) == 0)? false : true;
 }
 
 bool SymbolTable::addRegionName(const Decl *D,
@@ -544,8 +544,8 @@ bool SymbolTable::addParameterName(const Decl *D, StringRef Name) {
 
 bool SymbolTable::addBaseTypeAndSub(const Decl *D,
                                     const RecordDecl *Base,
-                                    SubstitutionVector *&SubV) {
-  if (!SubV)
+                                    SubstitutionSet *&SubS) {
+  if (!SubS)
     return true; // Nothing to do here
   if (hasBase(D, Base)) {
     return false; // FIXME: should we instead merge SubVs?...
@@ -556,7 +556,7 @@ bool SymbolTable::addBaseTypeAndSub(const Decl *D,
   if (!SymTable.lookup(Base))
     createSymbolTableEntry(Base);
 
-  SymTable[D]->addBaseTypeAndSub(Base, SymTable.lookup(Base), SubV);
+  SymTable[D]->addBaseTypeAndSub(Base, SymTable.lookup(Base), SubS);
   return true;
 }
 
@@ -978,22 +978,22 @@ void SymbolTableEntry::deleteEffectSummary() {
 
 bool SymbolTableEntry::addBaseTypeAndSub(const RecordDecl *BaseRD,
                                          SymbolTableEntry *BaseTE,
-                                         SubstitutionVector *&SubV) {
+                                         SubstitutionSet *&SubS) {
   // If we're not adding a substitution then skip it altogether.
-  if (!SubV)
+  if (!SubS)
     return true;
   // Allocate map if it doesn't exist.
   if (!InheritanceMap)
     InheritanceMap = new InheritanceMapT();
   // Add to map.
-  std::pair<SymbolTableEntry *, SubstitutionVector *> p(BaseTE, SubV);
+  std::pair<SymbolTableEntry *, SubstitutionSet *> p(BaseTE, SubS);
   (*InheritanceMap)[BaseRD] = p;
-  SubV = 0;
+  SubS = 0;
   return true;
 }
 
-const SubstitutionVector * SymbolTableEntry::
-getSubVec(const RecordDecl *Base) const {
+const SubstitutionSet * SymbolTableEntry::
+getSubstitutionSet(const RecordDecl *Base) const {
   if (!InheritanceMap)
     return 0;
   return (*InheritanceMap)[Base].second;
@@ -1013,8 +1013,8 @@ void SymbolTableEntry::computeInheritanceSubVec() {
       SymbolTableEntry *STE = (*I).second.first;
       InheritanceSubVec->push_back_vec(STE->getInheritanceSubVec());
       // 2. Last step: add these here substitutions
-      const SubstitutionVector *SubV = (*I).second.second;
-      InheritanceSubVec->push_back_vec(SubV);
+      const SubstitutionSet *SubS = (*I).second.second;
+      InheritanceSubVec->push_back(SubS);
       // Note: this order is important (i.e., first push_back the
       // base class inheritance substitutions (recursively) then
       // the substitution from for this base class to the next.

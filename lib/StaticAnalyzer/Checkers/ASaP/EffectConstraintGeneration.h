@@ -36,6 +36,8 @@ class EffectConstraintVisitor
   bool HasWriteSemantics;
   /// True when visiting a base expression (e.g., B in B.f, or B->f).
   bool IsBase;
+
+  bool IsCall;
   /// Number of Effects of a statement visited so far. Used for substitutions.
   int EffectCount;
   /// Count of number of dereferences on expression (values in [-1, 0, ...] ).
@@ -46,7 +48,8 @@ class EffectConstraintVisitor
   /// \brief Using Type with DerefNum perform substitution on all TmpEffects.
   void memberSubstitute(const ValueDecl *D);
   /// \brief Adds effects to TmpEffects and returns the number of effects added.
-  int collectEffects(const ValueDecl *D, const Expr *exp);
+  size_t collectEffects(const ValueDecl *D, const Expr *exp);
+  void finalizeCollectedEffects(size_t EffectNr);
     //checks that the effects in LHS are covered by RHS
   void checkEffectCoverage();
   void emitEffectNotCoveredWarning(const Stmt *S,
@@ -63,8 +66,9 @@ class EffectConstraintVisitor
 
   void helperVisitAssignment(BinaryOperator *E);
   void helperVisitCXXConstructorDecl(const CXXConstructorDecl *D);
+  void helperVisitCallArguments(ExprIterator I, ExprIterator E);
   void checkCXXConstructExpr(VarDecl *VarD,
-                             CXXConstructExpr *Exp, SubstitutionVector &SubV);
+                             CXXConstructExpr *Exp, SubstitutionSet &SubS);
 
 public:
   // Constructor

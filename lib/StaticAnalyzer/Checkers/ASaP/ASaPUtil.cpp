@@ -177,13 +177,13 @@ term_t buildPLEmptyList() {
 void buildTypeSubstitution(const SymbolTable &SymT,
                            const RecordDecl *ClassD,
                            const ASaPType *Typ,
-                           SubstitutionVector &SubV) {
+                           SubstitutionSet &SubS) {
   if (!ClassD || !Typ)
     return;
 
   // Set up Substitution Vector
   const ParameterVector *PV = SymT.getParameterVector(ClassD);
-  SubV.add(Typ, PV);
+  SubS.add(Typ, PV);
 }
 
 void buildSingleParamSubstitution(
@@ -191,7 +191,7 @@ void buildSingleParamSubstitution(
         SymbolTable &SymT,
         ParmVarDecl *Param, Expr *Arg,
         const ParameterSet &ParamSet, // Set of fn & class region params
-        SubstitutionVector &SubV) {
+        SubstitutionSet &SubS) {
   *SymbolTable::VB.OS << "DEBUG::  buildSingleParamSubstitution BEGIN\n";
   // if the function parameter has region argument that is a region
   // parameter, infer a substitution based on the type of the function argument
@@ -231,7 +231,7 @@ void buildSingleParamSubstitution(
       Substitution Sub(Elmt, *ArgI);
       *SymbolTable::VB.OS << "DEBUG::buildSingleParamSubstitution: adding Substitution = "
         << Sub.toString() << "\n";
-      SubV.push_back(&Sub);
+      SubS.insert(&Sub);
       //OS << "DEBUG:: added function param sub: " << Sub.toString() << "\n";
     }
   }
@@ -244,7 +244,7 @@ void buildParamSubstitutions(
         const FunctionDecl *CalleeDecl,
         ExprIterator ArgI, ExprIterator ArgE,
         const ParameterSet &ParamSet,
-        SubstitutionVector &SubV) {
+        SubstitutionSet &SubS) {
   assert(CalleeDecl);
   FunctionDecl::param_const_iterator ParamI, ParamE;
   *SymbolTable::VB.OS << "DEBUG:: buildParamSUbstitutions... BEGIN!\n";
@@ -253,7 +253,7 @@ void buildParamSubstitutions(
       ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
     Expr *ArgExpr = *ArgI;
     ParmVarDecl *ParamDecl = *ParamI;
-    buildSingleParamSubstitution(Def, SymT, ParamDecl, ArgExpr, ParamSet, SubV);
+    buildSingleParamSubstitution(Def, SymT, ParamDecl, ArgExpr, ParamSet, SubS);
   }
   *SymbolTable::VB.OS << "DEBUG:: DONE buildParamSUbstitutions\n";
 }
@@ -263,11 +263,11 @@ void tryBuildParamSubstitutions(
         SymbolTable &SymT,
         const FunctionDecl *CalleeDecl,
         ExprIterator ArgI, ExprIterator ArgE,
-        SubstitutionVector &SubV) {
+        SubstitutionSet &SubS) {
   assert(CalleeDecl);
   ParameterSet *ParamSet = new ParameterSet();
   assert(ParamSet);
-  // Build SubV for function region params
+  // Build SubS for function region params
   const ParameterVector *ParamV = SymT.getParameterVector(CalleeDecl);
   if (ParamV && ParamV->size() > 0) {
     ParamV->addToParamSet(ParamSet);
@@ -281,7 +281,7 @@ void tryBuildParamSubstitutions(
     }
   }
   if (ParamSet->size() > 0) {
-    buildParamSubstitutions(Def, SymT, CalleeDecl, ArgI, ArgE, *ParamSet, SubV);
+    buildParamSubstitutions(Def, SymT, CalleeDecl, ArgI, ArgE, *ParamSet, SubS);
   }
   delete ParamSet;
 }

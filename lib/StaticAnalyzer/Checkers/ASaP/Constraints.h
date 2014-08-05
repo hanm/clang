@@ -91,6 +91,7 @@ class EffectInclusionConstraint : public Constraint {
   virtual ~EffectInclusionConstraint();
 
   void addEffect(const Effect *Eff);
+  void addEffect(std::unique_ptr<Effect> &Eff);
   void addEffects(const ConcreteEffectSummary &ES);
 
   EffectVector *getLHS() { return LHS; }

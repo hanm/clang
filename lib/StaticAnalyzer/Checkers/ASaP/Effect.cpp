@@ -53,16 +53,28 @@ Effect::~Effect() {
 }
 
 void Effect::substitute(const Substitution *S) {
-  if (S == 0)
+  if (!S)
+    return; // Nothing to do
+
+  if (Kind == EK_InvocEffect) {
+    SubstitutionSet SubS;
+    SubS.insert(S);
+    SubV->push_back(SubS);
+  } else if (R)
+    R->substitute(S);
+}
+
+void Effect::substitute(const SubstitutionSet *SubS) {
+  if (!SubS)
     return; // Nothing to do
   if (Kind == EK_InvocEffect)
-    SubV->push_back(S);
+    SubV->push_back(SubS);
   else if (R)
-    S->applyTo(R);
+    R->substitute(SubS);
 }
 
 void Effect::substitute(const SubstitutionVector *S) {
-  if (S == 0)
+  if (!S)
     return; // Nothing to do
   if (Kind == EK_InvocEffect)
     SubV->push_back_vec(S);
@@ -271,6 +283,18 @@ void EffectVector::substitute(const Substitution *S) {
   }
 }
 
+void EffectVector::substitute(const SubstitutionSet *SubS) {
+  if (!SubS)
+    return; // Nothing to do.
+  for (VectorT::const_iterator
+          I = begin(),
+          E = end();
+       I != E; ++I) {
+    Effect *Eff = *I;
+    Eff->substitute(SubS);
+    }
+}
+
 void EffectVector::substitute(const SubstitutionVector *SubV) {
   if (!SubV)
     return; // Nothing to do.
@@ -286,24 +310,31 @@ void EffectVector::substitute(const SubstitutionVector *SubV) {
 void EffectVector::substitute(const Substitution *S, int N) {
   if (!S)
     return; // Nothing to do.
-  int i=0;
-  for (VectorT::const_reverse_iterator
-  I = rbegin(),
-  E = rend();
-       I != E && i<N; ++I, ++i) {
+  int i = 0;
+  for (VectorT::const_reverse_iterator I = rbegin(), E = rend();
+       I != E && i < N; ++I, ++i) {
     Effect *Eff = *I;
     Eff->substitute(S);
+  }
+}
+
+void EffectVector::substitute(const SubstitutionSet *SubS, int N) {
+  if (!SubS)
+    return; // Nothing to do.
+  int i = 0;
+  for (VectorT::const_reverse_iterator I = rbegin(), E = rend();
+       I != E && i < N; ++I, ++i) {
+    Effect *Eff = *I;
+    Eff->substitute(SubS);
   }
 }
 
 void EffectVector::substitute(const SubstitutionVector *SubV, int N) {
   if (!SubV)
     return; // Nothing to do.
-  int i=0;
-  for (VectorT::const_reverse_iterator
-         I = rbegin(),
-         E = rend();
-       I != E && i<N; ++I, ++i) {
+  int i = 0;
+  for (VectorT::const_reverse_iterator I = rbegin(), E = rend();
+       I != E && i < N; ++I, ++i) {
     Effect *Eff = *I;
     Eff->substitute(SubV);
   }
@@ -497,11 +528,20 @@ void ConcreteEffectSummary::print(raw_ostream &OS,
 }
 
 void ConcreteEffectSummary::substitute(const Substitution *Sub) {
-  if (!Sub || size()<=0)
+  if (!Sub || size() <= 0)
     return;
   for(SetT::iterator I = begin(), E = end(); I != E; ++I) {
     Effect *Eff = *I;
     Eff->substitute(Sub);
+  }
+}
+
+void ConcreteEffectSummary::substitute(const SubstitutionSet *SubS) {
+  if (!SubS || size() <= 0)
+    return;
+  for(SetT::iterator I = begin(), E = end(); I != E; ++I) {
+    Effect *Eff = *I;
+    Eff->substitute(SubS);
   }
 }
 

@@ -127,6 +127,7 @@ public:
 
   /// \brief substitute (Effect)
   void substitute(const Substitution *S);
+  void substitute(const SubstitutionSet *SubS);
   void substitute(const SubstitutionVector *SubV);
 
 
@@ -157,10 +158,12 @@ class EffectVector : public OwningVector<Effect, EFFECT_VECTOR_SIZE> {
 
 public:
   void substitute(const Substitution *S);
+  void substitute(const SubstitutionSet *SubS);
   void substitute(const SubstitutionVector *SubV);
   // The following two methods apply the substitutions to the last N
   // elements of the effect vector
   void substitute(const Substitution *S, int N);
+  void substitute(const SubstitutionSet *SubS, int N);
   void substitute(const SubstitutionVector *SubV, int N);
 
   void makeMinimal();
@@ -205,6 +208,7 @@ public:
   virtual void makeMinimal(EffectCoverageVector &ECV) = 0;
 
   virtual void substitute(const Substitution *Sub) = 0;
+  virtual void substitute(const SubstitutionSet *SubS) = 0;
   virtual void substitute(const SubstitutionVector *SubV) = 0;
 
   virtual void print(raw_ostream &OS, std::string Separator="\n",
@@ -253,6 +257,7 @@ public:
 	     bool PrintLastSeparator=true) const;
 
   virtual void substitute(const Substitution *Sub);
+  virtual void substitute(const SubstitutionSet *SubS);
   virtual void substitute(const SubstitutionVector *SubV);
 
   virtual ~ConcreteEffectSummary() {};
@@ -292,10 +297,13 @@ public:
   }
 
   virtual void substitute(const Substitution *Sub) {
-    assert(false && "Enexpected substitution on VarEffectSummary");
+    assert(false && "Unexpected substitution on VarEffectSummary");
+  }
+  virtual void substitute(const SubstitutionSet *SubS) {
+    assert(false && "Unexpected substitution on VarEffectSummary");
   }
   virtual void substitute(const SubstitutionVector *SubV) {
-    assert(false && "Enexpected substitution on VarEffectSummary");
+    assert(false && "Unexpected substitution on VarEffectSummary");
   }
 
   virtual ~VarEffectSummary() {};

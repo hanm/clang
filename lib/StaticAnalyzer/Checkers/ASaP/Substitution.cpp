@@ -90,8 +90,9 @@ std::string Substitution::toString() const {
   return std::string(OS.str());
 }
 
-void SubstitutionVector::
-buildSubstitutionVector(const ParameterVector *ParV, RplVector *RplVec) {
+//////////////////////////////////////////////////////////////////////////
+void SubstitutionSet::
+buildSubstitutionSet(const ParameterVector *ParV, const RplVector *RplVec) {
   if (!ParV && !RplVec)
     return; // empty SubstitutionVector
 
@@ -101,12 +102,65 @@ buildSubstitutionVector(const ParameterVector *ParV, RplVector *RplVec) {
     const Rpl *ToRpl = RplVec->getRplAt(I);
     const ParamRplElement *FromEl = ParV->getParamAt(I);
     if (*ToRpl != *FromEl) {
-      Substitution *Sub =
-        new Substitution(FromEl, ToRpl);
-      push_back(Sub);
+      Substitution Sub(FromEl, ToRpl);
+      insert(Sub);
     }
   }
 }
+
+void SubstitutionSet::add(const ASaPType *Typ,
+                          const ParameterVector *ParamV) {
+  if (Typ && ParamV && ParamV->size() > 0
+      && Typ->getSubstSize() >= ParamV->size() ) {
+    for (unsigned int I = 0; I < ParamV->size(); ++I) {
+      const ParamRplElement *ParamEl = ParamV->getParamAt(I);
+      const Rpl *R = Typ->getSubstArg(I);
+      if (ParamEl && R) {
+        Substitution Sub(ParamEl, R);
+        insert(Sub);
+      }
+    }
+  }
+}
+
+void SubstitutionSet::print(llvm::raw_ostream &OS) const {
+  OS << "subst_set{";
+  for(SetT::const_iterator I = begin(), E = end();
+      I != E; ++I) {
+    assert(*I);
+    (*I)->print(OS);
+  }
+  OS << "}";
+}
+
+std::string SubstitutionSet::toString() const {
+  std::string SBuf;
+  llvm::raw_string_ostream OS(SBuf);
+  print(OS);
+  return std::string(OS.str());
+}
+
+void SubstitutionSet::applyTo(ConcreteRpl &R) const {
+  for(SetT::const_iterator I = begin(), E = end();
+      I != E; ++I) {
+      Trivalent Result = R.substitute(*I);
+      if (Result == RK_TRUE)
+        break; // Each Rpl has at most one parameter, so stop after
+               // the first successful application
+  }
+}
+
+term_t SubstitutionSet::getPLTerm() const {
+  // TODO
+}
+
+//////////////////////////////////////////////////////////////////////////
+/*void SubstitutionVector::
+buildSubstitutionVector(const ParameterVector *ParV, const RplVector *RplVec) {
+  SubstitutionSet SubS;
+  SubS.buildSubstitutionSet(ParV, RplVec);
+  push_back(SubS);
+}*/
 
 void SubstitutionVector::print(llvm::raw_ostream &OS) const {
   for(VectorT::const_iterator I = begin(), E = end();
@@ -128,20 +182,6 @@ void SubstitutionVector::push_back_vec(const SubstitutionVector *SubV) {
     for(VectorT::const_iterator I = SubV->begin(), E = SubV->end();
         I != E; ++I) {
       this->push_back(*I);
-    }
-  }
-}
-
-void SubstitutionVector::add(const ASaPType *Typ,
-                             const ParameterVector *ParamV) {
-  if (Typ && ParamV && ParamV->size() > 0) {
-    for (unsigned int I = 0; I < ParamV->size(); ++I) {
-      const ParamRplElement *ParamEl = ParamV->getParamAt(I);
-      const Rpl *R = Typ->getSubstArg(I);
-      if (ParamEl && R) {
-        Substitution Sub(ParamEl, R);
-        push_back(&Sub);
-      }
     }
   }
 }
