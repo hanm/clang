@@ -98,8 +98,7 @@ ASaPType *AssignmentCheckerVisitor::stealType() {
 void AssignmentCheckerVisitor::
 VisitCallExpr(CallExpr *Exp) {
   if (!Exp->getBuiltinCallee()) {
-    SubstitutionSet SubS;
-    typecheckCallExpr(Exp, SubS);
+    typecheckCallExpr(Exp);
   }
 }
 
@@ -168,8 +167,7 @@ void AssignmentCheckerVisitor::VisitDeclStmt(DeclStmt *S) {
             break; // VD->getInit() could be a ParenListExpr or perhaps some
                    // other Expr
           assert(Exp);
-          SubstitutionSet SubS;
-          typecheckCXXConstructExpr(VD, Exp, SubS);
+          typecheckCXXConstructExpr(VD, Exp);
           break;
         }
       }
@@ -338,9 +336,10 @@ VisitCXXConstructExpr(CXXConstructExpr *Exp) {
   OS << "DEBUG:: Visiting CXXConstructExpr: ";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
-  SubstitutionSet SubS;
+
+  std::unique_ptr<SubstitutionSet> SubS = SymT.getTypeSubstitutionSet(0); // FIXME
   typecheckParamAssignments(Exp->getConstructor(),
-                            Exp->arg_begin(), Exp->arg_end(), SubS);
+                            Exp->arg_begin(), Exp->arg_end(), *SubS.get());
 }
 
 void AssignmentCheckerVisitor::
@@ -433,9 +432,7 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
 }
 
 void AssignmentCheckerVisitor::
-typecheckCXXConstructExpr(VarDecl *VarD,
-                          CXXConstructExpr *Exp,
-                          SubstitutionSet &SubS) {
+typecheckCXXConstructExpr(VarDecl *VarD, CXXConstructExpr *Exp) {
 
   CXXConstructorDecl *ConstrDecl =  Exp->getConstructor();
   DeclContext *ClassDeclContext = ConstrDecl->getDeclContext();
@@ -444,9 +441,15 @@ typecheckCXXConstructExpr(VarDecl *VarD,
   assert(ClassDecl);
   // Set up Substitution Vector
   const ASaPType *T = SymT.getType(VarD);
-  buildTypeSubstitution(SymT, ClassDecl, T, SubS);
-
-  typecheckParamAssignments(ConstrDecl, Exp->arg_begin(), Exp->arg_end(), SubS);
+  OS << "DEBUG:: Here 1\n";
+  //buildTypeSubstitution(SymT, ClassDecl, T, SubS);
+  std::unique_ptr<SubstitutionVector> SubV = SymT.getInheritanceSubstitutionVector(T);
+  std::unique_ptr<SubstitutionSet> SubS = SymT.getTypeSubstitutionSet(T);
+  assert(SubS.get() && "Internal Error: unexpected null pointer");
+  OS << "DEBUG:: Here 2\n";
+  typecheckParamAssignments(ConstrDecl, Exp->arg_begin(),
+                            Exp->arg_end(), *SubS.get());
+  SubV.get()->push_back(SubS);
   OS << "DEBUG:: DONE with typecheckCXXConstructExpr\n";
 
   // Now set Type to the return type of this call
@@ -461,12 +464,12 @@ typecheckCXXConstructExpr(VarDecl *VarD,
     delete Type;
     // set Type
     Type = new ASaPType(*RetTyp);
-    Type->substitute(&SubS);
+    Type->substitute(SubV.get());
   }
 }
 
 void AssignmentCheckerVisitor::
-typecheckCallExpr(CallExpr *Exp, SubstitutionSet &SubS) {
+typecheckCallExpr(CallExpr *Exp) {
   OS << "DEBUG:: typecheckCallExpr: ";
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
@@ -513,9 +516,11 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionSet &SubS) {
     // ClassDecl is allowed to be null
 
     // Build substitution for class region parameter(s)
-    const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
+    //const ParameterVector *ParamV = SymT.getParameterVector(ClassDecl);
     ASaPType *T = TBV.getType();
-    SubS.add(T, ParamV);
+    //SubS.add(T, ParamV);
+    std::unique_ptr<SubstitutionVector> SubV = SymT.getFullSubstitutionVector(T);
+
 
     unsigned NumArgs = Exp->getNumArgs();
     unsigned NumParams = FunD->getNumParams();
@@ -529,6 +534,7 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionSet &SubS) {
           NumParams+((FunD->isOverloadedOperator()) ? 1 : 0) == NumArgs) &&
           "Unexpected number of arguments to a call expresion");
 
+    SubstitutionSet SubS;
     if (FunD->isOverloadedOperator()
         && isa<CXXMethodDecl>(FunD)) {
       // if the overloaded operator is a member function, it's 1st
@@ -540,13 +546,15 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionSet &SubS) {
       CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
       TypeBuilderVisitor TBV(Def, Exp->getArg(0));
       ASaPType *Typ = TBV.getType();
-      buildTypeSubstitution(SymT, Rec, Typ, SubS);
+      //buildTypeSubstitution(SymT, Rec, Typ, SubS);
+      SubV = SymT.getFullSubstitutionVector(Typ);
       typecheckParamAssignments(FunD, Exp->arg_begin()+1, Exp->arg_end(), SubS);
     } else {
       typecheckParamAssignments(FunD, Exp->arg_begin(), Exp->arg_end(), SubS);
     }
     OS << "DEBUG:: DONE typecheckCallExpr\n";
-
+    assert(SubV.get() && "Internal Error: unexpected null-pointer");
+    SubV.get()->merge_back(&SubS);
     // Now set Type to the return type of this call
     const ASaPType *FunType = SymT.getType(FunD);
     if (FunType) {
@@ -557,7 +565,7 @@ typecheckCallExpr(CallExpr *Exp, SubstitutionSet &SubS) {
         delete Type;
         // set Type
         Type = RetTyp; // RetTyp is already a copy, no need to re-copy
-        Type->substitute(&SubS);
+        Type->substitute(SubV.get());
       }
     }
   // end if (FunD)

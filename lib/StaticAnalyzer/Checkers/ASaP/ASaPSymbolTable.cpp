@@ -636,28 +636,54 @@ getInheritanceSubVec(QualType QT) const {
 }
 
 std::unique_ptr<SubstitutionVector> SymbolTable::
-getSubstitutionVector(const ASaPType &Typ) const {
+getInheritanceSubstitutionVector(const ASaPType *Typ) const {
+  SubstitutionVector *SubV = new SubstitutionVector();
+  if (!Typ)
+    return std::unique_ptr<SubstitutionVector>(SubV);
   // 1. Inheritance Substitution Vector
-  const SubstitutionVector *InheritanceSubV = getInheritanceSubVec(Typ.getQT());
-  SubstitutionVector *SubV;
+  QualType QT = Typ->getQT();
+  const SubstitutionVector *InheritanceSubV = getInheritanceSubVec(QT);
   if (InheritanceSubV)
     SubV = new SubstitutionVector(*InheritanceSubV);
-  else
-    SubV = new SubstitutionVector();
-  // 2. Type Substitution Set
-  const ParameterVector *ParamV =
-    getParameterVectorFromQualType(Typ.getQT());
-  RplVector RplV;
-  for (size_t I = 0; I < ParamV->size(); ++I) {
-    const Rpl *ToRpl = Typ.getSubstArg(I);
-    assert(ToRpl);
-    RplV.push_back(ToRpl);
-  }
-  SubstitutionSet *SubS = new SubstitutionSet();
-  SubS->buildSubstitutionSet(ParamV, &RplV);
-  SubV->push_back(SubS);
-
   return std::unique_ptr<SubstitutionVector>(SubV);
+}
+
+std::unique_ptr<SubstitutionSet> SymbolTable::
+getTypeSubstitutionSet(const ASaPType *Typ) const {
+  SubstitutionSet *SubS = new SubstitutionSet();
+  if (!Typ)
+    return std::unique_ptr<SubstitutionSet>(SubS);
+  // Build Type Substitution Set
+  QualType QT = Typ->getQT();
+  const ParameterVector *ParamV =
+    getParameterVectorFromQualType(QT);
+  if (ParamV) {
+    RplVector RplV;
+    assert(ParamV && "Null ParamV");
+    for (size_t I = 0; I < ParamV->size(); ++I) {
+      const Rpl *ToRpl = Typ->getSubstArg(I);
+      assert(ToRpl);
+      RplV.push_back(ToRpl);
+    }
+    SubS->buildSubstitutionSet(ParamV, &RplV);
+  }
+  return std::unique_ptr<SubstitutionSet>(SubS);
+}
+
+std::unique_ptr<SubstitutionVector> SymbolTable::
+getFullSubstitutionVector(const ASaPType *Typ) const {
+  OSv2 << "DEBUG:: getSubstitutionVector begin!\n";
+  if (!Typ)
+    return std::unique_ptr<SubstitutionVector>(new SubstitutionVector());
+  // 1. Inheritance Substitution Vector
+  std::unique_ptr<SubstitutionVector> SubV =
+      getInheritanceSubstitutionVector(Typ);
+  // 2. Type Substitution Set
+  std::unique_ptr<SubstitutionSet> SubS = getTypeSubstitutionSet(Typ);
+  if (SubS->size() > 0) {
+    SubV->push_back(SubS);
+  }
+  return std::unique_ptr<SubstitutionVector>(SubV.release());
 }
 
 static void emitConstraintSolution(EffectInclusionConstraint *EC,
