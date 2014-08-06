@@ -68,6 +68,8 @@ class SubstitutionSet :
   public OwningPtrSet<Substitution, SUBSTITUTION_SET_SIZE> {
 
 public:
+  typedef OwningPtrSet<Substitution, SUBSTITUTION_SET_SIZE> BaseClass;
+
   void buildSubstitutionSet(const ParameterVector *ParV,
                             const RplVector *RplVec);
 

@@ -44,7 +44,7 @@ static const std::string PL_ConcreteRpl = "rpl";
 static const std::string PL_VarRpl = "var_rpl";
 static const std::string PL_RplDomain = "rpl_domain";
 static const std::string PL_ParamSub = "param_sub";
-
+static const std::string PL_SubstitutionSet = "subst_set";
 static const std::string PL_NullDomain = "null_dom";
 
 static const std::string PL_InferEffSumPredicate = "infer_es";

@@ -128,7 +128,18 @@ public:
     return std::string(OS.str());
   }
 
+  term_t getPLTerm() const {
+    term_t Result = clang::asap::buildPLEmptyList();
+    int Res;
 
+    for (typename SetT::const_iterator I = SetT::begin(), E = SetT::end();
+         I != E; ++I) {
+      term_t Term = (*I)->getPLTerm();
+      Res = PL_cons_list(Result, Term, Result);
+      assert(Res && "Failed to add OwningPtrSet element to Prolog list term");
+    }
+    return Result;
+  }
 }; // end class OwningPtrSet
 
 #endif

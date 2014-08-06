@@ -136,7 +136,13 @@ void SubstitutionSet::applyTo(ConcreteRpl &R) const {
 }
 
 term_t SubstitutionSet::getPLTerm() const {
-  // TODO
+  term_t Result = PL_new_term_ref();
+  functor_t SubFunctor =
+    PL_new_functor(PL_new_atom(PL_SubstitutionSet.c_str()), 1);
+  int Res = PL_cons_functor(Result, SubFunctor, BaseClass::getPLTerm());
+  assert(Res && "Failed to create prolog term_t for Substitution");
+  return Result;
+
 }
 
 //////////////////////////////////////////////////////////////////////////
