@@ -127,11 +127,6 @@ const Decl *getDeclFromContext(const DeclContext *DC);
 void assertzTermProlog(term_t Fact, StringRef ErrMsg = "");
 term_t buildPLEmptyList();
 
-void buildTypeSubstitution(const SymbolTable &SymT,
-                           const RecordDecl *ClassD,
-                           const ASaPType *Typ,
-                           SubstitutionSet &SubS);
-
 void buildSingleParamSubstitution(const FunctionDecl *Def,
                                   SymbolTable &SymT,
                                   ParmVarDecl *Param, Expr *Arg,

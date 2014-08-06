@@ -203,16 +203,14 @@ getInvokeEffectSummary(const CallExpr *CallExp, Expr *Arg,
   OS << "\n";
 
   ES = new ConcreteEffectSummary(*ConcSum);
-  const SubstitutionVector *SubVec =
-        SymbolTable::Table->getInheritanceSubVec(Method->getParent());
-  ES->substitute(SubVec);
+
   // perform 'this' substitution
   TypeBuilderVisitor TBV(Def, Arg);
   ASaPType *Typ = TBV.getType();
 
   if (Typ) {
     std::unique_ptr<SubstitutionVector> SubV =
-      SymbolTable::Table->getSubstitutionVector(*Typ);
+      SymbolTable::Table->getFullSubstitutionVector(Typ);
     ES->substitute(SubV.get());
   }
 
@@ -325,13 +323,13 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   // TODO InductionVarVector IVV = detectInductionVariablesVector
 
   // 3. Check non-interference
-  ConcreteEffectSummary* ESptr = ES.get();
+  ConcreteEffectSummary *ESptr = ES.get();
   Trivalent RK = ES->isNonInterfering(ESptr);
   if (RK == RK_FALSE) {
     emitInterferingEffects(Exp, *ES, *ES);
     Result = false;
   } else if (RK == RK_DUNNO) {
-    //    assert(false && "Found variable effect summary");
+    // assert(false && "Found variable effect summary");
     StringRef Name = SymT->makeFreshConstraintName();
     EffectNIConstraint *NIC = new EffectNIConstraint(Name, *ESptr, *ESptr);
     SymT->addConstraint(NIC);

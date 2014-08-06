@@ -174,18 +174,6 @@ term_t buildPLEmptyList() {
   return Result;
 }
 
-void buildTypeSubstitution(const SymbolTable &SymT,
-                           const RecordDecl *ClassD,
-                           const ASaPType *Typ,
-                           SubstitutionSet &SubS) {
-  if (!ClassD || !Typ)
-    return;
-
-  // Set up Substitution Vector
-  const ParameterVector *PV = SymT.getParameterVector(ClassD);
-  SubS.add(Typ, PV);
-}
-
 void buildSingleParamSubstitution(
         const FunctionDecl *Def,
         SymbolTable &SymT,
@@ -247,7 +235,7 @@ void buildParamSubstitutions(
         SubstitutionSet &SubS) {
   assert(CalleeDecl);
   FunctionDecl::param_const_iterator ParamI, ParamE;
-  *SymbolTable::VB.OS << "DEBUG:: buildParamSUbstitutions... BEGIN!\n";
+  *SymbolTable::VB.OS << "DEBUG:: buildParamSubstitutions... BEGIN!\n";
 
   for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
       ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
@@ -255,7 +243,7 @@ void buildParamSubstitutions(
     ParmVarDecl *ParamDecl = *ParamI;
     buildSingleParamSubstitution(Def, SymT, ParamDecl, ArgExpr, ParamSet, SubS);
   }
-  *SymbolTable::VB.OS << "DEBUG:: DONE buildParamSUbstitutions\n";
+  *SymbolTable::VB.OS << "DEBUG:: DONE buildParamSubstitutions\n";
 }
 
 void tryBuildParamSubstitutions(
@@ -280,10 +268,14 @@ void tryBuildParamSubstitutions(
       ParamV->addToParamSet(ParamSet);
     }
   }
+  OSv2 << "DEBUG:: ParamSet = " << ParamSet->toString() << "\n";
   if (ParamSet->size() > 0) {
     buildParamSubstitutions(Def, SymT, CalleeDecl, ArgI, ArgE, *ParamSet, SubS);
+    *SymbolTable::VB.OS << "DEBUG:: DONE buildParamSubstitutions\n";
+    OSv2 << "DEBUG: SubS = " << SubS.toString() << "\n";
   }
   delete ParamSet;
+  *SymbolTable::VB.OS << "DEBUG:: DONE delete ParamSet\n";
 }
 
 Stmt *getBody(const FunctionDecl *D) {

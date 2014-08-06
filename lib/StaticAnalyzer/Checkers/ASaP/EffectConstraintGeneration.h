@@ -67,8 +67,7 @@ class EffectConstraintVisitor
   void helperVisitAssignment(BinaryOperator *E);
   void helperVisitCXXConstructorDecl(const CXXConstructorDecl *D);
   void helperVisitCallArguments(ExprIterator I, ExprIterator E);
-  void checkCXXConstructExpr(VarDecl *VarD,
-                             CXXConstructExpr *Exp, SubstitutionSet &SubS);
+  void checkCXXConstructExpr(VarDecl *VarD, CXXConstructExpr *Exp);
 
 public:
   // Constructor

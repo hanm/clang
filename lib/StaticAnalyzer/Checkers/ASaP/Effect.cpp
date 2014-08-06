@@ -307,39 +307,6 @@ void EffectVector::substitute(const SubstitutionVector *SubV) {
     }
 }
 
-void EffectVector::substitute(const Substitution *S, int N) {
-  if (!S)
-    return; // Nothing to do.
-  int i = 0;
-  for (VectorT::const_reverse_iterator I = rbegin(), E = rend();
-       I != E && i < N; ++I, ++i) {
-    Effect *Eff = *I;
-    Eff->substitute(S);
-  }
-}
-
-void EffectVector::substitute(const SubstitutionSet *SubS, int N) {
-  if (!SubS)
-    return; // Nothing to do.
-  int i = 0;
-  for (VectorT::const_reverse_iterator I = rbegin(), E = rend();
-       I != E && i < N; ++I, ++i) {
-    Effect *Eff = *I;
-    Eff->substitute(SubS);
-  }
-}
-
-void EffectVector::substitute(const SubstitutionVector *SubV, int N) {
-  if (!SubV)
-    return; // Nothing to do.
-  int i = 0;
-  for (VectorT::const_reverse_iterator I = rbegin(), E = rend();
-       I != E && i < N; ++I, ++i) {
-    Effect *Eff = *I;
-    Eff->substitute(SubV);
-  }
-}
-
 void EffectVector::makeMinimal() {
   VectorT::iterator I = begin(); // not a const iterator
   while (I != end()) { // end is not loop invariant
@@ -371,11 +338,10 @@ void EffectVector::addEffects(const ConcreteEffectSummary &ES) {
 //////////////////////////////////////////////////////////////////////////
 // EffectSummary
 
-std::string EffectSummary::toString(std::string Separator,
-                                    bool PrintLastSeparator) const {
+std::string EffectSummary::toString() const {
   std::string SBuf;
   llvm::raw_string_ostream OS(SBuf);
-  print(OS, Separator, PrintLastSeparator);
+  print(OS);
   return std::string(OS.str());
 }
 
@@ -508,25 +474,6 @@ void ConcreteEffectSummary::makeMinimal(EffectCoverageVector &ECV) {
   } // end while loop
 }
 
-void ConcreteEffectSummary::print(raw_ostream &OS,
-                                   std::string Separator,
-                                   bool PrintLastSeparator) const {
-  SetT::const_iterator I = begin(), E = end(), Ip1 = begin();
-  if (Ip1 != E)
-    ++Ip1;
-
-  for(; Ip1 != E; ++I, ++Ip1) {
-    (*I)->print(OS);
-    OS << Separator;
-  }
-  // print last element
-  if (I != E) {
-    (*I)->print(OS);
-    if (PrintLastSeparator)
-      OS << Separator;
-  }
-}
-
 void ConcreteEffectSummary::substitute(const Substitution *Sub) {
   if (!Sub || size() <= 0)
     return;
@@ -584,9 +531,7 @@ term_t ConcreteEffectSummary::getPLTerm() const {
 }
 
 //VarEffectSummary
-void VarEffectSummary::print(raw_ostream &OS,
-                          std::string Separator,
-                          bool PrintLastSeparator) const {
+void VarEffectSummary::print(raw_ostream &OS) const {
   OS << ID << "(Effect Summary Variable)";
 }
 

@@ -108,21 +108,6 @@ buildSubstitutionSet(const ParameterVector *ParV, const RplVector *RplVec) {
   }
 }
 
-void SubstitutionSet::add(const ASaPType *Typ,
-                          const ParameterVector *ParamV) {
-  if (Typ && ParamV && ParamV->size() > 0
-      && Typ->getSubstSize() >= ParamV->size() ) {
-    for (unsigned int I = 0; I < ParamV->size(); ++I) {
-      const ParamRplElement *ParamEl = ParamV->getParamAt(I);
-      const Rpl *R = Typ->getSubstArg(I);
-      if (ParamEl && R) {
-        Substitution Sub(ParamEl, R);
-        insert(Sub);
-      }
-    }
-  }
-}
-
 void SubstitutionSet::print(llvm::raw_ostream &OS) const {
   OS << "subst_set{";
   for(SetT::const_iterator I = begin(), E = end();
@@ -155,38 +140,11 @@ term_t SubstitutionSet::getPLTerm() const {
 }
 
 //////////////////////////////////////////////////////////////////////////
-void SubstitutionVector::print(llvm::raw_ostream &OS) const {
-  for(VectorT::const_iterator I = begin(), E = end();
-      I != E; ++I) {
-    assert(*I);
-    (*I)->print(OS);
-  }
-}
-
-std::string SubstitutionVector::toString() const {
-  std::string SBuf;
-  llvm::raw_string_ostream OS(SBuf);
-  print(OS);
-  return std::string(OS.str());
-}
-
 void SubstitutionVector::push_back_vec(const SubstitutionVector *SubV) {
   if (SubV) {
     for(VectorT::const_iterator I = SubV->begin(), E = SubV->end();
         I != E; ++I) {
       this->push_back(*I);
-    }
-  }
-}
-
-void SubstitutionVector::merge_back(SubstitutionSet *SubS) {
-  if (SubS) {
-    if (size() > 0) {
-      std::unique_ptr<SubstitutionSet> Last = pop_back_val();
-      Last->take(SubS);
-      push_back(Last);
-    } else {
-      push_back(SubS);
     }
   }
 }

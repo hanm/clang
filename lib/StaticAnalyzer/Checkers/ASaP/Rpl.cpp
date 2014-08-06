@@ -613,6 +613,31 @@ bool ParameterSet::hasElement(const RplElement *Elmt) const {
   }
   return false;
 }
+
+inline void ParameterSet::print(llvm::raw_ostream &OS) const {
+  if (size() <= 0)
+    return;
+  OS << "{";
+  const_iterator I = begin(), E = end();
+  if (I != E) {
+    (*I)->print(OS);
+    ++I;
+  }
+  for(; I != E; ++I) {
+    OS << ",";
+    (*I)->print(OS);
+  }
+  OS << "}";
+}
+
+std::string ParameterSet::toString() const {
+  std::string SBuf;
+  llvm::raw_string_ostream OS(SBuf);
+  print(OS);
+  return std::string(OS.str());
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////
 //// ParameterVector
 void ParameterVector::addToParamSet(ParameterSet *PSet) const {
@@ -652,22 +677,6 @@ void ParameterVector::take(ParameterVector *&PV) {
   assert(PV->size()==0);
   delete PV;
   PV = 0;
-}
-
-void ParameterVector::print (llvm::raw_ostream& OS) const {
-  if(size() <= 0)
-    return;
-
-  VectorT::const_iterator I = begin(), E = end();
-  if (I != E) {
-    const ParamRplElement *El = *I;
-    OS << El->getName();
-    ++I;
-  }
-  for(; I != E; ++I) {
-    const ParamRplElement *El = *I;
-    OS << ", " << El->getName();
-  }
 }
 
 void ParameterVector::assertzProlog () const {
@@ -775,18 +784,6 @@ void RplVector::substitute(const SubstitutionSet *S) {
         I != E; ++I) {
     if (*I)
       (*I)->substitute(S);
-  }
-}
-
-void RplVector::print(llvm::raw_ostream &OS) const {
-  VectorT::const_iterator I = begin(), E = end();
-  if (I != E) {
-    (*I)->print(OS);
-    ++I;
-  }
-  for(; I < E; ++I) {
-    OS << ", ";
-    (*I)->print(OS);
   }
 }
 

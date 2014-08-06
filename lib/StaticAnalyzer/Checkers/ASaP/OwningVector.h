@@ -136,6 +136,30 @@ public:
     return Result;
   }
 
+  void print (llvm::raw_ostream& OS) const {
+    if(VectorT::size() <= 0)
+      return;
+
+    OS << "[";
+    typename VectorT::const_iterator I = VectorT::begin(), E = VectorT::end();
+    if (I != E) {
+      (*I)->print(OS);
+      ++I;
+    }
+    for(; I != E; ++I) {
+      OS << ", ";
+      (*I)->print(OS);
+    }
+    OS << "]";
+  }
+
+  inline std::string toString() const {
+    std::string SBuf;
+    llvm::raw_string_ostream OS(SBuf);
+    print(OS);
+    return std::string(OS.str());
+  }
+
 private:
   template<typename in_iter>
   void append(in_iter in_start, in_iter in_end); // NOT IMPLEMENTED

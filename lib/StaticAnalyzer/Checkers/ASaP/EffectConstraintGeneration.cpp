@@ -165,10 +165,10 @@ void EffectConstraintVisitor::memberSubstitute(const ValueDecl *D) {
 
   EffectsTmp->substitute(InheritanceSubV);
 
-  std::unique_ptr<SubstitutionVector> SubV = SymT.getSubstitutionVector(*T1);
+  std::unique_ptr<SubstitutionVector> SubV = SymT.getFullSubstitutionVector(T1);
   OS << "DEBUG:: before type substitution on LHS\n";
   if (SubV.get())
-    OS << "DEBUG:: SubV = " << SubV.get()->toString() << "\n";
+    OS << "DEBUG:: SubV = " << SubV->toString() << "\n";
 
   EffectsTmp->substitute(SubV.get());
 
@@ -457,9 +457,7 @@ helperVisitCallArguments(ExprIterator I, ExprIterator E) {
 }
 
 void EffectConstraintVisitor::
-checkCXXConstructExpr(VarDecl *VarD,
-                      CXXConstructExpr *Exp,
-                      SubstitutionSet &SubS) {
+checkCXXConstructExpr(VarDecl *VarD, CXXConstructExpr *Exp) {
   // 1. build substitutions
   CXXConstructorDecl *ConstrDecl =  Exp->getConstructor();
   DeclContext *ClassDeclContext = ConstrDecl->getDeclContext();
@@ -468,14 +466,15 @@ checkCXXConstructExpr(VarDecl *VarD,
   assert(ClassDecl);
   // Set up Substitution Vector
   const ASaPType *T = SymT.getType(VarD);
-  buildTypeSubstitution(SymT, ClassDecl, T, SubS);
+  std::unique_ptr<SubstitutionVector> SubV = SymT.getInheritanceSubstitutionVector(T);
+  std::unique_ptr<SubstitutionSet> SubS = SymT.getTypeSubstitutionSet(T);
+  assert(SubS.get() && "Internal Error: unexpected null pointer");
   tryBuildParamSubstitutions(Def, SymT, ConstrDecl, Exp->arg_begin(),
-                             Exp->arg_end(), SubS);
-
+                             Exp->arg_end(), *SubS);
   // 2. Add effects to tmp effects
-  SubstitutionVector SubV;
-  SubV.push_back(SubS);
-  Effect IE(Effect::EK_InvocEffect, Exp, ConstrDecl, &SubV);
+  assert(SubV.get() && "Internal Error: unexpected null pointer");
+  SubV->push_back(SubS);
+  Effect IE(Effect::EK_InvocEffect, Exp, ConstrDecl, SubV.get());
   OS << "DEBUG:: Adding invocation Effect "<< IE.toString() << "\n";
   OS << "DEBUG:: Callee = ";
   ConstrDecl->print(OS);
@@ -630,8 +629,7 @@ void EffectConstraintVisitor::VisitDeclStmt(DeclStmt *S) {
             break; // VD->getInit() could be a ParenListExpr or perhaps some
                    // other Expr
           assert(Exp);
-          SubstitutionSet SubS;
-          checkCXXConstructExpr(VD, Exp, SubS);
+          checkCXXConstructExpr(VD, Exp);
           break;
         }
       }
@@ -701,45 +699,62 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
     helperVisitCallArguments(Exp->arg_begin(), Exp->arg_end());
     OS << "DEBUG:: DONE Visiting Args with Read semantics.\n";
 
+
     FunctionDecl *FunD = dyn_cast<FunctionDecl>(CalleeDecl);
     VarDecl *VarD = dyn_cast<VarDecl>(CalleeDecl); // Non-null if calling through fn-ptr
     assert(FunD || VarD);
     if (FunD) {
+      OS << "DEBUG:: VisitCallExpr::(FunD!=NULL)\n";
+
       // Use the cannonical decl for annotations
       FunctionDecl *CanD = FunD->getCanonicalDecl();
       if (CanD)
         FunD = CanD;
-      OS << "DEBUG:: VisitCallExpr::(FunD!=NULL)\n";
-      SubstitutionSet SubS;
-      if (FunD->isOverloadedOperator() && isa<CXXMethodDecl>(FunD)) {
 
-        OS << "DEBUG:: isa<CXXOperatorCallExpr>(Exp) == true\n";
-        CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(FunD);
-        assert(CXXCalleeDecl && "Internal Error: Expected isa<CXXMethodDecl>(FunD)");
-        CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
-        TypeBuilderVisitor TBV(Def, Exp->getArg(0));
-        ASaPType *Typ = TBV.getType();
-        buildTypeSubstitution(SymT, Rec, Typ, SubS);
+      ASaPType *T = 0;
+      if (isa<CXXMethodDecl>(FunD)) {
+        if (FunD->isOverloadedOperator()) {
+          TypeBuilderVisitor TBV(Def, Exp->getArg(0));
+          T = TBV.stealType();
+        } else {
+          BaseTypeBuilderVisitor TBV(Def, Exp->getCallee());
+          T = TBV.stealType();
+        }
+      }
+      std::unique_ptr<SubstitutionVector> SubV =
+          SymT.getInheritanceSubstitutionVector(T);
+      std::unique_ptr<SubstitutionSet> SubS =
+          SymT.getTypeSubstitutionSet(T);
+
+      OS << "DEBUG:: Type = " << (T ? T->toString() : "null") << "\n";
+      assert(SubV.get() && "Internal Error: unexpected null-pointer");
+      assert(SubS.get() && "Internal Error: unexpected null pointer");
+
+      OS << "DEBUG:: SubV = " << SubV->toString() << "\n";
+      OS << "DEBUG:: SubS = " << SubS->toString() << "\n";
+      delete T;
+
+      if (isa<CXXMethodDecl>(FunD) && FunD->isOverloadedOperator()) {
         tryBuildParamSubstitutions(Def, SymT, FunD, Exp->arg_begin()+1,
-                                   Exp->arg_end(), SubS);
+                                   Exp->arg_end(), *SubS);
       } else {
         tryBuildParamSubstitutions(Def, SymT, FunD, Exp->arg_begin(),
-                                   Exp->arg_end(), SubS);
+                                   Exp->arg_end(), *SubS);
       }
+      SubV->push_back(SubS);
 
       /// 2. Add effects to tmp effects
-      SubstitutionVector SubV;
-      SubV.push_back(SubS);
-
-      Effect IE(Effect::EK_InvocEffect, Exp, FunD, &SubV);
+      Effect IE(Effect::EK_InvocEffect, Exp, FunD, SubV.get());
       OS << "DEBUG:: Adding invocation Effect "<< IE.toString() <<
         "to " << EC->getDef()->getNameAsString() << "\n";
-      EffectsTmp->push_back(IE);
+      EC->addEffect(&IE);
+
       /// 3. Visit base if it exists
-      SaveAndRestore<int> EffectAccumulator(EffectCount, EffectCount+1);
+      // Don't modify DerefNum as it modifies the return type of the call
+      SaveAndRestore<bool> VisitBase(IsBase, false);
+
       Visit(Exp->getCallee());
-      std::unique_ptr<Effect> E = EffectsTmp->pop_back_val();
-      EC->addEffect(E);
+
     // end if (FunD)
     } else { // VarD != null (call through function pointer)
     // TODO

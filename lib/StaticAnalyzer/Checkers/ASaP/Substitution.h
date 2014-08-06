@@ -71,8 +71,6 @@ public:
   void buildSubstitutionSet(const ParameterVector *ParV,
                             const RplVector *RplVec);
 
-  void add(const ASaPType *Typ, const ParameterVector *ParamV);
-
   /// \brief Print Substitution vector.
   void print(llvm::raw_ostream &OS) const;
 
@@ -96,12 +94,6 @@ class SubstitutionVector :
 
 public:
   // Methods
-  /// \brief Given a ParamVec (p_1, p_2, ..., p_n) and
-  /// an RplVec (r_1, r_2, ..., r_n),
-  /// build a SubstVec (s1, s2, ... s_n), where s_i = (p_i, r_i)
-  //void buildSubstitutionVector(const ParameterVector *ParV,
-  //                             const RplVector *RplVec);
-
   /// \brief Apply substitution vector to type T, which must implement
   /// T->substitute(Subtitution *)
   template<typename T>
@@ -110,7 +102,6 @@ public:
       for(VectorT::const_iterator I = begin(), E = end();
           I != E; ++I) {
         assert(*I);
-        //(*I)->applyTo(X);
         X->substitute(*I);
       }
     }
@@ -122,21 +113,12 @@ public:
       for(VectorT::const_reverse_iterator I = rbegin(), E = rend();
           I != E; ++I) {
         assert(*I);
-        //(*I)->applyTo(X);
         X->substitute(*I);
       }
     }
   }
 
-  // Print
-  /// \brief Print Substitution vector.
-  void print(llvm::raw_ostream &OS) const;
-
-  /// \brief Return a string for the Substitution vector.
-  std::string toString() const;
-
   void push_back_vec(const SubstitutionVector *SubV);
-  void merge_back(SubstitutionSet *SubS);
 }; // End class SubstituionVector.
 
 } // end namespace clang

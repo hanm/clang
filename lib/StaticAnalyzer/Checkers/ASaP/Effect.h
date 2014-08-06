@@ -160,11 +160,6 @@ public:
   void substitute(const Substitution *S);
   void substitute(const SubstitutionSet *SubS);
   void substitute(const SubstitutionVector *SubV);
-  // The following two methods apply the substitutions to the last N
-  // elements of the effect vector
-  void substitute(const Substitution *S, int N);
-  void substitute(const SubstitutionSet *SubS, int N);
-  void substitute(const SubstitutionVector *SubV, int N);
 
   void makeMinimal();
   void addEffects(const ConcreteEffectSummary &ES);
@@ -211,11 +206,9 @@ public:
   virtual void substitute(const SubstitutionSet *SubS) = 0;
   virtual void substitute(const SubstitutionVector *SubV) = 0;
 
-  virtual void print(raw_ostream &OS, std::string Separator="\n",
-                       bool PrintLastSeparator=true) const = 0;
+  virtual void print(raw_ostream &OS) const = 0;
 
-  std::string toString(std::string Separator=", ",
-                       bool PrintLastSeparator=false) const;
+  std::string toString() const;
 
   EffectSummary(SummaryKind SK) : Kind(SK) {}
   virtual EffectSummary *clone() const = 0;
@@ -253,8 +246,10 @@ public:
   virtual void makeMinimal(EffectCoverageVector &ECV);
 
   /// \brief Prints effect summary to raw output stream.
-  virtual void print(raw_ostream &OS, std::string Separator="\n",
-	     bool PrintLastSeparator=true) const;
+  // We need to specify which of the two base class implementation to use.
+  virtual void print(raw_ostream &OS) const { BaseClass::print(OS); }
+  // toString is found in both base classes, so we have to say which one to use
+  std::string toString() const { return EffectSummary::toString(); }
 
   virtual void substitute(const Substitution *Sub);
   virtual void substitute(const SubstitutionSet *SubS);
@@ -288,9 +283,7 @@ public:
     return new VarEffectSummary(*this);
   }
 
-  virtual void print(raw_ostream &OS,
-                     std::string Separator="\n",
-                     bool PrintLastSeparator=true) const;
+  virtual void print(raw_ostream &OS) const;
 
   virtual void makeMinimal(EffectCoverageVector &ECV) {
     //nothing to do

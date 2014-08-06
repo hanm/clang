@@ -104,6 +104,31 @@ public:
     return SetT::erase(E);
   }
 
+  void print (llvm::raw_ostream& OS) const {
+    if(SetT::size() <= 0)
+      return;
+
+    OS << "{";
+    typename SetT::const_iterator I = SetT::begin(), E = SetT::end();
+    if (I != E) {
+      (*I)->print(OS);
+      ++I;
+    }
+    for(; I != E; ++I) {
+      OS << ", ";
+      (*I)->print(OS);
+    }
+    OS << "}";
+  }
+
+  inline std::string toString() const {
+    std::string SBuf;
+    llvm::raw_string_ostream OS(SBuf);
+    print(OS);
+    return std::string(OS.str());
+  }
+
+
 }; // end class OwningPtrSet
 
 #endif

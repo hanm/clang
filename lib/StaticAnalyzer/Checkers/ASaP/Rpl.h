@@ -79,6 +79,10 @@ public:
   RplElementKind getKind() const { return Kind; }
   RplElement(RplElementKind K) : Kind(K) {}
 
+  void print (llvm::raw_ostream& OS) const {
+    OS << getName();
+  }
+
   virtual bool isFullySpecified() const { return true; }
 
   virtual StringRef getName() const = 0;
@@ -525,6 +529,9 @@ public:
   //typedef llvm::SmallPtrSet<const ParamRplElement*, PARAM_VECTOR_SIZE> BaseClass;
 
   bool hasElement(const RplElement *Elmt) const;
+  void print(llvm::raw_ostream &OS) const;
+  std::string toString() const;
+
 }; // end class ParameterSet
 
 class ParameterVector :
@@ -554,8 +561,6 @@ public:
   bool hasElement(const RplElement *Elmt) const;
 
   void take(ParameterVector *&PV);
-
-  void print (llvm::raw_ostream& OS) const;
 
   void assertzProlog () const;
 
@@ -629,16 +634,6 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
   /// \brief Substitution this[FromEl <- ToRpl] (over RPL vector)
   void substitute(const Substitution *S);
   void substitute(const SubstitutionSet *SubS);
-  /// \brief Print RPL vector
-  void print(llvm::raw_ostream &OS) const;
-  /// \brief Return a string for the RPL vector.
-  inline std::string toString() const {
-    std::string SBuf;
-    llvm::raw_string_ostream OS(SBuf);
-    print(OS);
-    return std::string(OS.str());
-  }
-
   /// \brief Returns the union of two RPL Vectors by copying its inputs.
   static RplVector *merge(const RplVector *A, const RplVector *B);
   /// \brief Returns the union of two RPL Vectors but destroys its inputs.
