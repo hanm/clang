@@ -571,8 +571,20 @@ addParallelFun(const FunctionDecl *D, const SpecificNIChecker *NIC) {
   }
 }
 
-void SymbolTable::updateEffectInclusionConstraint(const FunctionDecl *Def,
-                                                  ConcreteEffectSummary &CES) {
+void SymbolTable::addConstraint(Constraint *Cons) {
+  assert(Cons && "Internal Error: unexpected null-pointer");
+  OSv2 << "DEBUG:: adding Constraint: " << Cons->toString() << "\n";
+  ConstraintSet.insert(Cons);
+  if (EffectInclusionConstraint *EIC =
+        dyn_cast<EffectInclusionConstraint>(Cons)) {
+    bool Res = addEffectInclusionConstraint(EIC->getDef(), EIC);
+    assert(Res && "Unexpected error");
+  }
+}
+
+void SymbolTable::
+updateEffectInclusionConstraint(const FunctionDecl *Def,
+                                ConcreteEffectSummary &CES) {
   EffectInclusionConstraint *EIC = getEffectInclusionConstraint(Def);
   if (EIC) {
     EIC->addEffects(CES);
@@ -584,11 +596,17 @@ void SymbolTable::updateEffectInclusionConstraint(const FunctionDecl *Def,
   }
 }
 
-bool SymbolTable::addInclusionConstraint(const FunctionDecl *FunD,
-                                         EffectInclusionConstraint *EIC) {
+bool SymbolTable::
+addEffectInclusionConstraint(const FunctionDecl *FunD,
+                             EffectInclusionConstraint *EIC) {
   if (!SymTable.lookup(FunD))
     return false;
-  return SymTable[FunD]->addInclusionConstraint(EIC);
+  bool Result = SymTable[FunD]->addEffectInclusionConstraint(EIC);
+
+  const FunctionDecl *CanD = FunD->getCanonicalDecl();
+  if (CanD != FunD)
+    Result &= SymTable[CanD]->addEffectInclusionConstraint(EIC);
+  return Result;
 }
 
 void SymbolTable::
@@ -705,16 +723,6 @@ static void emitConstraintSolution(EffectInclusionConstraint *EC,
 
 }
 
-void SymbolTable::addConstraint(Constraint *Cons) {
-  assert(Cons && "Internal Error: unexpected null-pointer");
-  OSv2 << "DEBUG:: adding Constraint: " << Cons->toString() << "\n";
-  ConstraintSet.insert(Cons);
-  if (EffectInclusionConstraint *EIC =
-        dyn_cast<EffectInclusionConstraint>(Cons)) {
-    addInclusionConstraint(EIC->getDef(), EIC);
-  }
-}
-
 void SymbolTable::emitFacts() const {
   //PL_action(PL_ACTION_TRACE);
   //iterate through symbol table entries and emit facts
@@ -739,7 +747,7 @@ void SymbolTable::emitFacts() const {
     }
 
     const RplDomain *Dom = Entry->getRplDomain();
-    if (Dom && !Dom->isUsed()) {
+    if (Dom && Dom->isUsed()) {
       Dom->assertzProlog();
     }
 
@@ -779,11 +787,12 @@ void SymbolTable::emitConstraints() const {
 }
 
 void SymbolTable::solveConstraints() const {
-  emitFacts();
   //PL_action(PL_ACTION_TRACE);
+  emitFacts();
   emitConstraints();
-  //loop to call esi_collect (effect inference)
 
+  //PL_action(PL_ACTION_TRACE);
+  //loop to call esi_collect (effect inference)
   for (ConstraintsSetT::iterator
           I = ConstraintSet.begin(),
           E = ConstraintSet.end();
@@ -1005,7 +1014,8 @@ void SymbolTableEntry::addParameterName(StringRef Name, StringRef PrologName) {
   ParamVec->push_back(ParamRplElement(Name, PrologName));
 }
 
-bool SymbolTableEntry::addInclusionConstraint(EffectInclusionConstraint *EIC) {
+bool SymbolTableEntry::
+addEffectInclusionConstraint(EffectInclusionConstraint *EIC) {
   if (!EffSum || !isa<VarEffectSummary>(EffSum))
     return false;
   VarEffectSummary *VES = dyn_cast<VarEffectSummary>(EffSum);

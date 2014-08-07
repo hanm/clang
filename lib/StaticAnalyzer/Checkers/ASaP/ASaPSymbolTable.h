@@ -148,8 +148,8 @@ class SymbolTable {
     return Result;
   }
 
-  bool addInclusionConstraint(const FunctionDecl *FunD,
-                              EffectInclusionConstraint *EIC);
+  bool addEffectInclusionConstraint(const FunctionDecl *FunD,
+                                    EffectInclusionConstraint *EIC);
 
   void assertzHasEffectSummary(const NamedDecl &NDec,
                                const EffectSummary &EffSum) const;
@@ -419,7 +419,7 @@ public:
   // Adders.
   void addRegionName(llvm::StringRef Name, llvm::StringRef PrologName);
   void addParameterName(llvm::StringRef Name, llvm::StringRef PrologName);
-  bool addInclusionConstraint(EffectInclusionConstraint *EIC);
+  bool addEffectInclusionConstraint(EffectInclusionConstraint *EIC);
 
   // Deleters
   inline void deleteEffectSummary();
