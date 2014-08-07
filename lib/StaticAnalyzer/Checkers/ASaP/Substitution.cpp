@@ -155,6 +155,23 @@ void SubstitutionVector::push_back_vec(const SubstitutionVector *SubV) {
   }
 }
 
+term_t SubstitutionVector::getPLTerm() const {
+  term_t Result = clang::asap::buildPLEmptyList();
+  int Res;
+
+  for (VectorT::const_reverse_iterator
+            I = VectorT::rbegin(),
+            E = VectorT::rend();
+        I != E; ++I) {
+    if ((*I)->size() > 0) {
+      term_t Term = (*I)->getPLTerm();
+      Res = PL_cons_list(Result, Term, Result);
+      assert(Res && "Failed to add SubstitutionVector element to Prolog list term");
+    }
+  }
+  return Result;
+}
+
 } // end namespace clang
 } // end namespace asap
 
