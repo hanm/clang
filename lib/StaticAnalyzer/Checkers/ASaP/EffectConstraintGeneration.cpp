@@ -78,27 +78,21 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   OS << "DEBUG:: done running Visit\n";
   if (const CXXMethodDecl *CXXD = dyn_cast<CXXMethodDecl>(Def)) {
     // check overidden methods have an effect summary that covers this one
-    OS << "DEBUG:: here 1\n";
     const EffectSummary *DerivedSum = SymT.getEffectSummary(CXXD);
     assert(DerivedSum);
     const CXXRecordDecl *DerivedClass = CXXD->getParent();
-    OS << "DEBUG:: here 2\n";
 
     for(CXXMethodDecl::method_iterator
         I = CXXD->begin_overridden_methods(),
         E = CXXD->end_overridden_methods();
         I != E; ++I) {
       const CXXMethodDecl* OverriddenMethod = *I; // i.e., base Method
-      OS << "DEBUG:: here 3\n";
 
       const EffectSummary *OverriddenSum = SymT.getEffectSummary(OverriddenMethod);
       assert(OverriddenSum);
-      OS << "DEBUG:: here 4\n";
 
       const SubstitutionVector *SubVec = SymT.getInheritanceSubVec(DerivedClass);
-      OS << "DEBUG:: here 5\n";
       EffectSummary *SubstOVRDSum = OverriddenSum->clone();
-      OS << "DEBUG:: here 6\n";
       OS << "DEBUG:: SubstOVRDSum = " << SubstOVRDSum->toString() << "\n";
       OS << "DEBUG:: SubVec = " << SubVec->toString() << "\n";
       OS << "DEBUG:: SubVec size = " << SubVec->size() << "\n";
