@@ -1413,9 +1413,9 @@ std::pair<CharUnits, CharUnits>
 ASTContext::getTypeInfoInChars(const Type *T) const {
   if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(T))
     return getConstantArrayInfoInChars(*this, CAT);
-  std::pair<uint64_t, unsigned> Info = getTypeInfo(T);
-  return std::make_pair(toCharUnitsFromBits(Info.first),
-                        toCharUnitsFromBits(Info.second));
+  TypeInfo Info = getTypeInfo(T);
+  return std::make_pair(toCharUnitsFromBits(Info.Width),
+                        toCharUnitsFromBits(Info.Align));
 }
 
 std::pair<CharUnits, CharUnits>
@@ -1423,14 +1423,23 @@ ASTContext::getTypeInfoInChars(QualType T) const {
   return getTypeInfoInChars(T.getTypePtr());
 }
 
-std::pair<uint64_t, unsigned> ASTContext::getTypeInfo(const Type *T) const {
-  TypeInfoMap::iterator it = MemoizedTypeInfo.find(T);
-  if (it != MemoizedTypeInfo.end())
-    return it->second;
+bool ASTContext::isAlignmentRequired(const Type *T) const {
+  return getTypeInfo(T).AlignIsRequired;
+}
 
-  std::pair<uint64_t, unsigned> Info = getTypeInfoImpl(T);
-  MemoizedTypeInfo.insert(std::make_pair(T, Info));
-  return Info;
+bool ASTContext::isAlignmentRequired(QualType T) const {
+  return isAlignmentRequired(T.getTypePtr());
+}
+
+TypeInfo ASTContext::getTypeInfo(const Type *T) const {
+  TypeInfoMap::iterator I = MemoizedTypeInfo.find(T);
+  if (I != MemoizedTypeInfo.end())
+    return I->second;
+
+  // This call can invalidate MemoizedTypeInfo[T], so we need a second lookup.
+  TypeInfo TI = getTypeInfoImpl(T);
+  MemoizedTypeInfo[T] = TI;
+  return TI;
 }
 
 /// getTypeInfoImpl - Return the size of the specified type, in bits.  This
@@ -1439,10 +1448,10 @@ std::pair<uint64_t, unsigned> ASTContext::getTypeInfo(const Type *T) const {
 /// FIXME: Pointers into different addr spaces could have different sizes and
 /// alignment requirements: getPointerInfo should take an AddrSpace, this
 /// should take a QualType, &c.
-std::pair<uint64_t, unsigned>
-ASTContext::getTypeInfoImpl(const Type *T) const {
-  uint64_t Width=0;
-  unsigned Align=8;
+TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
+  uint64_t Width = 0;
+  unsigned Align = 8;
+  bool AlignIsRequired = false;
   switch (T->getTypeClass()) {
 #define TYPE(Class, Base)
 #define ABSTRACT_TYPE(Class, Base)
@@ -1471,12 +1480,12 @@ ASTContext::getTypeInfoImpl(const Type *T) const {
   case Type::ConstantArray: {
     const ConstantArrayType *CAT = cast<ConstantArrayType>(T);
 
-    std::pair<uint64_t, unsigned> EltInfo = getTypeInfo(CAT->getElementType());
+    TypeInfo EltInfo = getTypeInfo(CAT->getElementType());
     uint64_t Size = CAT->getSize().getZExtValue();
-    assert((Size == 0 || EltInfo.first <= (uint64_t)(-1)/Size) && 
+    assert((Size == 0 || EltInfo.Width <= (uint64_t)(-1) / Size) &&
            "Overflow in array type bit size evaluation");
-    Width = EltInfo.first*Size;
-    Align = EltInfo.second;
+    Width = EltInfo.Width * Size;
+    Align = EltInfo.Align;
     if (!getTargetInfo().getCXXABI().isMicrosoft() ||
         getTargetInfo().getPointerWidth(0) == 64)
       Width = llvm::RoundUpToAlignment(Width, Align);
@@ -1485,8 +1494,8 @@ ASTContext::getTypeInfoImpl(const Type *T) const {
   case Type::ExtVector:
   case Type::Vector: {
     const VectorType *VT = cast<VectorType>(T);
-    std::pair<uint64_t, unsigned> EltInfo = getTypeInfo(VT->getElementType());
-    Width = EltInfo.first*VT->getNumElements();
+    TypeInfo EltInfo = getTypeInfo(VT->getElementType());
+    Width = EltInfo.Width * VT->getNumElements();
     Align = Width;
     // If the alignment is not a power of 2, round up to the next power of 2.
     // This happens for non-power-of-2 length vectors.
@@ -1638,10 +1647,9 @@ ASTContext::getTypeInfoImpl(const Type *T) const {
   case Type::Complex: {
     // Complex types have the same alignment as their elements, but twice the
     // size.
-    std::pair<uint64_t, unsigned> EltInfo =
-      getTypeInfo(cast<ComplexType>(T)->getElementType());
-    Width = EltInfo.first*2;
-    Align = EltInfo.second;
+    TypeInfo EltInfo = getTypeInfo(cast<ComplexType>(T)->getElementType());
+    Width = EltInfo.Width * 2;
+    Align = EltInfo.Align;
     break;
   }
   case Type::ObjCObject:
@@ -1692,16 +1700,18 @@ ASTContext::getTypeInfoImpl(const Type *T) const {
 
   case Type::Typedef: {
     const TypedefNameDecl *Typedef = cast<TypedefType>(T)->getDecl();
-    std::pair<uint64_t, unsigned> Info
-      = getTypeInfo(Typedef->getUnderlyingType().getTypePtr());
+    TypeInfo Info = getTypeInfo(Typedef->getUnderlyingType().getTypePtr());
     // If the typedef has an aligned attribute on it, it overrides any computed
     // alignment we have.  This violates the GCC documentation (which says that
     // attribute(aligned) can only round up) but matches its implementation.
-    if (unsigned AttrAlign = Typedef->getMaxAlignment())
+    if (unsigned AttrAlign = Typedef->getMaxAlignment()) {
       Align = AttrAlign;
-    else
-      Align = Info.second;
-    Width = Info.first;
+      AlignIsRequired = true;
+    } else {
+      Align = Info.Align;
+      AlignIsRequired = Info.AlignIsRequired;
+    }
+    Width = Info.Width;
     break;
   }
 
@@ -1714,10 +1724,9 @@ ASTContext::getTypeInfoImpl(const Type *T) const {
 
   case Type::Atomic: {
     // Start with the base type information.
-    std::pair<uint64_t, unsigned> Info
-      = getTypeInfo(cast<AtomicType>(T)->getValueType());
-    Width = Info.first;
-    Align = Info.second;
+    TypeInfo Info = getTypeInfo(cast<AtomicType>(T)->getValueType());
+    Width = Info.Width;
+    Align = Info.Align;
 
     // If the size of the type doesn't exceed the platform's max
     // atomic promotion width, make the size and alignment more
@@ -1735,7 +1744,7 @@ ASTContext::getTypeInfoImpl(const Type *T) const {
   }
 
   assert(llvm::isPowerOf2_32(Align) && "Alignment must be power of 2");
-  return std::make_pair(Width, Align);
+  return TypeInfo(Width, Align, AlignIsRequired);
 }
 
 /// toCharUnitsFromBits - Convert a size in bits to a size in characters.
@@ -1771,12 +1780,11 @@ CharUnits ASTContext::getTypeAlignInChars(const Type *T) const {
 /// alignment in cases where it is beneficial for performance to overalign
 /// a data type.
 unsigned ASTContext::getPreferredTypeAlign(const Type *T) const {
-  unsigned ABIAlign = getTypeAlign(T);
+  TypeInfo TI = getTypeInfo(T);
+  unsigned ABIAlign = TI.Align;
 
   if (Target->getTriple().getArch() == llvm::Triple::xcore)
     return ABIAlign;  // Never overalign on XCore.
-
-  const TypedefType *TT = T->getAs<TypedefType>();
 
   // Double and long long should be naturally aligned if possible.
   T = T->getBaseElementTypeUnsafe();
@@ -1787,7 +1795,7 @@ unsigned ASTContext::getPreferredTypeAlign(const Type *T) const {
       T->isSpecificBuiltinType(BuiltinType::ULongLong))
     // Don't increase the alignment if an alignment attribute was specified on a
     // typedef declaration.
-    if (!TT || !TT->getDecl()->getMaxAlignment())
+    if (!TI.AlignIsRequired)
       return std::max(ABIAlign, (unsigned)getTypeSize(T));
 
   return ABIAlign;
@@ -2840,7 +2848,7 @@ ASTContext::getFunctionType(QualType ResultTy, ArrayRef<QualType> ArgArray,
 
   // Determine whether the type being created is already canonical or not.
   bool isCanonical =
-    EPI.ExceptionSpecType == EST_None && isCanonicalResultType(ResultTy) &&
+    EPI.ExceptionSpec.Type == EST_None && isCanonicalResultType(ResultTy) &&
     !EPI.HasTrailingReturn;
   for (unsigned i = 0; i != NumArgs && isCanonical; ++i)
     if (!ArgArray[i].isCanonicalAsParam())
@@ -2857,8 +2865,7 @@ ASTContext::getFunctionType(QualType ResultTy, ArrayRef<QualType> ArgArray,
 
     FunctionProtoType::ExtProtoInfo CanonicalEPI = EPI;
     CanonicalEPI.HasTrailingReturn = false;
-    CanonicalEPI.ExceptionSpecType = EST_None;
-    CanonicalEPI.NumExceptions = 0;
+    CanonicalEPI.ExceptionSpec = FunctionProtoType::ExceptionSpecInfo();
 
     // Result types do not have ARC lifetime qualifiers.
     QualType CanResultTy = getCanonicalType(ResultTy);
@@ -2886,13 +2893,13 @@ ASTContext::getFunctionType(QualType ResultTy, ArrayRef<QualType> ArgArray,
   // specification.
   size_t Size = sizeof(FunctionProtoType) +
                 NumArgs * sizeof(QualType);
-  if (EPI.ExceptionSpecType == EST_Dynamic) {
-    Size += EPI.NumExceptions * sizeof(QualType);
-  } else if (EPI.ExceptionSpecType == EST_ComputedNoexcept) {
+  if (EPI.ExceptionSpec.Type == EST_Dynamic) {
+    Size += EPI.ExceptionSpec.Exceptions.size() * sizeof(QualType);
+  } else if (EPI.ExceptionSpec.Type == EST_ComputedNoexcept) {
     Size += sizeof(Expr*);
-  } else if (EPI.ExceptionSpecType == EST_Uninstantiated) {
+  } else if (EPI.ExceptionSpec.Type == EST_Uninstantiated) {
     Size += 2 * sizeof(FunctionDecl*);
-  } else if (EPI.ExceptionSpecType == EST_Unevaluated) {
+  } else if (EPI.ExceptionSpec.Type == EST_Unevaluated) {
     Size += sizeof(FunctionDecl*);
   }
   if (EPI.ConsumedParameters)
@@ -3060,11 +3067,9 @@ QualType ASTContext::getSubstTemplateTypeParmPackType(
                                           const TemplateTypeParmType *Parm,
                                               const TemplateArgument &ArgPack) {
 #ifndef NDEBUG
-  for (TemplateArgument::pack_iterator P = ArgPack.pack_begin(), 
-                                    PEnd = ArgPack.pack_end();
-       P != PEnd; ++P) {
-    assert(P->getKind() == TemplateArgument::Type &&"Pack contains a non-type");
-    assert(P->getAsType().isCanonical() && "Pack contains non-canonical type");
+  for (const auto &P : ArgPack.pack_elements()) {
+    assert(P.getKind() == TemplateArgument::Type &&"Pack contains a non-type");
+    assert(P.getAsType().isCanonical() && "Pack contains non-canonical type");
   }
 #endif
   
@@ -3428,7 +3433,7 @@ QualType ASTContext::getPackExpansionType(QualType Pattern,
     // contains an alias template specialization which ignores one of its
     // parameters.
     if (Canon->containsUnexpandedParameterPack()) {
-      Canon = getPackExpansionType(getCanonicalType(Pattern), NumExpansions);
+      Canon = getPackExpansionType(Canon, NumExpansions);
 
       // Find the insert position again, in case we inserted an element into
       // PackExpansionTypes and invalidated our insert position.
@@ -3439,7 +3444,7 @@ QualType ASTContext::getPackExpansionType(QualType Pattern,
   T = new (*this) PackExpansionType(Pattern, Canon, NumExpansions);
   Types.push_back(T);
   PackExpansionTypes.InsertNode(T, InsertPos);
-  return QualType(T, 0);  
+  return QualType(T, 0);
 }
 
 /// CmpProtocolNames - Comparison predicate for sorting protocols
@@ -4783,6 +4788,12 @@ CharUnits ASTContext::getObjCEncodingTypeSize(QualType type) const {
   return sz;
 }
 
+bool ASTContext::isMSStaticDataMemberInlineDefinition(const VarDecl *VD) const {
+  return getLangOpts().MSVCCompat && VD->isStaticDataMember() &&
+         VD->getType()->isIntegralOrEnumerationType() &&
+         !VD->getFirstDecl()->isOutOfLine() && VD->getFirstDecl()->hasInit();
+}
+
 static inline 
 std::string charUnitsToString(const CharUnits &CU) {
   return llvm::itostr(CU.getQuantity());
@@ -5022,9 +5033,7 @@ void ASTContext::getObjCEncodingForPropertyDecl(const ObjCPropertyDecl *PD,
   // Encode result type.
   // GCC has some special rules regarding encoding of properties which
   // closely resembles encoding of ivars.
-  getObjCEncodingForTypeImpl(PD->getType(), S, true, true, nullptr,
-                             true /* outermost type */,
-                             true /* encoding for property */);
+  getObjCEncodingForPropertyType(PD->getType(), S);
 
   if (PD->isReadOnly()) {
     S += ",R";
@@ -5095,6 +5104,16 @@ void ASTContext::getObjCEncodingForType(QualType T, std::string& S,
   // same type.
   getObjCEncodingForTypeImpl(T, S, true, true, Field,
                              true /* outermost type */);
+}
+
+void ASTContext::getObjCEncodingForPropertyType(QualType T,
+                                                std::string& S) const {
+  // Encode result type.
+  // GCC has some special rules regarding encoding of properties which
+  // closely resembles encoding of ivars.
+  getObjCEncodingForTypeImpl(T, S, true, true, nullptr,
+                             true /* outermost type */,
+                             true /* encoding property */);
 }
 
 static char getObjCEncodingForPrimitiveKind(const ASTContext *C,
@@ -7843,6 +7862,12 @@ static GVALinkage basicGVALinkageForVariable(const ASTContext &Context,
                                                : StaticLocalLinkage;
   }
 
+  // MSVC treats in-class initialized static data members as definitions.
+  // By giving them non-strong linkage, out-of-line definitions won't
+  // cause link errors.
+  if (Context.isMSStaticDataMemberInlineDefinition(VD))
+    return GVA_DiscardableODR;
+
   switch (VD->getTemplateSpecializationKind()) {
   case TSK_Undeclared:
   case TSK_ExplicitSpecialization:
@@ -7928,7 +7953,8 @@ bool ASTContext::DeclMustBeEmitted(const Decl *D) {
   const VarDecl *VD = cast<VarDecl>(D);
   assert(VD->isFileVarDecl() && "Expected file scoped var");
 
-  if (VD->isThisDeclarationADefinition() == VarDecl::DeclarationOnly)
+  if (VD->isThisDeclarationADefinition() == VarDecl::DeclarationOnly &&
+      !isMSStaticDataMemberInlineDefinition(VD))
     return false;
 
   // Variables that can be needed in other TUs are required.

@@ -118,10 +118,7 @@ void Sema::CheckObjCMethodOverride(ObjCMethodDecl *NewMethod,
     // a suitable return type, but the new (overriding) method does not have
     // a suitable return type.
     QualType ResultType = NewMethod->getReturnType();
-    SourceRange ResultTypeRange;
-    if (const TypeSourceInfo *ResultTypeInfo =
-            NewMethod->getReturnTypeSourceInfo())
-      ResultTypeRange = ResultTypeInfo->getTypeLoc().getSourceRange();
+    SourceRange ResultTypeRange = NewMethod->getReturnTypeSourceRange();
     
     // Figure out which class this method is part of, if any.
     ObjCInterfaceDecl *CurrentClass 
@@ -209,10 +206,7 @@ bool Sema::CheckARCMethodDecl(ObjCMethodDecl *method) {
 
   case OMF_dealloc:
     if (!Context.hasSameType(method->getReturnType(), Context.VoidTy)) {
-      SourceRange ResultTypeRange;
-      if (const TypeSourceInfo *ResultTypeInfo =
-              method->getReturnTypeSourceInfo())
-        ResultTypeRange = ResultTypeInfo->getTypeLoc().getSourceRange();
+      SourceRange ResultTypeRange = method->getReturnTypeSourceRange();
       if (ResultTypeRange.isInvalid())
         Diag(method->getLocation(), diag::error_dealloc_bad_result_type)
             << method->getReturnType()
@@ -1362,9 +1356,9 @@ static bool CheckMethodOverrideReturn(Sema &S,
                   ? diag::warn_conflicting_overriding_ret_type_modifiers
                   : diag::warn_conflicting_ret_type_modifiers))
           << MethodImpl->getDeclName()
-          << getTypeRange(MethodImpl->getReturnTypeSourceInfo());
+          << MethodImpl->getReturnTypeSourceRange();
       S.Diag(MethodDecl->getLocation(), diag::note_previous_declaration)
-          << getTypeRange(MethodDecl->getReturnTypeSourceInfo());
+          << MethodDecl->getReturnTypeSourceRange();
     }
     else
       return false;
@@ -1402,11 +1396,11 @@ static bool CheckMethodOverrideReturn(Sema &S,
   S.Diag(MethodImpl->getLocation(), DiagID)
       << MethodImpl->getDeclName() << MethodDecl->getReturnType()
       << MethodImpl->getReturnType()
-      << getTypeRange(MethodImpl->getReturnTypeSourceInfo());
+      << MethodImpl->getReturnTypeSourceRange();
   S.Diag(MethodDecl->getLocation(), IsOverridingMode
                                         ? diag::note_previous_declaration
                                         : diag::note_previous_definition)
-      << getTypeRange(MethodDecl->getReturnTypeSourceInfo());
+      << MethodDecl->getReturnTypeSourceRange();
   return false;
 }
 
@@ -2107,7 +2101,12 @@ static bool matchTypes(ASTContext &Context, Sema::MethodMatchStrategy strategy,
   // validate the basic, low-level compatibility of the two types.
 
   // As a minimum, require the sizes and alignments to match.
-  if (Context.getTypeInfo(left) != Context.getTypeInfo(right))
+  TypeInfo LeftTI = Context.getTypeInfo(left);
+  TypeInfo RightTI = Context.getTypeInfo(right);
+  if (LeftTI.Width != RightTI.Width)
+    return false;
+
+  if (LeftTI.Align != RightTI.Align)
     return false;
 
   // Consider all the kinds of non-dependent canonical types:
@@ -2159,7 +2158,13 @@ static bool tryMatchRecordTypes(ASTContext &Context,
     return false;
 
   // Require size and alignment to match.
-  if (Context.getTypeInfo(lt) != Context.getTypeInfo(rt)) return false;
+  TypeInfo LeftTI = Context.getTypeInfo(lt);
+  TypeInfo RightTI = Context.getTypeInfo(rt);
+  if (LeftTI.Width != RightTI.Width)
+    return false;
+
+  if (LeftTI.Align != RightTI.Align)
+    return false;
 
   // Require fields to match.
   RecordDecl::field_iterator li = left->field_begin(), le = left->field_end();

@@ -66,6 +66,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   StaticVariableAccessChecker.cpp
   StreamChecker.cpp
   TaintTesterChecker.cpp
+  TestAfterDivZeroChecker.cpp
   TraversalChecker.cpp
   UndefBranchChecker.cpp
   UndefCapturedBlockVarChecker.cpp

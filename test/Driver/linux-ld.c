@@ -34,6 +34,19 @@
 // CHECK-LD-64: "-lgcc" "--as-needed" "-lgcc_s" "--no-as-needed"
 //
 // RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 \
+// RUN:     --target=x86_64-unknown-linux-gnux32 \
+// RUN:     --sysroot=%S/Inputs/basic_linux_tree \
+// RUN:   | FileCheck --check-prefix=CHECK-LD-X32 %s
+// CHECK-LD-X32-NOT: warning:
+// CHECK-LD-X32: "{{.*}}ld{{(.exe)?}}" "--sysroot=[[SYSROOT:[^"]+]]"
+// CHECK-LD-X32: "--eh-frame-hdr"
+// CHECK-LD-X32: "-m" "elf32_x86_64"
+// CHECK-LD-X32: "-dynamic-linker"
+// CHECK-LD-X32: "-lgcc" "--as-needed" "-lgcc_s" "--no-as-needed"
+// CHECK-LD-X32: "-lc"
+// CHECK-LD-X32: "-lgcc" "--as-needed" "-lgcc_s" "--no-as-needed"
+//
+// RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 \
 // RUN:     --target=x86_64-unknown-linux \
 // RUN:     --sysroot=%S/Inputs/basic_linux_tree \
 // RUN:     --rtlib=compiler-rt \
@@ -184,6 +197,57 @@
 // CHECK-64-TO-32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/../../.."
 // CHECK-64-TO-32: "-L[[SYSROOT]]/lib"
 // CHECK-64-TO-32: "-L[[SYSROOT]]/usr/lib"
+//
+// RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 \
+// RUN:     --target=x86_64-unknown-linux-gnux32 \
+// RUN:     --sysroot=%S/Inputs/multilib_64bit_linux_tree \
+// RUN:   | FileCheck --check-prefix=CHECK-X32 %s
+// CHECK-X32: "{{.*}}ld{{(.exe)?}}" "--sysroot=[[SYSROOT:[^"]+]]"
+// CHECK-X32: "{{.*}}/usr/lib/gcc/x86_64-unknown-linux/4.6.0/x32{{/|\\\\}}crtbegin.o"
+// CHECK-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/x32"
+// CHECK-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/../../../../x86_64-unknown-linux/lib/../libx32"
+// CHECK-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/../../../../libx32"
+// CHECK-X32: "-L[[SYSROOT]]/lib/../libx32"
+// CHECK-X32: "-L[[SYSROOT]]/usr/lib/../libx32"
+// CHECK-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0"
+// CHECK-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/../../../../x86_64-unknown-linux/lib"
+// CHECK-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/../../.."
+// CHECK-X32: "-L[[SYSROOT]]/lib"
+// CHECK-X32: "-L[[SYSROOT]]/usr/lib"
+//
+// RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 \
+// RUN:     --target=x86_64-unknown-linux -mx32 \
+// RUN:     --sysroot=%S/Inputs/multilib_64bit_linux_tree \
+// RUN:   | FileCheck --check-prefix=CHECK-64-TO-X32 %s
+// CHECK-64-TO-X32: "{{.*}}ld{{(.exe)?}}" "--sysroot=[[SYSROOT:[^"]+]]"
+// CHECK-64-TO-X32: "{{.*}}/usr/lib/gcc/x86_64-unknown-linux/4.6.0/x32{{/|\\\\}}crtbegin.o"
+// CHECK-64-TO-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/x32"
+// CHECK-64-TO-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/../../../../x86_64-unknown-linux/lib/../libx32"
+// CHECK-64-TO-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/../../../../libx32"
+// CHECK-64-TO-X32: "-L[[SYSROOT]]/lib/../libx32"
+// CHECK-64-TO-X32: "-L[[SYSROOT]]/usr/lib/../libx32"
+// CHECK-64-TO-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0"
+// CHECK-64-TO-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/../../../../x86_64-unknown-linux/lib"
+// CHECK-64-TO-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/../../.."
+// CHECK-64-TO-X32: "-L[[SYSROOT]]/lib"
+// CHECK-64-TO-X32: "-L[[SYSROOT]]/usr/lib"
+//
+// RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 \
+// RUN:     --target=i386-unknown-linux -mx32 \
+// RUN:     --sysroot=%S/Inputs/multilib_64bit_linux_tree \
+// RUN:   | FileCheck --check-prefix=CHECK-32-TO-X32 %s
+// CHECK-32-TO-X32: "{{.*}}ld{{(.exe)?}}" "--sysroot=[[SYSROOT:[^"]+]]"
+// CHECK-32-TO-X32: "{{.*}}/usr/lib/gcc/x86_64-unknown-linux/4.6.0/x32{{/|\\\\}}crtbegin.o"
+// CHECK-32-TO-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/x32"
+// CHECK-32-TO-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/../../../../x86_64-unknown-linux/lib/../libx32"
+// CHECK-32-TO-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/../../../../libx32"
+// CHECK-32-TO-X32: "-L[[SYSROOT]]/lib/../libx32"
+// CHECK-32-TO-X32: "-L[[SYSROOT]]/usr/lib/../libx32"
+// CHECK-32-TO-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0"
+// CHECK-32-TO-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/../../../../x86_64-unknown-linux/lib"
+// CHECK-32-TO-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-unknown-linux/4.6.0/../../.."
+// CHECK-32-TO-X32: "-L[[SYSROOT]]/lib"
+// CHECK-32-TO-X32: "-L[[SYSROOT]]/usr/lib"
 //
 // RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 \
 // RUN:     --target=x86_64-unknown-linux -m32 \
@@ -364,6 +428,26 @@
 // CHECK-UBUNTU-14-04-PPC64LE: "{{.*}}/usr/lib/gcc/powerpc64le-linux-gnu/4.8{{/|\\\\}}crtend.o"
 // CHECK-UBUNTU-14-04-PPC64LE: "{{.*}}/usr/lib/gcc/powerpc64le-linux-gnu/4.8/../../../powerpc64le-linux-gnu{{/|\\\\}}crtn.o"
 //
+// Check Ubuntu 14.04 on x32.
+// "/usr/lib/gcc/x86_64-linux-gnu/4.8/x32/crtend.o" "/usr/lib/gcc/x86_64-linux-gnu/4.8/../../../../libx32/crtn.o"
+// RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 \
+// RUN:     --target=x86_64-unknown-linux-gnux32 \
+// RUN:     --sysroot=%S/Inputs/ubuntu_14.04_multiarch_tree \
+// RUN:   | FileCheck --check-prefix=CHECK-UBUNTU-14-04-X32 %s
+// CHECK-UBUNTU-14-04-X32: "{{.*}}ld{{(.exe)?}}" "--sysroot=[[SYSROOT:[^"]+]]"
+// CHECK-UBUNTU-14-04-X32: "{{.*}}/usr/lib/gcc/x86_64-linux-gnu/4.8/../../../../libx32{{/|\\\\}}crt1.o"
+// CHECK-UBUNTU-14-04-X32: "{{.*}}/usr/lib/gcc/x86_64-linux-gnu/4.8/../../../../libx32{{/|\\\\}}crti.o"
+// CHECK-UBUNTU-14-04-X32: "{{.*}}/usr/lib/gcc/x86_64-linux-gnu/4.8/x32{{/|\\\\}}crtbegin.o"
+// CHECK-UBUNTU-14-04-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-linux-gnu/4.8/x32"
+// CHECK-UBUNTU-14-04-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-linux-gnu/4.8/../../../../libx32"
+// CHECK-UBUNTU-14-04-X32: "-L[[SYSROOT]]/lib/../libx32"
+// CHECK-UBUNTU-14-04-X32: "-L[[SYSROOT]]/usr/lib/../libx32"
+// CHECK-UBUNTU-14-04-X32: "-L[[SYSROOT]]/usr/lib/x86_64-linux-gnu/../../libx32"
+// CHECK-UBUNTU-14-04-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-linux-gnu/4.8"
+// CHECK-UBUNTU-14-04-X32: "-L[[SYSROOT]]/usr/lib/gcc/x86_64-linux-gnu/4.8/../../.."
+// CHECK-UBUNTU-14-04-X32: "{{.*}}/usr/lib/gcc/x86_64-linux-gnu/4.8/x32{{/|\\\\}}crtend.o"
+// CHECK-UBUNTU-14-04-X32: "{{.*}}/usr/lib/gcc/x86_64-linux-gnu/4.8/../../../../libx32{{/|\\\\}}crtn.o"
+//
 // Check fedora 18 on arm.
 // RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 \
 // RUN:     --target=armv7-unknown-linux-gnueabihf \
@@ -440,11 +524,46 @@
 // CHECK-ARM-HF: "-dynamic-linker" "{{.*}}/lib/ld-linux-armhf.so.3"
 //
 // RUN: %clang %s -### -o %t.o 2>&1 \
+// RUN:     --target=powerpc64-linux-gnu \
+// RUN:   | FileCheck --check-prefix=CHECK-PPC64 %s
+// CHECK-PPC64: "{{.*}}ld{{(.exe)?}}"
+// CHECK-PPC64: "-m" "elf64ppc"
+// CHECK-PPC64: "-dynamic-linker" "{{.*}}/lib64/ld64.so.1"
+//
+// RUN: %clang %s -### -o %t.o 2>&1 \
+// RUN:     --target=powerpc64-linux-gnu -mabi=elfv1 \
+// RUN:   | FileCheck --check-prefix=CHECK-PPC64-ELFv1 %s
+// CHECK-PPC64-ELFv1: "{{.*}}ld{{(.exe)?}}"
+// CHECK-PPC64-ELFv1: "-m" "elf64ppc"
+// CHECK-PPC64-ELFv1: "-dynamic-linker" "{{.*}}/lib64/ld64.so.1"
+//
+// RUN: %clang %s -### -o %t.o 2>&1 \
+// RUN:     --target=powerpc64-linux-gnu -mabi=elfv2 \
+// RUN:   | FileCheck --check-prefix=CHECK-PPC64-ELFv2 %s
+// CHECK-PPC64-ELFv2: "{{.*}}ld{{(.exe)?}}"
+// CHECK-PPC64-ELFv2: "-m" "elf64ppc"
+// CHECK-PPC64-ELFv2: "-dynamic-linker" "{{.*}}/lib64/ld64.so.2"
+//
+// RUN: %clang %s -### -o %t.o 2>&1 \
 // RUN:     --target=powerpc64le-linux-gnu \
 // RUN:   | FileCheck --check-prefix=CHECK-PPC64LE %s
 // CHECK-PPC64LE: "{{.*}}ld{{(.exe)?}}"
 // CHECK-PPC64LE: "-m" "elf64lppc"
 // CHECK-PPC64LE: "-dynamic-linker" "{{.*}}/lib64/ld64.so.2"
+//
+// RUN: %clang %s -### -o %t.o 2>&1 \
+// RUN:     --target=powerpc64le-linux-gnu -mabi=elfv1 \
+// RUN:   | FileCheck --check-prefix=CHECK-PPC64LE-ELFv1 %s
+// CHECK-PPC64LE-ELFv1: "{{.*}}ld{{(.exe)?}}"
+// CHECK-PPC64LE-ELFv1: "-m" "elf64lppc"
+// CHECK-PPC64LE-ELFv1: "-dynamic-linker" "{{.*}}/lib64/ld64.so.1"
+//
+// RUN: %clang %s -### -o %t.o 2>&1 \
+// RUN:     --target=powerpc64le-linux-gnu -mabi=elfv2 \
+// RUN:   | FileCheck --check-prefix=CHECK-PPC64LE-ELFv2 %s
+// CHECK-PPC64LE-ELFv2: "{{.*}}ld{{(.exe)?}}"
+// CHECK-PPC64LE-ELFv2: "-m" "elf64lppc"
+// CHECK-PPC64LE-ELFv2: "-dynamic-linker" "{{.*}}/lib64/ld64.so.2"
 //
 // Check that we do not pass --hash-style=gnu and --hash-style=both to linker
 // and provide correct path to the dynamic linker and emulation mode when build
@@ -746,7 +865,7 @@
 // RUN:     -shared \
 // RUN:   | FileCheck --check-prefix=CHECK-ANDROID-SO %s
 // CHECK-ANDROID-SO: "{{.*}}ld{{(.exe)?}}" "--sysroot=[[SYSROOT:[^"]+]]"
-// CHECK-ANDROID-SO: "-Bsymbolic"
+// CHECK-ANDROID-SO-NOT: "-Bsymbolic"
 // CHECK-ANDROID-SO: "{{.*}}{{/|\\\\}}crtbegin_so.o"
 // CHECK-ANDROID-SO: "-L[[SYSROOT]]/usr/lib"
 // CHECK-ANDROID-SO-NOT: "gcc_s"

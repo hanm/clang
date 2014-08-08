@@ -344,13 +344,16 @@ void Sema::ActOnParamUnparsedDefaultArgument(Decl *param,
 
 /// ActOnParamDefaultArgumentError - Parsing or semantic analysis of
 /// the default argument for the parameter param failed.
-void Sema::ActOnParamDefaultArgumentError(Decl *param) {
+void Sema::ActOnParamDefaultArgumentError(Decl *param,
+                                          SourceLocation EqualLoc) {
   if (!param)
     return;
 
   ParmVarDecl *Param = cast<ParmVarDecl>(param);
   Param->setInvalidDecl();
   UnparsedDefaultArgLocs.erase(Param);
+  Param->setDefaultArg(new(Context)
+                       OpaqueValueExpr(EqualLoc, Param->getType(), VK_RValue));
 }
 
 /// CheckExtraCXXDefaultArguments - Check for any extra default
@@ -476,7 +479,7 @@ bool Sema::MergeCXXFunctionDecl(FunctionDecl *New, FunctionDecl *Old,
                                       OldParam->getUninstantiatedDefaultArg());
           else
             NewParam->setDefaultArg(OldParam->getInit());
-          DiagDefaultParamID = diag::warn_param_default_argument_redefinition;
+          DiagDefaultParamID = diag::ext_param_default_argument_redefinition;
           Invalid = false;
         }
       }
@@ -4815,8 +4818,8 @@ static FunctionProtoType::ExtProtoInfo getImplicitMethodEPI(Sema &S,
   FunctionProtoType::ExtProtoInfo EPI;
 
   // Build an exception specification pointing back at this member.
-  EPI.ExceptionSpecType = EST_Unevaluated;
-  EPI.ExceptionSpecDecl = MD;
+  EPI.ExceptionSpec.Type = EST_Unevaluated;
+  EPI.ExceptionSpec.SourceDecl = MD;
 
   // Set the calling convention to the default for C++ instance methods.
   EPI.ExtInfo = EPI.ExtInfo.withCallingConv(
@@ -4831,14 +4834,10 @@ void Sema::EvaluateImplicitExceptionSpec(SourceLocation Loc, CXXMethodDecl *MD) 
     return;
 
   // Evaluate the exception specification.
-  ImplicitExceptionSpecification ExceptSpec =
-      computeImplicitExceptionSpec(*this, Loc, MD);
-
-  FunctionProtoType::ExtProtoInfo EPI;
-  ExceptSpec.getEPI(EPI);
+  auto ESI = computeImplicitExceptionSpec(*this, Loc, MD).getExceptionSpec();
 
   // Update the type of the special member to use it.
-  UpdateExceptionSpec(MD, EPI);
+  UpdateExceptionSpec(MD, ESI);
 
   // A user-provided destructor can be defined outside the class. When that
   // happens, be sure to update the exception specification on both
@@ -4846,7 +4845,7 @@ void Sema::EvaluateImplicitExceptionSpec(SourceLocation Loc, CXXMethodDecl *MD) 
   const FunctionProtoType *CanonicalFPT =
     MD->getCanonicalDecl()->getType()->castAs<FunctionProtoType>();
   if (CanonicalFPT->getExceptionSpecType() == EST_Unevaluated)
-    UpdateExceptionSpec(MD->getCanonicalDecl(), EPI);
+    UpdateExceptionSpec(MD->getCanonicalDecl(), ESI);
 }
 
 void Sema::CheckExplicitlyDefaultedSpecialMember(CXXMethodDecl *MD) {
@@ -4992,8 +4991,8 @@ void Sema::CheckExplicitlyDefaultedSpecialMember(CXXMethodDecl *MD) {
     //  -- it is implicitly considered to have the same exception-specification
     //     as if it had been implicitly declared,
     FunctionProtoType::ExtProtoInfo EPI = Type->getExtProtoInfo();
-    EPI.ExceptionSpecType = EST_Unevaluated;
-    EPI.ExceptionSpecDecl = MD;
+    EPI.ExceptionSpec.Type = EST_Unevaluated;
+    EPI.ExceptionSpec.SourceDecl = MD;
     MD->setType(Context.getFunctionType(ReturnType,
                                         ArrayRef<QualType>(&ArgType,
                                                            ExpectedParams),
@@ -5027,7 +5026,8 @@ void Sema::CheckExplicitlyDefaultedMemberExceptionSpec(
   CallingConv CC = Context.getDefaultCallingConvention(/*IsVariadic=*/false,
                                                        /*IsCXXMethod=*/true);
   FunctionProtoType::ExtProtoInfo EPI(CC);
-  computeImplicitExceptionSpec(*this, MD->getLocation(), MD).getEPI(EPI);
+  EPI.ExceptionSpec = computeImplicitExceptionSpec(*this, MD->getLocation(), MD)
+                          .getExceptionSpec();
   const FunctionProtoType *ImplicitType = cast<FunctionProtoType>(
     Context.getFunctionType(Context.VoidTy, None, EPI));
 
@@ -5942,7 +5942,14 @@ static bool FindHiddenVirtualMethod(const CXXBaseSpecifier *Specifier,
       if (!MD->isVirtual())
         continue;
       // If the method we are checking overrides a method from its base
-      // don't warn about the other overloaded methods.
+      // don't warn about the other overloaded methods. Clang deviates from GCC
+      // by only diagnosing overloads of inherited virtual functions that do not
+      // override any other virtual functions in the base. GCC's
+      // -Woverloaded-virtual diagnoses any derived function hiding a virtual
+      // function from a base class. These cases may be better served by a
+      // warning (not specific to virtual functions) on call sites when the call
+      // would select a different function from the base class, were it visible.
+      // See FIXME in test/SemaCXX/warn-overload-virtual.cpp for an example.
       if (!Data.S->IsOverload(Data.Method, MD, false))
         return true;
       // Collect the overload only if its hidden.
@@ -6279,6 +6286,15 @@ QualType Sema::CheckConstructorDeclarator(Declarator &D, QualType R,
     SC = SC_None;
   }
 
+  if (unsigned TypeQuals = D.getDeclSpec().getTypeQualifiers()) {
+    diagnoseIgnoredQualifiers(
+        diag::err_constructor_return_type, TypeQuals, SourceLocation(),
+        D.getDeclSpec().getConstSpecLoc(), D.getDeclSpec().getVolatileSpecLoc(),
+        D.getDeclSpec().getRestrictSpecLoc(),
+        D.getDeclSpec().getAtomicSpecLoc());
+    D.setInvalidType();
+  }
+
   DeclaratorChunk::FunctionTypeInfo &FTI = D.getFunctionTypeInfo();
   if (FTI.TypeQuals != 0) {
     if (FTI.TypeQuals & Qualifiers::Const)
@@ -6426,7 +6442,7 @@ QualType Sema::CheckDestructorDeclarator(Declarator &D, QualType R,
     
     SC = SC_None;
   }
-  if (D.getDeclSpec().hasTypeSpecifier() && !D.isInvalidType()) {
+  if (!D.isInvalidType()) {
     // Destructors don't have return types, but the parser will
     // happily parse something like:
     //
@@ -6435,9 +6451,19 @@ QualType Sema::CheckDestructorDeclarator(Declarator &D, QualType R,
     //   };
     //
     // The return type will be eliminated later.
-    Diag(D.getIdentifierLoc(), diag::err_destructor_return_type)
-      << SourceRange(D.getDeclSpec().getTypeSpecTypeLoc())
-      << SourceRange(D.getIdentifierLoc());
+    if (D.getDeclSpec().hasTypeSpecifier())
+      Diag(D.getIdentifierLoc(), diag::err_destructor_return_type)
+        << SourceRange(D.getDeclSpec().getTypeSpecTypeLoc())
+        << SourceRange(D.getIdentifierLoc());
+    else if (unsigned TypeQuals = D.getDeclSpec().getTypeQualifiers()) {
+      diagnoseIgnoredQualifiers(diag::err_destructor_return_type, TypeQuals,
+                                SourceLocation(),
+                                D.getDeclSpec().getConstSpecLoc(),
+                                D.getDeclSpec().getVolatileSpecLoc(),
+                                D.getDeclSpec().getRestrictSpecLoc(),
+                                D.getDeclSpec().getAtomicSpecLoc());
+      D.setInvalidType();
+    }
   }
 
   DeclaratorChunk::FunctionTypeInfo &FTI = D.getFunctionTypeInfo();
@@ -8715,8 +8741,8 @@ private:
     // Build an unevaluated exception specification for this constructor.
     const FunctionProtoType *FPT = DerivedType->castAs<FunctionProtoType>();
     FunctionProtoType::ExtProtoInfo EPI = FPT->getExtProtoInfo();
-    EPI.ExceptionSpecType = EST_Unevaluated;
-    EPI.ExceptionSpecDecl = DerivedCtor;
+    EPI.ExceptionSpec.Type = EST_Unevaluated;
+    EPI.ExceptionSpec.SourceDecl = DerivedCtor;
     DerivedCtor->setType(Context.getFunctionType(FPT->getReturnType(),
                                                  FPT->getParamTypes(), EPI));
 
@@ -8973,8 +8999,8 @@ void Sema::AdjustDestructorExceptionSpec(CXXRecordDecl *ClassDecl,
   // the only thing of interest in the destructor type is its extended info.
   // The return and arguments are fixed.
   FunctionProtoType::ExtProtoInfo EPI = DtorType->getExtProtoInfo();
-  EPI.ExceptionSpecType = EST_Unevaluated;
-  EPI.ExceptionSpecDecl = Destructor;
+  EPI.ExceptionSpec.Type = EST_Unevaluated;
+  EPI.ExceptionSpec.SourceDecl = Destructor;
   Destructor->setType(Context.getFunctionType(Context.VoidTy, None, EPI));
 
   // FIXME: If the destructor has a body that could throw, and the newly created
@@ -10365,6 +10391,8 @@ void Sema::DefineImplicitCopyConstructor(SourceLocation CurrentLocation,
   }
 
   CopyConstructor->markUsed(Context);
+  MarkVTableUsed(CurrentLocation, ClassDecl);
+
   if (ASTMutationListener *L = getASTMutationListener()) {
     L->CompletedImplicitDefinition(CopyConstructor);
   }
@@ -10523,6 +10551,7 @@ void Sema::DefineImplicitMoveConstructor(SourceLocation CurrentLocation,
   }
 
   MoveConstructor->markUsed(Context);
+  MarkVTableUsed(CurrentLocation, ClassDecl);
 
   if (ASTMutationListener *L = getASTMutationListener()) {
     L->CompletedImplicitDefinition(MoveConstructor);
@@ -10690,6 +10719,7 @@ Sema::BuildCXXConstructExpr(SourceLocation ConstructLoc, QualType DeclInitType,
                             MultiExprArg ExprArgs,
                             bool HadMultipleCandidates,
                             bool IsListInitialization,
+                            bool IsStdInitListInitialization,
                             bool RequiresZeroInit,
                             unsigned ConstructKind,
                             SourceRange ParenRange) {
@@ -10713,7 +10743,8 @@ Sema::BuildCXXConstructExpr(SourceLocation ConstructLoc, QualType DeclInitType,
 
   return BuildCXXConstructExpr(ConstructLoc, DeclInitType, Constructor,
                                Elidable, ExprArgs, HadMultipleCandidates,
-                               IsListInitialization, RequiresZeroInit,
+                               IsListInitialization,
+                               IsStdInitListInitialization, RequiresZeroInit,
                                ConstructKind, ParenRange);
 }
 
@@ -10725,13 +10756,15 @@ Sema::BuildCXXConstructExpr(SourceLocation ConstructLoc, QualType DeclInitType,
                             MultiExprArg ExprArgs,
                             bool HadMultipleCandidates,
                             bool IsListInitialization,
+                            bool IsStdInitListInitialization,
                             bool RequiresZeroInit,
                             unsigned ConstructKind,
                             SourceRange ParenRange) {
   MarkFunctionReferenced(ConstructLoc, Constructor);
   return CXXConstructExpr::Create(
       Context, DeclInitType, ConstructLoc, Constructor, Elidable, ExprArgs,
-      HadMultipleCandidates, IsListInitialization, RequiresZeroInit,
+      HadMultipleCandidates, IsListInitialization, IsStdInitListInitialization,
+      RequiresZeroInit,
       static_cast<CXXConstructExpr::ConstructionKind>(ConstructKind),
       ParenRange);
 }
@@ -11607,11 +11640,10 @@ Decl *Sema::ActOnTemplatedFriendTag(Scope *S, SourceLocation FriendLoc,
       if (Invalid)
         return nullptr;
 
-      return CheckClassTemplate(S, TagSpec, TUK_Friend, TagLoc,
-                                SS, Name, NameLoc, Attr,
-                                TemplateParams, AS_public,
+      return CheckClassTemplate(S, TagSpec, TUK_Friend, TagLoc, SS, Name,
+                                NameLoc, Attr, TemplateParams, AS_public,
                                 /*ModulePrivateLoc=*/SourceLocation(),
-                                TempParamLists.size() - 1,
+                                FriendLoc, TempParamLists.size() - 1,
                                 TempParamLists.data()).get();
     } else {
       // The "template<>" header is extraneous.
@@ -12946,9 +12978,9 @@ Sema::checkExceptionSpecification(ExceptionSpecificationType EST,
                                   ArrayRef<SourceRange> DynamicExceptionRanges,
                                   Expr *NoexceptExpr,
                                   SmallVectorImpl<QualType> &Exceptions,
-                                  FunctionProtoType::ExtProtoInfo &EPI) {
+                                  FunctionProtoType::ExceptionSpecInfo &ESI) {
   Exceptions.clear();
-  EPI.ExceptionSpecType = EST;
+  ESI.Type = EST;
   if (EST == EST_Dynamic) {
     Exceptions.reserve(DynamicExceptions.size());
     for (unsigned ei = 0, ee = DynamicExceptions.size(); ei != ee; ++ei) {
@@ -12969,11 +13001,10 @@ Sema::checkExceptionSpecification(ExceptionSpecificationType EST,
       if (!CheckSpecifiedExceptionType(ET, DynamicExceptionRanges[ei]))
         Exceptions.push_back(ET);
     }
-    EPI.NumExceptions = Exceptions.size();
-    EPI.Exceptions = Exceptions.data();
+    ESI.Exceptions = Exceptions;
     return;
   }
-  
+
   if (EST == EST_ComputedNoexcept) {
     // If an error occurred, there's no expression here.
     if (NoexceptExpr) {
@@ -12982,15 +13013,15 @@ Sema::checkExceptionSpecification(ExceptionSpecificationType EST,
               Context.BoolTy) &&
              "Parser should have made sure that the expression is boolean");
       if (NoexceptExpr && DiagnoseUnexpandedParameterPack(NoexceptExpr)) {
-        EPI.ExceptionSpecType = EST_BasicNoexcept;
+        ESI.Type = EST_BasicNoexcept;
         return;
       }
-      
+
       if (!NoexceptExpr->isValueDependent())
         NoexceptExpr = VerifyIntegerConstantExpression(NoexceptExpr, nullptr,
                          diag::err_noexcept_needs_constant_expression,
                          /*AllowFold*/ false).get();
-      EPI.NoexceptExpr = NoexceptExpr;
+      ESI.NoexceptExpr = NoexceptExpr;
     }
     return;
   }

@@ -46,7 +46,6 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <sys/stat.h>
 #include <utility>
 #include <vector>
 
@@ -1143,7 +1142,7 @@ private:
   QualType readTypeRecord(unsigned Index);
   void readExceptionSpec(ModuleFile &ModuleFile,
                          SmallVectorImpl<QualType> &ExceptionStorage,
-                         FunctionProtoType::ExtProtoInfo &EPI,
+                         FunctionProtoType::ExceptionSpecInfo &ESI,
                          const RecordData &Record, unsigned &Index);
   RecordLocation TypeCursorForIndex(unsigned Index);
   void LoadedDecl(unsigned Index, Decl *D);
@@ -1246,6 +1245,7 @@ private:
   void PassInterestingDeclToConsumer(Decl *D);
 
   void finishPendingActions();
+  void diagnoseOdrViolations();
 
   void pushExternalDeclIntoScope(NamedDecl *D, DeclarationName Name);
 
@@ -1367,7 +1367,8 @@ public:
                          bool Complain);
 
   /// \brief Make the names within this set of hidden names visible.
-  void makeNamesVisible(const HiddenNames &Names, Module *Owner);
+  void makeNamesVisible(const HiddenNames &Names, Module *Owner,
+                        bool FromFinalization);
 
   /// \brief Set the AST callbacks listener.
   void setListener(ASTReaderListener *listener) {
@@ -1838,11 +1839,12 @@ public:
   llvm::DenseMap<IdentifierInfo*, AmbiguousMacros> AmbiguousMacroDefs;
 
   void
-  removeOverriddenMacros(IdentifierInfo *II, AmbiguousMacros &Ambig,
+  removeOverriddenMacros(IdentifierInfo *II, SourceLocation Loc,
+                         AmbiguousMacros &Ambig,
                          ArrayRef<serialization::SubmoduleID> Overrides);
 
   AmbiguousMacros *
-  removeOverriddenMacros(IdentifierInfo *II,
+  removeOverriddenMacros(IdentifierInfo *II, SourceLocation Loc,
                          ArrayRef<serialization::SubmoduleID> Overrides);
 
   /// \brief Retrieve the macro with the given ID.

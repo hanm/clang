@@ -167,6 +167,9 @@ def err_expected_fn_body : Error<
 def warn_attribute_on_function_definition : Warning<
   "GCC does not allow %0 attribute in this position on a function definition">, 
   InGroup<GccCompat>;
+def warn_gcc_attribute_location : Warning<
+  "GCC does not allow an attribute in this position on a function declaration">, 
+  InGroup<GccCompat>;
 def warn_attribute_no_decl : Warning<
   "attribute %0 ignored, because it is not attached to a declaration">, 
   InGroup<IgnoredAttributes>;
@@ -303,6 +306,8 @@ def err_expected_class_name_not_template :
   Error<"'typename' is redundant; base classes are implicitly types">;
 def err_unspecified_vla_size_with_static : Error<
   "'static' may not be used with an unspecified variable length array size">;
+def err_unspecified_size_with_static : Error<
+  "'static' may not be used without an array size">;
 def warn_deprecated_register : Warning<
   "'register' storage class specifier is deprecated">,
   InGroup<DeprecatedRegister>;
@@ -597,14 +602,16 @@ def warn_cxx11_right_shift_in_template_arg : Warning<
 def warn_cxx98_compat_two_right_angle_brackets : Warning<
   "consecutive right angle brackets are incompatible with C++98 (use '> >')">,
   InGroup<CXX98Compat>, DefaultIgnore;
+def err_templated_invalid_declaration : Error<
+  "a static_assert declaration cannot be a template">;
 def err_multiple_template_declarators : Error<
-    "%select{|a template declaration|an explicit template specialization|"
-    "an explicit template instantiation}0 can "
-    "only %select{|declare|declare|instantiate}0 a single entity">;
+  "%select{|a template declaration|an explicit template specialization|"
+  "an explicit template instantiation}0 can "
+  "only %select{|declare|declare|instantiate}0 a single entity">;
 def err_explicit_instantiation_with_definition : Error<
-    "explicit template instantiation cannot have a definition; if this "
-    "definition is meant to be an explicit specialization, add '<>' after the "
-    "'template' keyword">;
+  "explicit template instantiation cannot have a definition; if this "
+  "definition is meant to be an explicit specialization, add '<>' after the "
+  "'template' keyword">;
 def err_template_defn_explicit_instantiation : Error<
   "%select{function|class|variable}0 cannot be defined in an explicit instantiation; if this "
   "declaration is meant to be a %select{function|class|variable}0 definition, remove the 'template' keyword">;
@@ -612,7 +619,7 @@ def err_friend_explicit_instantiation : Error<
   "friend cannot be declared in an explicit instantiation; if this "
   "declaration is meant to be a friend declaration, remove the 'template' keyword">;
 def err_explicit_instantiation_enum : Error<
-    "enumerations cannot be explicitly instantiated">;
+  "enumerations cannot be explicitly instantiated">;
 def err_expected_template_parameter : Error<"expected template parameter">;
 
 def err_missing_dependent_template_keyword : Error<
@@ -699,7 +706,7 @@ def err_alias_declaration_not_identifier : Error<
   "name defined in alias declaration must be an identifier">;
 def err_alias_declaration_specialization : Error<
   "%select{partial specialization|explicit specialization|explicit instantiation}0 of alias templates is not permitted">;
-    
+
 // C++11 override control
 def ext_override_control_keyword : ExtWarn<
   "'%0' keyword is a C++11 extension">, InGroup<CXX11>;
@@ -800,6 +807,9 @@ def warn_pragma_expected_section_push_pop_or_name : Warning<
 def warn_pragma_expected_section_label_or_name : Warning<
   "expected a stack label or a string literal for the section name in '#pragma %0' - ignored">,
   InGroup<IgnoredPragmas>;
+def warn_pragma_expected_init_seg : Warning<
+  "expected 'compiler', 'lib', 'user', or a string literal for the section name in '#pragma %0' - ignored">,
+  InGroup<IgnoredPragmas>;
 def warn_pragma_expected_integer : Warning<
   "expected integer between %0 and %1 inclusive in '#pragma %2' - ignored">,
   InGroup<IgnoredPragmas>;
@@ -811,6 +821,11 @@ def warn_pragma_extra_tokens_at_eol : Warning<
   InGroup<IgnoredPragmas>;
 def warn_pragma_expected_punc : Warning<
   "expected ')' or ',' in '#pragma %0'">, InGroup<IgnoredPragmas>;
+def warn_pragma_expected_non_wide_string : Warning<
+  "expected non-wide string literal in '#pragma %0'">, InGroup<IgnoredPragmas>;
+// - Generic errors
+def err_pragma_missing_argument : Error<
+  "missing argument to '#pragma %0'%select{|; expected %2}1">;
 // - #pragma options
 def warn_pragma_options_expected_align : Warning<
   "expected 'align' following '#pragma options' - ignored">,
@@ -858,8 +873,6 @@ def err_pragma_pointers_to_members_unknown_kind : Error<
   "unexpected %0, expected to see one of %select{|'best_case', 'full_generality', }1"
   "'single_inheritance', 'multiple_inheritance', or 'virtual_inheritance'">;
 // - #pragma clang optimize on/off
-def err_pragma_optimize_missing_argument : Error<
-  "missing argument to '#pragma clang optimize'; expected 'on' or 'off'">;
 def err_pragma_optimize_invalid_argument : Error<
   "unexpected argument '%0' to '#pragma clang optimize'; "
   "expected 'on' or 'off'">;
@@ -901,18 +914,31 @@ def err_omp_unknown_directive : Error<
 def err_omp_unexpected_directive : Error<
   "unexpected OpenMP directive '#pragma omp %0'">;
 def err_omp_expected_punc : Error<
-  "expected ',' or ')' in '%0' clause">;
+  "expected ',' or ')' in '%0' %select{clause|directive}1">;
 def err_omp_unexpected_clause : Error<
   "unexpected OpenMP clause '%0' in directive '#pragma omp %1'">;
 def err_omp_more_one_clause : Error<
   "directive '#pragma omp %0' cannot contain more than one '%1' clause">;
+def err_omp_immediate_directive : Error<
+  "'#pragma omp %0' cannot be an immediate substatement">;
+def err_omp_expected_identifier_for_critical : Error<
+  "expected identifier specifying the name of the 'omp critical' directive">;
+
+// Pragma support.
+def err_pragma_invalid_keyword : Error<
+  "%select{invalid|missing}0 argument; expected '%select{enable|full}1' or 'disable'">;
 
 // Pragma loop support.
 def err_pragma_loop_invalid_option : Error<
   "%select{invalid|missing}0 option%select{ %1|}0; expected vectorize, "
   "vectorize_width, interleave, interleave_count, unroll, or unroll_count">;
-def err_pragma_loop_missing_argument : Error<
-  "missing argument to loop pragma %0">;
+def err_pragma_loop_numeric_value : Error<
+  "invalid argument; expected a positive integer value">;
+
+// Pragma unroll support.
+def warn_pragma_unroll_cuda_value_in_parens : Warning<
+  "argument to '#pragma unroll' should not be in parentheses in CUDA C/C++">,
+  InGroup<CudaCompat>;
 } // end of Parse Issue category.
 
 let CategoryName = "Modules Issue" in {

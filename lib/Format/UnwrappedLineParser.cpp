@@ -354,7 +354,7 @@ void UnwrappedLineParser::calculateBraceTypes() {
             ProbablyBracedList =
                 NextTok->isOneOf(tok::comma, tok::semi, tok::period, tok::colon,
                                  tok::r_paren, tok::r_square, tok::l_brace,
-                                 tok::l_paren) ||
+                                 tok::l_paren, tok::ellipsis) ||
                 (NextTok->isBinaryOperator() && !NextIsObjCMethod);
           }
           if (ProbablyBracedList) {
@@ -1080,6 +1080,8 @@ void UnwrappedLineParser::parseIfThenElse() {
     --Line->Level;
   }
   if (FormatTok->Tok.is(tok::kw_else)) {
+    if (Style.BreakBeforeBraces == FormatStyle::BS_Stroustrup)
+      addUnwrappedLine();
     nextToken();
     if (FormatTok->Tok.is(tok::l_brace)) {
       CompoundStatementIndenter Indenter(this, Style, Line->Level);
@@ -1327,10 +1329,8 @@ void UnwrappedLineParser::parseEnum() {
 
 void UnwrappedLineParser::parseRecord() {
   nextToken();
-  if (FormatTok->Tok.is(tok::identifier) ||
-      FormatTok->Tok.is(tok::kw___attribute) ||
-      FormatTok->Tok.is(tok::kw___declspec) ||
-      FormatTok->Tok.is(tok::kw_alignas)) {
+  if (FormatTok->isOneOf(tok::identifier, tok::coloncolon, tok::kw___attribute,
+                         tok::kw___declspec, tok::kw_alignas)) {
     nextToken();
     // We can have macros or attributes in between 'class' and the class name.
     if (FormatTok->Tok.is(tok::l_paren)) {

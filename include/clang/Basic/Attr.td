@@ -855,7 +855,7 @@ def NonNull : InheritableAttr {
 
 def ReturnsNonNull : InheritableAttr {
   let Spellings = [GCC<"returns_nonnull">];
-  let Subjects = SubjectList<[ObjCMethod, HasFunctionProto], WarnDiag,
+  let Subjects = SubjectList<[ObjCMethod, Function], WarnDiag,
                              "ExpectedFunctionOrMethod">;
   let Documentation = [Undocumented];
 }
@@ -987,6 +987,13 @@ def ObjCDesignatedInitializer : Attr {
   let Subjects = SubjectList<[ObjCInterfaceDeclInitMethod], ErrorDiag,
                              "ExpectedObjCInterfaceDeclInitMethod">;
   let Documentation = [Undocumented];
+}
+
+def ObjCRuntimeName : Attr {
+  let Spellings = [GNU<"objc_runtime_name">];
+  let Subjects = SubjectList<[ObjCInterface, ObjCProtocol], ErrorDiag>;
+  let Args = [StringArgument<"MetadataName">];
+  let Documentation = [ObjCRuntimeNameDocs];
 }
 
 def OptimizeNone : InheritableAttr {
@@ -1760,19 +1767,38 @@ def MSVtorDisp : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
+def InitSeg : Attr {
+  let Spellings = [Pragma<"", "init_seg">];
+  let Args = [StringArgument<"Section">];
+  let SemaHandler = 0;
+  let Documentation = [InitSegDocs];
+  let AdditionalMembers = [{
+  void printPrettyPragma(raw_ostream &OS, const PrintingPolicy &Policy) const {
+    OS << '(' << getSection() << ')';
+  }
+  }];
+}
+
 def Unaligned : IgnoredAttr {
   let Spellings = [Keyword<"__unaligned">];
 }
 
 def LoopHint : Attr {
-  /// vectorize: vectorizes loop operations if 'value != 0'.
-  /// vectorize_width: vectorize loop operations with width 'value'.
-  /// interleave: interleave multiple loop iterations if 'value != 0'.
-  /// interleave_count: interleaves 'value' loop interations.
-  /// unroll: unroll loop if 'value != 0'.
-  /// unroll_count: unrolls loop 'value' times.
+  /// #pragma clang loop <option> directive
+  /// vectorize: vectorizes loop operations if State == Enable.
+  /// vectorize_width: vectorize loop operations with width 'Value'.
+  /// interleave: interleave multiple loop iterations if State == Enable.
+  /// interleave_count: interleaves 'Value' loop interations.
+  /// unroll: fully unroll loop if State == Enable.
+  /// unroll_count: unrolls loop 'Value' times.
 
-  let Spellings = [Pragma<"clang", "loop">];
+  /// #pragma unroll <argument> directive
+  /// <no arg>: fully unrolls loop.
+  /// boolean: fully unrolls loop if State == Enable.
+  /// expression: unrolls loop 'Value' times.
+
+  let Spellings = [Pragma<"clang", "loop">, Pragma<"", "unroll">,
+                   Pragma<"", "nounroll">];
 
   /// State of the loop optimization specified by the spelling.
   let Args = [EnumArgument<"Option", "OptionType",
@@ -1780,10 +1806,13 @@ def LoopHint : Attr {
                            "unroll", "unroll_count"],
                           ["Vectorize", "VectorizeWidth", "Interleave", "InterleaveCount",
                            "Unroll", "UnrollCount"]>,
+              EnumArgument<"State", "LoopHintState",
+                           ["default", "enable", "disable"],
+                           ["Default", "Enable", "Disable"]>,
               DefaultIntArgument<"Value", 1>];
 
   let AdditionalMembers = [{
-  static StringRef getOptionName(int Option) {
+  static const char *getOptionName(int Option) {
     switch(Option) {
     case Vectorize: return "vectorize";
     case VectorizeWidth: return "vectorize_width";
@@ -1795,22 +1824,54 @@ def LoopHint : Attr {
     llvm_unreachable("Unhandled LoopHint option.");
   }
 
-  static StringRef getValueName(int Value) {
-    if (Value)
-      return "enable";
-    return "disable";
+  void printPrettyPragma(raw_ostream &OS, const PrintingPolicy &Policy) const {
+    unsigned SpellingIndex = getSpellingListIndex();
+    // For "#pragma unroll" and "#pragma nounroll" the string "unroll" or
+    // "nounroll" is already emitted as the pragma name.
+    if (SpellingIndex == Pragma_nounroll) {
+      OS << "\n";
+      return;
+    }
+    else if (SpellingIndex == Pragma_unroll) {
+      OS << getValueString(Policy) << "\n";
+      return;
+    }
+
+    assert(SpellingIndex == Pragma_clang_loop && "Unexpected spelling");
+    OS << getOptionName(option) << getValueString(Policy) << "\n";
   }
 
-  void printPrettyPragma(raw_ostream &OS, const PrintingPolicy &Policy) const {
-    OS << getOptionName(option) << "(";
+  // Return a string containing the loop hint argument including the
+  // enclosing parentheses.
+  std::string getValueString(const PrintingPolicy &Policy) const {
+    std::string ValueName;
+    llvm::raw_string_ostream OS(ValueName);
+    OS << "(";
     if (option == VectorizeWidth || option == InterleaveCount ||
         option == UnrollCount)
       OS << value;
+    else if (state == Default)
+      return "";
+    else if (state == Enable)
+      OS << (option == Unroll ? "full" : "enable");
     else
-      OS << getValueName(value);
-    OS << ")\n";
+      OS << "disable";
+    OS << ")";
+    return OS.str();
+  }
+
+  // Return a string suitable for identifying this attribute in diagnostics.
+  std::string getDiagnosticName(const PrintingPolicy &Policy) const {
+    unsigned SpellingIndex = getSpellingListIndex();
+    if (SpellingIndex == Pragma_nounroll)
+      return "#pragma nounroll";
+    else if (SpellingIndex == Pragma_unroll)
+      return "#pragma unroll" + getValueString(Policy);
+
+    assert(SpellingIndex == Pragma_clang_loop && "Unexpected spelling");
+    return getOptionName(option) + getValueString(Policy);
   }
   }];
 
-  let Documentation = [LoopHintDocs];
+  let Documentation = [LoopHintDocs, UnrollHintDocs];
 }
