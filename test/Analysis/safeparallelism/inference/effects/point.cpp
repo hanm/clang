@@ -8,7 +8,7 @@ class [[asap::region("Rx,Ry")]] Point {
  public:
   void setX(int _x) { x = _x; } // expected-warning{{Inferred Effect Summary for setX: [reads(rpl([rLOCAL],[])),writes(rpl([r0_Rx],[]))]}}
   void setY(int _y) { y = _y; } // expected-warning{{Inferred Effect Summary for setY: [reads(rpl([rLOCAL],[])),writes(rpl([r1_Ry],[]))]}}
-  void setXY(int _x, int _y) {  // expected-warning{{Inferred Effect Summary for setXY: [writes(rpl([r0_Rx],[])),writes(rpl([r1_Ry],[])),reads(rpl([rLOCAL],[]))]}}
+  void setXY(int _x, int _y) {  // expected-warning{{Inferred Effect Summary for setXY: [writes(rpl([r0_Rx],[])),reads(rpl([rLOCAL],[])),writes(rpl([r1_Ry],[]))]}}
     setX(_x);
     setY(_y);
   }
