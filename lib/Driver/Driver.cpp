@@ -548,11 +548,15 @@ void Driver::generateCompilationDiagnostics(Compilation &C,
         StringRef NewFilename = llvm::sys::path::filename(*it);
         I = StringRef(Cmd).rfind(OldFilename);
         E = I + OldFilename.size();
+        if (E + 1 < Cmd.size() && Cmd[E] == '"')
+          ++E;  // Replace a trailing quote if present.
         I = Cmd.rfind(" ", I) + 1;
         Cmd.replace(I, E - I, NewFilename.data(), NewFilename.size());
-        // Add the VFS overlay to the reproduction script.
-        I += NewFilename.size();
-        Cmd.insert(I, std::string(" -ivfsoverlay ") + VFS.c_str());
+        if (!VFS.empty()) {
+          // Add the VFS overlay to the reproduction script.
+          I += NewFilename.size();
+          Cmd.insert(I, std::string(" -ivfsoverlay ") + VFS.c_str());
+        }
         ScriptOS << Cmd;
         Diag(clang::diag::note_drv_command_failed_diag_msg) << Script;
       }
@@ -1891,8 +1895,6 @@ static llvm::Triple computeTargetTriple(StringRef DefaultTargetTriple,
         Target.setArch(llvm::Triple::mips64el);
       else if (Target.getArch() == llvm::Triple::aarch64_be)
         Target.setArch(llvm::Triple::aarch64);
-      else if (Target.getArch() == llvm::Triple::arm64_be)
-        Target.setArch(llvm::Triple::arm64);
     } else {
       if (Target.getArch() == llvm::Triple::mipsel)
         Target.setArch(llvm::Triple::mips);
@@ -1900,8 +1902,6 @@ static llvm::Triple computeTargetTriple(StringRef DefaultTargetTriple,
         Target.setArch(llvm::Triple::mips64);
       else if (Target.getArch() == llvm::Triple::aarch64)
         Target.setArch(llvm::Triple::aarch64_be);
-      else if (Target.getArch() == llvm::Triple::arm64)
-        Target.setArch(llvm::Triple::arm64_be);
     }
   }
 
@@ -1911,14 +1911,18 @@ static llvm::Triple computeTargetTriple(StringRef DefaultTargetTriple,
       Target.getOS() == llvm::Triple::Minix)
     return Target;
 
-  // Handle pseudo-target flags '-m64', '-m32' and '-m16'.
-  if (Arg *A = Args.getLastArg(options::OPT_m64, options::OPT_m32,
-                               options::OPT_m16)) {
+  // Handle pseudo-target flags '-m64', '-mx32', '-m32' and '-m16'.
+  if (Arg *A = Args.getLastArg(options::OPT_m64, options::OPT_mx32,
+                               options::OPT_m32, options::OPT_m16)) {
     llvm::Triple::ArchType AT = llvm::Triple::UnknownArch;
 
     if (A->getOption().matches(options::OPT_m64))
       AT = Target.get64BitArchVariant().getArch();
-    else if (A->getOption().matches(options::OPT_m32))
+    else if (A->getOption().matches(options::OPT_mx32) &&
+             Target.get64BitArchVariant().getArch() == llvm::Triple::x86_64) {
+      AT = llvm::Triple::x86_64;
+      Target.setEnvironment(llvm::Triple::GNUX32);
+    } else if (A->getOption().matches(options::OPT_m32))
       AT = Target.get32BitArchVariant().getArch();
     else if (A->getOption().matches(options::OPT_m16) &&
              Target.get32BitArchVariant().getArch() == llvm::Triple::x86) {

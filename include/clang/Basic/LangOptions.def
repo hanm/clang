@@ -106,6 +106,8 @@ LANGOPT(OptimizeSize      , 1, 0, "__OPTIMIZE_SIZE__ predefined macro")
 LANGOPT(Static            , 1, 0, "__STATIC__ predefined macro (as opposed to __DYNAMIC__)")
 VALUE_LANGOPT(PackStruct  , 32, 0,
               "default struct packing maximum alignment")
+VALUE_LANGOPT(MaxTypeAlign  , 32, 0,
+              "default maximum alignment for types")
 VALUE_LANGOPT(PICLevel    , 2, 0, "__PIC__ level")
 VALUE_LANGOPT(PIELevel    , 2, 0, "__PIE__ level")
 LANGOPT(GNUInline         , 1, 0, "GNU inline semantics")
@@ -180,8 +182,7 @@ BENIGN_LANGOPT(BracketDepth, 32, 256,
                "maximum bracket nesting depth")
 BENIGN_LANGOPT(NumLargeByValueCopy, 32, 0,
         "if non-zero, warn about parameter or return Warn if parameter/return value is larger in bytes than this setting. 0 is no check.")
-VALUE_LANGOPT(MSCVersion, 32, 0,
-              "version of Microsoft Visual C/C++")
+VALUE_LANGOPT(MSCompatibilityVersion, 32, 0, "Microsoft Visual C/C++ Version")
 VALUE_LANGOPT(VtorDispMode, 2, 1, "How many vtordisps to insert")
 
 LANGOPT(ApplePragmaPack, 1, 0, "Apple gcc-compatible #pragma pack handling")

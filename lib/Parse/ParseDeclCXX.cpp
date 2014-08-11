@@ -1239,7 +1239,8 @@ void Parser::ParseClassSpecifier(tok::TokenKind TagTokKind,
   // Parse the (optional) nested-name-specifier.
   CXXScopeSpec &SS = DS.getTypeSpecScope();
   if (getLangOpts().CPlusPlus) {
-    // "FOO : BAR" is not a potential typo for "FOO::BAR".
+    // "FOO : BAR" is not a potential typo for "FOO::BAR".  In this context it
+    // is a base-specifier-list.
     ColonProtectionRAIIObject X(*this);
 
     if (ParseOptionalCXXScopeSpecifier(SS, ParsedType(), EnteringContext))
@@ -1926,14 +1927,8 @@ void Parser::ParseCXXMemberDeclaratorBeforeInitializer(
   //   declarator pure-specifier[opt]
   //   declarator brace-or-equal-initializer[opt]
   //   identifier[opt] ':' constant-expression
-  if (Tok.isNot(tok::colon)) {
-    // Don't parse FOO:BAR as if it were a typo for FOO::BAR, in this context it
-    // is a bitfield.
-    // FIXME: This should only apply when parsing the id-expression (see
-    // PR18587).
-    ColonProtectionRAIIObject X(*this);
+  if (Tok.isNot(tok::colon))
     ParseDeclarator(DeclaratorInfo);
-  }
 
   if (!DeclaratorInfo.isFunctionDeclarator() && TryConsumeToken(tok::colon)) {
     BitfieldSize = ParseConstantExpression();
@@ -1958,10 +1953,19 @@ void Parser::ParseCXXMemberDeclaratorBeforeInitializer(
 
   // For compatibility with code written to older Clang, also accept a
   // virt-specifier *after* the GNU attributes.
-  // FIXME: If we saw any attributes that are known to GCC followed by a
-  // virt-specifier, issue a GCC-compat warning.
-  if (BitfieldSize.isUnset() && VS.isUnset())
+  if (BitfieldSize.isUnset() && VS.isUnset()) {
     ParseOptionalCXX11VirtSpecifierSeq(VS, getCurrentClass().IsInterface);
+    if (!VS.isUnset()) {
+      // If we saw any GNU-style attributes that are known to GCC followed by a
+      // virt-specifier, issue a GCC-compat warning.
+      const AttributeList *Attr = DeclaratorInfo.getAttributes();
+      while (Attr) {
+        if (Attr->isKnownToGCC() && !Attr->isCXX11Attribute())
+          Diag(Attr->getLoc(), diag::warn_gcc_attribute_location);
+        Attr = Attr->getNext();
+      }
+    }
+  }
 }
 
 /// ParseCXXClassMemberDeclaration - Parse a C++ class member declaration.
@@ -2015,6 +2019,14 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
     return;
   }
 
+  // Turn on colon protection early, while parsing declspec, although there is
+  // nothing to protect there. It prevents from false errors if error recovery
+  // incorrectly determines where the declspec ends, as in the example:
+  //   struct A { enum class B { C }; };
+  //   const int C = 4;
+  //   struct D { A::B : C; };
+  ColonProtectionRAIIObject X(*this);
+
   // Access declarations.
   bool MalformedTypeSpec = false;
   if (!TemplateInfo.Kind &&
@@ -2063,9 +2075,10 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
     }
   }
 
-  // static_assert-declaration
-  if (Tok.is(tok::kw_static_assert) || Tok.is(tok::kw__Static_assert)) {
-    // FIXME: Check for templates
+  // static_assert-declaration. A templated static_assert declaration is
+  // diagnosed in Parser::ParseSingleDeclarationAfterTemplate.
+  if (!TemplateInfo.Kind &&
+      (Tok.is(tok::kw_static_assert) || Tok.is(tok::kw__Static_assert))) {
     SourceLocation DeclEnd;
     ParseStaticAssertDeclaration(DeclEnd);
     return;
@@ -2128,13 +2141,11 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
   if (MalformedTypeSpec)
     DS.SetTypeSpecError();
 
-  {
-    // Don't parse FOO:BAR as if it were a typo for FOO::BAR, in this context it
-    // is a bitfield.
-    ColonProtectionRAIIObject X(*this);
-    ParseDeclarationSpecifiers(DS, TemplateInfo, AS, DSC_class,
-                               &CommonLateParsedAttrs);
-  }
+  ParseDeclarationSpecifiers(DS, TemplateInfo, AS, DSC_class,
+                             &CommonLateParsedAttrs);
+
+  // Turn off colon protection that was set for declspec.
+  X.restore();
 
   // If we had a free-standing type definition with a missing semicolon, we
   // may get this far before the problem becomes obvious.

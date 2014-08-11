@@ -605,7 +605,7 @@ void Preprocessor::HandlePragmaPopMacro(Token &PopMacroTok) {
     if (MacroToReInstall) {
       // Reinstall the previously pushed macro.
       appendDefMacroDirective(IdentInfo, MacroToReInstall, MessageLoc,
-                              /*isImported=*/false);
+                              /*isImported=*/false, /*Overrides*/None);
     }
 
     // Pop PragmaPushMacroInfo stack.
@@ -993,13 +993,15 @@ public:
     }
 
     if (WarningName.size() < 3 || WarningName[0] != '-' ||
-        WarningName[1] != 'W') {
+        (WarningName[1] != 'W' && WarningName[1] != 'R')) {
       PP.Diag(StringLoc, diag::warn_pragma_diagnostic_invalid_option);
       return;
     }
 
-    if (PP.getDiagnostics().setSeverityForGroup(WarningName.substr(2), SV,
-                                                DiagLoc))
+    if (PP.getDiagnostics().setSeverityForGroup(
+            WarningName[1] == 'W' ? diag::Flavor::WarningOrError
+                                  : diag::Flavor::Remark,
+            WarningName.substr(2), SV, DiagLoc))
       PP.Diag(StringLoc, diag::warn_pragma_diagnostic_unknown_warning)
         << WarningName;
     else if (Callbacks)
