@@ -276,6 +276,11 @@ USE(redecl3)
 // GNU-DAG: declare           void @_Z7friend2v()
 // MSC-DAG: define            void @"\01?friend3@@YAXXZ"()
 // GNU-DAG: define            void @_Z7friend3v()
+// MSC-DAG: declare           void @"\01?friend4@@YAXXZ"()
+// GNU-DAG: declare           void @_Z7friend4v()
+// MSC-DAG: declare dllimport void @"\01?friend5@@YAXXZ"()
+// GNU-DAG: declare dllimport void @_Z7friend5v()
+
 struct FuncFriend {
   friend __declspec(dllimport) void friend1();
   friend __declspec(dllimport) void friend2();
@@ -284,9 +289,18 @@ struct FuncFriend {
 __declspec(dllimport) void friend1();
                       void friend2(); // dllimport ignored
                       void friend3() {} // dllimport ignored
+
+__declspec(dllimport) void friend4();
+__declspec(dllimport) void friend5();
+struct FuncFriendRedecl {
+  friend void friend4(); // dllimport ignored
+  friend void ::friend5();
+};
 USE(friend1)
 USE(friend2)
 USE(friend3)
+USE(friend4)
+USE(friend5)
 
 // Implicit declarations can be redeclared with dllimport.
 // MSC-DAG: declare dllimport noalias i8* @"\01??2@{{YAPAXI|YAPEAX_K}}@Z"(
@@ -539,11 +553,11 @@ struct __declspec(dllimport) T {
   // MO1-DAG: @"\01?b@T@@2HA" = external dllimport global i32
 
   T& operator=(T&) = default;
-  // MO1-DAG: define available_externally dllimport x86_thiscallcc nonnull %struct.T* @"\01??4T@@QAEAAU0@AAU0@@Z"
+  // MO1-DAG: define available_externally dllimport x86_thiscallcc dereferenceable({{[0-9]+}}) %struct.T* @"\01??4T@@QAEAAU0@AAU0@@Z"
 
   T& operator=(T&&) = default;
   // Note: Don't mark inline move operators dllimport because current MSVC versions don't export them.
-  // MO1-DAG: define linkonce_odr x86_thiscallcc nonnull %struct.T* @"\01??4T@@QAEAAU0@$$QAU0@@Z"
+  // MO1-DAG: define linkonce_odr x86_thiscallcc dereferenceable({{[0-9]+}}) %struct.T* @"\01??4T@@QAEAAU0@$$QAU0@@Z"
 };
 USEMEMFUNC(T, a)
 USEVAR(T::b)
@@ -765,7 +779,7 @@ USEMEMFUNC(ExplicitlyImportInstantiatedTemplate<int>, func)
 // MS: A dll attribute propagates through multiple levels of instantiation.
 template <typename T> struct TopClass { void func() {} };
 template <typename T> struct MiddleClass : public TopClass<T> { };
-struct __declspec(dllimport) BottomClas : public MiddleClass<int> { };
+struct __declspec(dllimport) BottomClass : public MiddleClass<int> { };
 USEMEMFUNC(TopClass<int>, func)
 // M32-DAG: {{declare|define available_externally}} dllimport x86_thiscallcc void @"\01?func@?$TopClass@H@@QAEXXZ"
 // G32-DAG: define linkonce_odr x86_thiscallcc void @_ZN8TopClassIiE4funcEv

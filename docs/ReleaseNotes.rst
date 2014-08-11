@@ -64,6 +64,9 @@ Clang's diagnostics are constantly being improved to catch more issues,
 explain them more clearly, and provide more accurate source information
 about them. The improvements since the 3.4 release include:
 
+- GCC compatibility: Clang displays a warning on unsupported gcc
+  optimization flags instead of an error.
+
 -  ...
 
 New Compiler Flags
@@ -97,6 +100,8 @@ passes via three new flags: `-Rpass`, `-Rpass-missed` and `-Rpass-analysis`.
 These flags take a POSIX regular expression which indicates the name
 of the pass (or passes) that should emit optimization remarks.
 
+The option `-u` is forwarded to the linker on gnutools toolchains.
+
 New Pragmas in Clang
 -----------------------
 
@@ -105,6 +110,30 @@ directive just prior to the desired loop. The directive allows vectorization,
 interleaving, and unrolling to be enabled or disabled. Vector width as well
 as interleave and unrolling count can be manually specified.  See language
 extensions for details.
+
+Clang now supports the `#pragma unroll` and `#pragma nounroll` directives to
+specify loop unrolling optimization hints.  Placed just prior to the desired
+loop, `#pragma unroll` directs the loop unroller to attempt to fully unroll the
+loop.  The pragma may also be specified with a positive integer parameter
+indicating the desired unroll count: `#pragma unroll _value_`.  The unroll count
+parameter can be optionally enclosed in parentheses. The directive `#pragma
+nounroll` indicates that the loop should not be unrolled.
+
+Windows Support
+---------------
+
+Clang's support for building native Windows programs, compatible with Visual
+C++, has improved significantly since the previous release. This includes
+correctly passing non-trivial objects by value, record layout, basic debug info,
+`Address Sanitizer <AddressSanitizer.html>`_ support, RTTI, name mangling,
+DLL attributes, and many many bug fixes. See
+`MSVC Compatibility <MSVCCompatibility.html>`_ for details.
+
+While still considered experimental, Clang's Windows support is good enough
+that Clang can self-host on Windows, and projects such as Chromium and Firefox
+have been built successfully using the
+`/fallback <UsersManual.html#the-fallback-option>`_ option.
+
 
 C Language Changes in Clang
 ---------------------------

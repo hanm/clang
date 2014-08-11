@@ -838,6 +838,7 @@ Sema::CheckClassTemplate(Scope *S, unsigned TagSpec, TagUseKind TUK,
                          AttributeList *Attr,
                          TemplateParameterList *TemplateParams,
                          AccessSpecifier AS, SourceLocation ModulePrivateLoc,
+                         SourceLocation FriendLoc,
                          unsigned NumOuterTemplateParamLists,
                          TemplateParameterList** OuterTemplateParamLists) {
   assert(TemplateParams && TemplateParams->size() > 0 &&
@@ -1123,10 +1124,8 @@ Sema::CheckClassTemplate(Scope *S, unsigned TagSpec, TagUseKind TUK,
                           /* AddToContext = */ false);
     }
 
-    FriendDecl *Friend = FriendDecl::Create(Context, CurContext,
-                                            NewClass->getLocation(),
-                                            NewTemplate,
-                                    /*FIXME:*/NewClass->getLocation());
+    FriendDecl *Friend = FriendDecl::Create(
+        Context, CurContext, NewClass->getLocation(), NewTemplate, FriendLoc);
     Friend->setAccess(AS_public);
     CurContext->addDecl(Friend);
   }
@@ -4439,7 +4438,8 @@ CheckTemplateArgumentAddressOfObjectOrFunction(Sema &S,
     switch (NPV) {
     case NPV_NullPointer:
       S.Diag(Arg->getExprLoc(), diag::warn_cxx98_compat_template_arg_null);
-      Converted = TemplateArgument(ParamType, /*isNullPtr=*/true);
+      Converted = TemplateArgument(S.Context.getCanonicalType(ParamType),
+                                   /*isNullPtr=*/true);
       return false;
 
     case NPV_Error:
@@ -4634,7 +4634,8 @@ static bool CheckTemplateArgumentPointerToMember(Sema &S,
     return true;
   case NPV_NullPointer:
     S.Diag(Arg->getExprLoc(), diag::warn_cxx98_compat_template_arg_null);
-    Converted = TemplateArgument(ParamType, /*isNullPtr*/true);
+    Converted = TemplateArgument(S.Context.getCanonicalType(ParamType),
+                                 /*isNullPtr*/true);
     if (S.Context.getTargetInfo().getCXXABI().isMicrosoft())
       S.RequireCompleteType(Arg->getExprLoc(), ParamType, 0);
     return false;
@@ -5090,7 +5091,8 @@ ExprResult Sema::CheckTemplateArgument(NonTypeTemplateParmDecl *Param,
       
     case NPV_NullPointer:
       Diag(Arg->getExprLoc(), diag::warn_cxx98_compat_template_arg_null);
-      Converted = TemplateArgument(ParamType, /*isNullPtr*/true);
+      Converted = TemplateArgument(Context.getCanonicalType(ParamType),
+                                   /*isNullPtr*/true);
       return Arg;
     }
   }
@@ -6123,6 +6125,7 @@ Sema::ActOnClassTemplateSpecialization(Scope *S, unsigned TagSpec,
                                 Attr,
                                 TemplateParams,
                                 AS_none, /*ModulePrivateLoc=*/SourceLocation(),
+                                /*FriendLoc*/SourceLocation(),
                                 TemplateParameterLists.size() - 1,
                                 TemplateParameterLists.data());
     }
@@ -6546,7 +6549,7 @@ Sema::CheckSpecializationInstantiationRedecl(SourceLocation NewLoc,
 
       // MSVCCompat: MSVC silently ignores duplicate explicit instantiations.
       Diag(NewLoc, (getLangOpts().MSVCCompat)
-                       ? diag::warn_explicit_instantiation_duplicate
+                       ? diag::ext_explicit_instantiation_duplicate
                        : diag::err_explicit_instantiation_duplicate)
           << PrevDecl;
       Diag(DiagLocForExplicitInstantiation(PrevDecl, PrevPointOfInstantiation),
