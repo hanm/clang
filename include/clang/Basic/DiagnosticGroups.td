@@ -383,7 +383,9 @@ def UnnamedTypeTemplateArgs : DiagGroup<"unnamed-type-template-args",
 def UnsupportedFriend : DiagGroup<"unsupported-friend">;
 def UnusedArgument : DiagGroup<"unused-argument">;
 def UnusedCommandLineArgument : DiagGroup<"unused-command-line-argument">;
-def InvalidCommandLineArgument : DiagGroup<"invalid-command-line-argument">;
+def IgnoredOptimizationArgument : DiagGroup<"ignored-optimization-argument">;
+def InvalidCommandLineArgument : DiagGroup<"invalid-command-line-argument",
+                                           [IgnoredOptimizationArgument]>;
 def UnusedComparison : DiagGroup<"unused-comparison">;
 def UnusedExceptionParameter : DiagGroup<"unused-exception-parameter">;
 def UnneededInternalDecl : DiagGroup<"unneeded-internal-declaration">;
@@ -426,6 +428,8 @@ def DeallocInCategory:DiagGroup<"dealloc-in-category">;
 def SelectorTypeMismatch : DiagGroup<"selector-type-mismatch">;
 def Selector : DiagGroup<"selector", [SelectorTypeMismatch]>;
 def Protocol : DiagGroup<"protocol">;
+def AtProtocol : DiagGroup<"at-protocol">;
+def PropertyAttr : DiagGroup<"property-attribute-mismatch">;
 def SuperSubClassMismatch : DiagGroup<"super-class-method-mismatch">;
 def OverridingMethodMismatch : DiagGroup<"overriding-method-mismatch">;
 def VariadicMacros : DiagGroup<"variadic-macros">;
@@ -589,10 +593,12 @@ def SafeParallelism : DiagGroup<"safe-parallelism", [SafeParallelismAttributes]>
 def ThreadSafetyAttributes : DiagGroup<"thread-safety-attributes">;
 def ThreadSafetyAnalysis   : DiagGroup<"thread-safety-analysis">;
 def ThreadSafetyPrecise    : DiagGroup<"thread-safety-precise">;
+def ThreadSafetyNegative   : DiagGroup<"thread-safety-negative">;
 def ThreadSafety : DiagGroup<"thread-safety",
                              [ThreadSafetyAttributes, 
                               ThreadSafetyAnalysis,
-                              ThreadSafetyPrecise]>;
+                              ThreadSafetyPrecise,
+                              ThreadSafetyNegative]>;
 def ThreadSafetyBeta : DiagGroup<"thread-safety-beta">;
 
 // Uniqueness Analysis warnings
@@ -708,7 +714,12 @@ def RemarkBackendPlugin : DiagGroup<"remark-backend-plugin">;
 def BackendOptimizationRemark : DiagGroup<"pass">;
 def BackendOptimizationRemarkMissed : DiagGroup<"pass-missed">;
 def BackendOptimizationRemarkAnalysis : DiagGroup<"pass-analysis">;
+def BackendOptimizationFailure : DiagGroup<"pass-failed">;
 
 // Instrumentation based profiling warnings.
 def ProfileInstrOutOfDate : DiagGroup<"profile-instr-out-of-date">;
 def ProfileInstrUnprofiled : DiagGroup<"profile-instr-unprofiled">;
+
+// A warning group for warnings about code that clang accepts when
+// compiling CUDA C/C++ but which is not compatible with the CUDA spec.
+def CudaCompat : DiagGroup<"cuda-compat">;

@@ -93,6 +93,19 @@ enum TypeEvaluationKind {
   TEK_Aggregate
 };
 
+class SuppressDebugLocation {
+  llvm::DebugLoc CurLoc;
+  llvm::IRBuilderBase &Builder;
+public:
+  SuppressDebugLocation(llvm::IRBuilderBase &Builder)
+      : CurLoc(Builder.getCurrentDebugLocation()), Builder(Builder) {
+    Builder.SetCurrentDebugLocation(llvm::DebugLoc());
+  }
+  ~SuppressDebugLocation() {
+    Builder.SetCurrentDebugLocation(CurLoc);
+  }
+};
+
 /// CodeGenFunction - This class organizes the per-function state that is used
 /// while generating LLVM code.
 class CodeGenFunction : public CodeGenTypeCache {
@@ -231,12 +244,23 @@ public:
   /// potentially higher performance penalties.
   unsigned char BoundsChecking;
 
-  /// \brief Whether any type-checking sanitizers are enabled. If \c false,
-  /// calls to EmitTypeCheck can be skipped.
-  bool SanitizePerformTypeCheck;
-
   /// \brief Sanitizer options to use for this function.
   const SanitizerOptions *SanOpts;
+
+  /// \brief True if CodeGen currently emits code implementing sanitizer checks.
+  bool IsSanitizerScope;
+
+  /// \brief RAII object to set/unset CodeGenFunction::IsSanitizerScope.
+  class SanitizerScope {
+    CodeGenFunction *CGF;
+  public:
+    SanitizerScope(CodeGenFunction *CGF);
+    ~SanitizerScope();
+  };
+
+  /// In C++, whether we are code generating a thunk.  This controls whether we
+  /// should emit cleanups.
+  bool CurFuncIsThunk;
 
   /// In ARC, whether we should autorelease the return value.
   bool AutoreleaseResult;
@@ -1184,8 +1208,11 @@ public:
 
   void StartThunk(llvm::Function *Fn, GlobalDecl GD, const CGFunctionInfo &FnInfo);
 
-  void EmitCallAndReturnForThunk(GlobalDecl GD, llvm::Value *Callee,
-                                 const ThunkInfo *Thunk);
+  void EmitCallAndReturnForThunk(llvm::Value *Callee, const ThunkInfo *Thunk);
+
+  /// Emit a musttail call for a thunk with a potentially adjusted this pointer.
+  void EmitMustTailThunk(const CXXMethodDecl *MD, llvm::Value *AdjustedThisPtr,
+                         llvm::Value *Callee);
 
   /// GenerateThunk - Generate a thunk for the given method.
   void GenerateThunk(llvm::Function *Fn, const CGFunctionInfo &FnInfo,
@@ -1372,8 +1399,13 @@ public:
 
   LValue MakeNaturalAlignAddrLValue(llvm::Value *V, QualType T) {
     CharUnits Alignment;
-    if (!T->isIncompleteType())
+    if (!T->isIncompleteType()) {
       Alignment = getContext().getTypeAlignInChars(T);
+      unsigned MaxAlign = getContext().getLangOpts().MaxTypeAlign;
+      if (MaxAlign && Alignment.getQuantity() > MaxAlign &&
+          !getContext().isAlignmentRequired(T))
+        Alignment = CharUnits::fromQuantity(MaxAlign);
+    }
     return LValue::MakeAddr(V, T, Alignment, getContext(),
                             CGM.getTBAAInfo(T));
   }
@@ -1693,6 +1725,10 @@ public:
     TCK_DowncastReference
   };
 
+  /// \brief Whether any type-checking sanitizers are enabled. If \c false,
+  /// calls to EmitTypeCheck can be skipped.
+  bool sanitizePerformTypeCheck() const;
+
   /// \brief Emit a check that \p V is the address of storage of the
   /// appropriate size and alignment for an object of type \p Type.
   void EmitTypeCheck(TypeCheckKind TCK, SourceLocation Loc, llvm::Value *V,
@@ -1889,6 +1925,7 @@ public:
 
   void EmitCXXTryStmt(const CXXTryStmt &S);
   void EmitSEHTryStmt(const SEHTryStmt &S);
+  void EmitSEHLeaveStmt(const SEHLeaveStmt &S);
   void EmitCXXForRangeStmt(const CXXForRangeStmt &S,
                            const ArrayRef<const Attr *> &Attrs = None);
 
@@ -1902,6 +1939,17 @@ public:
   void EmitOMPSectionsDirective(const OMPSectionsDirective &S);
   void EmitOMPSectionDirective(const OMPSectionDirective &S);
   void EmitOMPSingleDirective(const OMPSingleDirective &S);
+  void EmitOMPMasterDirective(const OMPMasterDirective &S);
+  void EmitOMPCriticalDirective(const OMPCriticalDirective &S);
+  void EmitOMPParallelForDirective(const OMPParallelForDirective &S);
+  void EmitOMPParallelSectionsDirective(const OMPParallelSectionsDirective &S);
+  void EmitOMPTaskDirective(const OMPTaskDirective &S);
+  void EmitOMPTaskyieldDirective(const OMPTaskyieldDirective &S);
+  void EmitOMPBarrierDirective(const OMPBarrierDirective &S);
+  void EmitOMPTaskwaitDirective(const OMPTaskwaitDirective &S);
+  void EmitOMPFlushDirective(const OMPFlushDirective &S);
+  void EmitOMPOrderedDirective(const OMPOrderedDirective &S);
+  void EmitOMPAtomicDirective(const OMPAtomicDirective &S);
 
   //===--------------------------------------------------------------------===//
   //                         LValue Expression Emission
@@ -2256,7 +2304,8 @@ public:
   llvm::Value *EmitObjCArrayLiteral(const ObjCArrayLiteral *E);
   llvm::Value *EmitObjCDictionaryLiteral(const ObjCDictionaryLiteral *E);
   llvm::Value *EmitObjCCollectionLiteral(const Expr *E,
-                                const ObjCMethodDecl *MethodWithObjects);
+                                const ObjCMethodDecl *MethodWithObjects,
+                                const ObjCMethodDecl *AllocMethod);
   llvm::Value *EmitObjCSelectorExpr(const ObjCSelectorExpr *E);
   RValue EmitObjCMessageExpr(const ObjCMessageExpr *E,
                              ReturnValueSlot Return = ReturnValueSlot());
@@ -2382,7 +2431,6 @@ public:
   /// CreateStaticVarDecl - Create a zero-initialized LLVM global for
   /// a static local variable.
   llvm::Constant *CreateStaticVarDecl(const VarDecl &D,
-                                      const char *Separator,
                                       llvm::GlobalValue::LinkageTypes Linkage);
 
   /// AddInitializerToStaticVarDecl - Add the initializer for 'D' to the

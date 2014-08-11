@@ -33,6 +33,7 @@
 #include "llvm/Target/TargetLibraryInfo.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Instrumentation.h"
@@ -180,11 +181,8 @@ static void addBoundsCheckingPass(const PassManagerBuilder &Builder,
 
 static void addAddressSanitizerPasses(const PassManagerBuilder &Builder,
                                       PassManagerBase &PM) {
-  const PassManagerBuilderWrapper &BuilderWrapper =
-      static_cast<const PassManagerBuilderWrapper&>(Builder);
-  const CodeGenOptions &CGOpts = BuilderWrapper.getCGOpts();
   PM.add(createAddressSanitizerFunctionPass());
-  PM.add(createAddressSanitizerModulePass(CGOpts.SanitizerBlacklistFile));
+  PM.add(createAddressSanitizerModulePass());
 }
 
 static void addMemorySanitizerPass(const PassManagerBuilder &Builder,
@@ -386,7 +384,7 @@ TargetMachine *EmitAssemblyHelper::CreateTargetMachine(bool MustCreateTM) {
   for (unsigned i = 0, e = CodeGenOpts.BackendOptions.size(); i != e; ++i)
     BackendArgs.push_back(CodeGenOpts.BackendOptions[i].c_str());
   if (CodeGenOpts.NoGlobalMerge)
-    BackendArgs.push_back("-global-merge=false");
+    BackendArgs.push_back("-enable-global-merge=false");
   BackendArgs.push_back(nullptr);
   llvm::cl::ParseCommandLineOptions(BackendArgs.size() - 1,
                                     BackendArgs.data());
@@ -603,8 +601,9 @@ void clang::EmitBackendOutput(DiagnosticsEngine &Diags,
   // If an optional clang TargetInfo description string was passed in, use it to
   // verify the LLVM TargetMachine's DataLayout.
   if (AsmHelper.TM && !TDesc.empty()) {
-    std::string DLDesc =
-        AsmHelper.TM->getDataLayout()->getStringRepresentation();
+    std::string DLDesc = AsmHelper.TM->getSubtargetImpl()
+                             ->getDataLayout()
+                             ->getStringRepresentation();
     if (DLDesc != TDesc) {
       unsigned DiagID = Diags.getCustomDiagID(
           DiagnosticsEngine::Error, "backend data layout '%0' does not match "

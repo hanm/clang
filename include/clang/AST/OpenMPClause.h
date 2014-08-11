@@ -61,7 +61,7 @@ public:
   ConstStmtRange children() const {
     return const_cast<OMPClause *>(this)->children();
   }
-  static bool classof(const OMPClause *T) { return true; }
+  static bool classof(const OMPClause *) { return true; }
 };
 
 /// \brief This represents clauses with the list of variables like 'private',
@@ -191,6 +191,59 @@ public:
 
   static bool classof(const OMPClause *T) {
     return T->getClauseKind() == OMPC_if;
+  }
+
+  StmtRange children() { return StmtRange(&Condition, &Condition + 1); }
+};
+
+/// \brief This represents 'final' clause in the '#pragma omp ...' directive.
+///
+/// \code
+/// #pragma omp task final(a > 5)
+/// \endcode
+/// In this example directive '#pragma omp task' has simple 'final'
+/// clause with condition 'a > 5'.
+///
+class OMPFinalClause : public OMPClause {
+  friend class OMPClauseReader;
+  /// \brief Location of '('.
+  SourceLocation LParenLoc;
+  /// \brief Condition of the 'if' clause.
+  Stmt *Condition;
+
+  /// \brief Set condition.
+  ///
+  void setCondition(Expr *Cond) { Condition = Cond; }
+
+public:
+  /// \brief Build 'final' clause with condition \a Cond.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param LParenLoc Location of '('.
+  /// \param Cond Condition of the clause.
+  /// \param EndLoc Ending location of the clause.
+  ///
+  OMPFinalClause(Expr *Cond, SourceLocation StartLoc, SourceLocation LParenLoc,
+                 SourceLocation EndLoc)
+      : OMPClause(OMPC_final, StartLoc, EndLoc), LParenLoc(LParenLoc),
+        Condition(Cond) {}
+
+  /// \brief Build an empty clause.
+  ///
+  OMPFinalClause()
+      : OMPClause(OMPC_final, SourceLocation(), SourceLocation()),
+        LParenLoc(SourceLocation()), Condition(nullptr) {}
+
+  /// \brief Sets the location of '('.
+  void setLParenLoc(SourceLocation Loc) { LParenLoc = Loc; }
+  /// \brief Returns the location of '('.
+  SourceLocation getLParenLoc() const { return LParenLoc; }
+
+  /// \brief Returns condition.
+  Expr *getCondition() const { return cast_or_null<Expr>(Condition); }
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_final;
   }
 
   StmtRange children() { return StmtRange(&Condition, &Condition + 1); }
@@ -653,6 +706,212 @@ public:
 
   static bool classof(const OMPClause *T) {
     return T->getClauseKind() == OMPC_nowait;
+  }
+
+  StmtRange children() { return StmtRange(); }
+};
+
+/// \brief This represents 'untied' clause in the '#pragma omp ...' directive.
+///
+/// \code
+/// #pragma omp task untied
+/// \endcode
+/// In this example directive '#pragma omp task' has 'untied' clause.
+///
+class OMPUntiedClause : public OMPClause {
+public:
+  /// \brief Build 'untied' clause.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param EndLoc Ending location of the clause.
+  ///
+  OMPUntiedClause(SourceLocation StartLoc, SourceLocation EndLoc)
+      : OMPClause(OMPC_untied, StartLoc, EndLoc) {}
+
+  /// \brief Build an empty clause.
+  ///
+  OMPUntiedClause()
+      : OMPClause(OMPC_untied, SourceLocation(), SourceLocation()) {}
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_untied;
+  }
+
+  StmtRange children() { return StmtRange(); }
+};
+
+/// \brief This represents 'mergeable' clause in the '#pragma omp ...'
+/// directive.
+///
+/// \code
+/// #pragma omp task mergeable
+/// \endcode
+/// In this example directive '#pragma omp task' has 'mergeable' clause.
+///
+class OMPMergeableClause : public OMPClause {
+public:
+  /// \brief Build 'mergeable' clause.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param EndLoc Ending location of the clause.
+  ///
+  OMPMergeableClause(SourceLocation StartLoc, SourceLocation EndLoc)
+      : OMPClause(OMPC_mergeable, StartLoc, EndLoc) {}
+
+  /// \brief Build an empty clause.
+  ///
+  OMPMergeableClause()
+      : OMPClause(OMPC_mergeable, SourceLocation(), SourceLocation()) {}
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_mergeable;
+  }
+
+  StmtRange children() { return StmtRange(); }
+};
+
+/// \brief This represents 'read' clause in the '#pragma omp atomic' directive.
+///
+/// \code
+/// #pragma omp atomic read
+/// \endcode
+/// In this example directive '#pragma omp atomic' has 'read' clause.
+///
+class OMPReadClause : public OMPClause {
+public:
+  /// \brief Build 'read' clause.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param EndLoc Ending location of the clause.
+  ///
+  OMPReadClause(SourceLocation StartLoc, SourceLocation EndLoc)
+      : OMPClause(OMPC_read, StartLoc, EndLoc) {}
+
+  /// \brief Build an empty clause.
+  ///
+  OMPReadClause() : OMPClause(OMPC_read, SourceLocation(), SourceLocation()) {}
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_read;
+  }
+
+  StmtRange children() { return StmtRange(); }
+};
+
+/// \brief This represents 'write' clause in the '#pragma omp atomic' directive.
+///
+/// \code
+/// #pragma omp atomic write
+/// \endcode
+/// In this example directive '#pragma omp atomic' has 'write' clause.
+///
+class OMPWriteClause : public OMPClause {
+public:
+  /// \brief Build 'write' clause.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param EndLoc Ending location of the clause.
+  ///
+  OMPWriteClause(SourceLocation StartLoc, SourceLocation EndLoc)
+      : OMPClause(OMPC_write, StartLoc, EndLoc) {}
+
+  /// \brief Build an empty clause.
+  ///
+  OMPWriteClause()
+      : OMPClause(OMPC_write, SourceLocation(), SourceLocation()) {}
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_write;
+  }
+
+  StmtRange children() { return StmtRange(); }
+};
+
+/// \brief This represents 'update' clause in the '#pragma omp atomic'
+/// directive.
+///
+/// \code
+/// #pragma omp atomic update
+/// \endcode
+/// In this example directive '#pragma omp atomic' has 'update' clause.
+///
+class OMPUpdateClause : public OMPClause {
+public:
+  /// \brief Build 'update' clause.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param EndLoc Ending location of the clause.
+  ///
+  OMPUpdateClause(SourceLocation StartLoc, SourceLocation EndLoc)
+      : OMPClause(OMPC_update, StartLoc, EndLoc) {}
+
+  /// \brief Build an empty clause.
+  ///
+  OMPUpdateClause()
+      : OMPClause(OMPC_update, SourceLocation(), SourceLocation()) {}
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_update;
+  }
+
+  StmtRange children() { return StmtRange(); }
+};
+
+/// \brief This represents 'capture' clause in the '#pragma omp atomic'
+/// directive.
+///
+/// \code
+/// #pragma omp atomic capture
+/// \endcode
+/// In this example directive '#pragma omp atomic' has 'capture' clause.
+///
+class OMPCaptureClause : public OMPClause {
+public:
+  /// \brief Build 'capture' clause.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param EndLoc Ending location of the clause.
+  ///
+  OMPCaptureClause(SourceLocation StartLoc, SourceLocation EndLoc)
+      : OMPClause(OMPC_capture, StartLoc, EndLoc) {}
+
+  /// \brief Build an empty clause.
+  ///
+  OMPCaptureClause()
+      : OMPClause(OMPC_capture, SourceLocation(), SourceLocation()) {}
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_capture;
+  }
+
+  StmtRange children() { return StmtRange(); }
+};
+
+/// \brief This represents 'seq_cst' clause in the '#pragma omp atomic'
+/// directive.
+///
+/// \code
+/// #pragma omp atomic seq_cst
+/// \endcode
+/// In this example directive '#pragma omp atomic' has 'seq_cst' clause.
+///
+class OMPSeqCstClause : public OMPClause {
+public:
+  /// \brief Build 'seq_cst' clause.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param EndLoc Ending location of the clause.
+  ///
+  OMPSeqCstClause(SourceLocation StartLoc, SourceLocation EndLoc)
+      : OMPClause(OMPC_seq_cst, StartLoc, EndLoc) {}
+
+  /// \brief Build an empty clause.
+  ///
+  OMPSeqCstClause()
+      : OMPClause(OMPC_seq_cst, SourceLocation(), SourceLocation()) {}
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_seq_cst;
   }
 
   StmtRange children() { return StmtRange(); }
@@ -1278,6 +1537,71 @@ public:
   }
 };
 
+/// \brief This represents implicit clause 'flush' for the '#pragma omp flush'
+/// directive.
+/// This clause does not exist by itself, it can be only as a part of 'omp
+/// flush' directive. This clause is introduced to keep the original structure
+/// of \a OMPExecutableDirective class and its derivatives and to use the
+/// existing infrastructure of clauses with the list of variables.
+///
+/// \code
+/// #pragma omp flush(a,b)
+/// \endcode
+/// In this example directive '#pragma omp flush' has implicit clause 'flush'
+/// with the variables 'a' and 'b'.
+///
+class OMPFlushClause : public OMPVarListClause<OMPFlushClause> {
+  /// \brief Build clause with number of variables \a N.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param LParenLoc Location of '('.
+  /// \param EndLoc Ending location of the clause.
+  /// \param N Number of the variables in the clause.
+  ///
+  OMPFlushClause(SourceLocation StartLoc, SourceLocation LParenLoc,
+                 SourceLocation EndLoc, unsigned N)
+      : OMPVarListClause<OMPFlushClause>(OMPC_flush, StartLoc, LParenLoc,
+                                         EndLoc, N) {}
+
+  /// \brief Build an empty clause.
+  ///
+  /// \param N Number of variables.
+  ///
+  explicit OMPFlushClause(unsigned N)
+      : OMPVarListClause<OMPFlushClause>(OMPC_flush, SourceLocation(),
+                                         SourceLocation(), SourceLocation(),
+                                         N) {}
+
+public:
+  /// \brief Creates clause with a list of variables \a VL.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the clause.
+  /// \param LParenLoc Location of '('.
+  /// \param EndLoc Ending location of the clause.
+  /// \param VL List of references to the variables.
+  ///
+  static OMPFlushClause *Create(const ASTContext &C, SourceLocation StartLoc,
+                                SourceLocation LParenLoc, SourceLocation EndLoc,
+                                ArrayRef<Expr *> VL);
+  /// \brief Creates an empty clause with \a N variables.
+  ///
+  /// \param C AST context.
+  /// \param N The number of variables.
+  ///
+  static OMPFlushClause *CreateEmpty(const ASTContext &C, unsigned N);
+
+  StmtRange children() {
+    return StmtRange(reinterpret_cast<Stmt **>(varlist_begin()),
+                     reinterpret_cast<Stmt **>(varlist_end()));
+  }
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_flush;
+  }
+};
+
 } // end namespace clang
 
 #endif
+

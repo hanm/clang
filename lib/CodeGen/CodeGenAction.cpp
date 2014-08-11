@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "CoverageMappingGen.h"
 #include "clang/CodeGen/CodeGenAction.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
@@ -15,6 +16,7 @@
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
+#include "clang/Lex/Preprocessor.h"
 #include "clang/CodeGen/BackendUtil.h"
 #include "clang/CodeGen/ModuleBuilder.h"
 #include "clang/Frontend/CompilerInstance.h"
@@ -59,11 +61,13 @@ namespace clang {
                     const TargetOptions &targetopts,
                     const LangOptions &langopts, bool TimePasses,
                     const std::string &infile, llvm::Module *LinkModule,
-                    raw_ostream *OS, LLVMContext &C)
+                    raw_ostream *OS, LLVMContext &C,
+                    CoverageSourceInfo *CoverageInfo = nullptr)
         : Diags(_Diags), Action(action), CodeGenOpts(compopts),
           TargetOpts(targetopts), LangOpts(langopts), AsmOutStream(OS),
           Context(), LLVMIRGeneration("LLVM IR Generation Time"),
-          Gen(CreateLLVMCodeGen(Diags, infile, compopts, targetopts, C)),
+          Gen(CreateLLVMCodeGen(Diags, infile, compopts,
+                                targetopts, C, CoverageInfo)),
           LinkModule(LinkModule) {
       llvm::TimePassesIsEnabled = TimePasses;
     }
@@ -238,15 +242,16 @@ namespace clang {
     /// \brief Specialized handlers for optimization remarks.
     /// Note that these handlers only accept remarks and they always handle
     /// them.
-    void
-    EmitOptimizationRemark(const llvm::DiagnosticInfoOptimizationRemarkBase &D,
-                           unsigned DiagID);
+    void EmitOptimizationMessage(const llvm::DiagnosticInfoOptimizationBase &D,
+                                 unsigned DiagID);
     void
     OptimizationRemarkHandler(const llvm::DiagnosticInfoOptimizationRemark &D);
     void OptimizationRemarkHandler(
         const llvm::DiagnosticInfoOptimizationRemarkMissed &D);
     void OptimizationRemarkHandler(
         const llvm::DiagnosticInfoOptimizationRemarkAnalysis &D);
+    void OptimizationFailureHandler(
+        const llvm::DiagnosticInfoOptimizationFailure &D);
   };
   
   void BackendConsumer::anchor() {}
@@ -416,10 +421,11 @@ BackendConsumer::StackSizeDiagHandler(const llvm::DiagnosticInfoStackSize &D) {
   return false;
 }
 
-void BackendConsumer::EmitOptimizationRemark(
-    const llvm::DiagnosticInfoOptimizationRemarkBase &D, unsigned DiagID) {
-  // We only support remarks.
-  assert(D.getSeverity() == llvm::DS_Remark);
+void BackendConsumer::EmitOptimizationMessage(
+    const llvm::DiagnosticInfoOptimizationBase &D, unsigned DiagID) {
+  // We only support warnings and remarks.
+  assert(D.getSeverity() == llvm::DS_Remark ||
+         D.getSeverity() == llvm::DS_Warning);
 
   SourceManager &SourceMgr = Context->getSourceManager();
   FileManager &FileMgr = SourceMgr.getFileManager();
@@ -442,8 +448,9 @@ void BackendConsumer::EmitOptimizationRemark(
     if (const Decl *FD = Gen->GetDeclForMangledName(D.getFunction().getName()))
       Loc = FD->getASTContext().getFullLoc(FD->getBodyRBrace());
 
-  Diags.Report(Loc, DiagID) << AddFlagValue(D.getPassName())
-                            << D.getMsg().str();
+  Diags.Report(Loc, DiagID)
+      << AddFlagValue(D.getPassName() ? D.getPassName() : "")
+      << D.getMsg().str();
 
   if (DILoc.isInvalid())
     // If we were not able to translate the file:line:col information
@@ -460,7 +467,7 @@ void BackendConsumer::OptimizationRemarkHandler(
   // expression that matches the name of the pass name in \p D.
   if (CodeGenOpts.OptimizationRemarkPattern &&
       CodeGenOpts.OptimizationRemarkPattern->match(D.getPassName()))
-    EmitOptimizationRemark(D, diag::remark_fe_backend_optimization_remark);
+    EmitOptimizationMessage(D, diag::remark_fe_backend_optimization_remark);
 }
 
 void BackendConsumer::OptimizationRemarkHandler(
@@ -470,8 +477,8 @@ void BackendConsumer::OptimizationRemarkHandler(
   // name in \p D.
   if (CodeGenOpts.OptimizationRemarkMissedPattern &&
       CodeGenOpts.OptimizationRemarkMissedPattern->match(D.getPassName()))
-    EmitOptimizationRemark(D,
-                           diag::remark_fe_backend_optimization_remark_missed);
+    EmitOptimizationMessage(D,
+                            diag::remark_fe_backend_optimization_remark_missed);
 }
 
 void BackendConsumer::OptimizationRemarkHandler(
@@ -481,8 +488,13 @@ void BackendConsumer::OptimizationRemarkHandler(
   // name in \p D.
   if (CodeGenOpts.OptimizationRemarkAnalysisPattern &&
       CodeGenOpts.OptimizationRemarkAnalysisPattern->match(D.getPassName()))
-    EmitOptimizationRemark(
+    EmitOptimizationMessage(
         D, diag::remark_fe_backend_optimization_remark_analysis);
+}
+
+void BackendConsumer::OptimizationFailureHandler(
+    const llvm::DiagnosticInfoOptimizationFailure &D) {
+  EmitOptimizationMessage(D, diag::warn_fe_backend_optimization_failure);
 }
 
 /// \brief This function is invoked when the backend needs
@@ -517,6 +529,11 @@ void BackendConsumer::DiagnosticHandlerImpl(const DiagnosticInfo &DI) {
     // handler. There is no generic way of emitting them.
     OptimizationRemarkHandler(
         cast<DiagnosticInfoOptimizationRemarkAnalysis>(DI));
+    return;
+  case llvm::DK_OptimizationFailure:
+    // Optimization failures are always handled completely by this
+    // handler.
+    OptimizationFailureHandler(cast<DiagnosticInfoOptimizationFailure>(DI));
     return;
   default:
     // Plugin IDs are not bound to any value as they are set dynamically.
@@ -623,10 +640,17 @@ ASTConsumer *CodeGenAction::CreateASTConsumer(CompilerInstance &CI,
     LinkModuleToUse = ModuleOrErr.get();
   }
 
+  CoverageSourceInfo *CoverageInfo = nullptr;
+  // Add the preprocessor callback only when the coverage mapping is generated.
+  if (CI.getCodeGenOpts().CoverageMapping) {
+    CoverageInfo = new CoverageSourceInfo;
+    CI.getPreprocessor().addPPCallbacks(CoverageInfo);
+  }
   BEConsumer = new BackendConsumer(BA, CI.getDiagnostics(), CI.getCodeGenOpts(),
                                    CI.getTargetOpts(), CI.getLangOpts(),
                                    CI.getFrontendOpts().ShowTimers, InFile,
-                                   LinkModuleToUse, OS.release(), *VMContext);
+                                   LinkModuleToUse, OS.release(), *VMContext,
+                                   CoverageInfo);
   return BEConsumer;
 }
 

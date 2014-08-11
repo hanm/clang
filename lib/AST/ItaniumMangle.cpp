@@ -1409,8 +1409,8 @@ void CXXNameMangler::mangleUnqualifiedBlock(const BlockDecl *Block) {
   if (!Number)
     Number = Context.getBlockId(Block, false);
   Out << "Ub";
-  if (Number > 1)
-    Out << Number - 2;
+  if (Number > 0)
+    Out << Number - 1;
   Out << '_';
 }
 
@@ -2301,9 +2301,7 @@ void CXXNameMangler::mangleType(const VectorType *T) {
     llvm::Triple::ArchType Arch =
         getASTContext().getTargetInfo().getTriple().getArch();
     if ((Arch == llvm::Triple::aarch64 ||
-         Arch == llvm::Triple::aarch64_be ||
-         Arch == llvm::Triple::arm64_be ||
-         Arch == llvm::Triple::arm64) && !Target.isOSDarwin())
+         Arch == llvm::Triple::aarch64_be) && !Target.isOSDarwin())
       mangleAArch64NeonVectorType(T);
     else
       mangleNeonVectorType(T);
@@ -3396,10 +3394,8 @@ void CXXNameMangler::mangleTemplateArg(TemplateArgument A) {
   case TemplateArgument::Pack: {
     //  <template-arg> ::= J <template-arg>* E
     Out << 'J';
-    for (TemplateArgument::pack_iterator PA = A.pack_begin(),
-                                      PAEnd = A.pack_end();
-         PA != PAEnd; ++PA)
-      mangleTemplateArg(*PA);
+    for (const auto &P : A.pack_elements())
+      mangleTemplateArg(P);
     Out << 'E';
   }
   }

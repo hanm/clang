@@ -126,6 +126,10 @@ struct FormatStyle {
   /// Switch statement body is always indented one level more than case labels.
   bool IndentCaseLabels;
 
+  /// \brief Indent if a function definition or declaration is wrapped after the
+  /// type.
+  bool IndentWrappedFunctionNames;
+
   /// \brief Different ways to indent namespace contents.
   enum NamespaceIndentationKind {
     /// Don't indent in namespaces.
@@ -231,6 +235,13 @@ struct FormatStyle {
   /// initializer lists.
   unsigned ConstructorInitializerIndentWidth;
 
+  /// \brief If \c true, always break after function definition return types.
+  ///
+  /// More truthfully called 'break before the identifier following the type
+  /// in a function definition'. PenaltyReturnTypeOnItsOwnLine becomes
+  /// irrelevant.
+  bool AlwaysBreakAfterDefinitionReturnType;
+
   /// \brief If \c true, always break after the <tt>template<...></tt> of a
   /// template declaration.
   bool AlwaysBreakTemplateDeclarations;
@@ -265,7 +276,7 @@ struct FormatStyle {
     /// Like \c Attach, but break before braces on function, namespace and
     /// class definitions.
     BS_Linux,
-    /// Like \c Attach, but break before function definitions.
+    /// Like \c Attach, but break before function definitions, and 'else'.
     BS_Stroustrup,
     /// Always break before braces.
     BS_Allman,
@@ -292,10 +303,6 @@ struct FormatStyle {
   /// the parentheses of a function call with that name. If there is no name,
   /// a zero-length name is assumed.
   bool Cpp11BracedListStyle;
-
-  /// \brief If \c true, indent when breaking function declarations which
-  /// are not also definitions after the type.
-  bool IndentFunctionDeclarationAfterType;
 
   /// \brief If \c true, spaces will be inserted after '(' and before ')'.
   bool SpacesInParentheses;
@@ -370,6 +377,8 @@ struct FormatStyle {
            AllowShortIfStatementsOnASingleLine ==
                R.AllowShortIfStatementsOnASingleLine &&
            AllowShortLoopsOnASingleLine == R.AllowShortLoopsOnASingleLine &&
+           AlwaysBreakAfterDefinitionReturnType ==
+               R.AlwaysBreakAfterDefinitionReturnType &&
            AlwaysBreakTemplateDeclarations ==
                R.AlwaysBreakTemplateDeclarations &&
            AlwaysBreakBeforeMultilineStrings ==
@@ -387,8 +396,7 @@ struct FormatStyle {
            ExperimentalAutoDetectBinPacking ==
                R.ExperimentalAutoDetectBinPacking &&
            IndentCaseLabels == R.IndentCaseLabels &&
-           IndentFunctionDeclarationAfterType ==
-               R.IndentFunctionDeclarationAfterType &&
+           IndentWrappedFunctionNames == R.IndentWrappedFunctionNames &&
            IndentWidth == R.IndentWidth && Language == R.Language &&
            MaxEmptyLinesToKeep == R.MaxEmptyLinesToKeep &&
            KeepEmptyLinesAtTheStartOfBlocks ==
