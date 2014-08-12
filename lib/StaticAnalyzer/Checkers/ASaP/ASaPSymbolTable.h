@@ -110,6 +110,7 @@ class SymbolTable {
   unsigned long RplDomIDNumber;
   unsigned long ConstraintIDNumber;
 
+  int PrologDbgLvl;
   // Private Methods
   /// \brief Return the next unused parameter ID number.
   /// Used to encode names into Prolog.
@@ -184,6 +185,8 @@ public:
   inline void setAnnotationScheme(AnnotationScheme *AnS) {
     AnnotScheme = AnS;
   }
+
+  void setPrologDbgLvl(int V) { PrologDbgLvl = V; }
 
   /// \brief return the number of In/Arg annotations needed for type or -1
   /// if unknown.

@@ -71,10 +71,26 @@ public:
     // initialize traverser
     SymbolTable &SymT = *SymbolTable::Table;
 
+    // Choose prolog debug level.
+    // 0: no debug (default)
+    // 1: debug inference
+    // 2: debug emitting constraints & inference
+    // 3: debug emitting facts, constraints, & inference
+    const StringRef PrologDbgLvlOptionName("-asap-debug-prolog");
+    StringRef PrologDbgLvlStr(Mgr.getAnalyzerOptions().Config.
+                              GetOrCreateValue(PrologDbgLvlOptionName, "0").
+                              getValue());
+    int PrologDbgLvl = std::stoi(PrologDbgLvlStr);
+    os << "DEBUG:: asap-debug-prolog = " << PrologDbgLvl << " ("
+       << PrologDbgLvl << ")\n";
+
     // Choose default Annotation Scheme from command-line option
-    const StringRef OptionName("-asap-default-scheme");
-    StringRef SchemeStr(Mgr.getAnalyzerOptions().Config.GetOrCreateValue(OptionName, "simple").getValue());
+    const StringRef DefaultAnnotOptionName("-asap-default-scheme");
+    StringRef SchemeStr(Mgr.getAnalyzerOptions().Config.
+                        GetOrCreateValue(DefaultAnnotOptionName, "simple").
+                        getValue());
     os << "DEBUG:: asap-default-scheme = " << SchemeStr << "\n";
+    SymT.setPrologDbgLvl(PrologDbgLvl);
 
     AnnotationScheme *AnnotScheme = 0;
     bool DoEffectInference = false;

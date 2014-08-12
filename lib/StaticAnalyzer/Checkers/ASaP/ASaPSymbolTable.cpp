@@ -137,7 +137,7 @@ SymbolTable::SymbolTable()
     : AnnotScheme(0), ParamIDNumber(0),
       RegionIDNumber(0), DeclIDNumber(0),
       RVIDNumber(0), ESVIDNumber(0),
-      RplDomIDNumber(0), ConstraintIDNumber(0) {
+      RplDomIDNumber(0), ConstraintIDNumber(0), PrologDbgLvl(0) {
   // FIXME: make this static like the other default Regions etc
   ParamRplElement Param("P","p");
   BuiltinDefaultRegionParameterVec = new ParameterVector(Param);
@@ -787,11 +787,16 @@ void SymbolTable::emitConstraints() const {
 }
 
 void SymbolTable::solveConstraints() const {
-  //PL_action(PL_ACTION_TRACE);
+  if (PrologDbgLvl >= 3)
+    PL_action(PL_ACTION_TRACE);
   emitFacts();
+
+  if (PrologDbgLvl >= 2)
+    PL_action(PL_ACTION_TRACE);
   emitConstraints();
 
-  //PL_action(PL_ACTION_TRACE);
+  if (PrologDbgLvl >= 1)
+    PL_action(PL_ACTION_TRACE);
   //loop to call esi_collect (effect inference)
   for (ConstraintsSetT::iterator
           I = ConstraintSet.begin(),
