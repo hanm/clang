@@ -282,7 +282,8 @@ void AssignmentCheckerVisitor::VisitBinAssign(BinaryOperator *E) {
     helperEmitInvalidExplicitAssignmentWarning(E, LHSType, RHSType);
     FatalError = true;
   } else if (TypChkRes == RK_DUNNO) {
-    // TODO: emit constraint
+    // constraints generated during typecheck.
+    //SymT.printConstraints();
   }
 
   // The type of the assignment is the type of the LHS. Set it in case
@@ -326,7 +327,8 @@ void AssignmentCheckerVisitor::VisitReturnStmt(ReturnStmt *Ret) {
     helperEmitInvalidReturnTypeWarning(Ret, LHSType, RHSType);
     FatalError = true;
   } else if (TypChkRes == RK_DUNNO) {
-    // TODO: gen constraint
+    // constraints generated during typecheck.
+    //SymT.printConstraints();
   }
   delete LHSType;
 }
@@ -356,7 +358,8 @@ helperTypecheckDeclWithInit(const ValueDecl *VD, Expr *Init) {
     helperEmitInvalidInitializationWarning(Init, LHSType, RHSType);
     FatalError = true;
   } else if (TypChkRes == RK_DUNNO) {
-    // TODO: gen constraint
+    // constraints generated during typecheck.
+    //SymT.printConstraints();
   }
 }
 
@@ -382,6 +385,7 @@ typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
     LHSTypeMod->substitute(&SubV);
     LHSTypeMod->substitute(&SubS);
     LHSType = LHSTypeMod;
+    LHSTypeMod = 0;
     OS << "DEBUG:: DONE performing substitution\n";
   }
   ASaPType *RHSType = TBVR.getType();
@@ -400,7 +404,8 @@ typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
     FatalError = true;
     Result = false;
   } else if (TypChkRes == RK_DUNNO) {
-    // TODO: gen constraints.
+    // constraints generated during typecheck.
+    //SymT.printConstraints();
   }
   OS << "DEBUG:: Gonna delete LHSTypeMod\n";
   delete LHSTypeMod;

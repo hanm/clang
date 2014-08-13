@@ -337,6 +337,8 @@ public:
 
   void addConstraint(Constraint *Cons);
 
+  void printConstraints() const;
+
   void emitFacts() const;
   void emitConstraints() const;
   void solveConstraints() const;

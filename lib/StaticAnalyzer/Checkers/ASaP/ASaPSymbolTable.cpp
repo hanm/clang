@@ -778,11 +778,27 @@ void SymbolTable::emitConstraints() const {
           I = ConstraintSet.begin(),
           E = ConstraintSet.end();
        I != E; ++I) {
-    OSv2 << "DEBUG:: Will assert Constraint to Prolog: " << (*I)->toString() << "\n";
-    term_t Term = (*I)->getPLTerm();
+    const Constraint *Cons = *I;
+    assert(Cons && "Internal Error: unexpected null pointer");
+    OSv2 << "DEBUG:: constraint ID = " << Cons->getConstraintID() << "\n";
+    OSv2 << "DEBUG:: Will assert Constraint to Prolog: " << Cons->toString() << "\n";
+    term_t Term = Cons->getPLTerm();
     OSv2 << "DEBUG:: build term for constraint...\n";
     assertzTermProlog(Term, "Failed to assert constraint to Prolog facts");
-    OSv2 << "DEBUG:: Asserted Constraint to Prolog: " << (*I)->toString() << "\n";
+    OSv2 << "DEBUG:: Asserted Constraint to Prolog: " << Cons->toString() << "\n";
+  }
+}
+
+void SymbolTable::printConstraints() const {
+  // Print Constraints
+  for (ConstraintsSetT::iterator
+          I = ConstraintSet.begin(),
+          E = ConstraintSet.end();
+       I != E; ++I) {
+    assert(*I && "Internal Error: unexpected null pointer");
+    const Constraint *Cons = *I;
+    OSv2 << "DEBUG:: constraint ID = " << Cons->getConstraintID() << "\n";
+    OSv2 << "DEBUG:: " << Cons->toString() << "\n";
   }
 }
 

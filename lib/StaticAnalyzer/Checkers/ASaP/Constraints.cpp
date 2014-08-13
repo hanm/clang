@@ -44,7 +44,7 @@ term_t RplInclusionConstraint::getPLTerm() const {
 }
 
 void RplInclusionConstraint::print(llvm::raw_ostream &OS) const {
-  OS << "RplInclusionConstraint: "
+  OS << "RplInclusionConstraint(" << getConstraintID() << "): "
      << LHS->toString() << " <=(Incl) "
      << RHS->toString();
 }
@@ -115,14 +115,19 @@ term_t EffectInclusionConstraint::getPLTerm() const {
 void EffectInclusionConstraint::print(llvm::raw_ostream &OS) const {
   assert(LHS && "Unexpected null-pointer LHS in EffectInclusionConstraint");
   assert(RHS && "Unexpected null-pointer RHS in EffectInclusionConstraint");
-  OS << "EffectInclusionConstraint: {";
-  for (EffectVector::const_iterator I = LHS->begin(), E = LHS->end();
-         I != E; ++I) {
-    OS << (*I)->toString();
-    if (I+1 != E)
-      OS << ", ";
+  OS << "EffectInclusionConstraint(" << getConstraintID() << "): {";
+  EffectVector::const_iterator I = LHS->begin(), E = LHS->end();
+  if (I != E) {
+    (*I)->print(OS);
+    ++I;
   }
-  OS << "} <=(Incl) " << RHS->toString();
+  for (; I != E; ++I) {
+    //OS << (*I)->toString();
+    OS << ", ";
+    (*I)->print(OS);
+  }
+  OS << "} <=(Incl) ";
+  RHS->print(OS);
 }
 
 void EffectInclusionConstraint::makeMinimal() {
@@ -158,7 +163,7 @@ term_t EffectNIConstraint::getPLTerm() const {
 void EffectNIConstraint::print(llvm::raw_ostream &OS) const {
   assert(LHS && "Unexpected null-pointer LHS in EffectNIConstraint");
   assert(RHS && "Unexpected null-pointer RHS in EffectNIConstraint");
-  OS << "EffectNonInterferenceConstraint: "
+  OS << "EffectNonInterferenceConstraint(" << getConstraintID() << "): "
      << LHS->toString() << " # " << RHS->toString();
 }
 

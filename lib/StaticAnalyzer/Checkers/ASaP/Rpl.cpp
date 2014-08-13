@@ -104,7 +104,12 @@ void Rpl::print(llvm::raw_ostream &OS) const {
 Rpl::Rpl(const Rpl &That)
         : Kind(That.Kind),
           FullySpecified(That.FullySpecified) {
-  SubV = That.SubV;
+  //SubV = That.SubV;
+  SubstitutionVector::const_reverse_iterator I = That.SubV.rbegin(),
+      E = That.SubV.rend();
+  for (; I != E; ++I) {
+    SubV.push_back(*I);
+  }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -201,19 +206,19 @@ RplDomain::~RplDomain() {
 ///////////////////////////////////////////////////////////////////////////////
 //// RplRef
 
-ConcreteRpl::RplRef::RplRef(const ConcreteRpl &R) : rpl(R) {
-  firstIdx = 0;
-  lastIdx = rpl.RplElements.size()-1;
+ConcreteRpl::RplRef::RplRef(const ConcreteRpl &R) : Rpl(R) {
+  FirstIdx = 0;
+  LastIdx = Rpl.RplElements.size() - 1;
 }
 /// Printing (Rpl Ref)
 void ConcreteRpl::RplRef::print(llvm::raw_ostream &OS) const {
-  int I = firstIdx;
-  for (; I < lastIdx; ++I) {
-    OS << rpl.RplElements[I]->getName() << RPL_SPLIT_CHARACTER;
+  int I = FirstIdx;
+  for (; I < LastIdx; ++I) {
+    OS << Rpl.RplElements[I]->getName() << RPL_SPLIT_CHARACTER;
   }
   // print last element
-  if (I==lastIdx)
-    OS << rpl.RplElements[I]->getName();
+  if (I == LastIdx)
+    OS << Rpl.RplElements[I]->getName();
 }
 
 std::string ConcreteRpl::RplRef::toString() const {
@@ -312,6 +317,15 @@ bool ConcreteRpl::RplRef::isDisjointRight(RplRef &That) {
 
 ///////////////////////////////////////////////////////////////////////////////
 // end ConcreteRpl::RplRef; start ConcreteRpl
+ConcreteRpl::ConcreteRpl(const ConcreteRpl &That)
+                        : Rpl(That) {
+  for (RplElementVectorTy::const_reverse_iterator
+       I = That.RplElements.rbegin(), E = That.RplElements.rend();
+       I != E; ++I) {
+    RplElements.push_back(*I);
+  }
+
+}
 
 term_t ConcreteRpl::getRplElementsPLTerm() const {
   term_t RplElList = buildPLEmptyList();
@@ -541,6 +555,8 @@ Trivalent VarRpl::isIncludedIn(const Rpl &That) const {
   if (this == &That)
     return RK_TRUE;
   else {
+    // TODO: optimization:
+    // if That is fully specified, then this must be equal to That
     StringRef Name = SymbolTable::Table->makeFreshConstraintName();
     RplInclusionConstraint *RIC = new RplInclusionConstraint(Name, *this, That);
     SymbolTable::Table->addConstraint(RIC);

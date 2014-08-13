@@ -296,45 +296,45 @@ typedef llvm::SmallVector<const RplElement*,
   // We use the RplRef class, friends with Rpl to efficiently perform
   // isIncluded and isUnder tests
   class RplRef {
-    long firstIdx;
-    long lastIdx;
-    const ConcreteRpl& rpl;
+    long FirstIdx;
+    long LastIdx;
+    const ConcreteRpl &Rpl;
 
   public:
     /// Constructor
-    RplRef(const ConcreteRpl& R);
+    RplRef(const ConcreteRpl &R);
 
     /// Printing (Rpl Ref)
-    void print(llvm::raw_ostream& OS) const;
+    void print(llvm::raw_ostream &OS) const;
     std::string toString() const;
 
     /// Getters
-    inline const RplElement* getFirstElement() const {
-      return rpl.RplElements[firstIdx];
+    inline const RplElement *getFirstElement() const {
+      return Rpl.RplElements[FirstIdx];
     }
-    inline const RplElement* getLastElement() const {
-      return rpl.RplElements[lastIdx];
+    inline const RplElement *getLastElement() const {
+      return Rpl.RplElements[LastIdx];
     }
 
-    inline RplRef& stripLast() {
-      lastIdx--;
+    inline RplRef &stripLast() {
+      LastIdx--;
       return *this;
     }
 
-    inline RplRef& stripFirst() {
-      firstIdx++;
+    inline RplRef &stripFirst() {
+      FirstIdx++;
       return *this;
     }
 
     inline bool isEmpty() {
-      return (lastIdx<firstIdx) ? true : false;
+      return (LastIdx < FirstIdx) ? true : false;
     }
 
     /// \brief Under: true  iff this <= RHS
-    bool isUnder(RplRef& RHS);
+    bool isUnder(RplRef &RHS);
 
     /// \brief Inclusion: true  iff  this c= rhs
-    bool isIncludedIn(RplRef& RHS);
+    bool isIncludedIn(RplRef &RHS);
 
     bool isDisjointLeft(RplRef &That);
     bool isDisjointRight(RplRef &That);
@@ -351,8 +351,7 @@ typedef llvm::SmallVector<const RplElement*,
   }
 
   /// Copy Constructor
-  ConcreteRpl(const ConcreteRpl &That)
-             : Rpl(That), RplElements(That.RplElements) {}
+  ConcreteRpl(const ConcreteRpl &That);
 
   /// \brief Print the Rpl to an output stream.
   virtual void print(llvm::raw_ostream &OS) const;
