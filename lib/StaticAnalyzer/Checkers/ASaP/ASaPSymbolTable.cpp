@@ -813,7 +813,15 @@ void SymbolTable::solveConstraints() const {
 
   if (PrologDbgLvl >= 1)
     PL_action(PL_ACTION_TRACE);
-  //loop to call esi_collect (effect inference)
+
+  // Call solve_all
+  predicate_t SolveAllP = PL_predicate(PL_SolveAllPredicate.c_str(), 0, "user");
+  term_t Arg0 = PL_new_term_refs(0);
+  int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, SolveAllP, Arg0);
+  assert(Rval && "Prolog failed to solve constraints");
+
+  //loop to read results of inference
+  // FIXME: iterate over effect and rpl variables
   for (ConstraintsSetT::iterator
           I = ConstraintSet.begin(),
           E = ConstraintSet.end();
@@ -827,24 +835,34 @@ void SymbolTable::solveConstraints() const {
       assert(FunD && "Internal Error: Effect Inclusion Constraint without matching FunctionDecl");
       StringRef FName = getPrologName(FunD);
 
-      OSv2 << "DEBUG:: **** Invoking inference for method '"
+      OSv2 << "DEBUG:: **** Querying effect summary for '"
           << FunD->getNameAsString() << "' (Prolog Name: "
           << FName << ") ****\n";
 
-      predicate_t InferP = PL_predicate(PL_InferEffSumPredicate.c_str(), 2, "user");
+      predicate_t InferP = PL_predicate(PL_HasValuePredicate.c_str(), 2, "user");
       term_t H0 = PL_new_term_refs(2);
-      term_t H1 = H0 + 1;
+      term_t EffectSumT = H0 + 1;
 
       PL_put_term(H0, VES->getIDPLTerm());
-      PL_put_variable(H1);
 
-      int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, InferP, H0);
+      //PL_put_variable(H1);
+      // effect_summary(SE, CE)
+      functor_t EffectSumF = PL_new_functor(PL_new_atom(PL_EffectSummary.c_str()), 2);
+      term_t SimpleL = PL_new_term_refs(2);
+      term_t CompoundL = SimpleL + 1;
+      PL_put_variable(SimpleL);
+      PL_put_variable(CompoundL);
+      Rval = PL_cons_functor(EffectSumT, EffectSumF, SimpleL, CompoundL);
+      assert(Rval && "Failed to create 'effect_summary' Prolog term");
 
 
-      assert(Rval && "Effect Inference Failed");
+      Rval = PL_call_predicate(NULL, PL_Q_NORMAL, InferP, H0);
+
+
+      assert(Rval && "Querying effect summary failed");
 
       char *Solution;
-      int Res = PL_get_chars(H1, &Solution, CVT_WRITE|BUF_RING);
+      int Res = PL_get_chars(SimpleL, &Solution, CVT_WRITE|BUF_RING);
 
       assert(Res && "Failed to read solution from Prolog");
       OSv2 << "result is "<< Solution << "\n";

@@ -105,8 +105,8 @@ Rpl::Rpl(const Rpl &That)
         : Kind(That.Kind),
           FullySpecified(That.FullySpecified) {
   //SubV = That.SubV;
-  SubstitutionVector::const_reverse_iterator I = That.SubV.rbegin(),
-      E = That.SubV.rend();
+  SubstitutionVector::const_iterator I = That.SubV.begin(),
+      E = That.SubV.end();
   for (; I != E; ++I) {
     SubV.push_back(*I);
   }
@@ -319,8 +319,8 @@ bool ConcreteRpl::RplRef::isDisjointRight(RplRef &That) {
 // end ConcreteRpl::RplRef; start ConcreteRpl
 ConcreteRpl::ConcreteRpl(const ConcreteRpl &That)
                         : Rpl(That) {
-  for (RplElementVectorTy::const_reverse_iterator
-       I = That.RplElements.rbegin(), E = That.RplElements.rend();
+  for (RplElementVectorTy::const_iterator
+       I = That.RplElements.begin(), E = That.RplElements.end();
        I != E; ++I) {
     RplElements.push_back(*I);
   }

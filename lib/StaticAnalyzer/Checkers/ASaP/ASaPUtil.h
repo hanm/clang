@@ -41,13 +41,15 @@ static const std::string PL_InvokesEffect = "invokes";
 static const std::string PL_EffectSummary = "effect_summary";
 static const std::string PL_EffectVar = "effect_var";
 static const std::string PL_ConcreteRpl = "rpl";
-static const std::string PL_VarRpl = "var_rpl";
+static const std::string PL_VarRpl = "rpl";
 static const std::string PL_RplDomain = "rpl_domain";
 static const std::string PL_ParamSub = "param_sub";
 static const std::string PL_SubstitutionSet = "subst_set";
 static const std::string PL_NullDomain = "null_dom";
 
 static const std::string PL_InferEffSumPredicate = "infer_es";
+static const std::string PL_SolveAllPredicate = "solve_all";
+static const std::string PL_HasValuePredicate = "has_value";
 
 /// \brief Rpl Inclusion Constraint
 static const std::string PL_RIConstraint = "ri_constraint";
