@@ -462,7 +462,7 @@ checkParamAndArgCounts(NamedDecl *D, const Attr* Att, QualType QT,
   //OS << "QT:" << QT.getAsString() << "\n";
 
   // Ignore DefaultInRpl if QualType is a ReferenceType
-  if (QT->isReferenceType())
+  if (QT->isReferenceType() || QT->isRecordType())
     DefaultInRpl = 0;
   else if (QT->isFunctionType()) {
     const FunctionType *FT = QT->getAs<FunctionType>();

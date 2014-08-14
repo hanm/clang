@@ -341,6 +341,8 @@ VisitCXXConstructExpr(CXXConstructExpr *Exp) {
 
   std::unique_ptr<SubstitutionVector> SubV = SymT.getInheritanceSubstitutionVector(0); // FIXME
   std::unique_ptr<SubstitutionSet> SubS = SymT.getTypeSubstitutionSet(0); // FIXME
+  OS << "DEBUG:: InheritanceSubV = " << SubV->toString() << "\n";
+  OS << "DEBUG:: TypeSubS = " << SubS->toString() << "\n";
   typecheckParamAssignments(Exp->getConstructor(), Exp->arg_begin(), Exp->arg_end(),
                             *SubV.get(), *SubS.get());
 }
@@ -421,6 +423,8 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
                           const SubstitutionVector &SubV,
                           SubstitutionSet &SubS) {
 
+  OSv2 << "DEBUG:: Before tryBuildParamSubstitutions: SubS = "
+    << SubS.toString() << "\n";
   tryBuildParamSubstitutions(Def, SymT, CalleeDecl, ArgI, ArgE, SubS);
 
   OS << "DEBUG:: CALLING typecheckParamAssignments\n";
@@ -450,9 +454,13 @@ typecheckCXXConstructExpr(VarDecl *VarD, CXXConstructExpr *Exp) {
   assert(ClassDecl);
   // Set up Substitution Vector
   const ASaPType *T = SymT.getType(VarD);
+  if (T)
+    OS << "DEBUG:: ASaPType T = " << T->toString() << "\n";
   std::unique_ptr<SubstitutionVector> SubV = SymT.getInheritanceSubstitutionVector(T);
   std::unique_ptr<SubstitutionSet> SubS = SymT.getTypeSubstitutionSet(T);
   assert(SubS.get() && "Internal Error: unexpected null pointer");
+  OS << "DEBUG:: InheritanceSubV = " << SubV->toString() << "\n";
+  OS << "DEBUG:: TypeSubS = " << SubS->toString() << "\n";
   typecheckParamAssignments(ConstrDecl, Exp->arg_begin(), Exp->arg_end(),
                             *SubV, *SubS);
   SubV->push_back(SubS);
