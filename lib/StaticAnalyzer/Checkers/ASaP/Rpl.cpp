@@ -391,15 +391,15 @@ Trivalent ConcreteRpl::isUnder(const Rpl &That) const {
   return Result;
 }
 
-Trivalent ConcreteRpl::isIncludedIn(const Rpl &That) const {
+Trivalent ConcreteRpl::isIncludedIn(const Rpl &That, bool GenConstraint) const {
   /*const CaptureRplElement *cap = dyn_cast<CaptureRplElement>(RplElements.front());
   if (cap) {
     return cap->upperBound().isIncludedIn(That);
   }*/
   if (isa<VarRpl>(&That)) {
-    StringRef Name = SymbolTable::Table->makeFreshConstraintName();
-    RplInclusionConstraint *RIC = new RplInclusionConstraint(Name, *this, That);
-    SymbolTable::Table->addConstraint(RIC);
+    if (GenConstraint) {
+      SymbolTable::Table->addRplInclusionConstraint(*this, That);
+    }
     return RK_DUNNO;
   }
   // else
@@ -551,15 +551,15 @@ Trivalent VarRpl::isUnder(const Rpl &That) const {
     return RK_DUNNO;
 }
 
-Trivalent VarRpl::isIncludedIn(const Rpl &That) const {
+Trivalent VarRpl::isIncludedIn(const Rpl &That, bool GenConstraint) const {
   if (this == &That)
     return RK_TRUE;
   else {
     // TODO: optimization:
     // if That is fully specified, then this must be equal to That
-    StringRef Name = SymbolTable::Table->makeFreshConstraintName();
-    RplInclusionConstraint *RIC = new RplInclusionConstraint(Name, *this, That);
-    SymbolTable::Table->addConstraint(RIC);
+    if (GenConstraint) {
+      SymbolTable::Table->addRplInclusionConstraint(*this, That);
+    }
     return RK_DUNNO;
   }
 }
@@ -779,7 +779,7 @@ void RplVector::join(RplVector *That) {
 }
 
 /// \brief Return true when this is included in That, false otherwise.
-Trivalent RplVector::isIncludedIn (const RplVector &That) const {
+Trivalent RplVector::isIncludedIn (const RplVector &That, bool GenConstraints) const {
   Trivalent Result = RK_TRUE;
   assert(That.size() == this->size());
 
@@ -793,7 +793,7 @@ Trivalent RplVector::isIncludedIn (const RplVector &That) const {
         ++ThatI, ++ThisI) {
     Rpl *LHS = *ThisI;
     Rpl *RHS = *ThatI;
-    Trivalent V = LHS->isIncludedIn(*RHS);
+    Trivalent V = LHS->isIncludedIn(*RHS, GenConstraints);
     if (V == RK_FALSE) {
       Result = RK_FALSE;
       break;

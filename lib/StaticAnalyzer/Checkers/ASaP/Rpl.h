@@ -249,7 +249,8 @@ public:
 
   // Inclusion
   /// \brief Returns true iff this RPL is included in That
-  virtual Trivalent isIncludedIn(const Rpl &That) const = 0;
+  virtual Trivalent isIncludedIn(const Rpl &That,
+                                 bool GenConstraint = false) const = 0;
 
   /// \brief Returns true iff this RPL is disjoint from That
   virtual Trivalent isDisjoint(const Rpl &That) const = 0;
@@ -398,7 +399,8 @@ typedef llvm::SmallVector<const RplElement*,
 
   // Inclusion
   /// \brief Returns true iff this RPL is included in That
-  virtual Trivalent isIncludedIn(const Rpl &That) const;
+  virtual Trivalent isIncludedIn(const Rpl &That,
+                                 bool GenConstraint = false) const;
 
   /// \brief Returns true iff this RPL is disjoint from That
   virtual Trivalent isDisjoint(const Rpl &That) const;
@@ -466,7 +468,7 @@ public:
 
   // Inclusion
   /// \brief Returns true iff this RPL is included in That
-  virtual Trivalent isIncludedIn(const Rpl &That) const;
+  virtual Trivalent isIncludedIn(const Rpl &That, bool GenConstraints = false) const;
 
   /// \brief Returns true iff this RPL is disjoint from That
   virtual Trivalent isDisjoint(const Rpl &That) const;
@@ -630,7 +632,7 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
   void join(RplVector *That);
 
   /// \brief Return true when this is included in That, false otherwise.
-  Trivalent isIncludedIn (const RplVector &That) const;
+  Trivalent isIncludedIn (const RplVector &That, bool GenConstraints = false) const;
 
   /// \brief Substitution this[FromEl <- ToRpl] (over RPL vector)
   void substitute(const Substitution *S);

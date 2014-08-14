@@ -108,11 +108,13 @@ public:
   /// \brief Returns true when 'this' can be assigned to That
   // Note: That=LHS and this=RHS
   Trivalent isAssignableTo(const ASaPType &That, SymbolTable &SymT,
-                      ASTContext &Ctx, bool IsInit = false) const;
+                           ASTContext &Ctx, bool IsInit = false,
+                           bool GenConstraints = true) const;
   /// \brief true when when cast is successful
   bool implicitCastToBase(QualType BaseQT, SymbolTable &SymT);
   /// \brief  true when 'this' is a subtype (derived type) of 'that'.
-  Trivalent isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const;
+  Trivalent isSubtypeOf(const ASaPType &That,
+                        SymbolTable &SymT, bool GenConstraints) const;
   /// \brief Joins this to That (by modifying this).
   /// Join returns the smallest common supertype (Base Type).
   void join(ASaPType *That);

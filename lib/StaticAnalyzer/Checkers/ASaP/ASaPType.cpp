@@ -286,7 +286,7 @@ std::string ASaPType::toString() const {
 
 Trivalent ASaPType::
 isAssignableTo(const ASaPType &That, SymbolTable &SymT,
-               ASTContext &Ctx, bool IsInit) const {
+               ASTContext &Ctx, bool IsInit, bool GenConstraints) const {
   OSv2 << "DEBUG:: isAssignable [IsInit=" << IsInit
   << "]\n";
   OSv2 << "RHS:" << this->toString() << "\n";
@@ -310,11 +310,11 @@ isAssignableTo(const ASaPType &That, SymbolTable &SymT,
       ThisCopy.addrOf(ThisRef);
     }
   } // end IsInit == true
-  return ThisCopy.isSubtypeOf(ThatCopy, SymT);
+  return ThisCopy.isSubtypeOf(ThatCopy, SymT, GenConstraints);
 }
 
-Trivalent ASaPType::
-isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const {
+Trivalent ASaPType::isSubtypeOf(const ASaPType &That,
+                                SymbolTable &SymT, bool GenConstraints) const {
   if (! areUnqualQTsEqual(QT, That.QT) ) {
     /// Typechecking has passed so we assume that this->QT <= that->QT
     /// but we have to find follow the mapping and substitute Rpls....
@@ -325,14 +325,14 @@ isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const {
       // both null or both non-null
       assert((ThisCopy.InRpl && ThatCopy.InRpl) ||
              (ThisCopy.InRpl==0 && ThatCopy.InRpl==0));
-      Trivalent Result = ThisCopy.isSubtypeOf(ThatCopy, SymT);
+      Trivalent Result = ThisCopy.isSubtypeOf(ThatCopy, SymT, GenConstraints);
       if (Result == RK_FALSE)
         return Result; // RK_FALSE
       // Invariant: ThisCopy.isSubtypeOf(ThatCopy,SymT) == RK_TRUE || RK_DUNNO
       if (ThisCopy.InRpl == 0 && ThatCopy.InRpl == 0)
         return Result;
       if (ThisCopy.InRpl && ThatCopy.InRpl) {
-        Trivalent InclRes = ThisCopy.InRpl->isIncludedIn(*ThatCopy.InRpl);
+        Trivalent InclRes = ThisCopy.InRpl->isIncludedIn(*ThatCopy.InRpl, GenConstraints);
         return trivalentAND(Result, InclRes);
       }
       // else
@@ -349,7 +349,7 @@ isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const {
       if (!ThisCopy.implicitCastToBase(That.QT, SymT))
         return RK_FALSE;
       else
-        return ThisCopy.ArgV->isIncludedIn(*That.ArgV);
+        return ThisCopy.ArgV->isIncludedIn(*That.ArgV, GenConstraints);
     } else {
       // this may happen in the case of an unsafe implicit cast,
       // in particular casting from function to function pointer.
@@ -358,7 +358,7 @@ isSubtypeOf(const ASaPType &That, SymbolTable &SymT) const {
   }
   /// Note that we're ignoring InRpl on purpose.
   assert(That.ArgV);
-  return this->ArgV->isIncludedIn(*That.ArgV);
+  return this->ArgV->isIncludedIn(*That.ArgV, GenConstraints);
 }
 
 bool ASaPType::implicitCastToBase(QualType BaseQT, SymbolTable &SymT) {
