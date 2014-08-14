@@ -335,6 +335,7 @@ public:
     return addFreshName(ss.str());
   }
 
+  void addRplInclusionConstraint(const Rpl &LHS, const Rpl &RHS);
   void addConstraint(Constraint *Cons);
 
   void printConstraints() const;

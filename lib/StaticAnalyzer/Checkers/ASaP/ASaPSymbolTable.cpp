@@ -571,6 +571,12 @@ addParallelFun(const FunctionDecl *D, const SpecificNIChecker *NIC) {
   }
 }
 
+void SymbolTable::addRplInclusionConstraint(const Rpl &LHS, const Rpl &RHS) {
+  StringRef Name = makeFreshConstraintName();
+  RplInclusionConstraint *RIC = new RplInclusionConstraint(Name, LHS, RHS);
+  SymbolTable::Table->addConstraint(RIC);
+}
+
 void SymbolTable::addConstraint(Constraint *Cons) {
   assert(Cons && "Internal Error: unexpected null-pointer");
   OSv2 << "DEBUG:: adding Constraint: " << Cons->toString() << "\n";
