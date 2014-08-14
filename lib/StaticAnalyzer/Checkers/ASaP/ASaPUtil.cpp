@@ -236,12 +236,14 @@ void buildParamSubstitutions(
   assert(CalleeDecl);
   FunctionDecl::param_const_iterator ParamI, ParamE;
   *SymbolTable::VB.OS << "DEBUG:: buildParamSubstitutions... BEGIN!\n";
+  OSv2 << "DEBUG: SubS = " << SubS.toString() << "\n";
 
   for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
       ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
     Expr *ArgExpr = *ArgI;
     ParmVarDecl *ParamDecl = *ParamI;
     buildSingleParamSubstitution(Def, SymT, ParamDecl, ArgExpr, ParamSet, SubS);
+    OSv2 << "DEBUG: SubS = " << SubS.toString() << "\n";
   }
   *SymbolTable::VB.OS << "DEBUG:: DONE buildParamSubstitutions\n";
 }

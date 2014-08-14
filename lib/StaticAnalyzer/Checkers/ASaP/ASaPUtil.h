@@ -42,6 +42,7 @@ static const std::string PL_EffectSummary = "effect_summary";
 static const std::string PL_EffectVar = "effect_var";
 static const std::string PL_ConcreteRpl = "rpl";
 static const std::string PL_VarRpl = "rpl";
+static const std::string PL_HeadVarRpl = "head_rpl_var";
 static const std::string PL_RplDomain = "rpl_domain";
 static const std::string PL_ParamSub = "param_sub";
 static const std::string PL_SubstitutionSet = "subst_set";

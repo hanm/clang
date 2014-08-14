@@ -47,7 +47,7 @@ public:
   RplDomain(const RplDomain &Dom);
   virtual ~RplDomain();
 
-  //StringRef getName() { return Name; }
+  const StringRef getName() { return Name; }
   void addRegion(const NamedRplElement &R);
   bool isUsed() const { return Used; }
   void markUsed();
@@ -476,6 +476,8 @@ public:
   virtual void substitute(const SubstitutionSet *SubS);
   virtual term_t getPLTerm() const;
   virtual term_t getRplElementsPLTerm() const;
+
+  void assertzProlog() const;
 
   virtual bool operator == (const RplElement &That) const {
       return false;

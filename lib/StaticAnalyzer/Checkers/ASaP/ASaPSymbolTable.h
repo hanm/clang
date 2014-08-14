@@ -65,10 +65,10 @@ class SymbolTable {
   typedef llvm::DenseMap<const FunctionDecl*,
                           const SpecificNIChecker*> ParallelismMapT;
   typedef OwningPtrSet<std::string, 1024> FreshNamesSetT;
-  //typedef OwningPtrSet<clang::asap::Constraint, NUM_OF_CONSTRAINTS> ConstraintsSetT;
-  typedef llvm::SmallPtrSet<Constraint*, NUM_OF_CONSTRAINTS> ConstraintsSetT;
 
-  //typedef OwningPtrSet<clang::asap::EffectNIConstraint, NUM_OF_CONSTRAINTS> NIConstraintsSetT;
+  typedef llvm::SmallPtrSet<Constraint*, NUM_OF_CONSTRAINTS> ConstraintsSetT;
+  typedef llvm::SmallPtrSet<VarRpl*, NUM_OF_CONSTRAINTS> VarRplSetT;
+  typedef llvm::SmallPtrSet<VarEffectSummary*, NUM_OF_CONSTRAINTS> VarEffectSummarySetT;
 
   /// \brief Symbol Table Map
   SymbolTableMapT SymTable;
@@ -88,8 +88,8 @@ class SymbolTable {
   /// \brief Set of all effect inclusion constraints generated
   ConstraintsSetT ConstraintSet;
 
-  /// \brief Set of all non-interference constraints generated
-  //NIConstraintsSetT NIConstraints;
+  VarRplSetT VarRplSet;
+  VarEffectSummarySetT VarEffectSummarySet;
 
   AnnotationScheme *AnnotScheme;
   static int Initialized;

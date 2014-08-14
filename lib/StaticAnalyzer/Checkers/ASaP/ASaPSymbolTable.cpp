@@ -724,6 +724,14 @@ static void emitConstraintSolution(EffectInclusionConstraint *EC,
 }
 
 void SymbolTable::emitFacts() const {
+  for (VarRplSetT::const_iterator
+          I = VarRplSet.begin(),
+          E = VarRplSet.end();
+        I != E; ++I) {
+    VarRpl *R = *I;
+    assert(R && "Internal Error: unexpected null pointer");
+    R->assertzProlog();
+  }
   //PL_action(PL_ACTION_TRACE);
   //iterate through symbol table entries and emit facts
   for (SymbolTableMapT::const_iterator
@@ -747,7 +755,7 @@ void SymbolTable::emitFacts() const {
     }
 
     const RplDomain *Dom = Entry->getRplDomain();
-    if (Dom && Dom->isUsed()) {
+    if (Dom /*&& Dom->isUsed()*/) {
       Dom->assertzProlog();
     }
 
@@ -973,13 +981,17 @@ VarRpl *SymbolTable::createFreshRplVar(const ValueDecl *D) {
   StringRef Name = makeFreshRVName(D->getNameAsString().data());
   OSv2 << "DEBUG:: VarRpl Fresh Name created: " << Name << "\n";
   RplDomain *Dom = buildDomain(D);
-  return new VarRpl(Name, Dom);
+  VarRpl *Result = new VarRpl(Name, Dom);
+  VarRplSet.insert(Result);
+  return Result;
 }
 
 VarEffectSummary *SymbolTable::createFreshEffectSumVar(const FunctionDecl *D) {
   // TODO: use name of D after processing to make it a valid Prolog identifier
   StringRef Name = makeFreshESVName("");
-  return new VarEffectSummary(Name);
+  VarEffectSummary *Result = new VarEffectSummary(Name);
+  VarEffectSummarySet.insert(Result);
+  return Result;
 }
 
 //////////////////////////////////////////////////////////////////////////

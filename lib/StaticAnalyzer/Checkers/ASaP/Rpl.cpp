@@ -618,6 +618,26 @@ term_t VarRpl::getRplElementsPLTerm() const {
 
   return RplElList;
 }
+
+void VarRpl::assertzProlog() const {
+  // head_rpl_var(Name, Domain)
+  term_t Result = PL_new_term_ref();
+  functor_t RplFunctor = PL_new_functor(PL_new_atom(PL_HeadVarRpl.c_str()), 2);
+
+  // 1. Name
+  term_t NameT = PL_new_term_ref();
+  PL_put_atom_chars(NameT, Name.data());
+
+  // 2. Domain
+  assert(Domain && "Internal Error: cannot emit head_rpl_var/2. Domain is null");
+  term_t DomT = PL_new_term_ref();
+  PL_put_atom_chars(DomT, Domain->getName().data());
+
+
+  int Res = PL_cons_functor(Result, RplFunctor, NameT, DomT);
+  assert(Res && "Failed to create prolog term_t for RPL");
+  assertzTermProlog(Result, "Failed to assert 'head_rpl_var/2' to Prolog facts");
+}
 ///////////////////////////////////////////////////////////////////////////////
 //// ParameterSet
 
@@ -704,7 +724,7 @@ void ParameterVector::assertzProlog () const {
       PL_new_functor(PL_new_atom(PL_RgnParam.c_str()), 1);
     int Res = PL_cons_functor(ParamT, RPFunctor, (*PI)->getPLTerm());
     assert(Res && "Failed to create 'rgn_param' Prolog term");
-    assertzTermProlog(ParamT,"Failed to assert 'rgn_param' to Prolog facts");
+    assertzTermProlog(ParamT,"Failed to assert 'rgn_param/1' to Prolog facts");
   }
 }
 
