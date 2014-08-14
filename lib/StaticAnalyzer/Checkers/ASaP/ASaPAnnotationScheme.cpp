@@ -56,9 +56,38 @@ helperMakeLocalType(const ValueDecl *D, long ArgNum) {
 inline AnnotationSet AnnotationScheme::
 helperMakeVarType(const ValueDecl *D, long ArgNum) {
   AnnotationSet Result;
-  //assert(false && "method not implemented yet");
   RplVector RplVec;
   for (int I = 0; I < ArgNum; ++I) {
+    // 1. Create new RplVarElement
+    VarRpl *RplVar = SymT.createFreshRplVar(D);
+    OSv2 << "DEBUG:: RplVar = " << RplVar->toString() << "\n";
+    // 2. Push it back
+    RplVec.push_back(RplVar);
+  }
+  Result.T = new ASaPType(D->getType(), SymT.getInheritanceMap(D), &RplVec);
+  return Result;
+}
+
+inline AnnotationSet AnnotationScheme::
+helperMakeParametricVarType(const ValueDecl *D, long ArgNum, QualType QT) {
+  AnnotationSet Result;
+  RplVector RplVec;
+  int I = 0;
+  Result.ParamVec = new ParameterVector();
+
+  OSv2 << "DEBUG:: QT (" << (QT->isScalarType()? "is Scalar" : "is *NOT* Scalar")
+       << ") = " << QT.getAsString() << "\n";
+  if (QT->isScalarType()) {
+    // 1st Arg = Local, then create a new parameter for each subsequent one
+    I = 1;
+    RplVec.push_back(ConcreteRpl(*SymbolTable::LOCAL_RplElmt));
+  }
+
+  for (; I < ArgNum; ++I) {
+    StringRef ParamName = SymT.makeFreshParamName(D->getNameAsString());
+    ParamRplElement Param(ParamName, ParamName);
+    Result.ParamVec->push_back(Param); // makes a (persistent) copy of Param
+
     // 1. Create new RplVarElement
     VarRpl *RplVar = SymT.createFreshRplVar(D);
     OSv2 << "DEBUG:: RplVar = " << RplVar->toString() << "\n";
@@ -372,8 +401,7 @@ makeFieldType(const FieldDecl *D, long ArgNum) {
 
 AnnotationSet InferenceAnnotationScheme::
 makeParamType(const ParmVarDecl *D, long ArgNum) {
-  return helperMakeVarType(D, ArgNum);
-
+  return helperMakeParametricVarType(D, ArgNum, D->getType());
 }
 
 AnnotationSet InferenceAnnotationScheme::

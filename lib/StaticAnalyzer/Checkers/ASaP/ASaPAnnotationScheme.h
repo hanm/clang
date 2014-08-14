@@ -60,6 +60,7 @@ protected:
   AnnotationSet helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT);
   AnnotationSet helperMakeWritesLocalEffectSummary(const FunctionDecl *D);
   AnnotationSet helperMakeVarType(const ValueDecl *D, long ArgNum);
+  AnnotationSet helperMakeParametricVarType(const ValueDecl *D, long ArgNum, QualType QT);
   AnnotationSet helperMakeVarEffectSummary(const FunctionDecl *D);
   RplVector *helperMakeBaseTypeArgs(const RecordDecl *Derived, long ArgNum);
 
