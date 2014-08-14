@@ -187,13 +187,13 @@ public:
   void setSummaryKind(SummaryKind SK) {Kind = SK;}
   SummaryKind getSummaryKind() const {return Kind;}
 
-  virtual  Trivalent covers(const Effect *Eff) const {return RK_DUNNO;}
+  virtual Trivalent covers(const Effect *Eff) const { return RK_DUNNO; }
   /// \brief Returns true iff 'this' covers 'Sum'
-  virtual  Trivalent covers(const EffectSummary *Sum) const {return RK_DUNNO;}
+  virtual Trivalent covers(const EffectSummary *Sum) const { return RK_DUNNO; }
   /// \brief Returns true iff 'this' is non-interfering with 'Eff'
-  virtual  Trivalent isNonInterfering(const Effect *Eff) const {return RK_DUNNO;}
+  virtual Trivalent isNonInterfering(const Effect *Eff) const { return RK_DUNNO; }
   /// \brief Returns true iff 'this' is non-interfering with 'Sum'
-  virtual  Trivalent isNonInterfering(const EffectSummary *Sum) const {return RK_DUNNO;}
+  virtual Trivalent isNonInterfering(const EffectSummary *Sum) const { return RK_DUNNO; }
 
   typedef llvm::SmallVector<std::pair<const Effect*, const Effect*> *, 8>
       EffectCoverageVector;
