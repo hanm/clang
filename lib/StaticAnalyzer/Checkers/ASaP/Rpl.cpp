@@ -191,7 +191,7 @@ term_t RplDomain::getPLTerm() const {
   } else {
     PL_put_atom_chars(ParentName, PL_NullDomain.c_str());
   }
-  int Res = PL_cons_functor(Result, DomF, DomNam, RegList, ParamList, ParentName);
+  int Res = PL_cons_functor(Result, DomF, DomNam, ParamList, RegList, ParentName);
   assert(Res && "Failed to create prolog term_t for RplDomain");
   return Result;
 }
@@ -396,7 +396,7 @@ Trivalent ConcreteRpl::isIncludedIn(const Rpl &That, bool GenConstraint) const {
   if (cap) {
     return cap->upperBound().isIncludedIn(That);
   }*/
-  if (isa<VarRpl>(&That)) {
+  if (isa<VarRpl>(&That) || hasSubs() || That.hasSubs()) {
     if (GenConstraint) {
       SymbolTable::Table->addRplInclusionConstraint(*this, That);
     }
@@ -436,6 +436,7 @@ Trivalent ConcreteRpl::substitute(const Substitution *S) {
   Trivalent Result = RK_FALSE; // set to true if substitution is
   if (!S || !S->getFrom() || !S->getTo())
     return Result; // Nothing to do.
+
   const RplElement &FromEl = *S->getFrom();
   const Rpl &ToRpl = *S->getTo();
 

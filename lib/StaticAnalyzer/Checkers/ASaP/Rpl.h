@@ -242,6 +242,7 @@ public:
   void addSubstitution(const SubstitutionSet &SubS);
 
   term_t getSubVPLTerm() const;
+  bool hasSubs() const { return (SubV.size() > 0); }
 
   // Nesting (Under)
   /// \brief Returns true iff this is under That
