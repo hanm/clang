@@ -11,10 +11,10 @@ public:
     
 	void setX(int _x) { x = _x; } // expected-warning{{Inferred Effect Summary for setX: [reads(rpl([rLOCAL],[])),writes(rpl([p0_P,r0_Rx],[]))]}}
 	void setY(int _y) { y = _y; } // expected-warning{{Inferred Effect Summary for setY: [reads(rpl([rLOCAL],[])),writes(rpl([p0_P,r1_Ry],[]))]}}
-	void setXY(int _x, int _y) { setX(_x); setY(_y); } // expected-warning{{Inferred Effect Summary for setXY: [writes(rpl([p0_P,r0_Rx],[])),reads(rpl([rLOCAL],[])),writes(rpl([p0_P,r1_Ry],[]))]}}
+	void setXY(int _x, int _y) { setX(_x); setY(_y); } // expected-warning{{Inferred Effect Summary for setXY: [reads(rpl([rLOCAL],[])),writes(rpl([p0_P,r0_Rx],[])),writes(rpl([p0_P,r1_Ry],[]))]}}
 };
 
-void foo [[asap::region("Rfoo")]] () { // expected-warning{{Inferred Effect Summary for foo: [writes(rpl([r2_Rfoo,r0_Rx],[])),reads(rpl([rLOCAL],[]))]}}
+void foo [[asap::region("Rfoo")]] () { // expected-warning{{Inferred Effect Summary for foo: [reads(rpl([rLOCAL],[])),writes(rpl([r2_Rfoo,r0_Rx],[]))]}}
 	Point *p1 [[asap::arg("Rfoo")]] = new Point();
 	p1->setX(4);
 }

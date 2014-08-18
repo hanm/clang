@@ -52,7 +52,7 @@ struct [[asap::param("Pl")]] link {
 
 void delete_all[[asap::param("Q")]]//, asap::writes("Q")]]
     (link *lnk[[asap::arg("Q")]])
-{ //expected-warning{{Inferred Effect Summary for delete_all: [reads(rpl([rLOCAL],[])),reads(rpl([p4_Q],[]))]}}
+{ //expected-warning{{Inferred Effect Summary for delete_all: [reads(rpl([p4_Q],[])),reads(rpl([rLOCAL],[]))]}}
     if(lnk)
         {
         delete_all(lnk->next);

@@ -88,14 +88,8 @@ void EffectInclusionConstraint::addEffects(const ConcreteEffectSummary &ES) {
 
 term_t EffectInclusionConstraint::getPLTerm() const {
   assert(Def && "Internal Error: Trying to create prolog term with mising declaration");
-  StringRef FName = SymbolTable::Table->getPrologName(Def);
-
   // Build ESI_ID term
   term_t ESIID = getIDPLTerm();
-
-  // Build Function name term
-  term_t FNameTerm = PL_new_term_ref();
-  PL_put_atom_chars(FNameTerm, FName.data());
 
   // Build LHS term (list of effects that must be inlcuded)
   term_t LHSTerm = LHS->getPLTerm();
@@ -105,8 +99,8 @@ term_t EffectInclusionConstraint::getPLTerm() const {
 
   term_t ESITerm  = PL_new_term_ref();
   functor_t ESIFunctor =
-    PL_new_functor(PL_new_atom(PL_ESIConstraint.c_str()), 4);
-  int Res = PL_cons_functor(ESITerm, ESIFunctor, ESIID, FNameTerm, LHSTerm, RHSTerm);
+    PL_new_functor(PL_new_atom(PL_ESIConstraint.c_str()), 3);
+  int Res = PL_cons_functor(ESITerm, ESIFunctor, ESIID, LHSTerm, RHSTerm);
   assert(Res && "Failed to build 'esi_constraint' Prolog term");
 
   return ESITerm;

@@ -10,7 +10,7 @@ protected:
 public:
 	void intersect [[asap::param("R_cT")]] /*[[asap::reads("R:*, R_cT:*")]]*/ (
 			CollisionTree &collisionTree [[asap::arg("R_cT")]]) //; 
-{ // expected-warning{{[reads(rpl([p0_R,rSTAR,r1_Right],[])),reads(rpl([p0_R,rSTAR,r0_Left],[])),reads(rpl([p1_R_cT,rSTAR,r0_Left],[])),reads(rpl([p1_R_cT,rSTAR,r1_Right],[]))]}}
+{ // expected-warning{{[reads(rpl([p0_R,rSTAR,r0_Left],[])),reads(rpl([p0_R,rSTAR,r1_Right],[])),reads(rpl([p1_R_cT,rSTAR,r0_Left],[])),reads(rpl([p1_R_cT,rSTAR,r1_Right],[]))]}}
 	if (left != nullptr) {
 		collisionTree.intersect(*left);
 		collisionTree.intersect(*right);
