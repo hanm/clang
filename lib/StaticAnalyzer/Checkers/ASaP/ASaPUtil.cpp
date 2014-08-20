@@ -289,5 +289,54 @@ Stmt *getBody(const FunctionDecl *D) {
   }
 }
 
+/// \brief True if Str only contains characters and underscores and digits
+bool isSimpleIdentifier(const llvm::StringRef& Str) {
+  if (Str.size() <= 0)
+    return true;
+  // must start with [_a-zA-Z]
+  const char c = Str.front();
+  if (c != '_' &&
+    !( c >= 'a' && c <= 'z') &&
+    !( c >= 'A' && c <= 'Z'))
+    return false;
+  // all remaining characters must be in [_a-zA-Z0-9]
+  for (size_t I = 0; I < Str.size(); I++) {
+    const char C = Str[I];
+    if (C != '_' &&
+      !( C >= 'a' && C <= 'z') &&
+      !( C >= 'A' && C <= 'Z') &&
+      !( C >= '0' && C <= '9'))
+      return false;
+  }
+  return true;
+}
+
+
+StringRef getPLNormalizedName(const NamedDecl &Dec) {
+  StringRef Name = Dec.getNameAsString();
+  if (Name.size() <= 0)
+    return "UnNamed";
+  if (isSimpleIdentifier(Name)) {
+    return Name;
+  }
+  //else
+  OSv2 << "DEBUG:: getPLNormalizedName:: Name = " << Name << "\n";
+  if (Name.startswith("operator")) {
+    StringRef Op = Name.drop_front(8);
+    OSv2 << "DEBUG:: getPLNormalizedName:: operator is '" << Op << "'\n";
+    if (Op.equals("()"))
+      return "operatorParen";
+    if (Op.equals("+"))
+      return "operatorPlus";
+    if (Op.equals("-"))
+      return "operatorMinus";
+    if (Op.equals("*"))
+      return "operatorTimes";
+    if (Op.equals("/"))
+      return "operatorDiv";
+  }
+  return "";
+}
+
 } // end namespace asap
 } // end namespace clang

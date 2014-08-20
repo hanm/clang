@@ -797,9 +797,7 @@ void SymbolTable::emitConstraints() const {
     OSv2 << "DEBUG:: constraint ID = " << Cons->getConstraintID() << "\n";
     OSv2 << "DEBUG:: Will assert Constraint to Prolog: " << Cons->toString() << "\n";
     term_t Term = Cons->getPLTerm();
-    OSv2 << "DEBUG:: build term for constraint...\n";
     assertzTermProlog(Term, "Failed to assert constraint to Prolog facts");
-    OSv2 << "DEBUG:: Asserted Constraint to Prolog: " << Cons->toString() << "\n";
   }
 }
 
@@ -956,21 +954,29 @@ makeDefaultBaseArgs(const RecordDecl *Derived, long NumArgs) {
 }
 
 void SymbolTable::createSymbolTableEntry(const Decl *D) {
+  assert(D && "Internal Error: unexpected null pointer");
   assert(!SymTable.lookup(D) && "Internal Error: trying to create duplicate entry");
-  StringRef DeclName;
+
+  StringRef PLSuffix;
+  if (const NamedDecl *NDec = dyn_cast<NamedDecl>(D))
+    PLSuffix = getPLNormalizedName(*NDec);
+  else
+    PLSuffix = "";
+
   // 0. If this is a type of declaration that has a canonical declaration
   //    use or create-and-use that declname
   const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
   const FunctionDecl *CanFD = FD ? FD->getCanonicalDecl() : 0;
   // 1. Make names for decl and domain
-  StringRef DomName = makeFreshRplDomName("");
+  StringRef DomName = makeFreshRplDomName(PLSuffix);
+  StringRef DeclName;
   if (FD && CanFD != FD) {
     if (!SymTable.lookup(CanFD)) {
       createSymbolTableEntry(CanFD);
     }
     DeclName = SymTable.lookup(CanFD)->getPrologName();
   } else {
-    DeclName = makeFreshDeclName("");
+    DeclName = makeFreshDeclName(PLSuffix);
   }
   // TODO: update DeclName:StringRef -> Decl Map
 
@@ -993,8 +999,9 @@ VarRpl *SymbolTable::createFreshRplVar(const ValueDecl *D) {
 }
 
 VarEffectSummary *SymbolTable::createFreshEffectSumVar(const FunctionDecl *D) {
-  // TODO: use name of D after processing to make it a valid Prolog identifier
-  StringRef Name = makeFreshESVName("");
+  assert(D && "Internal Error: unexpected null pointer");
+  StringRef NormalizedDeclName = getPLNormalizedName(*D);
+  StringRef Name = makeFreshESVName(NormalizedDeclName);
   VarEffectSummary *Result = new VarEffectSummary(Name);
   VarEffectSummarySet.insert(Result);
   return Result;
