@@ -35,12 +35,12 @@ public:
   OwningVector() : VectorT() {}
 
   OwningVector(const ElmtTyp &E) : VectorT() {
-    push_back(new ElmtTyp(E));
+    push_back(E); // push_back makes a copy of E
   }
 
   OwningVector(const ElmtTyp *E) : VectorT() {
     if (E)
-      push_back(new ElmtTyp(*E));
+      push_back(E); // push_back makes a copy of E
   }
 
   OwningVector(const OwningVector &From) : VectorT() {
