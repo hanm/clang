@@ -62,12 +62,12 @@ bool Rpl::isValidRegionName(const llvm::StringRef& Str) {
     !( c >= 'A' && c <= 'Z'))
     return false;
   // all remaining characters must be in [_a-zA-Z0-9]
-  for (size_t i=0; i < Str.size(); i++) {
-    const char c = Str[i];
-    if (c != '_' &&
-      !( c >= 'a' && c <= 'z') &&
-      !( c >= 'A' && c <= 'Z') &&
-      !( c >= '0' && c <= '9'))
+  for (size_t I = 0; I < Str.size(); I++) {
+    const char C = Str[I];
+    if (C != '_' &&
+      !( C >= 'a' && C <= 'z') &&
+      !( C >= 'A' && C <= 'Z') &&
+      !( C >= '0' && C <= '9'))
       return false;
   }
   return true;
