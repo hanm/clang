@@ -136,6 +136,21 @@ public:
     return Result;
   }
 
+  term_t getReversePLTerm() const {
+    term_t Result = clang::asap::buildPLEmptyList();
+    int Res;
+
+    for (typename VectorT::const_iterator
+             I = VectorT::begin(),
+             E = VectorT::end();
+         I != E; ++I) {
+      term_t Term = (*I)->getPLTerm();
+      Res = PL_cons_list(Result, Term, Result);
+      assert(Res && "Failed to add OwningVector element to Prolog list term");
+    }
+    return Result;
+  }
+
   void print (llvm::raw_ostream& OS) const {
     if(VectorT::size() <= 0)
       return;
