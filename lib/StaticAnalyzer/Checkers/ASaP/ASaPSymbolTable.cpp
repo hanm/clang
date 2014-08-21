@@ -358,6 +358,7 @@ RplDomain *SymbolTable::buildDomain(const ValueDecl *D) {
   if (ParentDom) {
     StringRef DomName = makeFreshRplDomName(PLSuffix);
     RplDomain *Result = new RplDomain(DomName, *ParentDom);
+    DomainSet.insert(Result);
     return Result;
   }
   else
@@ -767,7 +768,7 @@ void SymbolTable::emitFacts() const {
     }
 
     const RplDomain *Dom = Entry->getRplDomain();
-    if (Dom /*&& Dom->isUsed()*/) {
+    if (Dom && Dom->isUsed()) {
       Dom->assertzProlog();
     }
 

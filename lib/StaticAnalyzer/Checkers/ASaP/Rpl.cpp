@@ -127,7 +127,7 @@ RplDomain::RplDomain(StringRef ID, const RegionNameVector *RV,
 
 RplDomain::RplDomain(const StringRef ID, const RplDomain &Dom)
                     : ID(ID), Params(Dom.Params),
-                      Parent(Dom.Parent), Used(Dom.Used) {
+                      Parent(Dom.Parent), Used(false) {
   if (Dom.Regions) {
     Regions = new RegionNameVector(*Dom.Regions);
   } else {

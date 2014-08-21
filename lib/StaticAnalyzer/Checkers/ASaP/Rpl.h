@@ -458,7 +458,7 @@ public:
   }
 
   //inline void setDomain(RplDomain *D) { Domain = D;}
-  inline RplDomain* getDomain() { return Domain;}
+  inline const RplDomain *getDomain() { return Domain;}
 
   /// \brief Print the Rpl to an output stream.
   virtual void print(llvm::raw_ostream &OS) const;

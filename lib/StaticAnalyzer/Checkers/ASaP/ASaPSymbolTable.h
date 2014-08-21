@@ -65,6 +65,7 @@ class SymbolTable {
   typedef llvm::DenseMap<const FunctionDecl*,
                           const SpecificNIChecker*> ParallelismMapT;
   typedef OwningPtrSet<std::string, 1024> FreshNamesSetT;
+  typedef OwningPtrSet<RplDomain, 1024> DomainSetT;
 
   typedef llvm::SmallPtrSet<Constraint*, NUM_OF_CONSTRAINTS> ConstraintsSetT;
   typedef llvm::SmallPtrSet<VarRpl*, NUM_OF_CONSTRAINTS> VarRplSetT;
@@ -84,6 +85,10 @@ class SymbolTable {
   /// \brief A set keeping track of fresh names created (strings)
   /// so that they are properly deallocated by the symbol table destructor
   FreshNamesSetT FreshNames;
+
+  /// \brief Keep track of RplDomains which are used in VarRpl objects they can
+  /// be deallocated when the analysis is over.
+  DomainSetT DomainSet;
 
   /// \brief Set of all effect inclusion constraints generated
   ConstraintsSetT ConstraintSet;
