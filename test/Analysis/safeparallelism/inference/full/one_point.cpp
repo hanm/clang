@@ -1,5 +1,9 @@
 // RUN: %clang_cc1 -std=c++11 -analyze -analyzer-checker=alpha.SafeParallelismChecker -analyzer-config -asap-default-scheme=inference %s -verify
 
+// There are no two points on which setXY is called in parallel, so the 
+// inference will produce a solution which has only field distinction,
+// but not object distinction (i.e., using a class region parameter).
+
 #include "../../tbb/parallel_invoke_fake.h"
 class Point;
 
@@ -26,17 +30,17 @@ class //[[asap::region("Rx,Ry")]]
  public:
   void setX(int _x) { x = _x; } // expected-warning{{Inferred Effect Summary for setX: [reads(rpl([rLOCAL],[])),writes(rpl([r8_x],[]))]}}
   void setY(int _y) { y = _y; } // expected-warning{{Inferred Effect Summary for setY: [reads(rpl([rLOCAL],[])),writes(rpl([r9_y],[]))]}}
-  void setXY(int _x, int _y) { // expected-warning{{Inferred Effect Summary for setXY: [reads(rpl([r0_P],[])),reads(rpl([r4_P],[])),reads(rpl([rLOCAL],[])),writes(rpl([r8_x],[])),writes(rpl([r9_y],[]))]}}
+  void setXY(int _x, int _y) { // expected-warning{{Inferred Effect Summary for setXY: [reads(rpl([r1_v],[])),reads(rpl([r5_v],[])),reads(rpl([rLOCAL],[])),writes(rpl([r8_x],[])),writes(rpl([r9_y],[]))]}}
     SetXFunctor SXF(*this, _x);
     SetYFunctor SYF(*this, _y);
     tbb::parallel_invoke(SXF, SYF);
   }
 };
 
-void SetXFunctor::operator() () const { // expected-warning{{Inferred Effect Summary for operator(): [reads(rpl([r0_P],[])),reads(rpl([rLOCAL],[])),writes(rpl([r8_x],[]))]}}
+void SetXFunctor::operator() () const { // expected-warning{{Inferred Effect Summary for operator(): [reads(rpl([r1_v],[])),reads(rpl([rLOCAL],[])),writes(rpl([r8_x],[]))]}}
   P.setX(v);
 }
 
-void SetYFunctor::operator() () const { // expected-warning{{Inferred Effect Summary for operator(): [reads(rpl([r4_P],[])),reads(rpl([rLOCAL],[])),writes(rpl([r9_y],[]))]}}
+void SetYFunctor::operator() () const { // expected-warning{{Inferred Effect Summary for operator(): [reads(rpl([r5_v],[])),reads(rpl([rLOCAL],[])),writes(rpl([r9_y],[]))]}}
   P.setY(v);
 }
