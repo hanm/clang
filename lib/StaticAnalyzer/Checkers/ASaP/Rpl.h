@@ -33,21 +33,21 @@ namespace asap {
 class RegionNameVector;
 
 class RplDomain {
-  const StringRef Name;          // unique Prolog Name
+  const StringRef ID;          // unique Prolog Name
   RegionNameVector *Regions;     // owned
   const ParameterVector *Params; // not owned
   RplDomain *Parent;             // not owned
   bool Used;
 
 public:
-  RplDomain(StringRef Name,
+  RplDomain(StringRef ID,
             const RegionNameVector *RV,
             const ParameterVector *PV,
             RplDomain *Parent);
-  RplDomain(const RplDomain &Dom);
+  RplDomain(const StringRef ID, const RplDomain &Dom);
   virtual ~RplDomain();
 
-  const StringRef getName() { return Name; }
+  const StringRef getID() { return ID; }
   void addRegion(const NamedRplElement &R);
   bool isUsed() const { return Used; }
   void markUsed();

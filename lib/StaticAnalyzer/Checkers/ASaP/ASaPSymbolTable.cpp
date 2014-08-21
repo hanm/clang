@@ -344,19 +344,22 @@ RplDomain *SymbolTable::buildDomain(const ValueDecl *D) {
   const DeclContext *DC = D->getDeclContext();
   const Decl *EnclosingDecl = getDeclFromContext(DC);
   //add fresh region name to enclosing scope
-  StringRef Name;
+  StringRef PLSuffix;
   if (const NamedDecl *ND = dyn_cast<NamedDecl>(D)) {
-    Name = ND->getNameAsString();
+    PLSuffix = getPLNormalizedName(*ND);
   } else {
-    Name = "";
+    PLSuffix = "";
   }
-  StringRef RegName = makeFreshRegionName(Name);
+  StringRef RegName = makeFreshRegionName(PLSuffix);
   bool Res = addRegionName(EnclosingDecl, RegName, false);
   assert(Res && "Internal Error: failed to add fresh region name");
 
   const RplDomain *ParentDom = getRplDomain(EnclosingDecl);
-  if (ParentDom)
-    return new RplDomain(*ParentDom);
+  if (ParentDom) {
+    StringRef DomName = makeFreshRplDomName(PLSuffix);
+    RplDomain *Result = new RplDomain(DomName, *ParentDom);
+    return Result;
+  }
   else
     return 0;
 }
@@ -737,6 +740,9 @@ void SymbolTable::emitFacts() const {
     VarRpl *R = *I;
     assert(R && "Internal Error: unexpected null pointer");
     R->assertzProlog();
+    const RplDomain *Dom = R->getDomain();
+    assert(Dom && "Internal Error: unexpected null pointer");
+    Dom->assertzProlog();
   }
   //PL_action(PL_ACTION_TRACE);
   //iterate through symbol table entries and emit facts

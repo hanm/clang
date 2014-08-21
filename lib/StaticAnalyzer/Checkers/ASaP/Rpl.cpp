@@ -115,9 +115,9 @@ Rpl::Rpl(const Rpl &That)
 ///////////////////////////////////////////////////////////////////////////////
 //// RplDomain
 
-RplDomain::RplDomain(StringRef Name, const RegionNameVector *RV,
+RplDomain::RplDomain(StringRef ID, const RegionNameVector *RV,
                      const ParameterVector *PV, RplDomain *P)
-                    : Name(Name), Params(PV), Parent(P), Used(false) {
+                    : ID(ID), Params(PV), Parent(P), Used(false) {
   if (RV) {
     Regions = new RegionNameVector(*RV);
   } else {
@@ -125,8 +125,8 @@ RplDomain::RplDomain(StringRef Name, const RegionNameVector *RV,
   }
 }
 
-RplDomain::RplDomain(const RplDomain &Dom)
-                    : Name(Dom.Name), Params(Dom.Params),
+RplDomain::RplDomain(const StringRef ID, const RplDomain &Dom)
+                    : ID(ID), Params(Dom.Params),
                       Parent(Dom.Parent), Used(Dom.Used) {
   if (Dom.Regions) {
     Regions = new RegionNameVector(*Dom.Regions);
@@ -167,9 +167,9 @@ void RplDomain::print (llvm::raw_ostream &OS) const {
 term_t RplDomain::getPLTerm() const {
   term_t Result = PL_new_term_ref();
   functor_t DomF = PL_new_functor(PL_new_atom(PL_RplDomain.c_str()),4);
-  // 1. Domain Name
-  term_t DomNam = PL_new_term_ref();
-  PL_put_atom_chars(DomNam, Name.data());
+  // 1. Domain ID
+  term_t DomID = PL_new_term_ref();
+  PL_put_atom_chars(DomID, ID.data());
   // 2. Region name List
   term_t RegList;
   if (Regions) {
@@ -185,13 +185,13 @@ term_t RplDomain::getPLTerm() const {
     ParamList = buildPLEmptyList();
   }
   // 4. Parent domain name
-  term_t ParentName = PL_new_term_ref();
+  term_t ParentID = PL_new_term_ref();
   if (Parent) {
-    PL_put_atom_chars(ParentName, Parent->Name.data());
+    PL_put_atom_chars(ParentID, Parent->ID.data());
   } else {
-    PL_put_atom_chars(ParentName, PL_NullDomain.c_str());
+    PL_put_atom_chars(ParentID, PL_NullDomain.c_str());
   }
-  int Res = PL_cons_functor(Result, DomF, DomNam, ParamList, RegList, ParentName);
+  int Res = PL_cons_functor(Result, DomF, DomID, ParamList, RegList, ParentID);
   assert(Res && "Failed to create prolog term_t for RplDomain");
   return Result;
 }
@@ -632,7 +632,7 @@ void VarRpl::assertzProlog() const {
   // 2. Domain
   assert(Domain && "Internal Error: cannot emit head_rpl_var/2. Domain is null");
   term_t DomT = PL_new_term_ref();
-  PL_put_atom_chars(DomT, Domain->getName().data());
+  PL_put_atom_chars(DomT, Domain->getID().data());
 
 
   int Res = PL_cons_functor(Result, RplFunctor, NameT, DomT);
