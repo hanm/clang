@@ -378,7 +378,7 @@ EffectInclusionConstraint *SymbolTable::getEffectInclusionConstraint(const Decl 
     return SymTable.lookup(D)->getEffectInclusionConstraint();
 }
 
-bool SymbolTable::setType(const Decl* D, ASaPType *T) {
+bool SymbolTable::setType(const Decl *D, ASaPType *T) {
   if (!SymTable.lookup(D))
     createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
@@ -1026,7 +1026,6 @@ SymbolTableEntry::SymbolTableEntry(StringRef DeclName,
   ParamVec = new ParameterVector();
   RplDom = new RplDomain(DomName, 0, ParamVec, ParentDom);
   RegnNameSet = new RegionNameSet();
-
 }
 
 SymbolTableEntry::~SymbolTableEntry() {

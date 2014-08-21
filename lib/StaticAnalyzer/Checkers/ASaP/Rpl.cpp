@@ -163,7 +163,7 @@ void RplDomain::print (llvm::raw_ostream &OS) const {
   OS << "}";
 }
 
-//rpl_dom(name, [regions], [params], parent)
+//rpl_dom(name, [params], [regions], parent)
 term_t RplDomain::getPLTerm() const {
   term_t Result = PL_new_term_ref();
   functor_t DomF = PL_new_functor(PL_new_atom(PL_RplDomain.c_str()),4);
@@ -173,7 +173,7 @@ term_t RplDomain::getPLTerm() const {
   // 2. Region name List
   term_t RegList;
   if (Regions) {
-    RegList = Regions->getPLTerm();
+    RegList = Regions->getReversePLTerm();
   } else {
     RegList = buildPLEmptyList();
   }
