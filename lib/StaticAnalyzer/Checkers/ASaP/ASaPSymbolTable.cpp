@@ -17,6 +17,8 @@
 /// such information includes ASaPType*, ParamVector, RegionNameSet,
 /// and EffectSummary
 #include <SWI-Prolog.h>
+
+#include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 
@@ -714,8 +716,8 @@ getFullSubstitutionVector(const ASaPType *Typ) const {
   return std::unique_ptr<SubstitutionVector>(SubV.release());
 }
 
-static void emitConstraintSolution(EffectInclusionConstraint *EC,
-                                   char* Solution){
+static void emitInferredEffectSummary(EffectInclusionConstraint *EC,
+                                     char* Solution){
   const FunctionDecl *Func = EC->getDef();
   const Stmt  *S = EC->getS();
   StringRef BugName = "Effect Inclusion Constraint Solution";
@@ -731,6 +733,22 @@ static void emitConstraintSolution(EffectInclusionConstraint *EC,
                              SymbolTable::VB.AC,
                              S, Func, Str, BugName, false);
 
+}
+
+static void emitInferredTypeArgs(const Decl *Dec, const ASaPType *Typ) {
+  assert(Dec && "Internal Error: unexpected null pointer");
+  assert(Typ && "Internal Error: unexpected null pointer");
+  StringRef BugName = "Inferred region arguments";
+  std::string BugStr;
+  llvm::raw_string_ostream StrOS(BugStr);
+  StrOS << "Inferred region arguments: ";
+  //Dec->print(StrOS, SymbolTable::VB.Ctx->getPrintingPolicy());
+  //StrOS << ": ";
+  Typ->printSolution(StrOS);
+
+  StringRef Str(StrOS.str());
+  helperEmitDeclarationWarning(SymbolTable::VB.Checker, *SymbolTable::VB.BR,
+                               Dec, Str, BugName, false);
 }
 
 void SymbolTable::emitFacts() const {
@@ -821,24 +839,7 @@ void SymbolTable::printConstraints() const {
   }
 }
 
-void SymbolTable::solveConstraints() const {
-  if (PrologDbgLvl >= 3)
-    PL_action(PL_ACTION_TRACE);
-  emitFacts();
-
-  if (PrologDbgLvl >= 2)
-    PL_action(PL_ACTION_TRACE);
-  emitConstraints();
-
-  if (PrologDbgLvl >= 1)
-    PL_action(PL_ACTION_TRACE);
-
-  // Call solve_all
-  predicate_t SolveAllP = PL_predicate(PL_SolveAllPredicate.c_str(), 0, "user");
-  term_t Arg0 = PL_new_term_refs(0);
-  int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, SolveAllP, Arg0);
-  assert(Rval && "Prolog failed to solve constraints");
-
+void SymbolTable::readSolutions() const {
   //loop to read results of inference
   // FIXME: iterate over effect and rpl variables
   for (ConstraintsSetT::iterator
@@ -871,24 +872,59 @@ void SymbolTable::solveConstraints() const {
       term_t CompoundL = SimpleL + 1;
       PL_put_variable(SimpleL);
       PL_put_variable(CompoundL);
-      Rval = PL_cons_functor(EffectSumT, EffectSumF, SimpleL, CompoundL);
+      int Rval = PL_cons_functor(EffectSumT, EffectSumF, SimpleL, CompoundL);
       assert(Rval && "Failed to create 'effect_summary' Prolog term");
 
 
       Rval = PL_call_predicate(NULL, PL_Q_NORMAL, InferP, H0);
-
-
       assert(Rval && "Querying effect summary failed");
 
       char *Solution;
-      int Res = PL_get_chars(SimpleL, &Solution, CVT_WRITE|BUF_RING);
+      Rval = PL_get_chars(SimpleL, &Solution, CVT_WRITE|BUF_RING);
 
-      assert(Res && "Failed to read solution from Prolog");
-      OSv2 << "result is "<< Solution << "\n";
+      assert(Rval && "Failed to read solution from Prolog");
+      //OSv2 << "result is "<< Solution << "\n";
 
-      emitConstraintSolution(EIC, Solution);
+      emitInferredEffectSummary(EIC, Solution);
     }
+  } // done emiting ESI results
+  // emit inferred Type region arguments
+  for (SymbolTableMapT::const_iterator
+         MI = SymTable.begin(),
+         ME = SymTable.end();
+       MI != ME; ++MI) {
+
+    const Decl *Dec = (*MI).first;
+    const SymbolTableEntry *Entry = (*MI).second;
+    assert(Dec && Entry);
+    if (!Entry->hasType())
+      continue;
+    const ASaPType *Typ = Entry->getType();
+    if (!Typ->hasRplVar())
+      continue;
+    emitInferredTypeArgs(Dec, Typ);
   }
+}
+
+void SymbolTable::solveConstraints() const {
+  if (PrologDbgLvl >= 3)
+    PL_action(PL_ACTION_TRACE);
+  emitFacts();
+
+  if (PrologDbgLvl >= 2)
+    PL_action(PL_ACTION_TRACE);
+  emitConstraints();
+
+  if (PrologDbgLvl >= 1)
+    PL_action(PL_ACTION_TRACE);
+
+  // Call solve_all
+  predicate_t SolveAllP = PL_predicate(PL_SolveAllPredicate.c_str(), 0, "user");
+  term_t Arg0 = PL_new_term_refs(0);
+  int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, SolveAllP, Arg0);
+  assert(Rval && "Prolog failed to solve constraints");
+
+  readSolutions();
 }
 
 AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {

@@ -258,6 +258,7 @@ public:
 
   std::string toString() const;
   virtual void print(llvm::raw_ostream &OS) const;
+  virtual void printSolution(llvm::raw_ostream &OS) const;
   virtual void join(Rpl *That) = 0;
   virtual Trivalent substitute(const Substitution *S) = 0;
   virtual void substitute(const SubstitutionSet *SubS) = 0;
@@ -463,6 +464,8 @@ public:
   /// \brief Print the Rpl to an output stream.
   virtual void print(llvm::raw_ostream &OS) const;
 
+  virtual void printSolution(llvm::raw_ostream &OS) const;
+
   // Nesting (Under)
   /// \brief Returns true iff this is under That
   virtual Trivalent isUnder(const Rpl &That) const;
@@ -477,10 +480,18 @@ public:
   virtual void join(Rpl *That);
   virtual Trivalent substitute(const Substitution *S);
   virtual void substitute(const SubstitutionSet *SubS);
-  virtual term_t getPLTerm() const;
-  virtual term_t getRplElementsPLTerm() const;
 
+  /// \brief builds a rpl([ID], Subs) Prolog term
+  virtual term_t getPLTerm() const;
+  /// \brief build a [ID] Prolog list term
+  virtual term_t getRplElementsPLTerm() const;
+  /// \brief builds a atom out of the ID (Name)
+  term_t getIDPLTerm() const;
+  /// \brief builds and assertz a head_rpl_var(ID, Domain) Prolog predicate
   void assertzProlog() const;
+
+  /// \brief Query Prolog to retrieve the infered value for the VarRpl.
+  char *readPLValue() const;
 
   virtual bool operator == (const RplElement &That) const {
       return false;
@@ -608,8 +619,6 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
     VectorT::push_back(E.clone());
   }
 
-
-
   RplVector(const ParameterVector &ParamVec);
 
   /// \brief Add the argument RPL to the front of the RPL vector.
@@ -638,6 +647,9 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
   /// \brief Substitution this[FromEl <- ToRpl] (over RPL vector)
   void substitute(const Substitution *S);
   void substitute(const SubstitutionSet *SubS);
+  /// \brief Retrun true if at least one of the Rpl is a VarRpl
+  bool hasRplVar() const;
+  void printSolution(raw_ostream &OS) const;
   /// \brief Returns the union of two RPL Vectors by copying its inputs.
   static RplVector *merge(const RplVector *A, const RplVector *B);
   /// \brief Returns the union of two RPL Vectors but destroys its inputs.

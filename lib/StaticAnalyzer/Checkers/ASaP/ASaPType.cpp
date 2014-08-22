@@ -135,6 +135,15 @@ int ASaPType::getArgVSize() const {
     return 0;
 }
 
+bool ASaPType::hasRplVar() const {
+  if (InRpl && isa<VarRpl>(InRpl))
+    return true;
+  if (ArgV && ArgV->hasRplVar())
+    return true;
+  // else
+  return false;
+}
+
 const RplVector *ASaPType::getArgV() const { return ArgV; }
 
 const Rpl *ASaPType::getInRpl() const { return InRpl; }
@@ -282,6 +291,22 @@ std::string ASaPType::toString() const {
   OS << ", ArgV:" << ArgV->toString();
   OS << ", IMap(" << InheritanceMap << ")";
   return std::string(OS.str());
+}
+void ASaPType::printSolution(llvm::raw_ostream &OS) const {
+  OS << QT.getAsString();
+  OS << ", ";
+  if (InRpl) {
+    OS << "IN:";
+    InRpl->printSolution(OS);
+  } else {
+    OS << "IN:<empty>";
+  }
+  if (ArgV) {
+    OS << ", ArgV:";
+    ArgV->printSolution(OS);
+  } else {
+    OS << ", ArgV:<empty>";
+  }
 }
 
 Trivalent ASaPType::

@@ -347,6 +347,7 @@ public:
 
   void emitFacts() const;
   void emitConstraints() const;
+  void readSolutions() const;
   void solveConstraints() const;
 
   // Default annotations

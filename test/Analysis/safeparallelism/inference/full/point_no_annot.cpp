@@ -2,8 +2,8 @@
 // 
 
 class [[asap::region("Rx,Ry")]] Point {
-  int x ;
-  int y ;
+  int x ; // expected-warning{{Infered region arguments: int, IN:[r2_x], ArgV:}}
+  int y ; // expected-warning{{Infered region arguments: int, IN:[r3_y], ArgV:}}
  public:
   void setX(int _x) { x = _x; } // expected-warning{{Inferred Effect Summary for setX: [reads(rpl([rLOCAL],[])),writes(rpl([r2_x],[]))]}}
   void setY(int _y) { y = _y; } // expected-warning{{Inferred Effect Summary for setY: [reads(rpl([rLOCAL],[])),writes(rpl([r3_y],[]))]}}

@@ -101,6 +101,10 @@ void Rpl::print(llvm::raw_ostream &OS) const {
   }
 }
 
+void Rpl::printSolution(llvm::raw_ostream &OS) const {
+  print(OS);
+}
+
 Rpl::Rpl(const Rpl &That)
         : Kind(That.Kind),
           FullySpecified(That.FullySpecified) {
@@ -144,7 +148,7 @@ void RplDomain::markUsed() {
     Parent->markUsed();
 }
 
-void RplDomain::print (llvm::raw_ostream &OS) const {
+void RplDomain::print(llvm::raw_ostream &OS) const {
   OS << "{";
   if (Regions && Regions->size() > 0) {
     OS << "regions[[";
@@ -597,6 +601,10 @@ void VarRpl::print(raw_ostream &OS) const {
     Domain->print(OS);
 }
 
+void VarRpl::printSolution(raw_ostream &OS) const {
+  OS << readPLValue();
+}
+
 term_t VarRpl::getPLTerm() const {
   term_t Result = PL_new_term_ref();
   functor_t RplFunctor = PL_new_functor(PL_new_atom(PL_VarRpl.c_str()), 2);
@@ -612,12 +620,16 @@ term_t VarRpl::getPLTerm() const {
 
 term_t VarRpl::getRplElementsPLTerm() const {
   term_t RplElList = buildPLEmptyList();
-  term_t RplEl = PL_new_term_ref();
-  PL_put_atom_chars(RplEl, Name.data());
+  term_t RplEl = getIDPLTerm();
   bool Res = PL_cons_list(RplElList, RplEl, RplElList);
   assert(Res && "Failed to add RPL element to Prolog list term");
-
   return RplElList;
+}
+
+inline term_t VarRpl::getIDPLTerm() const {
+  term_t Result = PL_new_term_ref();
+  PL_put_atom_chars(Result, Name.data());
+  return Result;
 }
 
 void VarRpl::assertzProlog() const {
@@ -638,6 +650,22 @@ void VarRpl::assertzProlog() const {
   int Res = PL_cons_functor(Result, RplFunctor, NameT, DomT);
   assert(Res && "Failed to create prolog term_t for RPL");
   assertzTermProlog(Result, "Failed to assert 'head_rpl_var/2' to Prolog facts");
+}
+
+char *VarRpl::readPLValue() const {
+      predicate_t HasValueP = PL_predicate(PL_HasValuePredicate.c_str(), 2, "user");
+      term_t ID = PL_new_term_refs(2);
+      term_t Value = ID + 1;
+
+      PL_put_term(ID, getIDPLTerm());
+      PL_put_variable(Value);
+
+      int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, HasValueP, ID);
+      assert(Rval && "Querying effect summary failed");
+
+      char *Solution;
+      Rval = PL_get_chars(Value, &Solution, CVT_WRITE|BUF_RING);
+      return Solution;
 }
 ///////////////////////////////////////////////////////////////////////////////
 //// ParameterSet
@@ -869,6 +897,28 @@ RplVector *RplVector::destructiveMerge(RplVector *&A, RplVector *&B) {
   return LHS;
 }
 
+bool RplVector::hasRplVar() const {
+  for(VectorT::const_iterator I = begin(), E = end();
+        I != E; ++I) {
+    if (*I && isa<VarRpl>(*I))
+      return true;
+  }
+  return false;
+}
+
+void RplVector::printSolution(raw_ostream &OS) const {
+  VectorT::const_iterator I = begin(), E = end();
+  if (I != E) {
+    if (*I)
+      (*I)->printSolution(OS);
+    ++I;
+  }
+  for (; I != E; ++I) {
+    OS << ", ";
+    if (*I)
+      (*I)->printSolution(OS);
+  }
+}
 ///////////////////////////////////////////////////////////////////////////////
 //// RegionNameSet
 const NamedRplElement *RegionNameSet::lookup (StringRef Name) {

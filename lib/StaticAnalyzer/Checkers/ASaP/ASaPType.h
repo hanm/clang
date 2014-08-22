@@ -69,6 +69,8 @@ public:
     return InheritanceMap ? true : false;
   }
 
+  bool hasRplVar() const;
+
   /// \brief set the QualType part without touching the Region info.
   /// useful for implicit casts (e.g., cast from int to float)
   inline void setQT(QualType QT) { this->QT = QT; }
@@ -105,6 +107,8 @@ public:
   std::string toString(ASTContext &Ctx) const;
   /// \brief Returns a string describing this ASaPType.
   std::string toString() const;
+  /// \brief Queries Prolog for RplVars and prints solution to @param OS
+  void printSolution(llvm::raw_ostream &OS) const;
   /// \brief Returns true when 'this' can be assigned to That
   // Note: That=LHS and this=RHS
   Trivalent isAssignableTo(const ASaPType &That, SymbolTable &SymT,
