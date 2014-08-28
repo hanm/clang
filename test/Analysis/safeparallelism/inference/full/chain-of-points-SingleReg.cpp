@@ -49,7 +49,7 @@ struct //[[asap::param("Pl")]]
     // copy constructor
     link(link &l /*[[asap::arg("Pl")]]*/) : pos(l.pos), next(l.next) {} //expected-warning{{Inferred Effect Summary for link: [reads(rpl([r4_next],[]))]}} // expected-warning{{Inferred region arguments: struct link &, IN:<empty>, ArgV:[r7_l]}}
     // move "constructor"
-    link &operator = /*[[asap::arg("Pl")]]*/ (link && l/*[[asap::arg("Pl")]]*/) { return l; }  // expected-warning{{Inferred region arguments: struct link &(struct link &&), IN:<empty>, ArgV:[rSTAR]}}  // expected-warning{{Infered region arguments: struct link &&, IN:<empty>, ArgV:[r9_l]}}
+    link &operator = /*[[asap::arg("Pl")]]*/ (link && l/*[[asap::arg("Pl")]]*/) { return l; }  // expected-warning{{Inferred region arguments: struct link &(struct link &&), IN:<empty>, ArgV:[rSTAR]}}  // expected-warning{{Inferred region arguments: struct link &&, IN:<empty>, ArgV:[r9_l]}}
     };
 
 void delete_all[[asap::param("Q")]]//, asap::writes("Q")]]
