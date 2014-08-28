@@ -203,25 +203,19 @@ public:
       return;
     }
 
-    if (DoEffectInference) {
+    os << "DEBUG:: starting ASaP Non-Interference Checking\n";
+    StmtVisitorInvoker<NonInterferenceChecker> NonIChecker;
+    NonIChecker.TraverseDecl(TUDecl);
+    os << "##############################################\n";
+    os << "DEBUG:: done running ASaP Non-Interference Checking\n\n";
+    if (NonIChecker.encounteredFatalError()) {
+      os << "DEBUG:: NON-INTERFERENCE CHECKING ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      return;
+    }
+    if (DoEffectInference || DoFullInference) {
       setupProlog();
       SymbolTable::Table->solveConstraints();
-    } else {
-      os << "DEBUG:: starting ASaP Non-Interference Checking\n";
-      StmtVisitorInvoker<NonInterferenceChecker> NonIChecker;
-      NonIChecker.TraverseDecl(TUDecl);
-      os << "##############################################\n";
-      os << "DEBUG:: done running ASaP Non-Interference Checking\n\n";
-      if (NonIChecker.encounteredFatalError()) {
-        os << "DEBUG:: NON-INTERFERENCE CHECKING ENCOUNTERED FATAL ERROR!! STOPPING\n";
-        return;
-      }
-      if (DoFullInference) {
-        setupProlog();
-        SymbolTable::Table->solveConstraints();
-        // TODO
-      }
-    } // end else (!DoEffectInference)
+    }
   }
 
   void setupProlog() const {

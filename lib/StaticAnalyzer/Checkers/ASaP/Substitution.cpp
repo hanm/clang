@@ -90,6 +90,10 @@ std::string Substitution::toString() const {
   return std::string(OS.str());
 }
 
+bool Substitution::hasBase(const RplElement &Base) const {
+  return *FromEl == Base;
+}
+
 //////////////////////////////////////////////////////////////////////////
 void SubstitutionSet::
 buildSubstitutionSet(const ParameterVector *ParV, const RplVector *RplVec) {
@@ -143,6 +147,15 @@ term_t SubstitutionSet::getPLTerm() const {
   assert(Res && "Failed to create prolog term_t for Substitution");
   return Result;
 
+}
+
+bool SubstitutionSet::hasBase(const RplElement &Base) const {
+  for(SetT::const_iterator I = begin(), E = end();
+      I != E; ++I) {
+      if (*I  && (*I)->hasBase(Base))
+        return true;
+  }
+  return false;
 }
 
 //////////////////////////////////////////////////////////////////////////

@@ -56,6 +56,9 @@ public:
 
   /// \brief Return a string for the Substitution.
   std::string toString() const;
+
+  bool hasBase(const RplElement &Base) const;
+
 }; // end class Substitution
 
 //////////////////////////////////////////////////////////////////////////
@@ -83,6 +86,7 @@ public:
 
   term_t getPLTerm() const;
 
+  bool hasBase(const RplElement &Base) const;
 }; // end class SubstitutionSet
 
 //////////////////////////////////////////////////////////////////////////

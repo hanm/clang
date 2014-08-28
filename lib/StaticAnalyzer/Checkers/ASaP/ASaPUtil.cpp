@@ -216,6 +216,10 @@ void buildSingleParamSubstitution(
       if (!ParamSet.hasElement(Elmt))
         continue;
       // Ok find the argument
+      if (SubS.hasBase(*Elmt))
+        continue; // SubS already has a substitution for that base
+      // TODO: check that the two inferred substitutions are equal.
+
       Substitution Sub(Elmt, *ArgI);
       *SymbolTable::VB.OS << "DEBUG::buildSingleParamSubstitution: adding Substitution = "
         << Sub.toString() << "\n";
