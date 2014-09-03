@@ -60,7 +60,7 @@ helperMakeVarType(const ValueDecl *D, long ArgNum) {
   for (int I = 0; I < ArgNum; ++I) {
     // 1. Create new RplVarElement
     VarRpl *RplVar = SymT.createFreshRplVar(D);
-    OSv2 << "DEBUG:: RplVar = " << RplVar->toString() << "\n";
+    *OSv2 << "DEBUG:: RplVar = " << RplVar->toString() << "\n";
     // 2. Push it back
     RplVec.push_back(RplVar);
   }
@@ -75,7 +75,7 @@ helperMakeParametricVarType(const ValueDecl *D, long ArgNum, QualType QT) {
   int I = 0;
   Result.ParamVec = new ParameterVector();
 
-  OSv2 << "DEBUG:: QT (" << (QT->isScalarType()? "is Scalar" : "is *NOT* Scalar")
+  *OSv2 << "DEBUG:: QT (" << (QT->isScalarType()? "is Scalar" : "is *NOT* Scalar")
        << ") = " << QT.getAsString() << "\n";
   if (QT->isScalarType()) {
     // 1st Arg = Local, then create a new parameter for each subsequent one
@@ -90,7 +90,7 @@ helperMakeParametricVarType(const ValueDecl *D, long ArgNum, QualType QT) {
 
     // 1. Create new RplVarElement
     VarRpl *RplVar = SymT.createFreshRplVar(D);
-    OSv2 << "DEBUG:: RplVar = " << RplVar->toString() << "\n";
+    *OSv2 << "DEBUG:: RplVar = " << RplVar->toString() << "\n";
     // 2. Push it back
     RplVec.push_back(RplVar);
   }
@@ -117,7 +117,7 @@ helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT) {
   int I = 0;
   Result.ParamVec = new ParameterVector();
 
-  OSv2 << "DEBUG:: QT (" << (QT->isScalarType()? "is Scalar" : "is *NOT* Scalar")
+  *OSv2 << "DEBUG:: QT (" << (QT->isScalarType()? "is Scalar" : "is *NOT* Scalar")
        << ") = " << QT.getAsString() << "\n";
   if (QT->isScalarType()) {
     // 1st Arg = Local, then create a new parameter for each subsequent one
@@ -149,14 +149,14 @@ RplVector *AnnotationScheme::
 helperMakeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) {
   RplVector *Result = 0;
   const ParameterVector *ParamV = SymT.getParameterVector(Derived);
-  OSv2 << "DEBUG:: helperMakeBaseTypeArgs:: ParamV = " << ParamV << "\n";
+  *OSv2 << "DEBUG:: helperMakeBaseTypeArgs:: ParamV = " << ParamV << "\n";
   if (ParamV) {
-    OSv2 << "   (size=" << ParamV->size() << ") \n";
-    OSv2 << "   "; ParamV->print(OSv2); OSv2 << "\n";
+    *OSv2 << "   (size=" << ParamV->size() << ") \n";
+    *OSv2 << "   "; ParamV->print(*OSv2); *OSv2 << "\n";
   }
-  OSv2 << "        Derived:";
-  Derived->print(OSv2);
-  OSv2 << "\n";
+  *OSv2 << "        Derived:";
+  Derived->print(*OSv2);
+  *OSv2 << "\n";
 
   if (ParamV && ParamV->size() > 0) {
     Result = new RplVector();

@@ -62,10 +62,8 @@ static const std::string PL_ENIConstraint = "eni_constraint";
 static const std::string PL_ConstraintPrefix = "constraint";
 
 
-#define ASAP_DEBUG
-#define ASAP_DEBUG_VERBOSE2
-extern raw_ostream &os;
-extern raw_ostream &OSv2;
+extern raw_ostream *OS;
+extern raw_ostream *OSv2;
 
 
 struct VisitorBundle {

@@ -34,17 +34,8 @@ namespace asap {
 
 static const StringRef BugCategory = "Safe Parallelism";
 
-#ifdef ASAP_DEBUG
-raw_ostream &os = llvm::errs();
-#else
-raw_ostream &os = llvm::nulls();
-#endif
-
-#ifdef ASAP_DEBUG_VERBOSE2
-raw_ostream &OSv2 = llvm::errs();
-#else
-raw_ostream &OSv2 = llvm::nulls();
-#endif
+raw_ostream *OS = &llvm::nulls();
+raw_ostream *OSv2 = &llvm::nulls();
 
 using llvm::raw_string_ostream;
 
@@ -240,14 +231,14 @@ void buildParamSubstitutions(
   assert(CalleeDecl);
   FunctionDecl::param_const_iterator ParamI, ParamE;
   *SymbolTable::VB.OS << "DEBUG:: buildParamSubstitutions... BEGIN!\n";
-  OSv2 << "DEBUG: SubS = " << SubS.toString() << "\n";
+  *OSv2 << "DEBUG: SubS = " << SubS.toString() << "\n";
 
   for(ParamI = CalleeDecl->param_begin(), ParamE = CalleeDecl->param_end();
       ArgI != ArgE && ParamI != ParamE; ++ArgI, ++ParamI) {
     Expr *ArgExpr = *ArgI;
     ParmVarDecl *ParamDecl = *ParamI;
     buildSingleParamSubstitution(Def, SymT, ParamDecl, ArgExpr, ParamSet, SubS);
-    OSv2 << "DEBUG: SubS = " << SubS.toString() << "\n";
+    *OSv2 << "DEBUG: SubS = " << SubS.toString() << "\n";
   }
   *SymbolTable::VB.OS << "DEBUG:: DONE buildParamSubstitutions\n";
 }
@@ -274,11 +265,11 @@ void tryBuildParamSubstitutions(
       ParamV->addToParamSet(ParamSet);
     }
   }
-  OSv2 << "DEBUG:: ParamSet = " << ParamSet->toString() << "\n";
+  *OSv2 << "DEBUG:: ParamSet = " << ParamSet->toString() << "\n";
   if (ParamSet->size() > 0) {
     buildParamSubstitutions(Def, SymT, CalleeDecl, ArgI, ArgE, *ParamSet, SubS);
     *SymbolTable::VB.OS << "DEBUG:: DONE buildParamSubstitutions\n";
-    OSv2 << "DEBUG: SubS = " << SubS.toString() << "\n";
+    *OSv2 << "DEBUG: SubS = " << SubS.toString() << "\n";
   }
   delete ParamSet;
   *SymbolTable::VB.OS << "DEBUG:: DONE delete ParamSet\n";
@@ -324,10 +315,10 @@ StringRef getPLNormalizedName(const NamedDecl &Dec) {
     return Name;
   }
   //else
-  OSv2 << "DEBUG:: getPLNormalizedName:: Name = " << Name << "\n";
+  *OSv2 << "DEBUG:: getPLNormalizedName:: Name = " << Name << "\n";
   if (Name.startswith("operator")) {
     StringRef Op = Name.drop_front(8);
-    OSv2 << "DEBUG:: getPLNormalizedName:: operator is '" << Op << "'\n";
+    *OSv2 << "DEBUG:: getPLNormalizedName:: operator is '" << Op << "'\n";
     if (Op.equals("()"))
       return "operatorParen";
     if (Op.equals("+"))

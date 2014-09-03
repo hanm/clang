@@ -62,13 +62,25 @@ public:
     //PL_action(PL_ACTION_TRACE);
 
     bool Error = false;
+    // Choose debug level
+    const StringRef DbgLvlOptionName("-asap-debug-level");
+    StringRef DbgLvlStr(Mgr.getAnalyzerOptions().Config.
+                              GetOrCreateValue(DbgLvlOptionName, "0").
+                              getValue());
+    int DbgLvl = std::stoi(DbgLvlStr);
+    if (DbgLvl > 0)
+      OS = &llvm::errs();
+    if (DbgLvl > 1)
+      OSv2 =  &llvm::errs();
+
+    *OS << "DEBUG:: " << DbgLvlOptionName << " = " << DbgLvl << "\n";
+
+    // Initialize Symbol Table
     TranslationUnitDecl *TUDecl = const_cast<TranslationUnitDecl*>(TUDeclConst);
     ASTContext &Ctx = TUDecl->getASTContext();
     AnalysisDeclContext *AC = Mgr.getAnalysisDeclContext(TUDecl);
-    VisitorBundle VB = {this, &BR, &Ctx, &Mgr, AC, &os};
+    VisitorBundle VB = {this, &BR, &Ctx, &Mgr, AC, OS};
     SymbolTable::Initialize(VB);
-
-    // initialize traverser
     SymbolTable &SymT = *SymbolTable::Table;
 
     // Choose prolog debug level.
@@ -81,15 +93,14 @@ public:
                               GetOrCreateValue(PrologDbgLvlOptionName, "0").
                               getValue());
     int PrologDbgLvl = std::stoi(PrologDbgLvlStr);
-    os << "DEBUG:: asap-debug-prolog = " << PrologDbgLvl << " ("
-       << PrologDbgLvl << ")\n";
+    *OS << "DEBUG:: " << PrologDbgLvlOptionName << " = " << PrologDbgLvl << "\n";
 
     // Choose default Annotation Scheme from command-line option
     const StringRef DefaultAnnotOptionName("-asap-default-scheme");
     StringRef SchemeStr(Mgr.getAnalyzerOptions().Config.
                         GetOrCreateValue(DefaultAnnotOptionName, "simple").
                         getValue());
-    os << "DEBUG:: asap-default-scheme = " << SchemeStr << "\n";
+    *OS << "DEBUG:: asap-default-scheme = " << SchemeStr << "\n";
     SymT.setPrologDbgLvl(PrologDbgLvl);
 
     AnnotationScheme *AnnotScheme = 0;
@@ -114,7 +125,6 @@ public:
       DoFullInference = true;
     } else {
       StringRef BugName = "Invalid argument to command-line flag -asap-default-scheme  flag";
-      os << "DEBUG:: Here1 \n";
       assert(TUDecl->noload_decls_begin() != TUDecl->noload_decls_end());
       DeclContext::decl_iterator I = TUDecl->decls_begin(),
                     E = TUDecl->decls_end();
@@ -142,74 +152,74 @@ public:
                    bool DoEffectInference, bool DoFullInference) const {
     assert(!(DoEffectInference && DoFullInference) &&
            "Either effect or full inference can be performed");
-    os << "DEBUG:: starting ASaP TBB Parallelism Detection!\n";
+    *OS << "DEBUG:: starting ASaP TBB Parallelism Detection!\n";
     DetectTBBParallelism DetectTBBPar;
     DetectTBBPar.TraverseDecl(TUDecl);
-    os << "##############################################\n";
-    os << "DEBUG:: done running ASaP TBB Parallelism Detection\n\n";
+    *OS << "##############################################\n";
+    *OS << "DEBUG:: done running ASaP TBB Parallelism Detection\n\n";
     if (DetectTBBPar.encounteredFatalError()) {
-      os << "DEBUG:: TBB PARALLELISM DETECTION ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      *OS << "DEBUG:: TBB PARALLELISM DETECTION ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;
     }
 
-    os << "DEBUG:: starting ASaP Region Name & Parameter Collector\n";
+    *OS << "DEBUG:: starting ASaP Region Name & Parameter Collector\n";
     CollectRegionNamesAndParametersTraverser NameCollector;
     NameCollector.TraverseDecl(TUDecl);
-    os << "##############################################\n";
-    os << "DEBUG:: done running ASaP Region Name & Parameter Collector\n\n";
+    *OS << "##############################################\n";
+    *OS << "DEBUG:: done running ASaP Region Name & Parameter Collector\n\n";
     if (NameCollector.encounteredFatalError()) {
-      os << "DEBUG:: NAME COLLECTOR ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      *OS << "DEBUG:: NAME COLLECTOR ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;
     }
 
-    os << "DEBUG:: starting ASaP Semantic Checker\n";
+    *OS << "DEBUG:: starting ASaP Semantic Checker\n";
     ASaPSemanticCheckerTraverser SemanticChecker;
     SemanticChecker.TraverseDecl(TUDecl);
-    os << "##############################################\n";
-    os << "DEBUG:: done running ASaP Semantic Checker\n\n";
+    *OS << "##############################################\n";
+    *OS << "DEBUG:: done running ASaP Semantic Checker\n\n";
     if (SemanticChecker.encounteredFatalError()) {
-      os << "DEBUG:: SEMANTIC CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      *OS << "DEBUG:: SEMANTIC CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;
     }
 
-    os << "DEBUG:: starting ASaP Effect Coverage Checker\n";
+    *OS << "DEBUG:: starting ASaP Effect Coverage Checker\n";
     EffectSummaryNormalizerTraverser EffectNormalizerChecker;
     EffectNormalizerChecker.TraverseDecl(TUDecl);
-    os << "##############################################\n";
-    os << "DEBUG:: done running ASaP Effect Normalizer Checker\n\n";
+    *OS << "##############################################\n";
+    *OS << "DEBUG:: done running ASaP Effect Normalizer Checker\n\n";
     if (EffectNormalizerChecker.encounteredFatalError()) {
-      os << "DEBUG:: EFFECT NORMALIZER CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      *OS << "DEBUG:: EFFECT NORMALIZER CHECKER ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;
     }
 
-    os << "DEBUG:: starting ASaP Type Checker\n";
+    *OS << "DEBUG:: starting ASaP Type Checker\n";
     StmtVisitorInvoker<AssignmentCheckerVisitor> TypeChecker;
     TypeChecker.TraverseDecl(TUDecl);
-    os << "##############################################\n";
-    os << "DEBUG:: done running ASaP Type Checker\n\n";
+    *OS << "##############################################\n";
+    *OS << "DEBUG:: done running ASaP Type Checker\n\n";
     if (TypeChecker.encounteredFatalError()) {
-      os << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      *OS << "DEBUG:: Type Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;
     }
     // Check that Effect Summaries cover effects
-    os << "DEBUG:: starting ASaP Effect Constraint Generator\n";
+    *OS << "DEBUG:: starting ASaP Effect Constraint Generator\n";
     //StmtVisitorInvoker<EffectCollectorVisitor> EffectChecker;
     StmtVisitorInvoker<EffectConstraintVisitor> EffectChecker;
     EffectChecker.TraverseDecl(TUDecl);
-    os << "##############################################\n";
-    os << "DEBUG:: done running ASaP Effect Constraint Generator\n\n";
+    *OS << "##############################################\n";
+    *OS << "DEBUG:: done running ASaP Effect Constraint Generator\n\n";
     if (EffectChecker.encounteredFatalError()) {
-      os << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      *OS << "DEBUG:: Effect Checker ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;
     }
 
-    os << "DEBUG:: starting ASaP Non-Interference Checking\n";
+    *OS << "DEBUG:: starting ASaP Non-Interference Checking\n";
     StmtVisitorInvoker<NonInterferenceChecker> NonIChecker;
     NonIChecker.TraverseDecl(TUDecl);
-    os << "##############################################\n";
-    os << "DEBUG:: done running ASaP Non-Interference Checking\n\n";
+    *OS << "##############################################\n";
+    *OS << "DEBUG:: done running ASaP Non-Interference Checking\n\n";
     if (NonIChecker.encounteredFatalError()) {
-      os << "DEBUG:: NON-INTERFERENCE CHECKING ENCOUNTERED FATAL ERROR!! STOPPING\n";
+      *OS << "DEBUG:: NON-INTERFERENCE CHECKING ENCOUNTERED FATAL ERROR!! STOPPING\n";
       return;
     }
     if (DoEffectInference || DoFullInference) {

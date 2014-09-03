@@ -423,7 +423,7 @@ typecheckParamAssignments(FunctionDecl *CalleeDecl,
                           const SubstitutionVector &SubV,
                           SubstitutionSet &SubS) {
 
-  OSv2 << "DEBUG:: Before tryBuildParamSubstitutions: SubS = "
+  *OSv2 << "DEBUG:: Before tryBuildParamSubstitutions: SubS = "
     << SubS.toString() << "\n";
   tryBuildParamSubstitutions(Def, SymT, CalleeDecl, ArgI, ArgE, SubS);
 

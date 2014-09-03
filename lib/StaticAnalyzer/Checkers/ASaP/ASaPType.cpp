@@ -30,7 +30,7 @@ namespace asap {
 bool ASaPType::
 isDerivedFrom(QualType Derived, QualType Base) {
 
-  //OSv2 << "DEBUG:: isDerived: let's start...\n";
+  //*OSv2 << "DEBUG:: isDerived: let's start...\n";
   CXXRecordDecl *DerivedRD = Derived->getAsCXXRecordDecl();
   if (!DerivedRD)
     return false;
@@ -39,17 +39,17 @@ isDerivedFrom(QualType Derived, QualType Base) {
   if (!BaseRD)
     return false;
 
-  //OSv2 << "DEBUG:: isDerived: both non null...\n";
+  //*OSv2 << "DEBUG:: isDerived: both non null...\n";
   // If either the base or the derived type is invalid, don't try to
   // check whether one is derived from the other.
   if (BaseRD->isInvalidDecl() || DerivedRD->isInvalidDecl())
     return false;
 
-  //OSv2 << "DEBUG:: isDerived: about to compare...";
+  //*OSv2 << "DEBUG:: isDerived: about to compare...";
   // FIXME: instantiate DerivedRD if necessary.  We need a PoI for this.
   bool Result = DerivedRD->hasDefinition() &&
                 DerivedRD->isDerivedFrom(BaseRD);
-  //OSv2 << "Result:" << Result << "\n";
+  //*OSv2 << "Result:" << Result << "\n";
   return Result;
 }
 
@@ -65,7 +65,7 @@ QualType ASaPType::deref(QualType QT, int DerefNum, ASTContext &Ctx)
     } else if (Result->isArrayType()) {
       Result = Result->getAsArrayTypeUnsafe()->getElementType();
     } else {
-      OSv2 << "DEBUG:: QT = " << Result.getAsString() << "\n";
+      *OSv2 << "DEBUG:: QT = " << Result.getAsString() << "\n";
       assert(false && "trying to dereference unexpected QualType");
     }
     DerefNum--;
@@ -210,7 +210,7 @@ void ASaPType::arraySubscript() {
 }
 
 void ASaPType::deref(int DerefNum) {
-  OSv2 << "DEBUG::<ASaPType::deref> DerefNum = "
+  *OSv2 << "DEBUG::<ASaPType::deref> DerefNum = "
        << DerefNum << "\n";
   assert(DerefNum >= 0);
   if (DerefNum == 0)
@@ -224,7 +224,7 @@ void ASaPType::deref(int DerefNum) {
     } else if (QT->isArrayType()) {
       QT = QT->getAsArrayTypeUnsafe()->getElementType();
     } else {
-      OSv2 << "DEBUG:: QT = " << QT.getAsString() << "\n";
+      *OSv2 << "DEBUG:: QT = " << QT.getAsString() << "\n";
       assert(false && "trying to dereference unexpected QualType");
     }
 
@@ -243,8 +243,8 @@ void ASaPType::deref(int DerefNum) {
 void ASaPType::addrOf(QualType RefQT) {
   assert(RefQT->isPointerType() || RefQT->isReferenceType());
   if (!areUnqualQTsEqual(this->QT, RefQT->getPointeeType())) {
-    OSv2 << "DEBUG:: ASaPType::addrOf(): Ref Type: " << RefQT.getAsString() << "\n";
-    OSv2 << "DEBUG:: ASaPType::addrOf(): Ptr Type: " << QT.getAsString() << "\n";
+    *OSv2 << "DEBUG:: ASaPType::addrOf(): Ref Type: " << RefQT.getAsString() << "\n";
+    *OSv2 << "DEBUG:: ASaPType::addrOf(): Ptr Type: " << QT.getAsString() << "\n";
   }
   assert(areUnqualQTsEqual(this->QT, RefQT->getPointeeType()));
   this->QT = RefQT;
@@ -312,10 +312,10 @@ void ASaPType::printSolution(llvm::raw_ostream &OS) const {
 Trivalent ASaPType::
 isAssignableTo(const ASaPType &That, SymbolTable &SymT,
                ASTContext &Ctx, bool IsInit, bool GenConstraints) const {
-  OSv2 << "DEBUG:: isAssignable [IsInit=" << IsInit
+  *OSv2 << "DEBUG:: isAssignable [IsInit=" << IsInit
   << "]\n";
-  OSv2 << "RHS:" << this->toString() << "\n";
-  OSv2 << "LHS:" << That.toString() << "\n";
+  *OSv2 << "RHS:" << this->toString() << "\n";
+  *OSv2 << "LHS:" << That.toString() << "\n";
 
   ASaPType ThisCopy(*this);
   if (ThisCopy.QT->isReferenceType()) {
@@ -331,7 +331,7 @@ isAssignableTo(const ASaPType &That, SymbolTable &SymT,
     if (That.QT->isReferenceType()) {
       ThatCopy.addrOf(Ctx.getPointerType(ThatCopy.QT));
       QualType ThisRef = Ctx.getPointerType(ThisCopy.QT);
-      OSv2 << "DEBUG:: ThisRef:" << ThisRef.getAsString() << "\n";
+      *OSv2 << "DEBUG:: ThisRef:" << ThisRef.getAsString() << "\n";
       ThisCopy.addrOf(ThisRef);
     }
   } // end IsInit == true
@@ -387,7 +387,7 @@ Trivalent ASaPType::isSubtypeOf(const ASaPType &That,
 }
 
 bool ASaPType::implicitCastToBase(QualType BaseQT, SymbolTable &SymT) {
-  OSv2 << "DEBUG:: implicitCastToBase [" << this->toString() << "]\n";
+  *OSv2 << "DEBUG:: implicitCastToBase [" << this->toString() << "]\n";
   CXXRecordDecl *DerivedRD = QT->getAsCXXRecordDecl();
   CXXRecordDecl *BaseRD = BaseQT->getAsCXXRecordDecl();
 
@@ -403,10 +403,10 @@ bool ASaPType::implicitCastToBase(QualType BaseQT, SymbolTable &SymT) {
         I != E; ++I) {
     c++;
   }
-  OSv2 << "DEBUG:: implicitCastToBase: #Paths = " << c << "\n";
+  *OSv2 << "DEBUG:: implicitCastToBase: #Paths = " << c << "\n";
   ///
   CXXBasePath &Path = Paths->front();
-  OSv2 << "DEBUG:: implicitCastToBase: Paths.front.size()== "
+  *OSv2 << "DEBUG:: implicitCastToBase: Paths.front.size()== "
        << Paths->front().size() << "\n";
 
   const ParameterVector *ParV = SymT.getParameterVector(DerivedRD);
@@ -421,7 +421,7 @@ bool ASaPType::implicitCastToBase(QualType BaseQT, SymbolTable &SymT) {
     assert(CurrMap);
     //get Sub
     QualType DirectBaseQT = I->Base->getType();
-    OSv2 << "DEBUG:: DirectBaseQT=" << DirectBaseQT.getAsString() << "\n";
+    *OSv2 << "DEBUG:: DirectBaseQT=" << DirectBaseQT.getAsString() << "\n";
 
     const RecordType *BaseRT = DirectBaseQT->getAs<RecordType>();
     assert(BaseRT);

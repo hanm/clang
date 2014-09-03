@@ -164,13 +164,13 @@ SymbolTable::~SymbolTable() {
 
 ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
   if (isNonPointerScalarType(QT)) {
-    OSv2 << "DEBUG:: getRegionParamCount::isNonPointerScalarType\n";
+    *OSv2 << "DEBUG:: getRegionParamCount::isNonPointerScalarType\n";
     return ResultTriplet(RK_OK, 1, 0);
   } else if (QT->isAtomicType()) {
     const AtomicType *AT = QT->getAs<AtomicType>();
     return getRegionParamCount(AT->getValueType());
   } else if (QT->isArrayType()) {
-    OSv2 << "DEBUG:: getRegionParamCount::isArrayType\n";
+    *OSv2 << "DEBUG:: getRegionParamCount::isArrayType\n";
     // It is not allowed to use getAs<T> with T = ArrayType,
     // so we use getAsArrayTypeUnsafe
     const ArrayType *AT = QT->getAsArrayTypeUnsafe();
@@ -178,15 +178,15 @@ ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
     QualType ElQT = AT->getElementType();
     return getRegionParamCount(ElQT);
   } else if (QT->isPointerType()) {
-    OSv2 << "DEBUG:: getRegionParamCount::isPointerType\n";
+    *OSv2 << "DEBUG:: getRegionParamCount::isPointerType\n";
     ResultTriplet Result = getRegionParamCount(QT->getPointeeType());
     Result.NumArgs += 1;
     return Result;
   } else if (QT->isReferenceType()) {
-    OSv2 << "DEBUG:: getRegionParamCount::isReferenceType\n";
+    *OSv2 << "DEBUG:: getRegionParamCount::isReferenceType\n";
     return getRegionParamCount(QT->getPointeeType());
   } else if (QT->isStructureOrClassType()) {
-    OSv2 << "DEBUG:: getRegionParamCount::isStructureOrClassType\n";
+    *OSv2 << "DEBUG:: getRegionParamCount::isStructureOrClassType\n";
     const RecordType *RT = QT->getAs<RecordType>();
     assert(RT);
     RecordDecl *D = RT->getDecl();
@@ -196,35 +196,35 @@ ResultTriplet SymbolTable::getRegionParamCount(QualType QT) {
     else
       return ResultTriplet(RK_NOT_VISITED, 0, D);
   } else if (QT->isFunctionType()) {
-    OSv2 << "DEBUG:: getRegionParamCount::isFunctionType\n";
+    *OSv2 << "DEBUG:: getRegionParamCount::isFunctionType\n";
     const FunctionType *FT = QT->getAs<FunctionType>();
     assert(FT);
 
     QualType ResultQT = FT->getReturnType();
     return getRegionParamCount(ResultQT);
   } else if (QT->isVoidType()) {
-    OSv2 << "DEBUG:: getRegionParamCount::isVoidType\n";
+    *OSv2 << "DEBUG:: getRegionParamCount::isVoidType\n";
     return ResultTriplet(RK_OK, 0, 0);
   } else if (QT->isTemplateTypeParmType()) {
-    OSv2 << "DEBUG:: getRegionParamCount::isTemplateParmType\n";
+    *OSv2 << "DEBUG:: getRegionParamCount::isTemplateParmType\n";
     return ResultTriplet(RK_VAR, 0, 0);
   } else if (QT->isDependentType()) {
-    OSv2 << "DEBUG:: getRegionParamCount::isDependentType\n";
+    *OSv2 << "DEBUG:: getRegionParamCount::isDependentType\n";
     return ResultTriplet(RK_VAR, 0, 0);
   } else if (QT->isUnionType()) {
-    OSv2 << "DEBUG:: getRegionParamCount::isUnionType ";
-    OSv2 << (QT->hasUnnamedOrLocalType() ? "(Named Union)" : "(ANONYMOUS Union)") << "\n";
+    *OSv2 << "DEBUG:: getRegionParamCount::isUnionType ";
+    *OSv2 << (QT->hasUnnamedOrLocalType() ? "(Named Union)" : "(ANONYMOUS Union)") << "\n";
     return ResultTriplet(RK_OK, 0, 0);
   } else {
-    OSv2 << "DEBUG:: getRegionParamCount::UnexpectedType!! QT = "
+    *OSv2 << "DEBUG:: getRegionParamCount::UnexpectedType!! QT = "
          << QT.getAsString() << "\n";
-    //OSv2 << "DEBUG:: QT.dump:\n";
+    //*OSv2 << "DEBUG:: QT.dump:\n";
     //QT.dump();
-    OSv2 << "isAtomicType = " << QT->isAtomicType() << "\n";
-    OSv2 << "isBuiltinType = " << QT->isBuiltinType() << "\n";
-    //OSv2 << "isSpecificBuiltinType = " << QT->isSpecificBuiltinType() << "\n";
-    OSv2 << "isPlaceholderType = " << QT->isPlaceholderType() << "\n";
-    //OSv2 << "isSpecificPlaceholderType = " << QT->isSpecificPlaceholderType() << "\n";
+    *OSv2 << "isAtomicType = " << QT->isAtomicType() << "\n";
+    *OSv2 << "isBuiltinType = " << QT->isBuiltinType() << "\n";
+    //*OSv2 << "isSpecificBuiltinType = " << QT->isSpecificBuiltinType() << "\n";
+    *OSv2 << "isPlaceholderType = " << QT->isPlaceholderType() << "\n";
+    //*OSv2 << "isSpecificPlaceholderType = " << QT->isSpecificPlaceholderType() << "\n";
 
     // This should not happen: unknown number of region arguments for type
     return ResultTriplet(RK_ERROR, 0, 0);
@@ -289,10 +289,10 @@ const InheritanceMapT *SymbolTable::getInheritanceMap(QualType QT) const {
     QT = QT->getPointeeType();
   }
   if (const CXXRecordDecl *RecD = QT->getAsCXXRecordDecl()) {
-      /*OSv2 << "DEBUG:: the type is";
-      OSv2 << (RecD->hasNameForLinkage() ? "(Named)" : "(ANONYMOUS)") << ":\n";
-      RecD->dump(OSv2);
-      OSv2 << "\n";*/
+      /**OSv2 << "DEBUG:: the type is";
+      *OSv2 << (RecD->hasNameForLinkage() ? "(Named)" : "(ANONYMOUS)") << ":\n";
+      RecD->dump(*OSv2);
+      *OSv2 << "\n";*/
 
       assert(hasDecl(RecD) && "Internal error: type missing declaration");
       Result = getInheritanceMap(RecD);
@@ -585,7 +585,7 @@ void SymbolTable::addRplInclusionConstraint(const Rpl &LHS, const Rpl &RHS) {
 
 void SymbolTable::addConstraint(Constraint *Cons) {
   assert(Cons && "Internal Error: unexpected null-pointer");
-  OSv2 << "DEBUG:: adding Constraint: " << Cons->toString() << "\n";
+  *OSv2 << "DEBUG:: adding Constraint: " << Cons->toString() << "\n";
   ConstraintSet.insert(Cons);
   if (EffectInclusionConstraint *EIC =
         dyn_cast<EffectInclusionConstraint>(Cons)) {
@@ -641,7 +641,7 @@ const ParameterVector *SymbolTable::getParameterVectorFromQualType(QualType QT) 
     ParamVec = getParameterVectorFromQualType(QT->getPointeeType());
   } else if (const TagType* TT = dyn_cast<TagType>(QT.getTypePtr())) {
     const TagDecl* TD = TT->getDecl();
-    //TD->dump(OSv2);
+    //TD->dump(*OSv2);
     ParamVec = this->getParameterVector(TD);
   } else if (QT->isBuiltinType() || QT->isPointerType()) {
     // TODO check the number of parameters of the arg attr to be 1
@@ -657,7 +657,7 @@ getInheritanceSubVec(QualType QT) const {
     SubV = getInheritanceSubVec(QT->getPointeeType());
   } else if (const TagType* TT = dyn_cast<TagType>(QT.getTypePtr())) {
     const TagDecl* TD = TT->getDecl();
-    //TD->dump(OSv2);
+    //TD->dump(*OSv2);
     SubV = this->getInheritanceSubVec(TD);
   } else if (QT->isBuiltinType() || QT->isPointerType()) {
     SubV = 0;
@@ -702,7 +702,7 @@ getTypeSubstitutionSet(const ASaPType *Typ) const {
 
 std::unique_ptr<SubstitutionVector> SymbolTable::
 getFullSubstitutionVector(const ASaPType *Typ) const {
-  OSv2 << "DEBUG:: getSubstitutionVector begin!\n";
+  *OSv2 << "DEBUG:: getSubstitutionVector begin!\n";
   if (!Typ)
     return std::unique_ptr<SubstitutionVector>(new SubstitutionVector());
   // 1. Inheritance Substitution Vector
@@ -775,14 +775,14 @@ void SymbolTable::emitFacts() const {
     assert(Dec && Entry);
 
     if (Entry->hasParameterVector()) {
-      //OSv2 << "DEBUG:: gonna assert a parameter vector\n";
+      //*OSv2 << "DEBUG:: gonna assert a parameter vector\n";
       Entry->getParameterVector()->assertzProlog();
-      //OSv2 << "DEBUG:: asserted a parameter vector\n";
+      //*OSv2 << "DEBUG:: asserted a parameter vector\n";
     }
     if (Entry->getRegionNameSet()) {
-      //OSv2 << "DEBUG:: gonna assert a region name set\n";
+      //*OSv2 << "DEBUG:: gonna assert a region name set\n";
       Entry->getRegionNameSet()->assertzProlog();
-      //OSv2 << "DEBUG:: asserted a region name set\n";
+      //*OSv2 << "DEBUG:: asserted a region name set\n";
     }
 
     const RplDomain *Dom = Entry->getRplDomain();
@@ -807,7 +807,7 @@ void SymbolTable::emitFacts() const {
       }
     } // end if function declaration with effect summary.
   } // end for-all symbol table entries
-  OSv2 << "DEBUG:: Done emmitting facts to Prolog\n";
+  *OSv2 << "DEBUG:: Done emmitting facts to Prolog\n";
 }
 
 void SymbolTable::emitConstraints() const {
@@ -819,8 +819,8 @@ void SymbolTable::emitConstraints() const {
        I != E; ++I) {
     const Constraint *Cons = *I;
     assert(Cons && "Internal Error: unexpected null pointer");
-    OSv2 << "DEBUG:: constraint ID = " << Cons->getConstraintID() << "\n";
-    OSv2 << "DEBUG:: Will assert Constraint to Prolog: " << Cons->toString() << "\n";
+    *OSv2 << "DEBUG:: constraint ID = " << Cons->getConstraintID() << "\n";
+    *OSv2 << "DEBUG:: Will assert Constraint to Prolog: " << Cons->toString() << "\n";
     term_t Term = Cons->getPLTerm();
     assertzTermProlog(Term, "Failed to assert constraint to Prolog facts");
   }
@@ -834,8 +834,8 @@ void SymbolTable::printConstraints() const {
        I != E; ++I) {
     assert(*I && "Internal Error: unexpected null pointer");
     const Constraint *Cons = *I;
-    OSv2 << "DEBUG:: constraint ID = " << Cons->getConstraintID() << "\n";
-    OSv2 << "DEBUG:: " << Cons->toString() << "\n";
+    *OSv2 << "DEBUG:: constraint ID = " << Cons->getConstraintID() << "\n";
+    *OSv2 << "DEBUG:: " << Cons->toString() << "\n";
   }
 }
 
@@ -855,7 +855,7 @@ void SymbolTable::readSolutions() const {
       assert(FunD && "Internal Error: Effect Inclusion Constraint without matching FunctionDecl");
       StringRef FName = getPrologName(FunD);
 
-      OSv2 << "DEBUG:: **** Querying effect summary for '"
+      *OSv2 << "DEBUG:: **** Querying effect summary for '"
           << FunD->getNameAsString() << "' (Prolog Name: "
           << FName << ") ****\n";
 
@@ -883,7 +883,7 @@ void SymbolTable::readSolutions() const {
       Rval = PL_get_chars(SimpleL, &Solution, CVT_WRITE|BUF_RING);
 
       assert(Rval && "Failed to read solution from Prolog");
-      //OSv2 << "result is "<< Solution << "\n";
+      //*OSv2 << "result is "<< Solution << "\n";
 
       emitInferredEffectSummary(EIC, Solution);
     }
@@ -928,9 +928,9 @@ void SymbolTable::solveConstraints() const {
 }
 
 AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
-  OSv2 << "DEBUG:: SymbolTable::makeDefaultType\n";
+  *OSv2 << "DEBUG:: SymbolTable::makeDefaultType\n";
   if (FieldDecl *FieldD = dyn_cast<FieldDecl>(ValD)) {
-    OSv2 << "DEBUG:: SymbolTable::makeDefaultType ValD isa FiledDecl\n";
+    *OSv2 << "DEBUG:: SymbolTable::makeDefaultType ValD isa FiledDecl\n";
     AnnotationSet AnSe = AnnotScheme->makeFieldType(FieldD, ParamCount);
     assert(AnSe.ParamVec == 0 && "Internal Error: Not allowed to create a "
                                  "region parameter in method makeDefaultType");
@@ -938,14 +938,14 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
   } else if (/*ImplicitParamDecl *ImplParamD = */dyn_cast<ImplicitParamDecl>(ValD)) {
     assert(false && "ImplicitParamDecl case not implemented!");
   } else if (ParmVarDecl *ParamD = dyn_cast<ParmVarDecl>(ValD)) {
-    OSv2 << "DEBUG::         case ParmVarDecl (ParamCount = " << ParamCount << ")\n";
+    *OSv2 << "DEBUG::         case ParmVarDecl (ParamCount = " << ParamCount << ")\n";
     AnnotationSet AnSe = AnnotScheme->makeParamType(ParamD, ParamCount);
     if (AnSe.ParamVec) {
       DeclContext *DC = ParamD->getDeclContext();
-      //OSv2 << "DEBUG:: DeclContext:";
+      //*OSv2 << "DEBUG:: DeclContext:";
       //DC->dumpDeclContext();
-      //OSv2 << "\n";
-      //OSv2 << "DEBUG:: DeclContext->isFunctionOrMethod = "  << DC->isFunctionOrMethod() << "\n";
+      //*OSv2 << "\n";
+      //*OSv2 << "DEBUG:: DeclContext->isFunctionOrMethod = "  << DC->isFunctionOrMethod() << "\n";
       //assert(DC->isFunctionOrMethod() && "Internal error: ParmVarDecl found "
       //       "outside FunctionDecl Context.");
       if (DC->isFunctionOrMethod()) {
@@ -963,7 +963,7 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
         assert(AnSe.ParamVec == 0);
       }
     }
-    OSv2 << "DEBUG::         case ParmVarDecl = DONE\n";
+    *OSv2 << "DEBUG::         case ParmVarDecl = DONE\n";
     return AnSe;
   } else if (VarDecl *VarD = dyn_cast<VarDecl>(ValD)) {
       if (VarD->isStaticLocal() || VarD->isStaticDataMember()
@@ -982,10 +982,10 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
     }
     return AnSe;
   } else {
-    OSv2 << "DEBUG:: ";
-    //ValD->print(OSv2);
-    ValD->dump(OSv2);
-    OSv2 << "\n";
+    *OSv2 << "DEBUG:: ";
+    //ValD->print(*OSv2);
+    ValD->dump(*OSv2);
+    *OSv2 << "\n";
     assert(false && "Internal error: unknown kind of ValueDecl in "
            "SymbolTable::makeDefaultType");
   }
@@ -1034,7 +1034,7 @@ void SymbolTable::createSymbolTableEntry(const Decl *D) {
 
 VarRpl *SymbolTable::createFreshRplVar(const ValueDecl *D) {
   StringRef Name = makeFreshRVName(D->getNameAsString().data());
-  OSv2 << "DEBUG:: VarRpl Fresh Name created: " << Name << "\n";
+  *OSv2 << "DEBUG:: VarRpl Fresh Name created: " << Name << "\n";
   RplDomain *Dom = buildDomain(D);
   VarRpl *Result = new VarRpl(Name, Dom);
   VarRplSet.insert(Result);
@@ -1107,10 +1107,10 @@ lookupParameterName(StringRef Name) {
 }
 
 void SymbolTableEntry::addRegionName(StringRef Name, StringRef PrologName) {
-  OSv2 << "in addRegionName 1\n";
+  *OSv2 << "in addRegionName 1\n";
   RegnNameSet->insert(NamedRplElement(Name, PrologName));
   RplDom->addRegion(NamedRplElement(Name, PrologName));
-  OSv2 << "addRegionName is done\n";
+  *OSv2 << "addRegionName is done\n";
 }
 
 void SymbolTableEntry::addParameterName(StringRef Name, StringRef PrologName) {

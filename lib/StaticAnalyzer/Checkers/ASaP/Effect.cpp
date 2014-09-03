@@ -92,7 +92,7 @@ Trivalent Effect::isSubEffectOf(const Effect &That) const {
   } else {
     Result = RK_FALSE;
   }
-  OSv2  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
+  *OSv2  << "DEBUG:: ~~~isSubEffect(" << this->toString() << ", "
     << That.toString() << ")="
     << (Result==RK_TRUE ? "true" : "false-or-dunno") << "\n";
   return Result;

@@ -35,7 +35,7 @@ std::pair<StringRef, StringRef> Rpl::splitRpl(StringRef &String) {
   size_t Idx = 0;
   do {
     Idx = String.find(RPL_SPLIT_CHARACTER, Idx);
-    OSv2 << "DEBUG:: Rpl::splitRpl: Idx = " << Idx << ", size = " << String.size() << "\n";
+    *OSv2 << "DEBUG:: Rpl::splitRpl: Idx = " << Idx << ", size = " << String.size() << "\n";
     if (Idx == StringRef::npos)
       break;
 
@@ -233,7 +233,7 @@ std::string ConcreteRpl::RplRef::toString() const {
 }
 
 bool ConcreteRpl::RplRef::isUnder(RplRef &RHS) {
-  OSv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
+  *OSv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
         << this->toString() << ", " << RHS.toString() << ")\n";
   /// R <= Root
   if (RHS.isEmpty())
@@ -252,7 +252,7 @@ bool ConcreteRpl::RplRef::isUnder(RplRef &RHS) {
 }
 
 bool ConcreteRpl::RplRef::isIncludedIn(RplRef &RHS) {
-  OSv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef]("
+  *OSv2  << "DEBUG:: ~~~~~~~~isIncludedIn[RplRef]("
         << this->toString() << ", " << RHS.toString() << ")\n";
   if (RHS.isEmpty()) {
     /// Root c= Root
@@ -262,7 +262,7 @@ bool ConcreteRpl::RplRef::isIncludedIn(RplRef &RHS) {
   } else { /// RHS is not empty
     /// R c= R':* <==  R <= R'
     if (RHS.getLastElement() == SymbolTable::STAR_RplElmt) {
-      OSv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
+      *OSv2 <<"DEBUG:: isIncludedIn[RplRef] last elmt of RHS is '*'\n";
       return isUnder(RHS.stripLast());
     }
     ///   R:r c= R':r    <==  R <= R'
@@ -413,7 +413,7 @@ Trivalent ConcreteRpl::isIncludedIn(const Rpl &That, bool GenConstraint) const {
   RplRef *RHS = new RplRef(*ConcThat);
   Trivalent Result = boolToTrivalent(LHS->isIncludedIn(*RHS));
   delete LHS; delete RHS;
-  OSv2 << "DEBUG:: ~~~~~ isIncludedIn[RPL](" << this->toString()
+  *OSv2 << "DEBUG:: ~~~~~ isIncludedIn[RPL](" << this->toString()
     << "[" << this << "], " << That.toString() << "[" << &That
     << "])=" << (Result==RK_TRUE ? "true" : "false-or-dunno") << "\n";
   return Result;
@@ -444,36 +444,36 @@ Trivalent ConcreteRpl::substitute(const Substitution *S) {
   const RplElement &FromEl = *S->getFrom();
   const Rpl &ToRpl = *S->getTo();
 
-  os << "DEBUG:: before substitution(" << FromEl.getName() << "<-";
-  ToRpl.print(os);
-  os <<"): ";
+  *OS << "DEBUG:: before substitution(" << FromEl.getName() << "<-";
+  ToRpl.print(*OS);
+  *OS <<"): ";
   assert(RplElements.size()>0);
-  print(os);
-  os << "\n";
+  print(*OS);
+  *OS << "\n";
   /// A parameter is only allowed at the head of an Rpl
   RplElementVectorTy::iterator I = RplElements.begin();
   if (*(*I) == FromEl) {
     Result = RK_TRUE;
     if (const ConcreteRpl *ConcToRpl = dyn_cast<ConcreteRpl>(&ToRpl)) {
-      OSv2 << "DEBUG:: found '" << FromEl.getName()
+      *OSv2 << "DEBUG:: found '" << FromEl.getName()
         << "' replaced with '" ;
-      ToRpl.print(OSv2);
+      ToRpl.print(*OSv2);
       I = RplElements.erase(I);
       I = RplElements.insert(I, ConcToRpl->RplElements.begin(),
                                 ConcToRpl->RplElements.end());
-      OSv2 << "' == '";
-      print(OSv2);
-      OSv2 << "'\n";
+      *OSv2 << "' == '";
+      print(*OSv2);
+      *OSv2 << "'\n";
     } else {
       assert(isa<VarRpl>(&ToRpl) && "Unexpected kind of Rpl");
       addSubstitution(*S);
     }
   }
-  os << "DEBUG:: after substitution(" << FromEl.getName() << "<-";
-  ToRpl.print(os);
-  os << "): ";
-  print(os);
-  os << "\n";
+  *OS << "DEBUG:: after substitution(" << FromEl.getName() << "<-";
+  ToRpl.print(*OS);
+  *OS << "): ";
+  print(*OS);
+  *OS << "\n";
   return Result;
 }
 
@@ -830,7 +830,7 @@ Trivalent RplVector::isIncludedIn (const RplVector &That, bool GenConstraints) c
       Result = RK_DUNNO;
     }
   }
-  OSv2 << "DEBUG:: [" << this->toString() << "] is "
+  *OSv2 << "DEBUG:: [" << this->toString() << "] is "
       << (Result==RK_TRUE?"":"(possibly) not ")
       << "included in [" << That.toString() << "]\n";
   return Result;
