@@ -182,10 +182,25 @@ public:
 private:
   /// \brief Stores the LLVM-style RTTI discriminator
   SummaryKind Kind;
+  EffectInclusionConstraint *InclCons;
 
 public:
   void setSummaryKind(SummaryKind SK) {Kind = SK;}
   SummaryKind getSummaryKind() const {return Kind;}
+
+  void setInclusionConstraint(EffectInclusionConstraint *EIC) {
+    InclCons = EIC;
+  }
+
+  EffectInclusionConstraint *getInclusionConstraint() const {
+    return InclCons;
+  }
+
+  bool hasInclusionConstraint() const {
+    return (InclCons == 0) ? false : true;
+  }
+
+
 
   virtual Trivalent covers(const Effect *Eff) const { return RK_DUNNO; }
   /// \brief Returns true iff 'this' covers 'Sum'
@@ -210,7 +225,8 @@ public:
 
   std::string toString() const;
 
-  EffectSummary(SummaryKind SK) : Kind(SK) {}
+  EffectSummary(SummaryKind SK) : Kind(SK), InclCons(0) {}
+  EffectSummary(const EffectSummary &ES) : Kind(ES.Kind), InclCons(ES.InclCons) {}
   virtual EffectSummary *clone() const = 0;
   virtual ~EffectSummary() {};
   virtual term_t getPLTerm() const = 0;
@@ -267,17 +283,16 @@ class VarEffectSummary : public EffectSummary {
   StringRef ID;
   // TODO: add field to store solution of inference
   // ConcreteEffectSummary* Concrete;  // Commented out to remove warning.
-  EffectInclusionConstraint *InclCons;
 
 public:
   // Constructors
   VarEffectSummary(StringRef ID)
                   : EffectSummary(ESK_Var),
-                    ID(ID), InclCons(0) {}
+                    ID(ID) {}
 
   VarEffectSummary(const VarEffectSummary &VES)
-                  : EffectSummary(ESK_Var),
-                    ID(VES.ID), InclCons(VES.InclCons) {}
+                  : EffectSummary(VES),
+                    ID(VES.ID) {}
 
   virtual VarEffectSummary *clone() const {
     return new VarEffectSummary(*this);
@@ -302,18 +317,6 @@ public:
   virtual ~VarEffectSummary() {};
   virtual term_t getPLTerm() const;
   term_t getIDPLTerm() const;
-
-  void setInclusionConstraint(EffectInclusionConstraint *EIC) {
-    InclCons = EIC;
-  }
-
-  EffectInclusionConstraint *getInclusionConstraint() const {
-    return InclCons;
-  }
-
-  bool hasInclusionConstraint() const {
-    return (InclCons == 0) ? false : true;
-  }
 
   static bool classof(const EffectSummary *ES) {
     return ES->getSummaryKind() == ESK_Var;

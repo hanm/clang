@@ -1122,11 +1122,9 @@ void SymbolTableEntry::addParameterName(StringRef Name, StringRef PrologName) {
 
 bool SymbolTableEntry::
 addEffectInclusionConstraint(EffectInclusionConstraint *EIC) {
-  if (!EffSum || !isa<VarEffectSummary>(EffSum))
+  if (!EffSum)
     return false;
-  VarEffectSummary *VES = dyn_cast<VarEffectSummary>(EffSum);
-  assert(VES && "Internal Error: unexpected kind of effect summary");
-  VES->setInclusionConstraint(EIC);
+  EffSum->setInclusionConstraint(EIC);
   return true;
 }
 
