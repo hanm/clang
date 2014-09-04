@@ -320,7 +320,7 @@ StringRef getPLNormalizedName(const NamedDecl &Dec) {
     StringRef Op = Name.drop_front(8);
     *OSv2 << "DEBUG:: getPLNormalizedName:: operator is '" << Op << "'\n";
     if (Op.equals("()"))
-      return "operatorParen";
+      return "operatorCall";
     if (Op.equals("+"))
       return "operatorPlus";
     if (Op.equals("-"))
@@ -329,6 +329,19 @@ StringRef getPLNormalizedName(const NamedDecl &Dec) {
       return "operatorTimes";
     if (Op.equals("/"))
       return "operatorDiv";
+    if (Op.equals("="))
+      return "operatorAssign";
+    if (Op.equals("=="))
+      return "operatorEquals";
+    if (Op.equals("+="))
+      return "operatorPlusEq";
+    if (Op.equals("-="))
+      return "operatorMinusEq";
+    if (Op.equals("*="))
+      return "operatorTimesEq";
+    if (Op.equals("/="))
+      return "operatorDivEq";
+    // TODO: rest
   }
   return "";
 }
