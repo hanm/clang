@@ -59,6 +59,13 @@ public:
   ASaPType(const ASaPType &T);
   ~ASaPType();
 
+  inline static bool typeExpectsInRpl(QualType QT) {
+    if (QT->isScalarType() && !QT->isReferenceType())
+      return true;
+    else
+      return false;
+  }
+
   static QualType deref(QualType QT, int DerefNum, ASTContext &Ctx);
 
   /// \brief Returns true iff this is of FunctionType.

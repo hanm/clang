@@ -73,13 +73,12 @@ QualType ASaPType::deref(QualType QT, int DerefNum, ASTContext &Ctx)
   return Result;
 }
 
-
 // Non-Static Functions
 void ASaPType::adjust() {
   // Check if we might need to set InRpl.
   if (!this->InRpl) {
     // Figure out based on QT if we need an InRpl.
-    if (this->QT->isScalarType() && !this->QT->isReferenceType()) {
+    if (typeExpectsInRpl(this->QT)) {
       // Get it from the head of ArgV.
       assert(this->ArgV && this->ArgV->size() > 0);
       this->InRpl = this->ArgV->pop_front().release();
