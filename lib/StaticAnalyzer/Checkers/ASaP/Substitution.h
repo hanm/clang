@@ -125,6 +125,8 @@ public:
   }
 
   void push_back_vec(const SubstitutionVector *SubV);
+  void push_back_vec(std::unique_ptr<SubstitutionVector> &SubV);
+
   term_t getPLTerm() const;
 
 }; // End class SubstituionVector.

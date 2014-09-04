@@ -339,12 +339,12 @@ VisitCXXConstructExpr(CXXConstructExpr *Exp) {
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
 
-  std::unique_ptr<SubstitutionVector> SubV = SymT.getInheritanceSubstitutionVector(0); // FIXME
-  std::unique_ptr<SubstitutionSet> SubS = SymT.getTypeSubstitutionSet(0); // FIXME
+  std::unique_ptr<SubstitutionVector> SubV = SymT.getInheritanceSubstitutionVector(0); // FIXME?
+  std::unique_ptr<SubstitutionVector> TypSubV = SymT.getTypeSubstitutionVector(0); // FIXME?
   OS << "DEBUG:: InheritanceSubV = " << SubV->toString() << "\n";
-  OS << "DEBUG:: TypeSubS = " << SubS->toString() << "\n";
+  OS << "DEBUG:: TypeSubV = " << TypSubV->toString() << "\n";
   typecheckParamAssignments(Exp->getConstructor(), Exp->arg_begin(), Exp->arg_end(),
-                            *SubV.get(), *SubS.get());
+                            *SubV.get(), *TypSubV->front());
 }
 
 void AssignmentCheckerVisitor::
@@ -457,13 +457,13 @@ typecheckCXXConstructExpr(VarDecl *VarD, CXXConstructExpr *Exp) {
   if (T)
     OS << "DEBUG:: ASaPType T = " << T->toString() << "\n";
   std::unique_ptr<SubstitutionVector> SubV = SymT.getInheritanceSubstitutionVector(T);
-  std::unique_ptr<SubstitutionSet> SubS = SymT.getTypeSubstitutionSet(T);
-  assert(SubS.get() && "Internal Error: unexpected null pointer");
+  std::unique_ptr<SubstitutionVector> TypSubV = SymT.getTypeSubstitutionVector(T);
+  assert(TypSubV.get() && "Internal Error: unexpected null pointer");
   OS << "DEBUG:: InheritanceSubV = " << SubV->toString() << "\n";
-  OS << "DEBUG:: TypeSubS = " << SubS->toString() << "\n";
+  OS << "DEBUG:: TypeSubV = " << TypSubV->toString() << "\n";
   typecheckParamAssignments(ConstrDecl, Exp->arg_begin(), Exp->arg_end(),
-                            *SubV, *SubS);
-  SubV->push_back(SubS);
+                            *SubV, *TypSubV->front());
+  SubV->push_back_vec(TypSubV);
   OS << "DEBUG:: DONE with typecheckCXXConstructExpr\n";
 
   // Now set Type to the return type of this call
@@ -526,9 +526,9 @@ typecheckCallExpr(CallExpr *Exp) {
     // Build substitution for class region parameter(s)
     ASaPType *T = TBV.getType();
     std::unique_ptr<SubstitutionVector> SubV = SymT.getInheritanceSubstitutionVector(T);
-    std::unique_ptr<SubstitutionSet> SubS = SymT.getTypeSubstitutionSet(T);
+    std::unique_ptr<SubstitutionVector> TypSubV = SymT.getTypeSubstitutionVector(T);
     assert(SubV.get() && "Internal Error: unexpected null-pointer");
-    assert(SubS.get() && "Internal Error: unexpected null pointer");
+    assert(TypSubV.get() && "Internal Error: unexpected null pointer");
 
     unsigned NumArgs = Exp->getNumArgs();
     unsigned NumParams = FunD->getNumParams();
@@ -541,8 +541,10 @@ typecheckCallExpr(CallExpr *Exp) {
     assert((FunD->isVariadic() || NumParams == NumArgs ||
           NumParams+((FunD->isOverloadedOperator()) ? 1 : 0) == NumArgs) &&
           "Unexpected number of arguments to a call expresion");
+
+    OS << "DEBUG:: Type = " << (T ? T->toString() : "null") << "\n";
     OS << "DEBUG:: InheritanceSubV = " << SubV->toString() << "\n";
-    OS << "DEBUG:: TypeSubS = " << SubS->toString() << "\n";
+    OS << "DEBUG:: TypeSubV = " << TypSubV->toString() << "\n";
     //SubstitutionSet SubS;
 
     if (FunD->isOverloadedOperator()
@@ -552,13 +554,13 @@ typecheckCallExpr(CallExpr *Exp) {
       // parameter, so skip it!
 
       typecheckParamAssignments(FunD, Exp->arg_begin()+1, Exp->arg_end(),
-                                *SubV, *SubS);
+                                *SubV, *TypSubV->front());
     } else {
       typecheckParamAssignments(FunD, Exp->arg_begin(), Exp->arg_end(),
-                                *SubV, *SubS);
+                                *SubV, *TypSubV->front());
     }
 
-    SubV->push_back(SubS);
+    SubV->push_back_vec(TypSubV);
     // Now set Type to the return type of this call
     const ASaPType *FunType = SymT.getType(FunD);
     if (FunType) {

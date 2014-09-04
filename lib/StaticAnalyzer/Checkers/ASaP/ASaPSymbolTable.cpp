@@ -686,12 +686,17 @@ getInheritanceSubstitutionVector(const ASaPType *Typ) const {
   return std::unique_ptr<SubstitutionVector>(SubV);
 }
 
-std::unique_ptr<SubstitutionSet> SymbolTable::
-getTypeSubstitutionSet(const ASaPType *Typ) const {
-  SubstitutionSet *SubS = new SubstitutionSet();
-  if (!Typ)
-    return std::unique_ptr<SubstitutionSet>(SubS);
-  // Build Type Substitution Set
+std::unique_ptr<SubstitutionVector> SymbolTable::
+getTypeSubstitutionVector(const ASaPType *Typ) const {
+  SubstitutionVector *SubV = new SubstitutionVector();
+  std::unique_ptr<SubstitutionSet> SubS(new SubstitutionSet());
+
+  if (!Typ) {
+    SubV->push_back(SubS);
+    return std::unique_ptr<SubstitutionVector>(SubV);
+  }
+
+  // Else, Build Type Substitution Set
   QualType QT = Typ->getQT();
   const ParameterVector *ParamV =
     getParameterVectorFromQualType(QT);
@@ -700,12 +705,16 @@ getTypeSubstitutionSet(const ASaPType *Typ) const {
     assert(ParamV && "Null ParamV");
     for (size_t I = 0; I < ParamV->size(); ++I) {
       const Rpl *ToRpl = Typ->getSubstArg(I);
-      assert(ToRpl);
+      assert(ToRpl && "Internal Error: unexpected null pointer");
+      // TODO
+      //if (ToRpl->hasSubs())
+      //  SubV->merge(ToRpl->getSubstitutionVector());
       RplV.push_back(ToRpl);
     }
     SubS->buildSubstitutionSet(ParamV, &RplV);
   }
-  return std::unique_ptr<SubstitutionSet>(SubS);
+  SubV->push_back(SubS);
+  return std::unique_ptr<SubstitutionVector>(SubV);
 }
 
 std::unique_ptr<SubstitutionVector> SymbolTable::
@@ -717,9 +726,9 @@ getFullSubstitutionVector(const ASaPType *Typ) const {
   std::unique_ptr<SubstitutionVector> SubV =
       getInheritanceSubstitutionVector(Typ);
   // 2. Type Substitution Set
-  std::unique_ptr<SubstitutionSet> SubS = getTypeSubstitutionSet(Typ);
-  if (SubS->size() > 0) {
-    SubV->push_back(SubS);
+  std::unique_ptr<SubstitutionVector> TypSubV = getTypeSubstitutionVector(Typ);
+  if (TypSubV->size() > 0) {
+    SubV->push_back_vec(TypSubV);
   }
   return std::unique_ptr<SubstitutionVector>(SubV.release());
 }

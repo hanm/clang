@@ -60,6 +60,7 @@ term_t Substitution::getPLTerm() const {
     PL_new_functor(PL_new_atom(PL_ParamSub.c_str()), 2);
   assert(FromEl && "Subtitution missing left hand side");
   assert(ToRpl && "Substitution missing right hand side");
+  assert(!ToRpl->hasSubs() && "Internal Error: RPL in substitution cannot have substitutions");
   int Res = PL_cons_functor(Result, SubFunctor,
                             FromEl->getPLTerm(),
                             ToRpl->getRplElementsPLTerm());
@@ -114,11 +115,15 @@ buildSubstitutionSet(const ParameterVector *ParV, const RplVector *RplVec) {
 
 void SubstitutionSet::print(llvm::raw_ostream &OS) const {
   OS << "subst_set{";
-  for(SetT::const_iterator I = begin(), E = end();
-      I != E; ++I) {
-    assert(*I);
-    (*I)->print(OS);
-  }
+  BaseClass::const_iterator I = SetT::begin(), E = SetT::end();
+  if (I != E) {
+      (*I)->print(OS);
+      ++I;
+    }
+    for(; I != E; ++I) {
+      OS << ", ";
+      (*I)->print(OS);
+    }
   OS << "}";
 }
 
@@ -165,6 +170,17 @@ void SubstitutionVector::push_back_vec(const SubstitutionVector *SubV) {
         I != E; ++I) {
       this->push_back(*I);
     }
+  }
+}
+
+void SubstitutionVector::
+push_back_vec(std::unique_ptr<SubstitutionVector> &SubV) {
+  if (SubV.get()) {
+    for(VectorT::const_iterator I = SubV->begin(), E = SubV->end();
+        I != E; ++I) {
+      this->VectorT::push_back(*I);
+    }
+    SubV.release();
   }
 }
 

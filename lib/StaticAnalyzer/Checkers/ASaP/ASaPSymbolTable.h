@@ -223,8 +223,8 @@ public:
   const InheritanceMapT *getInheritanceMap(QualType QT) const;
   std::unique_ptr<SubstitutionVector>
     getInheritanceSubstitutionVector(const ASaPType *Typ) const;
-  std::unique_ptr<SubstitutionSet>
-    getTypeSubstitutionSet(const ASaPType *Typ) const;
+  std::unique_ptr<SubstitutionVector>
+    getTypeSubstitutionVector(const ASaPType *Typ) const;
   std::unique_ptr<SubstitutionVector>
     getFullSubstitutionVector(const ASaPType *Typ) const;
   const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;

@@ -64,7 +64,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
 
   //create a constraint object
   EC = new EffectInclusionConstraint(SymT.makeFreshConstraintName(),
-                                     0, EffSummary, Def, S);
+                                     0, EffSummary, CanD, S);
   EffectsTmp = new EffectVector();
   if (VisitCXXInitializer) {
     if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(Def)) {
@@ -331,7 +331,7 @@ void EffectConstraintVisitor::checkEffectCoverage() {
       OS << "DEBUG:: SubV = " << SubV->toString() << ". (size = "
          << SubV->size() << ")\n";
       OS << "======= EK_InvocEffect -before call to getEffectSummary() for ("
-         << FunD << " CanD(" << FunD->getCanonicalDecl() << "))\n";
+         << FunD << " CanFD(" << FunD->getCanonicalDecl() << "))\n";
       FunD->print(OS, Ctx.getPrintingPolicy());
       OS << "\n";
 
@@ -461,13 +461,13 @@ checkCXXConstructExpr(VarDecl *VarD, CXXConstructExpr *Exp) {
   // Set up Substitution Vector
   const ASaPType *T = SymT.getType(VarD);
   std::unique_ptr<SubstitutionVector> SubV = SymT.getInheritanceSubstitutionVector(T);
-  std::unique_ptr<SubstitutionSet> SubS = SymT.getTypeSubstitutionSet(T);
-  assert(SubS.get() && "Internal Error: unexpected null pointer");
-  tryBuildParamSubstitutions(Def, SymT, ConstrDecl, Exp->arg_begin(),
-                             Exp->arg_end(), *SubS);
+  std::unique_ptr<SubstitutionVector> TypSubV = SymT.getTypeSubstitutionVector(T);
+  assert(TypSubV.get() && "Internal Error: unexpected null pointer");
+  tryBuildParamSubstitutions(CanD, SymT, ConstrDecl, Exp->arg_begin(),
+                             Exp->arg_end(), *TypSubV->front());
   // 2. Add effects to tmp effects
   assert(SubV.get() && "Internal Error: unexpected null pointer");
-  SubV->push_back(SubS);
+  SubV->push_back_vec(TypSubV);
   Effect IE(Effect::EK_InvocEffect, Exp, ConstrDecl, SubV.get());
   OS << "DEBUG:: Adding invocation Effect "<< IE.toString() << "\n";
   OS << "DEBUG:: Callee = ";
@@ -556,7 +556,7 @@ void EffectConstraintVisitor::VisitReturnStmt(ReturnStmt *Ret) {
   if (!Ret->getRetValue())
     return; // this is a 'return' statement with no return expression
   // This next lookup actually returns the function type.
-  const ASaPType *FunType = SymT.getType(Def);
+  const ASaPType *FunType = SymT.getType(CanD);
   if (!FunType) {
     // This is probably (hopefully) a template function.
     // We are not yet checking effects and types of parametric code
@@ -701,41 +701,41 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
       OS << "DEBUG:: VisitCallExpr::(FunD!=NULL)\n";
 
       // Use the cannonical decl for annotations
-      FunctionDecl *CanD = FunD->getCanonicalDecl();
-      if (CanD)
-        FunD = CanD;
+      FunctionDecl *CanFD = FunD->getCanonicalDecl();
+      if (CanFD)
+        FunD = CanFD;
 
       ASaPType *T = 0;
       if (isa<CXXMethodDecl>(FunD)) {
         if (FunD->isOverloadedOperator()) {
-          TypeBuilderVisitor TBV(Def, Exp->getArg(0));
+          TypeBuilderVisitor TBV(CanD, Exp->getArg(0));
           T = TBV.stealType();
         } else {
-          BaseTypeBuilderVisitor TBV(Def, Exp->getCallee());
+          BaseTypeBuilderVisitor TBV(CanD, Exp->getCallee());
           T = TBV.stealType();
         }
       }
       std::unique_ptr<SubstitutionVector> SubV =
           SymT.getInheritanceSubstitutionVector(T);
-      std::unique_ptr<SubstitutionSet> SubS =
-          SymT.getTypeSubstitutionSet(T);
+      std::unique_ptr<SubstitutionVector> TypSubV =
+          SymT.getTypeSubstitutionVector(T);
 
       OS << "DEBUG:: Type = " << (T ? T->toString() : "null") << "\n";
       assert(SubV.get() && "Internal Error: unexpected null-pointer");
-      assert(SubS.get() && "Internal Error: unexpected null pointer");
+      assert(TypSubV.get() && "Internal Error: unexpected null pointer");
 
       OS << "DEBUG:: SubV = " << SubV->toString() << "\n";
-      OS << "DEBUG:: SubS = " << SubS->toString() << "\n";
+      OS << "DEBUG:: TypSubV = " << TypSubV->toString() << "\n";
       delete T;
 
       if (isa<CXXMethodDecl>(FunD) && FunD->isOverloadedOperator()) {
-        tryBuildParamSubstitutions(Def, SymT, FunD, Exp->arg_begin()+1,
-                                   Exp->arg_end(), *SubS);
+        tryBuildParamSubstitutions(CanD, SymT, FunD, Exp->arg_begin()+1,
+                                   Exp->arg_end(), *TypSubV->front());
       } else {
-        tryBuildParamSubstitutions(Def, SymT, FunD, Exp->arg_begin(),
-                                   Exp->arg_end(), *SubS);
+        tryBuildParamSubstitutions(CanD, SymT, FunD, Exp->arg_begin(),
+                                   Exp->arg_end(), *TypSubV->front());
       }
-      SubV->push_back(SubS);
+      SubV->push_back_vec(TypSubV);
 
       /// 2. Add effects to tmp effects
       Effect IE(Effect::EK_InvocEffect, Exp, FunD, SubV.get());

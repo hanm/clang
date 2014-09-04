@@ -243,6 +243,7 @@ public:
 
   term_t getSubVPLTerm() const;
   bool hasSubs() const { return (SubV.size() > 0); }
+  const SubstitutionVector getSubstitutionVector() const { return SubV; }
 
   // Nesting (Under)
   /// \brief Returns true iff this is under That

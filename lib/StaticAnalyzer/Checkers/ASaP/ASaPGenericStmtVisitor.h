@@ -86,6 +86,7 @@ protected:
   SymbolTable &SymT;
 
   const FunctionDecl *Def;
+  const FunctionDecl *CanD;
 
   bool FatalError;
 
@@ -101,6 +102,7 @@ public:
         SymT(*SymbolTable::Table),
         Def(Def),
         FatalError(false) {
+    CanD = Def->getCanonicalDecl();
     OS << "DEBUG:: ******** INVOKING Generic STMT Visitor...\n";
     //Def->print(OS, Ctx.getPrintingPolicy());
     //S->printPretty(OS, 0, Ctx.getPrintingPolicy());
