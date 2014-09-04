@@ -1033,7 +1033,8 @@ void SymbolTable::createSymbolTableEntry(const Decl *D) {
 }
 
 VarRpl *SymbolTable::createFreshRplVar(const ValueDecl *D) {
-  StringRef Name = makeFreshRVName(D->getNameAsString().data());
+  StringRef NormalizedDeclName = getPLNormalizedName(*D);
+  StringRef Name = makeFreshRVName(NormalizedDeclName);
   *OSv2 << "DEBUG:: VarRpl Fresh Name created: " << Name << "\n";
   RplDomain *Dom = buildDomain(D);
   VarRpl *Result = new VarRpl(Name, Dom);
