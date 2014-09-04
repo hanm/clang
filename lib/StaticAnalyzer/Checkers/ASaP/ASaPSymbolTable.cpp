@@ -343,8 +343,16 @@ RplDomain *SymbolTable::getRplDomain(const Decl *D) const {
 }
 
 RplDomain *SymbolTable::buildDomain(const ValueDecl *D) {
-  const DeclContext *DC = D->getDeclContext();
-  const Decl *EnclosingDecl = getDeclFromContext(DC);
+  const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
+  const FunctionDecl *CanFD = FD ? FD->getCanonicalDecl() : 0;
+  const Decl *EnclosingDecl = 0;
+  if (FD && CanFD != FD) {
+    EnclosingDecl = CanFD;
+  } else {
+    const DeclContext *DC = D->getDeclContext();
+    EnclosingDecl = getDeclFromContext(DC);
+  }
+
   //add fresh region name to enclosing scope
   StringRef PLSuffix;
   if (const NamedDecl *ND = dyn_cast<NamedDecl>(D)) {
@@ -1025,7 +1033,9 @@ void SymbolTable::createSymbolTableEntry(const Decl *D) {
 
   // 2. Compute ParentDom
   RplDomain *ParentDom = 0;
-  if (const DeclContext *DC = D->getDeclContext()) {
+  if (FD && CanFD != FD) {
+    ParentDom = getRplDomain(CanFD);
+  } else if (const DeclContext *DC = D->getDeclContext()) {
     const Decl *EnclosingDecl = getDeclFromContext(DC);
     ParentDom = getRplDomain(EnclosingDecl);
   }
