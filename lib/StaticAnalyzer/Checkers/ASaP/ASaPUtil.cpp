@@ -211,6 +211,13 @@ void buildSingleParamSubstitution(
         continue; // SubS already has a substitution for that base
       // TODO: check that the two inferred substitutions are equal.
 
+      // TODO *ArgI might have a substitution vector
+      //ArgIwoSubV
+      //ArgSubV
+      //Sub(Elmt, ArgIwoSubV)
+      //SubS(Sub)
+      //NewSubV(SubS)
+      //NewSubV.push_back(ArgSubV)
       Substitution Sub(Elmt, *ArgI);
       *SymbolTable::VB.OS << "DEBUG::buildSingleParamSubstitution: adding Substitution = "
         << Sub.toString() << "\n";

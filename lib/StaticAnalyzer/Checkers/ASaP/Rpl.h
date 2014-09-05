@@ -243,7 +243,8 @@ public:
 
   term_t getSubVPLTerm() const;
   bool hasSubs() const { return (SubV.size() > 0); }
-  const SubstitutionVector getSubstitutionVector() const { return SubV; }
+  const SubstitutionVector &getSubstitutionVector() const { return SubV; }
+  void clearSubstitutionVector();
 
   // Nesting (Under)
   /// \brief Returns true iff this is under That
@@ -588,9 +589,8 @@ public:
 #endif
 
 class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
-  //friend class RplVector;
-  typedef OwningVector<Rpl, RPL_VECTOR_SIZE> BaseClass;
   public:
+  typedef OwningVector<Rpl, RPL_VECTOR_SIZE> BaseClass;
   /// Constructor
   RplVector() : BaseClass() {}
   RplVector(const Rpl &R) {

@@ -689,6 +689,7 @@ getInheritanceSubstitutionVector(const ASaPType *Typ) const {
 std::unique_ptr<SubstitutionVector> SymbolTable::
 getTypeSubstitutionVector(const ASaPType *Typ) const {
   SubstitutionVector *SubV = new SubstitutionVector();
+  //std::unique_ptr<SubstitutionVector> SubV2(new SubstitutionVector());
   std::unique_ptr<SubstitutionSet> SubS(new SubstitutionSet());
 
   if (!Typ) {
@@ -705,16 +706,27 @@ getTypeSubstitutionVector(const ASaPType *Typ) const {
     assert(ParamV && "Null ParamV");
     for (size_t I = 0; I < ParamV->size(); ++I) {
       const Rpl *ToRpl = Typ->getSubstArg(I);
-      assert(ToRpl && "Internal Error: unexpected null pointer");
-      // TODO
-      //if (ToRpl->hasSubs())
-      //  SubV->merge(ToRpl->getSubstitutionVector());
+      assert(ToRpl);
       RplV.push_back(ToRpl);
     }
     SubS->buildSubstitutionSet(ParamV, &RplV);
   }
   SubV->push_back(SubS);
   return std::unique_ptr<SubstitutionVector>(SubV);
+      /* Alt:
+      std::unique_ptr<Rpl> ToRpl(Typ->getSubstArg(I)->clone());
+      assert(ToRpl.get() && "Internal Error: unexpected null pointer");
+      if (ToRpl->hasSubs()) {
+        SubV2->merge(&ToRpl->getSubstitutionVector());
+        ToRpl->clearSubstitutionVector();
+      }
+      //RplV.RplVector::BaseClass::push_back(ToRpl);
+    }
+    SubS->buildSubstitutionSet(ParamV, &RplV);
+  }
+  SubV->push_back(SubS);
+  SubV->push_back_vec(SubV2);
+  return std::unique_ptr<SubstitutionVector>(SubV);*/
 }
 
 std::unique_ptr<SubstitutionVector> SymbolTable::

@@ -83,7 +83,7 @@ public:
   std::string toString() const;
 
   void applyTo(ConcreteRpl &R) const;
-
+  void merge(const SubstitutionSet *SubS);
   term_t getPLTerm() const;
 
   bool hasBase(const RplElement &Base) const;
@@ -126,7 +126,7 @@ public:
 
   void push_back_vec(const SubstitutionVector *SubV);
   void push_back_vec(std::unique_ptr<SubstitutionVector> &SubV);
-
+  void merge(const SubstitutionVector *SubV);
   term_t getPLTerm() const;
 
 }; // End class SubstituionVector.

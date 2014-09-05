@@ -88,6 +88,12 @@ term_t Rpl::getSubVPLTerm() const {
     return SubV.getPLTerm();
 }
 
+void Rpl::clearSubstitutionVector() {
+  while (SubV.size() > 0) {
+    SubV.pop_back();
+  }
+}
+
 std::string Rpl::toString() const {
   std::string SBuf;
   llvm::raw_string_ostream OS(SBuf);

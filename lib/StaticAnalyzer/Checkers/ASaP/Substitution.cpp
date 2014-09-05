@@ -60,10 +60,10 @@ term_t Substitution::getPLTerm() const {
     PL_new_functor(PL_new_atom(PL_ParamSub.c_str()), 2);
   assert(FromEl && "Subtitution missing left hand side");
   assert(ToRpl && "Substitution missing right hand side");
-  assert(!ToRpl->hasSubs() && "Internal Error: RPL in substitution cannot have substitutions");
+  //assert(!ToRpl->hasSubs() && "Internal Error: RPL in substitution cannot have substitutions");
   int Res = PL_cons_functor(Result, SubFunctor,
                             FromEl->getPLTerm(),
-                            ToRpl->getRplElementsPLTerm());
+                            ToRpl->getPLTerm());
   assert(Res && "Failed to create prolog term_t for Substitution");
   return Result;
 }
@@ -143,6 +143,15 @@ void SubstitutionSet::applyTo(ConcreteRpl &R) const {
                // the first successful application
   }
 }
+void SubstitutionSet::merge(const SubstitutionSet *SubS) {
+  if (!SubS)
+    return;
+  for(SetT::const_iterator I = SubS->begin(), E = SubS->end();
+      I != E; ++I) {
+      if (*I  && !hasBase(*(*I)->getFrom()))
+        insert(*I); // copy substitution
+  }
+}
 
 term_t SubstitutionSet::getPLTerm() const {
   term_t Result = PL_new_term_ref();
@@ -181,6 +190,23 @@ push_back_vec(std::unique_ptr<SubstitutionVector> &SubV) {
       this->VectorT::push_back(*I);
     }
     SubV.release();
+  }
+}
+
+void SubstitutionVector::merge(const SubstitutionVector *SubV) {
+  if (!SubV)
+    return;
+  // 1. pairwise merge of substitution sets for the common elements
+  VectorT::const_iterator I1 = begin(), I2 = SubV->begin(),
+                          E1 = end(),   E2 = SubV->end();
+  for( ;I1 != E1 && I2 != E2; ++I1, ++I2) {
+    assert(*I1);
+    assert(*I2);
+    (*I1)->merge(*I2);
+  }
+  // 2. copy any remaining elements from SubV
+  for (; I2 != E2; ++I2) {
+    push_back(*I2);
   }
 }
 
