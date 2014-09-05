@@ -767,19 +767,28 @@ static void emitInferredTypeArgs(const Decl *Dec, const ASaPType *Typ) {
 }
 
 void SymbolTable::emitFacts() const {
+  long RVCount = 0;
+  double Arity = 1;
   for (VarRplSetT::const_iterator
           I = VarRplSet.begin(),
           E = VarRplSet.end();
-        I != E; ++I) {
+        I != E; ++I, ++RVCount) {
     VarRpl *R = *I;
     assert(R && "Internal Error: unexpected null pointer");
     R->assertzProlog();
     const RplDomain *Dom = R->getDomain();
     assert(Dom && "Internal Error: unexpected null pointer");
     Dom->assertzProlog();
+    long N = Dom->getArity();
+    Arity *= N;
+    OS_Stat << "RPL_Var#" << RVCount << " with domain arity = " << N << "\n";
   }
-  //PL_action(PL_ACTION_TRACE);
+  OS_Stat << "#RPL Vars: " << RVCount << "\n";
+  OS_Stat << "Rpl Instantiation Space Size = " << Arity << "\n";
+
   //iterate through symbol table entries and emit facts
+  long ParamCount = 0;
+  long RegionCount = 0;
   for (SymbolTableMapT::const_iterator
          MI = SymTable.begin(),
          ME = SymTable.end();
@@ -792,11 +801,13 @@ void SymbolTable::emitFacts() const {
     if (Entry->hasParameterVector()) {
       //*OSv2 << "DEBUG:: gonna assert a parameter vector\n";
       Entry->getParameterVector()->assertzProlog();
+      ParamCount += Entry->getParameterVector()->size();
       //*OSv2 << "DEBUG:: asserted a parameter vector\n";
     }
     if (Entry->getRegionNameSet()) {
       //*OSv2 << "DEBUG:: gonna assert a region name set\n";
       Entry->getRegionNameSet()->assertzProlog();
+      RegionCount += Entry->getRegionNameSet()->size();
       //*OSv2 << "DEBUG:: asserted a region name set\n";
     }
 
@@ -828,6 +839,9 @@ void SymbolTable::emitFacts() const {
 void SymbolTable::emitConstraints() const {
   //PL_action(PL_ACTION_TRACE);
   // Emit Constraints
+  long RICount = 0;
+  long ESICount = 0;
+  long ENICount = 0;
   for (ConstraintsSetT::iterator
           I = ConstraintSet.begin(),
           E = ConstraintSet.end();
@@ -838,7 +852,18 @@ void SymbolTable::emitConstraints() const {
     *OSv2 << "DEBUG:: Will assert Constraint to Prolog: " << Cons->toString() << "\n";
     term_t Term = Cons->getPLTerm();
     assertzTermProlog(Term, "Failed to assert constraint to Prolog facts");
+    if (isa<RplInclusionConstraint>(Cons))
+      ++RICount;
+    else if (isa<EffectInclusionConstraint>(Cons))
+      ++ESICount;
+    else if (isa<EffectNIConstraint>(Cons))
+      ++ENICount;
   }
+  OS_Stat << "#Rpl Inclusion Constraints: " << RICount << "\n";
+  OS_Stat << "#Effect Inclusion Constraints: " << ESICount << "\n";
+  OS_Stat << "#Effect Non-Interference Constraints: " << ENICount << "\n";
+  OS_Stat << "#Total Constraints: " << RICount + ESICount + ENICount << "\n";
+  OS_Stat.close();
 }
 
 void SymbolTable::printConstraints() const {
@@ -934,6 +959,8 @@ void SymbolTable::solveConstraints() const {
     PL_action(PL_ACTION_TRACE);
 
   // Call solve_all
+  OS_PL.close();
+
   predicate_t SolveAllP = PL_predicate(PL_SolveAllPredicate.c_str(), 0, "user");
   term_t Arg0 = PL_new_term_refs(0);
   int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, SolveAllP, Arg0);

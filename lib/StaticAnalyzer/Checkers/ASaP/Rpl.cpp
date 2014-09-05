@@ -213,6 +213,40 @@ void RplDomain::assertzProlog() const {
 RplDomain::~RplDomain() {
   delete Regions;
 }
+
+std::pair<long, long> RplDomain::size() const {
+  std::pair<long, long> Rest(0, 0);
+  if (Parent)
+    Rest = Parent->size();
+  long ParamCount = 0;
+  if (Params)
+    ParamCount += Params->size();
+  long RegionCount = 0;
+  if (Regions)
+    RegionCount += Regions->size();
+  std::pair<long, long> Result(Rest.first + ParamCount,
+                               Rest.second + RegionCount);
+  return Result;
+}
+
+long RplDomain::getArity() const {
+  std::pair<long, long> Size = size();
+  long Params = Size.first;
+  long Regions = Size.second + 1; // +1 to account for rGLOBAL
+  long Result = 0;
+  // 1. RgnName
+  Result += Regions;
+  // 2. Param
+  Result += Params;
+  // 3. Param:Name
+  Result += Regions * Params;
+  // 4. Param:STAR
+  Result += Params;
+  // 5. STAR
+  Result += 1;
+
+  return Result;
+}
 ///////////////////////////////////////////////////////////////////////////////
 //// RplRef
 

@@ -54,6 +54,8 @@ public:
   void print (llvm::raw_ostream &OS) const;
   term_t getPLTerm() const;
   void assertzProlog() const;
+  std::pair<long,long> size() const;
+  long getArity() const;
 };
 
 class RplElement {

@@ -64,6 +64,8 @@ static const std::string PL_ConstraintPrefix = "constraint";
 
 extern raw_ostream *OS;
 extern raw_ostream *OSv2;
+extern raw_fd_ostream &OS_Stat;
+extern raw_fd_ostream &OS_PL;
 
 
 struct VisitorBundle {

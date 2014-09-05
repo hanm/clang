@@ -20,10 +20,12 @@ namespace llvm {
 
 class StringRef;
 class raw_ostream;
+class raw_fd_ostream;
 
 }
 using llvm::StringRef;
 using llvm::raw_ostream;
+using llvm::raw_fd_ostream;
 
 namespace clang {
 
