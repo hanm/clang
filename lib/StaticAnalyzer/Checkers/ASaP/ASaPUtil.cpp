@@ -13,6 +13,7 @@
 //
 //===----------------------------------------------------------------===//
 
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include "clang/AST/Attr.h"
@@ -34,8 +35,15 @@ namespace asap {
 
 static const StringRef BugCategory = "Safe Parallelism";
 
+raw_ostream &prologLog() {
+  std::string Err;
+  static llvm::raw_fd_ostream S("constraints.pl", Err, llvm::sys::fs::OpenFlags::F_None);
+  return S;
+}
+
 raw_ostream *OS = &llvm::nulls();
 raw_ostream *OSv2 = &llvm::nulls();
+raw_ostream &OS_PL = prologLog();
 
 using llvm::raw_string_ostream;
 
@@ -157,6 +165,9 @@ void assertzTermProlog(term_t Fact, StringRef ErrMsg) {
   predicate_t AssertzP = PL_predicate("assertz", 1, "user");
   int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, AssertzP, Fact);
   assert(Rval && ErrMsg.data());
+  char *Text;
+  Rval = PL_get_chars(Fact, &Text, CVT_WRITE|BUF_RING);
+  OS_PL << Text << "\n";
 }
 
 term_t buildPLEmptyList() {
