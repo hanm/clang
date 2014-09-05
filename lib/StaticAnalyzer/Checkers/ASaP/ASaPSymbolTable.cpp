@@ -713,20 +713,6 @@ getTypeSubstitutionVector(const ASaPType *Typ) const {
   }
   SubV->push_back(SubS);
   return std::unique_ptr<SubstitutionVector>(SubV);
-      /* Alt:
-      std::unique_ptr<Rpl> ToRpl(Typ->getSubstArg(I)->clone());
-      assert(ToRpl.get() && "Internal Error: unexpected null pointer");
-      if (ToRpl->hasSubs()) {
-        SubV2->merge(&ToRpl->getSubstitutionVector());
-        ToRpl->clearSubstitutionVector();
-      }
-      //RplV.RplVector::BaseClass::push_back(ToRpl);
-    }
-    SubS->buildSubstitutionSet(ParamV, &RplV);
-  }
-  SubV->push_back(SubS);
-  SubV->push_back_vec(SubV2);
-  return std::unique_ptr<SubstitutionVector>(SubV);*/
 }
 
 std::unique_ptr<SubstitutionVector> SymbolTable::
