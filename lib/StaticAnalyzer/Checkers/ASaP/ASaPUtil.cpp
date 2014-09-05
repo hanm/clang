@@ -167,7 +167,7 @@ void assertzTermProlog(term_t Fact, StringRef ErrMsg) {
   assert(Rval && ErrMsg.data());
   char *Text;
   Rval = PL_get_chars(Fact, &Text, CVT_WRITE|BUF_RING);
-  OS_PL << Text << "\n";
+  OS_PL << Text << ".\n";
 }
 
 term_t buildPLEmptyList() {
