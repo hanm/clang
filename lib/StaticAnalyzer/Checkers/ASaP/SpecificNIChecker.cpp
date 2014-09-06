@@ -294,7 +294,7 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
         assert(Sum);
         ConcreteEffectSummary *CES = dyn_cast<ConcreteEffectSummary>(Sum);
         assert(CES && "Internal Error: Unexpected kind of effect summary");
-        SymT->updateEffectInclusionConstraint(Def, *CES);
+        SymT->updateEffectInclusionConstraint(Def->getCanonicalDecl(), *CES);
       }
     }
   }
@@ -349,7 +349,7 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
     Result = false;
   }
   else if (RK == RK_DUNNO){
-    SymT->updateEffectInclusionConstraint(Def, *ESptr);
+    SymT->updateEffectInclusionConstraint(Def->getCanonicalDecl(), *ESptr);
   }
   // 5. Cleanup
   //delete(ES);
@@ -401,7 +401,7 @@ bool TBBParallelForIndexNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
     emitEffectsNotCoveredWarning(Arg, Def, Str);
     Result = false;
   } else if (RK == RK_DUNNO) {
-    SymT->updateEffectInclusionConstraint(Def, *ESptr);
+    SymT->updateEffectInclusionConstraint(Def->getCanonicalDecl(), *ESptr);
   }
   // 5. Cleanup
   //delete(ES);
