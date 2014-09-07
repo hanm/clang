@@ -836,7 +836,7 @@ void SymbolTable::emitFacts() const {
   *OSv2 << "DEBUG:: Done emmitting facts to Prolog\n";
 }
 
-void SymbolTable::emitConstraints() const {
+void SymbolTable::emitConstraints(bool DoFullInference) const {
   //PL_action(PL_ACTION_TRACE);
   // Emit Constraints
   long RICount = 0;
@@ -848,6 +848,8 @@ void SymbolTable::emitConstraints() const {
        I != E; ++I) {
     const Constraint *Cons = *I;
     assert(Cons && "Internal Error: unexpected null pointer");
+    if (!DoFullInference && !isa<EffectInclusionConstraint>(Cons))
+      continue;
     *OSv2 << "DEBUG:: constraint ID = " << Cons->getConstraintID() << "\n";
     *OSv2 << "DEBUG:: Will assert Constraint to Prolog: " << Cons->toString() << "\n";
     term_t Term = Cons->getPLTerm();
@@ -946,14 +948,14 @@ void SymbolTable::readSolutions() const {
   }
 }
 
-void SymbolTable::solveConstraints() const {
+void SymbolTable::solveConstraints(bool DoFullInference) const {
   if (PrologDbgLvl >= 3)
     PL_action(PL_ACTION_TRACE);
   emitFacts();
 
   if (PrologDbgLvl >= 2)
     PL_action(PL_ACTION_TRACE);
-  emitConstraints();
+  emitConstraints(DoFullInference);
 
   if (PrologDbgLvl >= 1)
     PL_action(PL_ACTION_TRACE);

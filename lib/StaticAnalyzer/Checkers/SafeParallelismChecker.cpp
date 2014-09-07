@@ -224,7 +224,7 @@ public:
     }
     if (DoEffectInference || DoFullInference) {
       setupProlog();
-      SymbolTable::Table->solveConstraints();
+      SymbolTable::Table->solveConstraints(DoFullInference);
     }
   }
 

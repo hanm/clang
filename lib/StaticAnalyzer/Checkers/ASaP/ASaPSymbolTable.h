@@ -346,9 +346,9 @@ public:
   void printConstraints() const;
 
   void emitFacts() const;
-  void emitConstraints() const;
+  void emitConstraints(bool DoFullInference) const;
   void readSolutions() const;
-  void solveConstraints() const;
+  void solveConstraints(bool DoFullInference) const; // if false -> do Effect inference only
 
   // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
