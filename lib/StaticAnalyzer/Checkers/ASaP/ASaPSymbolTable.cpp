@@ -346,13 +346,15 @@ RplDomain *SymbolTable::buildDomain(const ValueDecl *D) {
   const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
   const FunctionDecl *CanFD = FD ? FD->getCanonicalDecl() : 0;
   const Decl *EnclosingDecl = 0;
-  if (FD && CanFD != FD) {
+  if (FD && CanFD != FD && CanFD) {
     EnclosingDecl = CanFD;
   } else {
     const DeclContext *DC = D->getDeclContext();
     EnclosingDecl = getDeclFromContext(DC);
   }
-
+  if (!EnclosingDecl)
+    EnclosingDecl = D;
+  assert(EnclosingDecl && "Internal error: unexpected null pointer");
   //add fresh region name to enclosing scope
   StringRef PLSuffix;
   if (const NamedDecl *ND = dyn_cast<NamedDecl>(D)) {
