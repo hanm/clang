@@ -770,7 +770,7 @@ static void emitInferredTypeArgs(const Decl *Dec, const ASaPType *Typ) {
 
 void SymbolTable::emitFacts() const {
   long RVCount = 0;
-  double Arity = 1;
+  long double Arity = 1;
   for (VarRplSetT::const_iterator
           I = VarRplSet.begin(),
           E = VarRplSet.end();
@@ -786,7 +786,10 @@ void SymbolTable::emitFacts() const {
     OS_Stat << "RPL_Var#" << RVCount << " with domain arity = " << N << "\n";
   }
   OS_Stat << "#RPL Vars: " << RVCount << "\n";
-  OS_Stat << "Rpl Instantiation Space Size = " << Arity << "\n";
+  char Buffer[20];
+  sprintf(Buffer,"%Le", Arity);
+  OS_Stat << "Rpl Instantiation Space Size = " << Buffer << "\n";
+  //OS_Stat << "Rpl Instantiation Space Size = " << Arity << "\n";
 
   //iterate through symbol table entries and emit facts
   long ParamCount = 0;
