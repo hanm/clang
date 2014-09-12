@@ -120,7 +120,11 @@ public:
     } else if (SchemeStr.compare("parametric-effect-inference") == 0) {
       AnnotScheme = new ParametricEffectInferenceAnnotationScheme(SymT);
       DoEffectInference = true;
-    } else if (SchemeStr.compare("inference") == 0) {
+    } else if (SchemeStr.compare("simple-inference") == 0) {
+      AnnotScheme = new SimpleInferenceAnnotationScheme(SymT);
+      DoFullInference = true;
+    } else if (SchemeStr.compare("inference") == 0
+              || SchemeStr.compare("parametric-inference") == 0) {
       AnnotScheme = new InferenceAnnotationScheme(SymT);
       DoFullInference = true;
     } else {

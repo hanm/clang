@@ -60,6 +60,7 @@ protected:
   AnnotationSet helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT);
   AnnotationSet helperMakeWritesLocalEffectSummary(const FunctionDecl *D);
   AnnotationSet helperMakeVarType(const ValueDecl *D, long ArgNum);
+  AnnotationSet helperMakeParameterVarType(const ValueDecl *D, long ArgNum);
   AnnotationSet helperMakeParametricVarType(const ValueDecl *D, long ArgNum, QualType QT);
   AnnotationSet helperMakeVarEffectSummary(const FunctionDecl *D);
   RplVector *helperMakeBaseTypeArgs(const RecordDecl *Derived, long ArgNum);
@@ -153,6 +154,28 @@ public:
   virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
 }; // end class EffectInferenceAnnotationScheme
 
+
+// Insert effect summary variables and rpl variables wherever they are missing.
+class SimpleInferenceAnnotationScheme : public SimpleAnnotationScheme {
+public:
+  // Constructor
+  SimpleInferenceAnnotationScheme(SymbolTable &SymT)
+                           : SimpleAnnotationScheme(SymT) {}
+  // Destructor
+  virtual ~SimpleInferenceAnnotationScheme() {}
+
+  // Methods (Inherited)
+  //virtual AnnotationSet makeClassParams(const RecordDecl *D);
+
+  virtual AnnotationSet makeGlobalType(const VarDecl *D, long ArgNum);
+  virtual AnnotationSet makeStackType(const VarDecl *D, long ArgNum);
+  virtual AnnotationSet makeFieldType(const FieldDecl *D, long ArgNum);
+  virtual AnnotationSet makeParamType(const ParmVarDecl *D, long ArgNum);
+  virtual AnnotationSet makeReturnType(const FunctionDecl *D, long ArgNum);
+
+  // Methods (Overridden)
+  virtual AnnotationSet makeEffectSummary(const FunctionDecl *D);
+}; // end class CheckGlobalsAnnotationScheme
 
 // Insert effect summary variables and rpl variables wherever they are missing.
 class InferenceAnnotationScheme : public ParametricAnnotationScheme {
