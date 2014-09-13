@@ -54,6 +54,7 @@ public:
   virtual RplVector *makeBaseTypeArgs(const RecordDecl *Derived, long ArgNum) = 0;
 
 protected:
+  bool helperDecideIfGenClassParam(const RecordDecl *D);
   AnnotationSet helperMakeClassParams(const RecordDecl *D);
   AnnotationSet helperMakeGlobalType(const ValueDecl *D, long ArgNum);
   AnnotationSet helperMakeLocalType(const ValueDecl *D, long ArgNum);
@@ -165,7 +166,7 @@ public:
   virtual ~SimpleInferenceAnnotationScheme() {}
 
   // Methods (Inherited)
-  //virtual AnnotationSet makeClassParams(const RecordDecl *D);
+  virtual AnnotationSet makeClassParams(const RecordDecl *D);
 
   virtual AnnotationSet makeGlobalType(const VarDecl *D, long ArgNum);
   virtual AnnotationSet makeStackType(const VarDecl *D, long ArgNum);

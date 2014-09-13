@@ -156,6 +156,39 @@ helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT) {
 
 }
 
+inline bool AnnotationScheme::
+helperDecideIfGenClassParam(const RecordDecl *D) {
+  // we don't need a class parameter if the class has no fields
+  bool GenerateParam = false;
+  if (!D->field_empty()) {
+    GenerateParam = true;
+  } else {
+    if (const CXXRecordDecl *CXXD = dyn_cast<CXXRecordDecl>(D)) {
+      if (const CXXRecordDecl *CXXDef = CXXD->getDefinition()) {
+        for (CXXRecordDecl::base_class_const_iterator
+               I = CXXDef->bases_begin(), E = CXXDef->bases_end();
+             I!=E; ++I) {
+          QualType BaseQT = (*I).getType();
+          // Check if the base class takes no region arguments
+          ResultTriplet ResTriplet =
+            SymT.getRegionParamCount(BaseQT);
+          // If the base type is a template type variable, skip the check.
+          // We will only check fully instantiated template code.
+          if (ResTriplet.ResKin != RK_OK)
+            continue;
+
+          assert(ResTriplet.ResKin == RK_OK && "Unknown number of region parameters");
+          if (ResTriplet.NumArgs > 0) {
+            GenerateParam = true;
+            break;
+          }
+        } // end for-all base classes
+      }
+    }
+  }
+  return GenerateParam;
+}
+
 inline AnnotationSet AnnotationScheme::
 helperMakeClassParams(const RecordDecl *D) {
   AnnotationSet Result;
@@ -198,35 +231,7 @@ helperMakeVarEffectSummary(const FunctionDecl *D) {
 ///////////////////////////////////////////////////////////////////////////////
 AnnotationSet ParametricAnnotationScheme::
 makeClassParams(const RecordDecl *D) {
-  // we don't need a class parameter if the class has no fields
-  bool GenerateParam = false;
-  if (!D->field_empty()) {
-    GenerateParam = true;
-  } else {
-    if (const CXXRecordDecl *CXXD = dyn_cast<CXXRecordDecl>(D)) {
-      if (const CXXRecordDecl *CXXDef = CXXD->getDefinition()) {
-        for (CXXRecordDecl::base_class_const_iterator
-               I = CXXDef->bases_begin(), E = CXXDef->bases_end();
-             I!=E; ++I) {
-          QualType BaseQT = (*I).getType();
-          // Check if the base class takes no region arguments
-          ResultTriplet ResTriplet =
-            SymT.getRegionParamCount(BaseQT);
-          // If the base type is a template type variable, skip the check.
-          // We will only check fully instantiated template code.
-          if (ResTriplet.ResKin!=RK_OK)
-            continue;
-
-          assert(ResTriplet.ResKin==RK_OK && "Unknown number of region parameters");
-          if (ResTriplet.NumArgs>0) {
-            GenerateParam = true;
-            break;
-          }
-        } // end for-all base classes
-      }
-    }
-  }
-
+  bool GenerateParam = helperDecideIfGenClassParam(D);
   if (GenerateParam) {
     return helperMakeClassParams(D);
   } else {
@@ -405,6 +410,17 @@ makeEffectSummary(const FunctionDecl *D) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+AnnotationSet SimpleInferenceAnnotationScheme::
+makeClassParams(const RecordDecl *D) {
+  bool GenerateParam = helperDecideIfGenClassParam(D);
+  if (GenerateParam) {
+    return helperMakeClassParams(D);
+  } else {
+    AnnotationSet Result;
+    return Result;
+  }
+}
+
 AnnotationSet SimpleInferenceAnnotationScheme::
 makeGlobalType(const VarDecl *D, long ArgNum) {
   return helperMakeVarType(D, ArgNum);
