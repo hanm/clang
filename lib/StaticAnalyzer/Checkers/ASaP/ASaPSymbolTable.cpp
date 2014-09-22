@@ -356,7 +356,7 @@ RplDomain *SymbolTable::buildDomain(const ValueDecl *D) {
     EnclosingDecl = D;
   assert(EnclosingDecl && "Internal error: unexpected null pointer");
   //add fresh region name to enclosing scope
-  StringRef PLSuffix;
+  std::string PLSuffix;
   if (const NamedDecl *ND = dyn_cast<NamedDecl>(D)) {
     PLSuffix = getPLNormalizedName(*ND);
   } else {
@@ -1049,12 +1049,11 @@ void SymbolTable::createSymbolTableEntry(const Decl *D) {
   assert(D && "Internal Error: unexpected null pointer");
   assert(!SymTable.lookup(D) && "Internal Error: trying to create duplicate entry");
 
-  StringRef PLSuffix;
+  std::string PLSuffix;
   if (const NamedDecl *NDec = dyn_cast<NamedDecl>(D))
     PLSuffix = getPLNormalizedName(*NDec);
   else
     PLSuffix = "";
-
   // 0. If this is a type of declaration that has a canonical declaration
   //    use or create-and-use that declname
   const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
@@ -1070,8 +1069,6 @@ void SymbolTable::createSymbolTableEntry(const Decl *D) {
   } else {
     DeclName = makeFreshDeclName(PLSuffix);
   }
-  // TODO: update DeclName:StringRef -> Decl Map
-
   // 2. Compute ParentDom
   RplDomain *ParentDom = 0;
   if (FD && CanFD != FD) {
@@ -1080,11 +1077,13 @@ void SymbolTable::createSymbolTableEntry(const Decl *D) {
     const Decl *EnclosingDecl = getDeclFromContext(DC);
     ParentDom = getRplDomain(EnclosingDecl);
   }
+  //*OSv2  << "DEBUG:: createSymbolTableEntry("
+  //    << DeclName << ", " << DomName << ", " << ParentDom <<")\n";
   SymTable[D] = new SymbolTableEntry(DeclName, DomName, ParentDom);
 }
 
 VarRpl *SymbolTable::createFreshRplVar(const ValueDecl *D) {
-  StringRef NormalizedDeclName = getPLNormalizedName(*D);
+  std::string NormalizedDeclName = getPLNormalizedName(*D);
   StringRef Name = makeFreshRVName(NormalizedDeclName);
   *OSv2 << "DEBUG:: VarRpl Fresh Name created: " << Name << "\n";
   RplDomain *Dom = buildDomain(D);
@@ -1095,7 +1094,7 @@ VarRpl *SymbolTable::createFreshRplVar(const ValueDecl *D) {
 
 VarEffectSummary *SymbolTable::createFreshEffectSumVar(const FunctionDecl *D) {
   assert(D && "Internal Error: unexpected null pointer");
-  StringRef NormalizedDeclName = getPLNormalizedName(*D);
+  std::string NormalizedDeclName = getPLNormalizedName(*D);
   StringRef Name = makeFreshESVName(NormalizedDeclName);
   VarEffectSummary *Result = new VarEffectSummary(Name);
   VarEffectSummarySet.insert(Result);

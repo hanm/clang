@@ -325,7 +325,7 @@ bool isSimpleIdentifier(const llvm::StringRef& Str) {
 }
 
 
-StringRef getPLNormalizedName(const NamedDecl &Dec) {
+std::string getPLNormalizedName(const NamedDecl &Dec) {
   StringRef Name = Dec.getNameAsString();
   if (Name.size() <= 0)
     return "UnNamed";
