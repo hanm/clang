@@ -42,8 +42,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_AST_MATCHERS_AST_MATCHERS_H
-#define LLVM_CLANG_AST_MATCHERS_AST_MATCHERS_H
+#ifndef LLVM_CLANG_ASTMATCHERS_ASTMATCHERS_H
+#define LLVM_CLANG_ASTMATCHERS_ASTMATCHERS_H
 
 #include "clang/AST/DeclFriend.h"
 #include "clang/AST/DeclTemplate.h"
@@ -155,6 +155,17 @@ anything() {
 ///   };
 /// \endcode
 const internal::VariadicAllOfMatcher<Decl> decl;
+
+/// \brief Matches a declaration of a linkage specification.
+///
+/// Given
+/// \code
+///   extern "C" {}
+/// \endcode
+/// linkageSpecDecl()
+///   matches "extern "C" {}"
+const internal::VariadicDynCastAllOfMatcher<Decl, LinkageSpecDecl>
+    linkageSpecDecl;
 
 /// \brief Matches a declaration of anything that could have a name.
 ///
@@ -1558,7 +1569,7 @@ AST_MATCHER_P(NamedDecl, matchesName, std::string, RegExp) {
 inline internal::PolymorphicMatcherWithParam1<
     internal::HasOverloadedOperatorNameMatcher, StringRef,
     AST_POLYMORPHIC_SUPPORTED_TYPES_2(CXXOperatorCallExpr, FunctionDecl)>
-hasOverloadedOperatorName(const StringRef Name) {
+hasOverloadedOperatorName(StringRef Name) {
   return internal::PolymorphicMatcherWithParam1<
       internal::HasOverloadedOperatorNameMatcher, StringRef,
       AST_POLYMORPHIC_SUPPORTED_TYPES_2(CXXOperatorCallExpr, FunctionDecl)>(
@@ -2285,7 +2296,7 @@ AST_POLYMORPHIC_MATCHER_P(hasAnyArgument, AST_POLYMORPHIC_SUPPORTED_TYPES_2(
     BoundNodesTreeBuilder Result(*Builder);
     if (InnerMatcher.matches(*Node.getArg(I)->IgnoreParenImpCasts(), Finder,
                              &Result)) {
-      *Builder = Result;
+      *Builder = std::move(Result);
       return true;
     }
   }
@@ -2371,6 +2382,19 @@ AST_MATCHER_P(FunctionDecl, returns,
 ///   matches the declaration of f and g, but not the declaration h
 AST_MATCHER(FunctionDecl, isExternC) {
   return Node.isExternC();
+}
+
+/// \brief Matches deleted function declarations.
+///
+/// Given:
+/// \code
+///   void Func();
+///   void DeletedFunc() = delete;
+/// \endcode
+/// functionDecl(isDeleted())
+///   matches the declaration of DeletedFunc, but not Func.
+AST_MATCHER(FunctionDecl, isDeleted) {
+  return Node.isDeleted();
 }
 
 /// \brief Matches the condition expression of an if statement, for loop,
@@ -2952,6 +2976,46 @@ AST_POLYMORPHIC_MATCHER(
   return (Node.getTemplateSpecializationKind() == TSK_ImplicitInstantiation ||
           Node.getTemplateSpecializationKind() ==
           TSK_ExplicitInstantiationDefinition);
+}
+
+/// \brief Matches declarations that are template instantiations or are inside
+/// template instantiations.
+///
+/// Given
+/// \code
+///   template<typename T> void A(T t) { T i; }
+///   A(0);
+///   A(0U);
+/// \endcode
+/// functionDecl(isInstantiated())
+///   matches 'A(int) {...};' and 'A(unsigned) {...}'.
+AST_MATCHER(Decl, isInstantiated) {
+  auto IsInstantiation = decl(anyOf(recordDecl(isTemplateInstantiation()),
+                                    functionDecl(isTemplateInstantiation())));
+  auto InnerMatcher =
+      decl(anyOf(IsInstantiation, hasAncestor(IsInstantiation)));
+  return InnerMatcher.matches(Node, Finder, Builder);
+}
+
+/// \brief Matches statements inside of a template instantiation.
+///
+/// Given
+/// \code
+///   int j;
+///   template<typename T> void A(T t) { T i; j += 42;}
+///   A(0);
+///   A(0U);
+/// \endcode
+/// declStmt(isInTemplateInstantiation())
+///   matches 'int i;' and 'unsigned i'.
+/// unless(stmt(isInTemplateInstantiation()))
+///   will NOT match j += 42; as it's shared between the template definition and
+///   instantiation.
+AST_MATCHER(Stmt, isInTemplateInstantiation) {
+  auto InnerMatcher =
+      stmt(hasAncestor(decl(anyOf(recordDecl(isTemplateInstantiation()),
+                                  functionDecl(isTemplateInstantiation())))));
+  return InnerMatcher.matches(Node, Finder, Builder);
 }
 
 /// \brief Matches explicit template specializations of function, class, or
@@ -3601,7 +3665,7 @@ AST_MATCHER_P(SwitchStmt, forEachSwitchCase, internal::Matcher<SwitchCase>,
       Result.addMatch(CaseBuilder);
     }
   }
-  *Builder = Result;
+  *Builder = std::move(Result);
   return Matched;
 }
 
@@ -3624,7 +3688,7 @@ AST_MATCHER_P(CXXConstructorDecl, forEachConstructorInitializer,
       Result.addMatch(InitBuilder);
     }
   }
-  *Builder = Result;
+  *Builder = std::move(Result);
   return Matched;
 }
 
@@ -3645,6 +3709,22 @@ AST_MATCHER_P(CaseStmt, hasCaseConstant, internal::Matcher<Expr>,
   return InnerMatcher.matches(*Node.getLHS(), Finder, Builder);
 }
 
+/// \brief Matches declaration that has a given attribute.
+///
+/// Given
+/// \code
+///   __attribute__((device)) void f() { ... }
+/// \endcode
+/// decl(hasAttr(clang::attr::CUDADevice)) matches the function declaration of
+/// f.
+AST_MATCHER_P(Decl, hasAttr, attr::Kind, AttrKind) {
+  for (const auto *Attr : Node.attrs()) {
+    if (Attr->getKind() == AttrKind)
+      return true;
+  }
+  return false;
+}
+
 /// \brief Matches CUDA kernel call expression.
 ///
 /// Example matches,
@@ -3654,40 +3734,7 @@ AST_MATCHER_P(CaseStmt, hasCaseConstant, internal::Matcher<Expr>,
 const internal::VariadicDynCastAllOfMatcher<Stmt, CUDAKernelCallExpr>
     CUDAKernelCallExpr;
 
-/// \brief Matches declaration that has CUDA device attribute.
-///
-/// Given
-/// \code
-///   __attribute__((device)) void f() { ... }
-/// \endcode
-/// matches the function declaration of f.
-AST_MATCHER(Decl, hasCudaDeviceAttr) {
-  return Node.hasAttr<clang::CUDADeviceAttr>();
-}
-
-/// \brief Matches declaration that has CUDA host attribute.
-///
-/// Given
-/// \code
-///   __attribute__((host)) void f() { ... }
-/// \endcode
-/// matches the function declaration of f.
-AST_MATCHER(Decl, hasCudaHostAttr) {
-  return Node.hasAttr<clang::CUDAHostAttr>();
-}
-
-/// \brief  Matches declaration that has CUDA global attribute.
-///
-/// Given
-/// \code
-///   __attribute__((global)) void f() { ... }
-/// \endcode
-/// matches the function declaration of f.
-AST_MATCHER(Decl, hasCudaGlobalAttr) {
-  return Node.hasAttr<clang::CUDAGlobalAttr>();
-}
-
 } // end namespace ast_matchers
 } // end namespace clang
 
-#endif // LLVM_CLANG_AST_MATCHERS_AST_MATCHERS_H
+#endif

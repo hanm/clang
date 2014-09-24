@@ -13,8 +13,8 @@
 |*                                                                            *|
 \*===----------------------------------------------------------------------===*/
 
-#ifndef CLANG_C_INDEX_H
-#define CLANG_C_INDEX_H
+#ifndef LLVM_CLANG_C_INDEX_H
+#define LLVM_CLANG_C_INDEX_H
 
 #include <time.h>
 
@@ -32,7 +32,7 @@
  * compatible, thus CINDEX_VERSION_MAJOR is expected to remain stable.
  */
 #define CINDEX_VERSION_MAJOR 0
-#define CINDEX_VERSION_MINOR 27
+#define CINDEX_VERSION_MINOR 28
 
 #define CINDEX_VERSION_ENCODE(major, minor) ( \
       ((major) * 10000)                       \
@@ -334,6 +334,12 @@ clang_isFileMultipleIncludeGuarded(CXTranslationUnit tu, CXFile file);
  */
 CINDEX_LINKAGE CXFile clang_getFile(CXTranslationUnit tu,
                                     const char *file_name);
+
+/**
+ * \brief Returns non-zero if the \c file1 and \c file2 point to the same file,
+ * or they are both NULL.
+ */
+CINDEX_LINKAGE int clang_File_isEqual(CXFile file1, CXFile file2);
 
 /**
  * @}
@@ -2203,7 +2209,19 @@ enum CXCursorKind {
    */
   CXCursor_OMPAtomicDirective            = 249,
 
-  CXCursor_LastStmt                      = CXCursor_OMPAtomicDirective,
+  /** \brief OpenMP for simd directive.
+   */
+  CXCursor_OMPForSimdDirective           = 250,
+
+  /** \brief OpenMP parallel for simd directive.
+   */
+  CXCursor_OMPParallelForSimdDirective   = 251,
+
+  /** \brief OpenMP target directive.
+   */
+  CXCursor_OMPTargetDirective            = 252,
+
+  CXCursor_LastStmt                      = CXCursor_OMPTargetDirective,
 
   /**
    * \brief Cursor that represents the translation unit itself.

@@ -510,6 +510,12 @@ namespace {
   class VariadicArgument : public Argument {
     std::string Type, ArgName, ArgSizeName, RangeName;
 
+  protected:
+    // Assumed to receive a parameter: raw_ostream OS.
+    virtual void writeValueImpl(raw_ostream &OS) const {
+      OS << "    OS << Val;\n";
+    }
+
   public:
     VariadicArgument(const Record &Arg, StringRef Attr, std::string T)
         : Argument(Arg, Attr), Type(T), ArgName(getLowerName().str() + "_"),
@@ -589,9 +595,9 @@ namespace {
       OS << "  bool isFirst = true;\n"
          << "  for (const auto &Val : " << RangeName << "()) {\n"
          << "    if (isFirst) isFirst = false;\n"
-         << "    else OS << \", \";\n"
-         << "    OS << Val;\n"
-         << "  }\n";
+         << "    else OS << \", \";\n";
+      writeValueImpl(OS);
+      OS << "  }\n";
       OS << "  OS << \"";
     }
     void writeDump(raw_ostream &OS) const override {
@@ -678,7 +684,11 @@ namespace {
       OS << "Record.push_back(SA->get" << getUpperName() << "());\n";
     }
     void writeValue(raw_ostream &OS) const override {
-      OS << "\" << get" << getUpperName() << "() << \"";
+      // FIXME: this isn't 100% correct -- some enum arguments require printing
+      // as a string literal, while others require printing as an identifier.
+      // Tablegen currently does not distinguish between the two forms.
+      OS << "\\\"\" << " << getAttrName() << "Attr::Convert" << type << "ToStr(get"
+         << getUpperName() << "()) << \"\\\"";
     }
     void writeDump(raw_ostream &OS) const override {
       OS << "    switch(SA->get" << getUpperName() << "()) {\n";
@@ -703,13 +713,40 @@ namespace {
       OS << "    if (R) {\n";
       OS << "      Out = *R;\n      return true;\n    }\n";
       OS << "    return false;\n";
-      OS << "  }\n";
+      OS << "  }\n\n";
+
+      // Mapping from enumeration values back to enumeration strings isn't
+      // trivial because some enumeration values have multiple named
+      // enumerators, such as type_visibility(internal) and
+      // type_visibility(hidden) both mapping to TypeVisibilityAttr::Hidden.
+      OS << "  static const char *Convert" << type << "ToStr("
+         << type << " Val) {\n"
+         << "    switch(Val) {\n";
+      std::set<std::string> Uniques;
+      for (size_t I = 0; I < enums.size(); ++I) {
+        if (Uniques.insert(enums[I]).second)
+          OS << "    case " << getAttrName() << "Attr::" << enums[I]
+             << ": return \"" << values[I] << "\";\n";       
+      }
+      OS << "    }\n"
+         << "    llvm_unreachable(\"No enumerator with that value\");\n"
+         << "  }\n";
     }
   };
   
   class VariadicEnumArgument: public VariadicArgument {
     std::string type, QualifiedTypeName;
     std::vector<std::string> values, enums, uniques;
+
+  protected:
+    void writeValueImpl(raw_ostream &OS) const override {
+      // FIXME: this isn't 100% correct -- some enum arguments require printing
+      // as a string literal, while others require printing as an identifier.
+      // Tablegen currently does not distinguish between the two forms.
+      OS << "    OS << \"\\\"\" << " << getAttrName() << "Attr::Convert" << type
+         << "ToStr(Val)" << "<< \"\\\"\";\n";
+    }
+
   public:
     VariadicEnumArgument(const Record &Arg, StringRef Attr)
       : VariadicArgument(Arg, Attr, Arg.getValueAsString("Type")),
@@ -785,7 +822,20 @@ namespace {
       OS << "    if (R) {\n";
       OS << "      Out = *R;\n      return true;\n    }\n";
       OS << "    return false;\n";
-      OS << "  }\n";
+      OS << "  }\n\n";
+
+      OS << "  static const char *Convert" << type << "ToStr("
+        << type << " Val) {\n"
+        << "    switch(Val) {\n";
+      std::set<std::string> Uniques;
+      for (size_t I = 0; I < enums.size(); ++I) {
+        if (Uniques.insert(enums[I]).second)
+          OS << "    case " << getAttrName() << "Attr::" << enums[I]
+          << ": return \"" << values[I] << "\";\n";
+      }
+      OS << "    }\n"
+        << "    llvm_unreachable(\"No enumerator with that value\");\n"
+        << "  }\n";
     }
   };
 
@@ -969,44 +1019,49 @@ createArgument(const Record &Arg, StringRef Attr,
   if (!Search)
     Search = &Arg;
 
-  Argument *Ptr = nullptr;
+  std::unique_ptr<Argument> Ptr;
   llvm::StringRef ArgName = Search->getName();
 
-  if (ArgName == "AlignedArgument") Ptr = new AlignedArgument(Arg, Attr);
-  else if (ArgName == "EnumArgument") Ptr = new EnumArgument(Arg, Attr);
-  else if (ArgName == "ExprArgument") Ptr = new ExprArgument(Arg, Attr);
+  if (ArgName == "AlignedArgument")
+    Ptr = llvm::make_unique<AlignedArgument>(Arg, Attr);
+  else if (ArgName == "EnumArgument")
+    Ptr = llvm::make_unique<EnumArgument>(Arg, Attr);
+  else if (ArgName == "ExprArgument")
+    Ptr = llvm::make_unique<ExprArgument>(Arg, Attr);
   else if (ArgName == "FunctionArgument")
-    Ptr = new SimpleArgument(Arg, Attr, "FunctionDecl *");
+    Ptr = llvm::make_unique<SimpleArgument>(Arg, Attr, "FunctionDecl *");
   else if (ArgName == "IdentifierArgument")
-    Ptr = new SimpleArgument(Arg, Attr, "IdentifierInfo *");
+    Ptr = llvm::make_unique<SimpleArgument>(Arg, Attr, "IdentifierInfo *");
   else if (ArgName == "DefaultBoolArgument")
-    Ptr = new DefaultSimpleArgument(Arg, Attr, "bool",
-                                    Arg.getValueAsBit("Default"));
-  else if (ArgName == "BoolArgument") Ptr = new SimpleArgument(Arg, Attr, 
-                                                               "bool");
+    Ptr = llvm::make_unique<DefaultSimpleArgument>(
+        Arg, Attr, "bool", Arg.getValueAsBit("Default"));
+  else if (ArgName == "BoolArgument")
+    Ptr = llvm::make_unique<SimpleArgument>(Arg, Attr, "bool");
   else if (ArgName == "DefaultIntArgument")
-    Ptr = new DefaultSimpleArgument(Arg, Attr, "int",
-                                    Arg.getValueAsInt("Default"));
-  else if (ArgName == "IntArgument") Ptr = new SimpleArgument(Arg, Attr, "int");
-  else if (ArgName == "StringArgument") Ptr = new StringArgument(Arg, Attr);
-  else if (ArgName == "TypeArgument") Ptr = new TypeArgument(Arg, Attr);
+    Ptr = llvm::make_unique<DefaultSimpleArgument>(
+        Arg, Attr, "int", Arg.getValueAsInt("Default"));
+  else if (ArgName == "IntArgument")
+    Ptr = llvm::make_unique<SimpleArgument>(Arg, Attr, "int");
+  else if (ArgName == "StringArgument")
+    Ptr = llvm::make_unique<StringArgument>(Arg, Attr);
+  else if (ArgName == "TypeArgument")
+    Ptr = llvm::make_unique<TypeArgument>(Arg, Attr);
   else if (ArgName == "UnsignedArgument")
-    Ptr = new SimpleArgument(Arg, Attr, "unsigned");
+    Ptr = llvm::make_unique<SimpleArgument>(Arg, Attr, "unsigned");
   else if (ArgName == "VariadicUnsignedArgument")
-    Ptr = new VariadicArgument(Arg, Attr, "unsigned");
+    Ptr = llvm::make_unique<VariadicArgument>(Arg, Attr, "unsigned");
   else if (ArgName == "VariadicEnumArgument")
-    Ptr = new VariadicEnumArgument(Arg, Attr);
+    Ptr = llvm::make_unique<VariadicEnumArgument>(Arg, Attr);
   else if (ArgName == "VariadicExprArgument")
-    Ptr = new VariadicExprArgument(Arg, Attr);
+    Ptr = llvm::make_unique<VariadicExprArgument>(Arg, Attr);
   else if (ArgName == "VersionArgument")
-    Ptr = new VersionArgument(Arg, Attr);
+    Ptr = llvm::make_unique<VersionArgument>(Arg, Attr);
 
   if (!Ptr) {
     // Search in reverse order so that the most-derived type is handled first.
     std::vector<Record*> Bases = Search->getSuperClasses();
     for (const auto *Base : llvm::make_range(Bases.rbegin(), Bases.rend())) {
-      Ptr = createArgument(Arg, Attr, Base).release();
-      if (Ptr)
+      if ((Ptr = createArgument(Arg, Attr, Base)))
         break;
     }
   }
@@ -1014,7 +1069,7 @@ createArgument(const Record &Arg, StringRef Attr,
   if (Ptr && Arg.getValueAsBit("Optional"))
     Ptr->setOptional(true);
 
-  return std::unique_ptr<Argument>(Ptr);
+  return Ptr;
 }
 
 static void writeAvailabilityValue(raw_ostream &OS) {

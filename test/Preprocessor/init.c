@@ -1764,12 +1764,13 @@
 // ARM-NETBSD:#define __arm 1
 // ARM-NETBSD:#define __arm__ 1
 
-// RUN: %clang -target arm -arch armv7s -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-NO-EABI %s
-// RUN: %clang -target arm -arch armv6m -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-NO-EABI %s
-// RUN: %clang -target arm -arch armv7m -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-NO-EABI %s
-// RUN: %clang -target arm -arch armv7em -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-NO-EABI %s
+// RUN: %clang -target arm-apple-darwin-eabi -arch armv7s -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-NO-EABI %s
+// RUN: %clang -target arm-apple-darwin-eabi -arch armv6m -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-EABI %s
+// RUN: %clang -target arm-apple-darwin-eabi -arch armv7m -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-EABI %s
+// RUN: %clang -target arm-apple-darwin-eabi -arch armv7em -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-EABI %s
 // RUN: %clang -target thumbv7-apple-darwin-eabi -arch armv7 -x c -E -dM %s -o - | FileCheck --check-prefix=ARM-DARWIN-NO-EABI %s
 // ARM-DARWIN-NO-EABI-NOT: #define __ARM_EABI__ 1
+// ARM-DARWIN-EABI: #define __ARM_EABI__ 1
 
 // Check that -mhwdiv works properly for targets which don't have the hwdiv feature enabled by default.
 
@@ -6230,6 +6231,13 @@
 // X86_64:#define __x86_64 1
 // X86_64:#define __x86_64__ 1
 //
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=x86_64h-none-none < /dev/null | FileCheck -check-prefix X86_64H %s
+//
+// X86_64H:#define __x86_64 1
+// X86_64H:#define __x86_64__ 1
+// X86_64H:#define __x86_64h 1
+// X86_64H:#define __x86_64h__ 1
+
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=x86_64-none-none-gnux32 < /dev/null | FileCheck -check-prefix X32 %s
 //
 // X32:#define _ILP32 1

@@ -267,8 +267,8 @@ pushTemporaryCleanup(CodeGenFunction &CGF, const MaterializeTemporaryExpr *M,
           dyn_cast_or_null<VarDecl>(M->getExtendingDecl()));
       CleanupArg = llvm::Constant::getNullValue(CGF.Int8PtrTy);
     } else {
-      CleanupFn =
-        CGF.CGM.GetAddrOfCXXDestructor(ReferenceTemporaryDtor, Dtor_Complete);
+      CleanupFn = CGF.CGM.getAddrOfCXXStructor(ReferenceTemporaryDtor,
+                                               StructorType::Complete);
       CleanupArg = cast<llvm::Constant>(ReferenceTemporary);
     }
     CGF.CGM.getCXXABI().registerGlobalDtor(
@@ -711,6 +711,34 @@ EmitComplexPrePostIncDec(const UnaryOperator *E, LValue LV,
   return isPre ? IncVal : InVal;
 }
 
+void CodeGenFunction::EmitAlignmentAssumption(llvm::Value *PtrValue,
+                                              unsigned Alignment,
+                                              llvm::Value *OffsetValue) {
+  llvm::Value *PtrIntValue =
+    Builder.CreatePtrToInt(PtrValue, IntPtrTy, "ptrint");
+
+  llvm::Value *Mask = llvm::ConstantInt::get(IntPtrTy,
+    Alignment > 0 ? Alignment - 1 : 0);
+  if (OffsetValue) {
+    bool IsOffsetZero = false;
+    if (llvm::ConstantInt *CI = dyn_cast<llvm::ConstantInt>(OffsetValue))
+      IsOffsetZero = CI->isZero();
+
+    if (!IsOffsetZero) {
+      if (OffsetValue->getType() != IntPtrTy)
+        OffsetValue = Builder.CreateIntCast(OffsetValue, IntPtrTy,
+                        /*isSigned*/true, "offsetcast");
+      PtrIntValue = Builder.CreateSub(PtrIntValue, OffsetValue, "offsetptr");
+    }
+  }
+
+  llvm::Value *Zero = llvm::ConstantInt::get(IntPtrTy, 0);
+  llvm::Value *MaskedPtr = Builder.CreateAnd(PtrIntValue, Mask, "maskedptr");
+  llvm::Value *InvCond = Builder.CreateICmpEQ(MaskedPtr, Zero, "maskcond");
+
+  llvm::Value *FnAssume = CGM.getIntrinsic(llvm::Intrinsic::assume);
+  Builder.CreateCall(FnAssume, InvCond);
+}
 
 //===----------------------------------------------------------------------===//
 //                         LValue Expression Emission
@@ -1359,6 +1387,28 @@ RValue CodeGenFunction::EmitLoadOfExtVectorElementLValue(LValue LV) {
   Vec = Builder.CreateShuffleVector(Vec, llvm::UndefValue::get(Vec->getType()),
                                     MaskV);
   return RValue::get(Vec);
+}
+
+/// @brief Generates lvalue for partial ext_vector access.
+llvm::Value *CodeGenFunction::EmitExtVectorElementLValue(LValue LV) {
+  llvm::Value *VectorAddress = LV.getExtVectorAddr();
+  const VectorType *ExprVT = LV.getType()->getAs<VectorType>();
+  QualType EQT = ExprVT->getElementType();
+  llvm::Type *VectorElementTy = CGM.getTypes().ConvertType(EQT);
+  llvm::Type *VectorElementPtrToTy = VectorElementTy->getPointerTo();
+  
+  llvm::Value *CastToPointerElement =
+    Builder.CreateBitCast(VectorAddress,
+                          VectorElementPtrToTy, "conv.ptr.element");
+  
+  const llvm::Constant *Elts = LV.getExtVectorElts();
+  unsigned ix = getAccessedFieldNo(0, Elts);
+  
+  llvm::Value *VectorBasePtrPlusIx =
+    Builder.CreateInBoundsGEP(CastToPointerElement,
+                              llvm::ConstantInt::get(SizeTy, ix), "add.ptr");
+  
+  return VectorBasePtrPlusIx;
 }
 
 /// @brief Load of global gamed gegisters are always calls to intrinsics.
@@ -2115,7 +2165,7 @@ llvm::Constant *CodeGenFunction::EmitCheckTypeDescriptor(QualType T) {
   CGM.getDiags().ConvertArgToString(DiagnosticsEngine::ak_qualtype,
                                     (intptr_t)T.getAsOpaquePtr(),
                                     StringRef(), StringRef(), None, Buffer,
-                                    ArrayRef<intptr_t>());
+                                    None);
 
   llvm::Constant *Components[] = {
     Builder.getInt16(TypeKind), Builder.getInt16(TypeInfo),
@@ -2323,7 +2373,8 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E,
 
   // If the base is a vector type, then we are forming a vector element lvalue
   // with this subscript.
-  if (E->getBase()->getType()->isVectorType()) {
+  if (E->getBase()->getType()->isVectorType() &&
+      !isa<ExtVectorElementExpr>(E->getBase())) {
     // Emit the vector as an lvalue to get its address.
     LValue LHS = EmitLValue(E->getBase());
     assert(LHS.isSimple() && "Can only subscript lvalue vectors here!");
@@ -2339,8 +2390,17 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E,
   // size is a VLA or Objective-C interface.
   llvm::Value *Address = nullptr;
   CharUnits ArrayAlignment;
-  if (const VariableArrayType *vla =
-        getContext().getAsVariableArrayType(E->getType())) {
+  if (isa<ExtVectorElementExpr>(E->getBase())) {
+    LValue LV = EmitLValue(E->getBase());
+    Address = EmitExtVectorElementLValue(LV);
+    Address = Builder.CreateInBoundsGEP(Address, Idx, "arrayidx");
+    const VectorType *ExprVT = LV.getType()->getAs<VectorType>();
+    QualType EQT = ExprVT->getElementType();
+    return MakeAddrLValue(Address, EQT,
+                          getContext().getTypeAlignInChars(EQT));
+  }
+  else if (const VariableArrayType *vla =
+           getContext().getAsVariableArrayType(E->getType())) {
     // The base must be a pointer, which is not an aggregate.  Emit
     // it.  It needs to be emitted first in case it's what captures
     // the VLA bounds.
@@ -3046,8 +3106,8 @@ RValue CodeGenFunction::EmitCallExpr(const CallExpr *E,
   }
 
   llvm::Value *Callee = EmitScalarExpr(E->getCallee());
-  return EmitCall(E->getCallee()->getType(), Callee, E->getLocStart(),
-                  ReturnValue, E->arg_begin(), E->arg_end(), TargetDecl);
+  return EmitCall(E->getCallee()->getType(), Callee, E, ReturnValue,
+                  TargetDecl);
 }
 
 LValue CodeGenFunction::EmitBinaryOperatorLValue(const BinaryOperator *E) {
@@ -3218,10 +3278,7 @@ LValue CodeGenFunction::EmitStmtExprLValue(const StmtExpr *E) {
 }
 
 RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
-                                 SourceLocation CallLoc,
-                                 ReturnValueSlot ReturnValue,
-                                 CallExpr::const_arg_iterator ArgBeg,
-                                 CallExpr::const_arg_iterator ArgEnd,
+                                 const CallExpr *E, ReturnValueSlot ReturnValue,
                                  const Decl *TargetDecl) {
   // Get the actual function type. The callee type will always be a pointer to
   // function type or a block pointer type.
@@ -3275,7 +3332,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
       llvm::Value *CalleeRTTIMatch =
           Builder.CreateICmpEQ(CalleeRTTI, FTRTTIConst);
       llvm::Constant *StaticData[] = {
-        EmitCheckSourceLocation(CallLoc),
+        EmitCheckSourceLocation(E->getLocStart()),
         EmitCheckTypeDescriptor(CalleeType)
       };
       EmitCheck(CalleeRTTIMatch,
@@ -3290,7 +3347,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
   }
 
   CallArgList Args;
-  EmitCallArgs(Args, dyn_cast<FunctionProtoType>(FnType), ArgBeg, ArgEnd,
+  EmitCallArgs(Args, dyn_cast<FunctionProtoType>(FnType), E->arg_begin(),
+               E->arg_end(), E->getDirectCallee(), /*ParamsToSkip*/ 0,
                ForceColumnInfo);
 
   const CGFunctionInfo &FnInfo =
