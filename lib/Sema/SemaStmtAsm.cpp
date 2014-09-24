@@ -15,6 +15,7 @@
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/TypeLoc.h"
 #include "clang/Basic/TargetInfo.h"
+#include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/Initialization.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/Scope.h"
@@ -121,6 +122,20 @@ StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
       return StmtError();
 
     OutputConstraintInfos.push_back(Info);
+
+    const Type *Ty = OutputExpr->getType().getTypePtr();
+
+    // If this is a dependent type, just continue. We don't know the size of a
+    // dependent type.
+    if (Ty->isDependentType())
+      continue;
+
+    unsigned Size = Context.getTypeSize(Ty);
+    if (!Context.getTargetInfo().validateOutputSize(Literal->getString(),
+                                                    Size))
+      return StmtError(Diag(OutputExpr->getLocStart(),
+                            diag::err_asm_invalid_output_size)
+                       << Info.getConstraintStr());
   }
 
   SmallVector<TargetInfo::ConstraintInfo, 4> InputConstraintInfos;
@@ -257,11 +272,22 @@ StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
       continue;
 
     unsigned Size = Context.getTypeSize(Ty);
-    if (!Context.getTargetInfo()
-          .validateConstraintModifier(Literal->getString(), Piece.getModifier(),
-                                      Size))
+    std::string SuggestedModifier;
+    if (!Context.getTargetInfo().validateConstraintModifier(
+            Literal->getString(), Piece.getModifier(), Size,
+            SuggestedModifier)) {
       Diag(Exprs[ConstraintIdx]->getLocStart(),
            diag::warn_asm_mismatched_size_modifier);
+
+      if (!SuggestedModifier.empty()) {
+        auto B = Diag(Piece.getRange().getBegin(),
+                      diag::note_asm_missing_constraint_modifier)
+                 << SuggestedModifier;
+        SuggestedModifier = "%" + SuggestedModifier + Piece.getString();
+        B.AddFixItHint(FixItHint::CreateReplacement(Piece.getRange(),
+                                                    SuggestedModifier));
+      }
+    }
   }
 
   // Validate tied input operands for type mismatches.
@@ -394,6 +420,19 @@ ExprResult Sema::LookupInlineAsmIdentifier(CXXScopeSpec &SS,
   Result = CheckPlaceholderExpr(Result.get());
   if (!Result.isUsable()) return Result;
 
+  // Referring to parameters is not allowed in naked functions.
+  if (DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(Result.get())) {
+    if (ParmVarDecl *Parm = dyn_cast<ParmVarDecl>(DRE->getDecl())) {
+      if (FunctionDecl *Func = dyn_cast<FunctionDecl>(Parm->getDeclContext())) {
+        if (Func->hasAttr<NakedAttr>()) {
+          Diag(Id.getLocStart(), diag::err_asm_naked_parm_ref);
+          Diag(Func->getAttr<NakedAttr>()->getLocation(), diag::note_attribute);
+          return ExprError();
+        }
+      }
+    }
+  }
+
   QualType T = Result.get()->getType();
 
   // For now, reject dependent types.
@@ -443,9 +482,10 @@ bool Sema::LookupInlineAsmField(StringRef Base, StringRef Member,
   NamedDecl *FoundDecl = BaseResult.getFoundDecl();
   if (VarDecl *VD = dyn_cast<VarDecl>(FoundDecl))
     RT = VD->getType()->getAs<RecordType>();
-  else if (TypedefNameDecl *TD = dyn_cast<TypedefNameDecl>(FoundDecl))
+  else if (TypedefNameDecl *TD = dyn_cast<TypedefNameDecl>(FoundDecl)) {
+    MarkAnyDeclReferenced(TD->getLocation(), TD, /*OdrUse=*/false);
     RT = TD->getUnderlyingType()->getAs<RecordType>();
-  else if (TypeDecl *TD = dyn_cast<TypeDecl>(FoundDecl))
+  } else if (TypeDecl *TD = dyn_cast<TypeDecl>(FoundDecl))
     RT = TD->getTypeForDecl()->getAs<RecordType>();
   if (!RT)
     return true;
@@ -481,10 +521,39 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
                                 ArrayRef<Expr*> Exprs,
                                 SourceLocation EndLoc) {
   bool IsSimple = (NumOutputs != 0 || NumInputs != 0);
+  getCurFunction()->setHasBranchProtectedScope();
   MSAsmStmt *NS =
     new (Context) MSAsmStmt(Context, AsmLoc, LBraceLoc, IsSimple,
                             /*IsVolatile*/ true, AsmToks, NumOutputs, NumInputs,
                             Constraints, Exprs, AsmString,
                             Clobbers, EndLoc);
   return NS;
+}
+
+LabelDecl *Sema::GetOrCreateMSAsmLabel(StringRef ExternalLabelName,
+                                       SourceLocation Location,
+                                       bool AlwaysCreate) {
+  LabelDecl* Label = LookupOrCreateLabel(PP.getIdentifierInfo(ExternalLabelName),
+                                         Location);
+
+  if (!Label->isMSAsmLabel()) {
+    // Otherwise, insert it, but only resolve it if we have seen the label itself.
+    std::string InternalName;
+    llvm::raw_string_ostream OS(InternalName);
+    // Create an internal name for the label.  The name should not be a valid mangled
+    // name, and should be unique.  We use a dot to make the name an invalid mangled
+    // name.
+    OS << "__MSASMLABEL_." << MSAsmLabelNameCounter++ << "__" << ExternalLabelName;
+    Label->setMSAsmLabel(OS.str());
+  }
+  if (AlwaysCreate) {
+    // The label might have been created implicitly from a previously encountered
+    // goto statement.  So, for both newly created and looked up labels, we mark
+    // them as resolved.
+    Label->setMSAsmLabelResolved();
+  }
+  // Adjust their location for being able to generate accurate diagnostics.
+  Label->setLocation(Location);
+
+  return Label;
 }

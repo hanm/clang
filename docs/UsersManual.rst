@@ -481,7 +481,7 @@ TODO: Generate this from tblgen. Define one anchor per warning group.
    Warn about an unusable copy constructor when binding a reference to a
    temporary.
 
-   This option, which defaults to on, enables warnings about binding a
+   This option enables warnings about binding a
    reference to a temporary when the temporary doesn't have a usable
    copy constructor. For example:
 
@@ -977,6 +977,8 @@ are listed below.
    -  ``-fsanitize=function``: Indirect call of a function through a
       function pointer of the wrong type (Linux, C++ and x86/x86_64 only).
    -  ``-fsanitize=integer-divide-by-zero``: Integer division by zero.
+   -  ``-fsanitize=nonnull-attribute``: Passing null pointer as a function
+      parameter which is declared to never be null.
    -  ``-fsanitize=null``: Use of a null pointer or creation of a null
       reference.
    -  ``-fsanitize=object-size``: An attempt to use bytes which the
@@ -986,6 +988,8 @@ are listed below.
       more problems at higher optimization levels.
    -  ``-fsanitize=return``: In C++, reaching the end of a
       value-returning function without returning a value.
+   -  ``-fsanitize=returns-nonnull-attribute``: Returning null pointer
+      from a function which is declared to never return null.
    -  ``-fsanitize=shift``: Shift operators where the amount shifted is
       greater or equal to the promoted bit-width of the left hand side
       or less than zero, or where the left hand side is negative. For a

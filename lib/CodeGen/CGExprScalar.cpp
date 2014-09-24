@@ -274,6 +274,10 @@ public:
   Value *VisitExplicitCastExpr(ExplicitCastExpr *E) {
     if (E->getType()->isVariablyModifiedType())
       CGF.EmitVariablyModifiedType(E->getType());
+
+    if (CGDebugInfo *DI = CGF.getDebugInfo())
+      DI->EmitExplicitCastType(E->getType());
+
     return VisitCastExpr(E);
   }
   Value *VisitCastExpr(CastExpr *E);
@@ -701,7 +705,8 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
   llvm::Type *SrcTy = Src->getType();
 
   // If casting to/from storage-only half FP, use special intrinsics.
-  if (SrcType->isHalfType() && !CGF.getContext().getLangOpts().NativeHalfType) {
+  if (SrcType->isHalfType() && !CGF.getContext().getLangOpts().NativeHalfType &&
+      !CGF.getContext().getLangOpts().HalfArgsAndReturns) {
     Src = Builder.CreateCall(
         CGF.CGM.getIntrinsic(llvm::Intrinsic::convert_from_fp16,
                              CGF.CGM.FloatTy),
@@ -773,7 +778,8 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
                              DstTy);
 
   // Cast to half via float
-  if (DstType->isHalfType() && !CGF.getContext().getLangOpts().NativeHalfType)
+  if (DstType->isHalfType() && !CGF.getContext().getLangOpts().NativeHalfType &&
+      !CGF.getContext().getLangOpts().HalfArgsAndReturns)
     DstTy = CGF.FloatTy;
 
   if (isa<llvm::IntegerType>(SrcTy)) {
@@ -1691,7 +1697,8 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
     // Add the inc/dec to the real part.
     llvm::Value *amt;
 
-    if (type->isHalfType() && !CGF.getContext().getLangOpts().NativeHalfType) {
+    if (type->isHalfType() && !CGF.getContext().getLangOpts().NativeHalfType &&
+        !CGF.getContext().getLangOpts().HalfArgsAndReturns) {
       // Another special case: half FP increment should be done via float
       value = Builder.CreateCall(
           CGF.CGM.getIntrinsic(llvm::Intrinsic::convert_from_fp16,
@@ -1714,7 +1721,8 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
     }
     value = Builder.CreateFAdd(value, amt, isInc ? "inc" : "dec");
 
-    if (type->isHalfType() && !CGF.getContext().getLangOpts().NativeHalfType)
+    if (type->isHalfType() && !CGF.getContext().getLangOpts().NativeHalfType &&
+        !CGF.getContext().getLangOpts().HalfArgsAndReturns)
       value = Builder.CreateCall(
           CGF.CGM.getIntrinsic(llvm::Intrinsic::convert_to_fp16,
                                CGF.CGM.FloatTy),

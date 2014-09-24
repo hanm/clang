@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_TOOLING_JSON_COMPILATION_DATABASE_H
-#define LLVM_CLANG_TOOLING_JSON_COMPILATION_DATABASE_H
+#ifndef LLVM_CLANG_TOOLING_JSONCOMPILATIONDATABASE_H
+#define LLVM_CLANG_TOOLING_JSONCOMPILATIONDATABASE_H
 
 #include "clang/Basic/LLVM.h"
 #include "clang/Tooling/CompilationDatabase.h"
@@ -81,8 +81,9 @@ public:
 
 private:
   /// \brief Constructs a JSON compilation database on a memory buffer.
-  JSONCompilationDatabase(llvm::MemoryBuffer *Database)
-    : Database(Database), YAMLStream(Database->getBuffer(), SM) {}
+  JSONCompilationDatabase(std::unique_ptr<llvm::MemoryBuffer> Database)
+      : Database(std::move(Database)),
+        YAMLStream(this->Database->getBuffer(), SM) {}
 
   /// \brief Parses the database file and creates the index.
   ///
@@ -112,4 +113,4 @@ private:
 } // end namespace tooling
 } // end namespace clang
 
-#endif // LLVM_CLANG_TOOLING_JSON_COMPILATION_DATABASE_H
+#endif
