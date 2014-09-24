@@ -446,19 +446,23 @@ bool Sema::MergeCXXFunctionDecl(FunctionDecl *New, FunctionDecl *Old,
     bool OldParamHasDfl = OldParam->hasDefaultArg();
     bool NewParamHasDfl = NewParam->hasDefaultArg();
 
-    NamedDecl *ND = Old;
-
     // The declaration context corresponding to the scope is the semantic
     // parent, unless this is a local function declaration, in which case
     // it is that surrounding function.
-    DeclContext *ScopeDC = New->getLexicalDeclContext();
-    if (!ScopeDC->isFunctionOrMethod())
-      ScopeDC = New->getDeclContext();
-    if (S && !isDeclInScope(ND, ScopeDC, S) &&
+    DeclContext *ScopeDC = New->isLocalExternDecl()
+                               ? New->getLexicalDeclContext()
+                               : New->getDeclContext();
+    if (S && !isDeclInScope(Old, ScopeDC, S) &&
         !New->getDeclContext()->isRecord())
       // Ignore default parameters of old decl if they are not in
       // the same scope and this is not an out-of-line definition of
       // a member function.
+      OldParamHasDfl = false;
+    if (New->isLocalExternDecl() != Old->isLocalExternDecl())
+      // If only one of these is a local function declaration, then they are
+      // declared in different scopes, even though isDeclInScope may think
+      // they're in the same scope. (If both are local, the scope check is
+      // sufficent, and if neither is local, then they are in the same scope.)
       OldParamHasDfl = false;
 
     if (OldParamHasDfl && NewParamHasDfl) {
@@ -855,7 +859,7 @@ static bool CheckConstexprDeclStmt(Sema &SemaRef, const FunctionDecl *Dcl,
       // C++1y allows types to be defined, not just declared.
       if (cast<TagDecl>(DclIt)->isThisDeclarationADefinition())
         SemaRef.Diag(DS->getLocStart(),
-                     SemaRef.getLangOpts().CPlusPlus1y
+                     SemaRef.getLangOpts().CPlusPlus14
                        ? diag::warn_cxx11_compat_constexpr_type_definition
                        : diag::ext_constexpr_type_definition)
           << isa<CXXConstructorDecl>(Dcl);
@@ -896,7 +900,7 @@ static bool CheckConstexprDeclStmt(Sema &SemaRef, const FunctionDecl *Dcl,
         }
       }
       SemaRef.Diag(VD->getLocation(),
-                   SemaRef.getLangOpts().CPlusPlus1y
+                   SemaRef.getLangOpts().CPlusPlus14
                     ? diag::warn_cxx11_compat_constexpr_local_var
                     : diag::ext_constexpr_local_var)
         << isa<CXXConstructorDecl>(Dcl);
@@ -1041,7 +1045,7 @@ CheckConstexprFunctionStmt(Sema &SemaRef, const FunctionDecl *Dcl, Stmt *S,
   case Stmt::ContinueStmtClass:
     // C++1y allows all of these. We don't allow them as extensions in C++11,
     // because they don't make sense without variable mutation.
-    if (!SemaRef.getLangOpts().CPlusPlus1y)
+    if (!SemaRef.getLangOpts().CPlusPlus14)
       break;
     if (!Cxx1yLoc.isValid())
       Cxx1yLoc = S->getLocStart();
@@ -1115,7 +1119,7 @@ bool Sema::CheckConstexprFunctionBody(const FunctionDecl *Dcl, Stmt *Body) {
 
   if (Cxx1yLoc.isValid())
     Diag(Cxx1yLoc,
-         getLangOpts().CPlusPlus1y
+         getLangOpts().CPlusPlus14
            ? diag::warn_cxx11_compat_constexpr_body_invalid_stmt
            : diag::ext_constexpr_body_invalid_stmt)
       << isa<CXXConstructorDecl>(Dcl);
@@ -1180,7 +1184,7 @@ bool Sema::CheckConstexprFunctionBody(const FunctionDecl *Dcl, Stmt *Body) {
       // statement. We still do, unless the return type might be void, because
       // otherwise if there's no return statement, the function cannot
       // be used in a core constant expression.
-      bool OK = getLangOpts().CPlusPlus1y &&
+      bool OK = getLangOpts().CPlusPlus14 &&
                 (Dcl->getReturnType()->isVoidType() ||
                  Dcl->getReturnType()->isDependentType());
       Diag(Dcl->getLocation(),
@@ -1190,7 +1194,7 @@ bool Sema::CheckConstexprFunctionBody(const FunctionDecl *Dcl, Stmt *Body) {
     }
     if (ReturnStmts.size() > 1) {
       Diag(ReturnStmts.back(),
-           getLangOpts().CPlusPlus1y
+           getLangOpts().CPlusPlus14
              ? diag::warn_cxx11_compat_constexpr_body_multiple_return
              : diag::ext_constexpr_body_multiple_return);
       for (unsigned I = 0; I < ReturnStmts.size() - 1; ++I)
@@ -2205,16 +2209,17 @@ namespace {
     Sema &S;
     // List of Decls to generate a warning on.  Also remove Decls that become
     // initialized.
-    llvm::SmallPtrSet<ValueDecl*, 4> &Decls;
+    llvm::SmallPtrSetImpl<ValueDecl*> &Decls;
+    // Vector of decls to be removed from the Decl set prior to visiting the
+    // nodes.  These Decls may have been initialized in the prior initializer.
+    llvm::SmallVector<ValueDecl*, 4> DeclsToRemove;
     // If non-null, add a note to the warning pointing back to the constructor.
     const CXXConstructorDecl *Constructor;
   public:
     typedef EvaluatedExprVisitor<UninitializedFieldVisitor> Inherited;
     UninitializedFieldVisitor(Sema &S,
-                              llvm::SmallPtrSet<ValueDecl*, 4> &Decls,
-                              const CXXConstructorDecl *Constructor)
-      : Inherited(S.Context), S(S), Decls(Decls),
-        Constructor(Constructor) { }
+                              llvm::SmallPtrSetImpl<ValueDecl*> &Decls)
+      : Inherited(S.Context), S(S), Decls(Decls) { }
 
     void HandleMemberExpr(MemberExpr *ME, bool CheckReferenceOnly) {
       if (isa<EnumConstantDecl>(ME->getMemberDecl()))
@@ -2279,8 +2284,12 @@ namespace {
 
       if (BinaryConditionalOperator *BCO =
               dyn_cast<BinaryConditionalOperator>(E)) {
-        HandleValue(BCO->getCommon());
         HandleValue(BCO->getFalseExpr());
+        return;
+      }
+
+      if (OpaqueValueExpr *OVE = dyn_cast<OpaqueValueExpr>(E)) {
+        HandleValue(OVE->getSourceExpr());
         return;
       }
 
@@ -2299,6 +2308,20 @@ namespace {
       }
     }
 
+    void CheckInitializer(Expr *E, const CXXConstructorDecl *FieldConstructor,
+                          FieldDecl *Field) {
+      // Remove Decls that may have been initialized in the previous
+      // initializer.
+      for (ValueDecl* VD : DeclsToRemove)
+        Decls.erase(VD);
+
+      DeclsToRemove.clear();
+      Constructor = FieldConstructor;
+      Visit(E);
+      if (Field)
+        Decls.erase(Field);
+    }
+
     void VisitMemberExpr(MemberExpr *ME) {
       // All uses of unbounded reference fields will warn.
       HandleMemberExpr(ME, true /*CheckReferenceOnly*/);
@@ -2314,12 +2337,18 @@ namespace {
     }
 
     void VisitCXXConstructExpr(CXXConstructExpr *E) {
-      if (E->getConstructor()->isCopyConstructor())
-        if (ImplicitCastExpr* ICE = dyn_cast<ImplicitCastExpr>(E->getArg(0)))
-          if (ICE->getCastKind() == CK_NoOp)
-            if (MemberExpr *ME = dyn_cast<MemberExpr>(ICE->getSubExpr()))
-              HandleMemberExpr(ME, false /*CheckReferenceOnly*/);
+      if (E->getConstructor()->isCopyConstructor()) {
+        Expr *ArgExpr = E->getArg(0);
+        if (ImplicitCastExpr* ICE = dyn_cast<ImplicitCastExpr>(ArgExpr)) {
+          if (ICE->getCastKind() == CK_NoOp) {
+            ArgExpr = ICE->getSubExpr();
+          }
+        }
 
+        if (MemberExpr *ME = dyn_cast<MemberExpr>(ArgExpr)) {
+          HandleMemberExpr(ME, false /*CheckReferenceOnly*/);
+        }
+      }
       Inherited::VisitCXXConstructExpr(E);
     }
 
@@ -2331,6 +2360,19 @@ namespace {
       Inherited::VisitCXXMemberCallExpr(E);
     }
 
+    void VisitCallExpr(CallExpr *E) {
+      // Treat std::move as a use.
+      if (E->getNumArgs() == 1) {
+        if (FunctionDecl *FD = E->getDirectCallee()) {
+          if (FD->getIdentifier() && FD->getIdentifier()->isStr("move")) {
+            HandleValue(E->getArg(0));
+          }
+        }
+      }
+
+      Inherited::VisitCallExpr(E);
+    }
+
     void VisitBinaryOperator(BinaryOperator *E) {
       // If a field assignment is detected, remove the field from the
       // uninitiailized field set.
@@ -2338,30 +2380,11 @@ namespace {
         if (MemberExpr *ME = dyn_cast<MemberExpr>(E->getLHS()))
           if (FieldDecl *FD = dyn_cast<FieldDecl>(ME->getMemberDecl()))
             if (!FD->getType()->isReferenceType())
-              Decls.erase(FD);
+              DeclsToRemove.push_back(FD);
 
       Inherited::VisitBinaryOperator(E);
     }
   };
-  static void CheckInitExprContainsUninitializedFields(
-      Sema &S, Expr *E, llvm::SmallPtrSet<ValueDecl*, 4> &Decls,
-      const CXXConstructorDecl *Constructor) {
-    if (Decls.size() == 0)
-      return;
-
-    if (!E)
-      return;
-
-    if (CXXDefaultInitExpr *Default = dyn_cast<CXXDefaultInitExpr>(E)) {
-      E = Default->getExpr();
-      if (!E)
-        return;
-      // In class initializers will point to the constructor.
-      UninitializedFieldVisitor(S, Decls, Constructor).Visit(E);
-    } else {
-      UninitializedFieldVisitor(S, Decls, nullptr).Visit(E);
-    }
-  }
 
   // Diagnose value-uses of fields to initialize themselves, e.g.
   //   foo(foo)
@@ -2394,14 +2417,32 @@ namespace {
       }
     }
 
+    if (UninitializedFields.empty())
+      return;
+
+    UninitializedFieldVisitor UninitializedChecker(SemaRef,
+                                                   UninitializedFields);
+
     for (const auto *FieldInit : Constructor->inits()) {
+      if (UninitializedFields.empty())
+        break;
+
       Expr *InitExpr = FieldInit->getInit();
+      if (!InitExpr)
+        continue;
 
-      CheckInitExprContainsUninitializedFields(
-          SemaRef, InitExpr, UninitializedFields, Constructor);
-
-      if (FieldDecl *Field = FieldInit->getAnyMember())
-        UninitializedFields.erase(Field);
+      if (CXXDefaultInitExpr *Default =
+              dyn_cast<CXXDefaultInitExpr>(InitExpr)) {
+        InitExpr = Default->getExpr();
+        if (!InitExpr)
+          continue;
+        // In class initializers will point to the constructor.
+        UninitializedChecker.CheckInitializer(InitExpr, Constructor,
+                                              FieldInit->getAnyMember());
+      } else {
+        UninitializedChecker.CheckInitializer(InitExpr, nullptr,
+                                              FieldInit->getAnyMember());
+      }
     }
   }
 } // namespace
@@ -3582,6 +3623,8 @@ Sema::SetDelegatingInitializer(CXXConstructorDecl *Constructor,
 
   DelegatingCtorDecls.push_back(Constructor);
 
+  DiagnoseUninitializedFields(*this, Constructor);
+
   return false;
 }
 
@@ -4415,7 +4458,42 @@ static void CheckAbstractClassUsage(AbstractUsageInfo &Info,
 /// \brief Check class-level dllimport/dllexport attribute.
 static void checkDLLAttribute(Sema &S, CXXRecordDecl *Class) {
   Attr *ClassAttr = getDLLAttr(Class);
+
+  // MSVC inherits DLL attributes to partial class template specializations.
+  if (S.Context.getTargetInfo().getCXXABI().isMicrosoft() && !ClassAttr) {
+    if (auto *Spec = dyn_cast<ClassTemplatePartialSpecializationDecl>(Class)) {
+      if (Attr *TemplateAttr =
+              getDLLAttr(Spec->getSpecializedTemplate()->getTemplatedDecl())) {
+        auto *A = cast<InheritableAttr>(TemplateAttr->clone(S.getASTContext()));
+        A->setInherited(true);
+        ClassAttr = A;
+      }
+    }
+  }
+
   if (!ClassAttr)
+    return;
+
+  if (S.Context.getTargetInfo().getCXXABI().isMicrosoft() &&
+      !ClassAttr->isInherited()) {
+    // Diagnose dll attributes on members of class with dll attribute.
+    for (Decl *Member : Class->decls()) {
+      if (!isa<VarDecl>(Member) && !isa<CXXMethodDecl>(Member))
+        continue;
+      InheritableAttr *MemberAttr = getDLLAttr(Member);
+      if (!MemberAttr || MemberAttr->isInherited() || Member->isInvalidDecl())
+        continue;
+
+      S.Diag(MemberAttr->getLocation(),
+             diag::err_attribute_dll_member_of_dll_class)
+          << MemberAttr << ClassAttr;
+      S.Diag(ClassAttr->getLocation(), diag::note_previous_attribute);
+      Member->setInvalidDecl();
+    }
+  }
+
+  if (Class->getDescribedClassTemplate())
+    // Don't inherit dll attribute until the template is instantiated.
     return;
 
   bool ClassExported = ClassAttr->getKind() == attr::DLLExport;
@@ -4425,6 +4503,9 @@ static void checkDLLAttribute(Sema &S, CXXRecordDecl *Class) {
 
   // FIXME: MSVC's docs say all bases must be exportable, but this doesn't
   // seem to be true in practice?
+
+  TemplateSpecializationKind TSK =
+    Class->getTemplateSpecializationKind();
 
   for (Decl *Member : Class->decls()) {
     VarDecl *VD = dyn_cast<VarDecl>(Member);
@@ -4445,39 +4526,34 @@ static void checkDLLAttribute(Sema &S, CXXRecordDecl *Class) {
       continue;
     }
 
-    if (InheritableAttr *MemberAttr = getDLLAttr(Member)) {
-      if (S.Context.getTargetInfo().getCXXABI().isMicrosoft() &&
-          !MemberAttr->isInherited() && !ClassAttr->isInherited()) {
-        S.Diag(MemberAttr->getLocation(),
-               diag::err_attribute_dll_member_of_dll_class)
-            << MemberAttr << ClassAttr;
-        S.Diag(ClassAttr->getLocation(), diag::note_previous_attribute);
-        Member->setInvalidDecl();
-        continue;
-      }
-    } else {
+    if (!getDLLAttr(Member)) {
       auto *NewAttr =
           cast<InheritableAttr>(ClassAttr->clone(S.getASTContext()));
       NewAttr->setInherited(true);
       Member->addAttr(NewAttr);
     }
 
-    if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(Member)) {
-      if (ClassExported) {
-        if (MD->isUserProvided()) {
-          // Instantiate non-default methods.
-          S.MarkFunctionReferenced(Class->getLocation(), MD);
-        } else if (!MD->isTrivial() || MD->isExplicitlyDefaulted() ||
-                   MD->isCopyAssignmentOperator() ||
-                   MD->isMoveAssignmentOperator()) {
-          // Instantiate non-trivial or explicitly defaulted methods, and the
-          // copy assignment / move assignment operators.
-          S.MarkFunctionReferenced(Class->getLocation(), MD);
-          // Resolve its exception specification; CodeGen needs it.
-          auto *FPT = MD->getType()->getAs<FunctionProtoType>();
-          S.ResolveExceptionSpec(Class->getLocation(), FPT);
-          S.ActOnFinishInlineMethodDef(MD);
-        }
+    if (MD && ClassExported) {
+      if (MD->isUserProvided()) {
+        // Instantiate non-default methods..
+
+        // .. except for certain kinds of template specializations.
+        if (TSK == TSK_ExplicitInstantiationDeclaration)
+          continue;
+        if (TSK == TSK_ImplicitInstantiation && !ClassAttr->isInherited())
+          continue;
+
+        S.MarkFunctionReferenced(Class->getLocation(), MD);
+      } else if (!MD->isTrivial() || MD->isExplicitlyDefaulted() ||
+                 MD->isCopyAssignmentOperator() ||
+                 MD->isMoveAssignmentOperator()) {
+        // Instantiate non-trivial or explicitly defaulted methods, and the
+        // copy assignment / move assignment operators.
+        S.MarkFunctionReferenced(Class->getLocation(), MD);
+        // Resolve its exception specification; CodeGen needs it.
+        auto *FPT = MD->getType()->getAs<FunctionProtoType>();
+        S.ResolveExceptionSpec(Class->getLocation(), FPT);
+        S.ActOnFinishInlineMethodDef(MD);
       }
     }
   }
@@ -4723,7 +4799,7 @@ static bool defaultedSpecialMemberIsConstexpr(Sema &S, CXXRecordDecl *ClassDecl,
 
   case Sema::CXXCopyAssignment:
   case Sema::CXXMoveAssignment:
-    if (!S.getLangOpts().CPlusPlus1y)
+    if (!S.getLangOpts().CPlusPlus14)
       return false;
     // In C++1y, we need to perform overload resolution.
     Ctor = false;
@@ -4907,7 +4983,7 @@ void Sema::CheckExplicitlyDefaultedSpecialMember(CXXMethodDecl *MD) {
     // A defaulted special member cannot have cv-qualifiers.
     if (Type->getTypeQuals()) {
       Diag(MD->getLocation(), diag::err_defaulted_special_member_quals)
-        << (CSM == CXXMoveAssignment) << getLangOpts().CPlusPlus1y;
+        << (CSM == CXXMoveAssignment) << getLangOpts().CPlusPlus14;
       HadError = true;
     }
   }
@@ -4956,7 +5032,7 @@ void Sema::CheckExplicitlyDefaultedSpecialMember(CXXMethodDecl *MD) {
   // destructors in C++1y), this is checked elsewhere.
   bool Constexpr = defaultedSpecialMemberIsConstexpr(*this, RD, CSM,
                                                      HasConstParam);
-  if ((getLangOpts().CPlusPlus1y ? !isa<CXXDestructorDecl>(MD)
+  if ((getLangOpts().CPlusPlus14 ? !isa<CXXDestructorDecl>(MD)
                                  : isa<CXXConstructorDecl>(MD)) &&
       MD->isConstexpr() && !Constexpr &&
       MD->getTemplatedKind() == FunctionDecl::TK_NonTemplate) {
@@ -4994,7 +5070,7 @@ void Sema::CheckExplicitlyDefaultedSpecialMember(CXXMethodDecl *MD) {
     EPI.ExceptionSpec.Type = EST_Unevaluated;
     EPI.ExceptionSpec.SourceDecl = MD;
     MD->setType(Context.getFunctionType(ReturnType,
-                                        ArrayRef<QualType>(&ArgType,
+                                        llvm::makeArrayRef(&ArgType,
                                                            ExpectedParams),
                                         EPI));
   }
@@ -5904,7 +5980,7 @@ namespace {
 
 /// \brief Check whether any most overriden method from MD in Methods
 static bool CheckMostOverridenMethods(const CXXMethodDecl *MD,
-                   const llvm::SmallPtrSet<const CXXMethodDecl *, 8>& Methods) {
+                  const llvm::SmallPtrSetImpl<const CXXMethodDecl *>& Methods) {
   if (MD->size_overridden_methods() == 0)
     return Methods.count(MD->getCanonicalDecl());
   for (CXXMethodDecl::method_iterator I = MD->begin_overridden_methods(),
@@ -5966,7 +6042,7 @@ static bool FindHiddenVirtualMethod(const CXXBaseSpecifier *Specifier,
 
 /// \brief Add the most overriden methods from MD to Methods
 static void AddMostOverridenMethods(const CXXMethodDecl *MD,
-                         llvm::SmallPtrSet<const CXXMethodDecl *, 8>& Methods) {
+                        llvm::SmallPtrSetImpl<const CXXMethodDecl *>& Methods) {
   if (MD->size_overridden_methods() == 0)
     Methods.insert(MD->getCanonicalDecl());
   for (CXXMethodDecl::method_iterator I = MD->begin_overridden_methods(),
@@ -8168,6 +8244,7 @@ Decl *Sema::ActOnAliasDeclaration(Scope *S,
       TypeAliasTemplateDecl::Create(Context, CurContext, UsingLoc,
                                     Name.Identifier, TemplateParams,
                                     NewTD);
+    NewTD->setDescribedAliasTemplate(NewDecl);
 
     NewDecl->setAccess(AS);
 
@@ -8189,42 +8266,15 @@ Decl *Sema::ActOnAliasDeclaration(Scope *S,
   return NewND;
 }
 
-Decl *Sema::ActOnNamespaceAliasDef(Scope *S,
-                                             SourceLocation NamespaceLoc,
-                                             SourceLocation AliasLoc,
-                                             IdentifierInfo *Alias,
-                                             CXXScopeSpec &SS,
-                                             SourceLocation IdentLoc,
-                                             IdentifierInfo *Ident) {
+Decl *Sema::ActOnNamespaceAliasDef(Scope *S, SourceLocation NamespaceLoc,
+                                   SourceLocation AliasLoc,
+                                   IdentifierInfo *Alias, CXXScopeSpec &SS,
+                                   SourceLocation IdentLoc,
+                                   IdentifierInfo *Ident) {
 
   // Lookup the namespace name.
   LookupResult R(*this, Ident, IdentLoc, LookupNamespaceName);
   LookupParsedName(R, S, &SS);
-
-  // Check if we have a previous declaration with the same name.
-  NamedDecl *PrevDecl
-    = LookupSingleName(S, Alias, AliasLoc, LookupOrdinaryName,
-                       ForRedeclaration);
-  if (PrevDecl && !isDeclInScope(PrevDecl, CurContext, S))
-    PrevDecl = nullptr;
-
-  if (PrevDecl) {
-    if (NamespaceAliasDecl *AD = dyn_cast<NamespaceAliasDecl>(PrevDecl)) {
-      // We already have an alias with the same name that points to the same
-      // namespace, so don't create a new one.
-      // FIXME: At some point, we'll want to create the (redundant)
-      // declaration to maintain better source information.
-      if (!R.isAmbiguous() && !R.empty() &&
-          AD->getNamespace()->Equals(getNamespaceDecl(R.getFoundDecl())))
-        return nullptr;
-    }
-
-    unsigned DiagID = isa<NamespaceDecl>(PrevDecl) ? diag::err_redefinition :
-      diag::err_redefinition_different_kind;
-    Diag(AliasLoc, DiagID) << Alias;
-    Diag(PrevDecl->getLocation(), diag::note_previous_definition);
-    return nullptr;
-  }
 
   if (R.isAmbiguous())
     return nullptr;
@@ -8235,11 +8285,41 @@ Decl *Sema::ActOnNamespaceAliasDef(Scope *S,
       return nullptr;
     }
   }
+  assert(!R.isAmbiguous() && !R.empty());
+
+  // Check if we have a previous declaration with the same name.
+  NamedDecl *PrevDecl = LookupSingleName(S, Alias, AliasLoc, LookupOrdinaryName,
+                                         ForRedeclaration);
+  if (PrevDecl && !isDeclInScope(PrevDecl, CurContext, S))
+    PrevDecl = nullptr;
+
+  if (PrevDecl) {
+    if (NamespaceAliasDecl *AD = dyn_cast<NamespaceAliasDecl>(PrevDecl)) {
+      // We already have an alias with the same name that points to the same
+      // namespace; check that it matches.
+      if (!AD->getNamespace()->Equals(getNamespaceDecl(R.getFoundDecl()))) {
+        Diag(AliasLoc, diag::err_redefinition_different_namespace_alias)
+          << Alias;
+        Diag(PrevDecl->getLocation(), diag::note_previous_namespace_alias)
+          << AD->getNamespace();
+        return nullptr;
+      }
+    } else {
+      unsigned DiagID = isa<NamespaceDecl>(PrevDecl)
+                            ? diag::err_redefinition
+                            : diag::err_redefinition_different_kind;
+      Diag(AliasLoc, DiagID) << Alias;
+      Diag(PrevDecl->getLocation(), diag::note_previous_definition);
+      return nullptr;
+    }
+  }
 
   NamespaceAliasDecl *AliasDecl =
     NamespaceAliasDecl::Create(Context, CurContext, NamespaceLoc, AliasLoc,
                                Alias, SS.getWithLocInContext(Context),
                                IdentLoc, R.getFoundDecl());
+  if (PrevDecl)
+    AliasDecl->setPreviousDecl(cast<NamespaceAliasDecl>(PrevDecl));
 
   PushOnScopeChains(AliasDecl, S);
   return AliasDecl;
@@ -8601,7 +8681,7 @@ private:
   void inherit(const CXXConstructorDecl *Ctor) {
     const FunctionProtoType *CtorType =
         Ctor->getType()->castAs<FunctionProtoType>();
-    ArrayRef<QualType> ArgTypes(CtorType->getParamTypes());
+    ArrayRef<QualType> ArgTypes = CtorType->getParamTypes();
     FunctionProtoType::ExtProtoInfo EPI = CtorType->getExtProtoInfo();
 
     SourceLocation UsingLoc = getUsingLoc(Ctor->getParent());
@@ -10838,8 +10918,7 @@ Sema::CompleteConstructorCall(CXXConstructorDecl *Constructor,
   DiagnoseSentinelCalls(Constructor, Loc, AllArgs);
 
   CheckConstructorCall(Constructor,
-                       llvm::makeArrayRef<const Expr *>(AllArgs.data(),
-                                                        AllArgs.size()),
+                       llvm::makeArrayRef(AllArgs.data(), AllArgs.size()),
                        Proto, Loc);
 
   return Invalid;
@@ -12938,27 +13017,27 @@ bool Sema::checkThisInStaticMemberFunctionAttributes(CXXMethodDecl *Method) {
     else if (const auto *G = dyn_cast<PtGuardedByAttr>(A))
       Arg = G->getArg();
     else if (const auto *AA = dyn_cast<AcquiredAfterAttr>(A))
-      Args = ArrayRef<Expr *>(AA->args_begin(), AA->args_size());
+      Args = llvm::makeArrayRef(AA->args_begin(), AA->args_size());
     else if (const auto *AB = dyn_cast<AcquiredBeforeAttr>(A))
-      Args = ArrayRef<Expr *>(AB->args_begin(), AB->args_size());
+      Args = llvm::makeArrayRef(AB->args_begin(), AB->args_size());
     else if (const auto *ETLF = dyn_cast<ExclusiveTrylockFunctionAttr>(A)) {
       Arg = ETLF->getSuccessValue();
-      Args = ArrayRef<Expr *>(ETLF->args_begin(), ETLF->args_size());
+      Args = llvm::makeArrayRef(ETLF->args_begin(), ETLF->args_size());
     } else if (const auto *STLF = dyn_cast<SharedTrylockFunctionAttr>(A)) {
       Arg = STLF->getSuccessValue();
-      Args = ArrayRef<Expr *>(STLF->args_begin(), STLF->args_size());
+      Args = llvm::makeArrayRef(STLF->args_begin(), STLF->args_size());
     } else if (const auto *LR = dyn_cast<LockReturnedAttr>(A))
       Arg = LR->getArg();
     else if (const auto *LE = dyn_cast<LocksExcludedAttr>(A))
-      Args = ArrayRef<Expr *>(LE->args_begin(), LE->args_size());
+      Args = llvm::makeArrayRef(LE->args_begin(), LE->args_size());
     else if (const auto *RC = dyn_cast<RequiresCapabilityAttr>(A))
-      Args = ArrayRef<Expr *>(RC->args_begin(), RC->args_size());
+      Args = llvm::makeArrayRef(RC->args_begin(), RC->args_size());
     else if (const auto *AC = dyn_cast<AcquireCapabilityAttr>(A))
-      Args = ArrayRef<Expr *>(AC->args_begin(), AC->args_size());
+      Args = llvm::makeArrayRef(AC->args_begin(), AC->args_size());
     else if (const auto *AC = dyn_cast<TryAcquireCapabilityAttr>(A))
-      Args = ArrayRef<Expr *>(AC->args_begin(), AC->args_size());
+      Args = llvm::makeArrayRef(AC->args_begin(), AC->args_size());
     else if (const auto *RC = dyn_cast<ReleaseCapabilityAttr>(A))
-      Args = ArrayRef<Expr *>(RC->args_begin(), RC->args_size());
+      Args = llvm::makeArrayRef(RC->args_begin(), RC->args_size());
 
     if (Arg && !Finder.TraverseStmt(Arg))
       return true;
@@ -13025,46 +13104,6 @@ Sema::checkExceptionSpecification(ExceptionSpecificationType EST,
     }
     return;
   }
-}
-
-/// IdentifyCUDATarget - Determine the CUDA compilation target for this function
-Sema::CUDAFunctionTarget Sema::IdentifyCUDATarget(const FunctionDecl *D) {
-  // Implicitly declared functions (e.g. copy constructors) are
-  // __host__ __device__
-  if (D->isImplicit())
-    return CFT_HostDevice;
-
-  if (D->hasAttr<CUDAGlobalAttr>())
-    return CFT_Global;
-
-  if (D->hasAttr<CUDADeviceAttr>()) {
-    if (D->hasAttr<CUDAHostAttr>())
-      return CFT_HostDevice;
-    return CFT_Device;
-  }
-
-  return CFT_Host;
-}
-
-bool Sema::CheckCUDATarget(CUDAFunctionTarget CallerTarget,
-                           CUDAFunctionTarget CalleeTarget) {
-  // CUDA B.1.1 "The __device__ qualifier declares a function that is...
-  // Callable from the device only."
-  if (CallerTarget == CFT_Host && CalleeTarget == CFT_Device)
-    return true;
-
-  // CUDA B.1.2 "The __global__ qualifier declares a function that is...
-  // Callable from the host only."
-  // CUDA B.1.3 "The __host__ qualifier declares a function that is...
-  // Callable from the host only."
-  if ((CallerTarget == CFT_Device || CallerTarget == CFT_Global) &&
-      (CalleeTarget == CFT_Host || CalleeTarget == CFT_Global))
-    return true;
-
-  if (CallerTarget == CFT_HostDevice && CalleeTarget != CFT_HostDevice)
-    return true;
-
-  return false;
 }
 
 /// HandleMSProperty - Analyze a __delcspec(property) field of a C++ class.

@@ -11,8 +11,8 @@
 //  containing a serialized representation of a translation unit.
 //
 //===----------------------------------------------------------------------===//
-#ifndef LLVM_CLANG_FRONTEND_AST_WRITER_H
-#define LLVM_CLANG_FRONTEND_AST_WRITER_H
+#ifndef LLVM_CLANG_SERIALIZATION_ASTWRITER_H
+#define LLVM_CLANG_SERIALIZATION_ASTWRITER_H
 
 #include "clang/AST/ASTMutationListener.h"
 #include "clang/AST/Decl.h"
@@ -282,6 +282,10 @@ private:
   /// record) to the macro IDs.
   llvm::DenseMap<const MacroDefinition *, serialization::PreprocessedEntityID>
       MacroDefinitions;
+
+  /// \brief Cache of indices of anonymous declarations within their lexical
+  /// contexts.
+  llvm::DenseMap<const Decl *, unsigned> AnonymousDeclarationNumbers;
 
   /// An update to a Decl.
   class DeclUpdate {
@@ -639,6 +643,7 @@ public:
                              DeclarationName Name, RecordDataImpl &Record);
   void AddDeclarationNameInfo(const DeclarationNameInfo &NameInfo,
                               RecordDataImpl &Record);
+  unsigned getAnonymousDeclarationNumber(const NamedDecl *D);
 
   void AddQualifierInfo(const QualifierInfo &Info, RecordDataImpl &Record);
 
