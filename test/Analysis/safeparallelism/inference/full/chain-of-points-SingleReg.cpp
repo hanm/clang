@@ -49,7 +49,11 @@ struct //[[asap::param("Pl")]]
     // copy constructor
     link(link &l /*[[asap::arg("Pl")]]*/) : pos(l.pos), next(l.next) {} //expected-warning{{Inferred Effect Summary for link: [reads(rpl([r4_next],[]))]}} // expected-warning{{Inferred region arguments: struct link &, IN:<empty>, ArgV:[r7_l]}}
     // move "constructor"
-    link &operator = /*[[asap::arg("Pl")]]*/ (link && l/*[[asap::arg("Pl")]]*/) { return l; }  // expected-warning{{Inferred region arguments: struct link &(struct link &&), IN:<empty>, ArgV:[rSTAR]}}  // expected-warning{{Inferred region arguments: struct link &&, IN:<empty>, ArgV:[r9_l]}}
+    link &operator = /*[[asap::arg("Pl")]]*/ // expected-warning{{Inferred region arguments: struct link &(struct link &&), IN:<empty>, ArgV:[r8_operatorAssign]}}
+                     (link && l/*[[asap::arg("Pl")]]*/) { // expected-warning{{Inferred region arguments: struct link &&, IN:<empty>, ArgV:[rv8_operatorAssign]}}
+        return l;
+    }
+
     };
 
 void delete_all[[asap::param("Q")]]//, asap::writes("Q")]]
@@ -70,7 +74,7 @@ public:
     /*[[asap::writes("P")]]*/ ~chain() { delete_all(start); } //expected-warning{{Inferred Effect Summary for ~chain: [reads(rpl([r10_start],[])),reads(rpl([r4_next],[])),reads(rpl([rLOCAL],[]))]}}
    
     // Add a link to the start of the chain
-    void add_link /*[[asap::writes("P")]]*/ (const point &pos /*[[asap::arg("P")]]*/)  // expected-warning{{Inferred region arguments: const class point &, IN:<empty>, ArgV:[rGLOBAL]}}
+    void add_link /*[[asap::writes("P")]]*/ (const point &pos /*[[asap::arg("P")]]*/)  // expected-warning{{Inferred region arguments: const class point &, IN:<empty>, ArgV:[rv6_pos_in]}}
         {//expected-warning{{Inferred Effect Summary for add_link: [reads(rpl([r10_start],[])),reads(rpl([r13_new_start],[])),writes(rpl([r10_start],[])),writes(rpl([r4_next],[]))]}}
         link *new_start /*[[asap::arg("P, P")]]*/ = new link(pos);  // expected-warning{{Inferred region arguments: struct link *, IN:[r13_new_start], ArgV:[rGLOBAL]}}
         new_start->next = start;

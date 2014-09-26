@@ -965,9 +965,9 @@ void SymbolTable::solveConstraints(bool DoFullInference) const {
   if (PrologDbgLvl >= 1)
     PL_action(PL_ACTION_TRACE);
 
-  // Call solve_all
   OS_PL.close();
 
+  // Call solve_all
   predicate_t SolveAllP = PL_predicate(PL_SolveAllPredicate.c_str(), 0, "user");
   term_t Arg0 = PL_new_term_refs(0);
   int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, SolveAllP, Arg0);

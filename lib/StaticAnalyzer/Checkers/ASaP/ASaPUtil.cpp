@@ -36,13 +36,13 @@ namespace asap {
 static const StringRef BugCategory = "Safe Parallelism";
 
 raw_fd_ostream &prologLog() {
-  std::string Err;
+  std::error_code Err;
   static llvm::raw_fd_ostream S("constraints.pl", Err, llvm::sys::fs::OpenFlags::F_None);
   return S;
 }
 
 raw_fd_ostream &constraintStats() {
-  std::string Err;
+  std::error_code Err;
   static llvm::raw_fd_ostream S("constraint-stats.txt", Err, llvm::sys::fs::OpenFlags::F_None);
   return S;
 }
