@@ -72,8 +72,8 @@ void SetXYFunctor::operator() () const { // expected-warning{{Inferred Effect Su
 
 void foo //[[asap::region("R1, R2")]] 
          () { // expected-warning{{Inferred Effect Summary for foo: [reads(rpl([r10_v2],[])),reads(rpl([r1_v],[])),reads(rpl([r5_v],[])),reads(rpl([r9_v1],[])),reads(rpl([rLOCAL],[])),writes(rpl([r19_p1],[])),writes(rpl([r19_p1,r14_y],[])),writes(rpl([r20_p2],[])),writes(rpl([r20_p2,r14_y],[]))]}}
-  Point p1 ; // expected-warning{{Inferred region arguments: class Point, IN:<empty>, ArgV:[rv21_F1]}}
-  Point p2 ; // expected-warning{{Inferred region arguments: class Point, IN:<empty>, ArgV:[rv22_F2]}}
+  Point p1 ; // expected-warning{{Inferred region arguments: class Point, IN:<empty>, ArgV:[r19_p1]}}
+  Point p2 ; // expected-warning{{Inferred region arguments: class Point, IN:<empty>, ArgV:[r20_p2]}}
   SetXYFunctor F1(p1, 3, 4); // expected-warning{{Inferred region arguments: class SetXYFunctor, IN:<empty>, ArgV:[r19_p1]}}
   SetXYFunctor F2(p2, 5, 3); // expected-warning{{Inferred region arguments: class SetXYFunctor, IN:<empty>, ArgV:[r20_p2]}}
   tbb::parallel_invoke(F1, F2);
