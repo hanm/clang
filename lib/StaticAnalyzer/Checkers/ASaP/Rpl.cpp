@@ -25,6 +25,20 @@ namespace asap {
 
 ///////////////////////////////////////////////////////////////////////////////
 //// Rpl
+/// Global
+bool isRootRplElement(const RplElement *E) {
+  if (!E)
+    return false;
+  if (auto S = dyn_cast<SpecialRplElement>(E)) {
+    if (S->getSpecialKind() == SpecialRplElement::SRK_Root)
+      return true;
+    else
+      return false;
+  } else {
+    return false;
+  }
+}
+
 
 /// Static
 const StringRef Rpl::RPL_LIST_SEPARATOR = ",";
@@ -276,7 +290,7 @@ bool ConcreteRpl::RplRef::isUnder(RplRef &RHS) {
   *OSv2  << "DEBUG:: ~~~~~~~~isUnder[RplRef]("
         << this->toString() << ", " << RHS.toString() << ")\n";
   /// R <= Root
-  if (RHS.isEmpty())
+  if (RHS.isRoot())
     return true;
   if (isEmpty()) /// and RHS is not Empty
     return false;

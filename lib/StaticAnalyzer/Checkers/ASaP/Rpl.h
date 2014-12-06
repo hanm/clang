@@ -58,6 +58,7 @@ public:
   long getArity() const;
 };
 
+// virtual class
 class RplElement {
 public:
   /// Discriminator for LLVM-style RTTI (dyn_cast<> et al.)
@@ -94,7 +95,7 @@ public:
   virtual term_t getPLTerm() const = 0;
 
   virtual ~RplElement() {}
-}; // end class RplElement
+}; // end virtual class RplElement
 
 class SpecialRplElement : public RplElement {
 public:
@@ -123,6 +124,8 @@ public:
     }
   }
 
+  SpecialRplElementKind getSpecialKind() const { return Kind; }
+
   virtual term_t getPLTerm() const {
     term_t Result = PL_new_term_ref();
     switch(Kind) {
@@ -137,7 +140,20 @@ public:
   static bool classof(const RplElement *R) {
     return R->getKind() == RK_Special;
   }
-};
+}; // end class SpecialRplElement
+
+bool isRootRplElement(const RplElement *E); /*{
+  if (!E)
+    return false;
+  if (auto S = dyn_cast<SpecialRplElement>(E)) {
+    if (S->getSpecialKind() == SpecialRplElement::SRK_Root)
+      return true;
+    else
+      return false;
+  } else {
+    return false;
+  }
+}*/
 
 class StarRplElement : public RplElement {
 public:
@@ -316,25 +332,30 @@ typedef llvm::SmallVector<const RplElement*,
     std::string toString() const;
 
     /// Getters
-    inline const RplElement *getFirstElement() const {
+    const RplElement *getFirstElement() const {
       return Rpl.RplElements[FirstIdx];
     }
-    inline const RplElement *getLastElement() const {
+
+    const RplElement *getLastElement() const {
       return Rpl.RplElements[LastIdx];
     }
 
-    inline RplRef &stripLast() {
+    RplRef &stripLast() {
       LastIdx--;
       return *this;
     }
 
-    inline RplRef &stripFirst() {
+    RplRef &stripFirst() {
       FirstIdx++;
       return *this;
     }
 
-    inline bool isEmpty() {
+    bool isEmpty() {
       return (LastIdx < FirstIdx) ? true : false;
+    }
+
+    bool isRoot() {
+      return isEmpty() || (LastIdx == FirstIdx && isRootRplElement(getFirstElement())) ;
     }
 
     /// \brief Under: true  iff this <= RHS
