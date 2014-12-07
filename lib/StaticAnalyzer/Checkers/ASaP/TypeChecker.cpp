@@ -391,7 +391,7 @@ typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
     OS << "DEBUG:: DONE performing substitution\n";
   }
   ASaPType *RHSType = TBVR.getType();
-  Trivalent TypChkRes = typecheck(LHSType, RHSType, true);
+  Trivalent TypChkRes = typecheck(LHSType, RHSType, false);
   if (TypChkRes == RK_FALSE) {
     OS << "DEBUG:: invalid argument to parameter assignment: "
       << "gonna emit an error\n";
