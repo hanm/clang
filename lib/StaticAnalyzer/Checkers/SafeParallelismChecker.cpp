@@ -90,7 +90,13 @@ public:
 
     // Choose default Annotation Scheme from command-line option
     const StringRef OptionName("-asap-default-scheme");
-    StringRef SchemeStr(Mgr.getAnalyzerOptions().Config.GetOrCreateValue(OptionName, "simple").getValue());
+    //StringRef SchemeStr(Mgr.getAnalyzerOptions().Config.GetOrCreateValue(OptionName, "simple").getValue());
+    llvm::StringMap<std::string> &OptionMap = Mgr.getAnalyzerOptions().Config;
+    llvm::StringMapConstIterator<std::string> It = OptionMap.find(OptionName);
+    if (It == OptionMap.end())
+      OptionMap[OptionName] = "simple";
+    StringRef SchemeStr(OptionMap.lookup(OptionName));
+
     os << "DEBUG:: asap-default-scheme = " << SchemeStr << "\n";
 
     AnnotationScheme *AnnotScheme = 0;
