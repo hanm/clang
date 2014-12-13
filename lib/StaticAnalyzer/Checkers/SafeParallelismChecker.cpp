@@ -41,6 +41,14 @@ using clang::asap::SymbolTable;
 class  SafeParallelismChecker
   : public Checker<check::ASTDecl<TranslationUnitDecl> > {
 
+  std::string GetOrCreateValue(llvm::StringMap<std::string> &Map,
+                               const std::string &Key,
+                               const std::string &Default) const {
+    llvm::StringMapConstIterator<std::string> It = Map.find(Key);
+    if (It == Map.end())
+      Map[Key] = Default;
+    return Map.lookup(Key);
+  }
 
 public:
 
@@ -63,10 +71,9 @@ public:
 
     bool Error = false;
     // Choose debug level
+    llvm::StringMap<std::string> &OptionMap = Mgr.getAnalyzerOptions().Config;
     const StringRef DbgLvlOptionName("-asap-debug-level");
-    StringRef DbgLvlStr(Mgr.getAnalyzerOptions().Config.
-                              GetOrCreateValue(DbgLvlOptionName, "0").
-                              getValue());
+    StringRef DbgLvlStr(GetOrCreateValue(OptionMap, DbgLvlOptionName, "0"));
     int DbgLvl = std::stoi(DbgLvlStr);
     if (DbgLvl > 0)
       OS = &llvm::errs();
@@ -89,17 +96,14 @@ public:
     // 2: debug emitting constraints & inference
     // 3: debug emitting facts, constraints, & inference
     const StringRef PrologDbgLvlOptionName("-asap-debug-prolog");
-    StringRef PrologDbgLvlStr(Mgr.getAnalyzerOptions().Config.
-                              GetOrCreateValue(PrologDbgLvlOptionName, "0").
-                              getValue());
+    StringRef PrologDbgLvlStr(GetOrCreateValue(OptionMap, PrologDbgLvlOptionName, "0"));
+
     int PrologDbgLvl = std::stoi(PrologDbgLvlStr);
     *OS << "DEBUG:: " << PrologDbgLvlOptionName << " = " << PrologDbgLvl << "\n";
 
     // Choose default Annotation Scheme from command-line option
     const StringRef DefaultAnnotOptionName("-asap-default-scheme");
-    StringRef SchemeStr(Mgr.getAnalyzerOptions().Config.
-                        GetOrCreateValue(DefaultAnnotOptionName, "simple").
-                        getValue());
+    StringRef SchemeStr(GetOrCreateValue(OptionMap, DefaultAnnotOptionName, "simple"));
     *OS << "DEBUG:: asap-default-scheme = " << SchemeStr << "\n";
     SymT.setPrologDbgLvl(PrologDbgLvl);
 

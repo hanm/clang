@@ -19,6 +19,9 @@
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_OWNING_PTRSET_H
 
 #include "llvm/ADT/SmallPtrSet.h"
+
+#include <iterator>
+
 using llvm::SmallPtrSet;
 
 
@@ -60,13 +63,13 @@ public:
 
   bool insert(const T *E) {
     if (E)
-      return SetT::insert(new T(*E));
+      return SetT::insert(new T(*E)).second;
     else
       return false;
   }
 
   inline bool insert(const T &E) {
-    return SetT::insert(new T(E));
+    return SetT::insert(new T(E)).second;
   }
 
 
