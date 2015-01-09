@@ -44,10 +44,8 @@ class  SafeParallelismChecker
   std::string GetOrCreateValue(llvm::StringMap<std::string> &Map,
                                const std::string &Key,
                                const std::string &Default) const {
-    llvm::StringMapConstIterator<std::string> It = Map.find(Key);
-    if (It == Map.end())
-      Map[Key] = Default;
-    return Map.lookup(Key);
+    return Map.insert(std::pair<std::string, std::string>
+                               (Key, Default)).first->second;
   }
 
 public:
