@@ -151,6 +151,7 @@ void tryBuildParamSubstitutions(const FunctionDecl *Def,
 
 Stmt *getBody(const FunctionDecl *D);
 std::string getPLNormalizedName(const NamedDecl &Decl);
+
 } // end namespace asap
 } // end namespace clang
 

@@ -49,7 +49,8 @@ std::pair<StringRef, StringRef> Rpl::splitRpl(StringRef &String) {
   size_t Idx = 0;
   do {
     Idx = String.find(RPL_SPLIT_CHARACTER, Idx);
-    *OSv2 << "DEBUG:: Rpl::splitRpl: Idx = " << Idx << ", size = " << String.size() << "\n";
+    *OSv2 << "DEBUG:: Rpl::splitRpl: Idx = "
+          << Idx << ", size = " << String.size() << "\n";
     if (Idx == StringRef::npos)
       break;
 

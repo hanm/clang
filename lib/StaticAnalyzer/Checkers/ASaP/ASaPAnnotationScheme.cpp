@@ -74,7 +74,12 @@ helperMakeParameterVarType(const ValueDecl *D, long ArgNum) {
   RplVector RplVec;
   int I = 0;
   assert(D && "Internal Error: unexpected null pointer");
-  if (ASaPType::typeExpectsInRpl(D->getType())) {
+  QualType QT = D->getType();
+  if (QT->isFunctionType()) {
+    const FunctionType *FT = QT->getAs<FunctionType>();
+    QT = FT->getReturnType();
+  }
+  if (ASaPType::typeExpectsInRpl(QT)) {
     // 1st Arg = Local, then create a new parameter for each subsequent one
     I = 1;
     RplVec.push_back(ConcreteRpl(*SymbolTable::LOCAL_RplElmt));
@@ -443,7 +448,7 @@ makeParamType(const ParmVarDecl *D, long ArgNum) {
 
 AnnotationSet SimpleInferenceAnnotationScheme::
 makeReturnType(const FunctionDecl *D, long ArgNum) {
-  return helperMakeVarType(D, ArgNum);
+  return helperMakeParameterVarType(D, ArgNum);
 }
 
 AnnotationSet SimpleInferenceAnnotationScheme::
@@ -474,7 +479,7 @@ makeParamType(const ParmVarDecl *D, long ArgNum) {
 
 AnnotationSet InferenceAnnotationScheme::
 makeReturnType(const FunctionDecl *D, long ArgNum) {
-  return helperMakeVarType(D, ArgNum);
+  return helperMakeParameterVarType(D, ArgNum);
 }
 
 AnnotationSet InferenceAnnotationScheme::

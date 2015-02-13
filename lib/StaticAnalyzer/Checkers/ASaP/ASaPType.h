@@ -60,6 +60,11 @@ public:
   ~ASaPType();
 
   inline static bool typeExpectsInRpl(QualType QT) {
+    if (QT->isFunctionType()) {
+      const FunctionType *FT = QT->getAs<FunctionType>();
+      QT = FT->getReturnType();
+    }
+
     if (QT->isScalarType() && !QT->isReferenceType())
       return true;
     else
