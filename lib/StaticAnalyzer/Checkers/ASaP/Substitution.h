@@ -59,6 +59,7 @@ public:
 
   bool hasBase(const RplElement &Base) const;
 
+  VarRplSetT *collectRplVars() const;
 }; // end class Substitution
 
 //////////////////////////////////////////////////////////////////////////
@@ -87,6 +88,7 @@ public:
   term_t getPLTerm() const;
 
   bool hasBase(const RplElement &Base) const;
+  VarRplSetT *collectRplVars() const;
 }; // end class SubstitutionSet
 
 //////////////////////////////////////////////////////////////////////////
@@ -128,6 +130,7 @@ public:
   void push_back_vec(std::unique_ptr<SubstitutionVector> &SubV);
   void merge(const SubstitutionVector *SubV);
   term_t getPLTerm() const;
+  VarRplSetT *collectRplVars() const;
 
 }; // End class SubstituionVector.
 

@@ -40,11 +40,30 @@ public:
 
   StringRef getConstraintID() const { return ConstraintID; }
   ConstraintKind getKind() const { return Kind; }
+  const std::string &getNodeColor() const {
+    switch (Kind) {
+    case CK_RplInclusion: return DOT_RIConstraintColor;
+    case CK_EffectInclusion: return DOT_ESIConstraintColor;
+    case CK_EffectNonInterference: return DOT_ENIConstraintColor;
+    }
+  }
 
   term_t getIDPLTerm() const;
 
   virtual term_t getPLTerm() const = 0;
   virtual void print(llvm::raw_ostream &OS) const = 0;
+
+  virtual void emitGraphNode(std::ofstream &OutF) const;
+  void emitGraphEdges(std::ofstream &OutF,
+                      const std::string &EdgeOp,
+                      const std::string &EdgeColor,
+                      const VarRplSetT *VRS) const;
+  void emitGraphEdges(std::ofstream &OutF,
+                      const std::string &EdgeOp,
+                      const std::string &EdgeColor,
+                      const VarEffectSummarySetT *VRS) const;
+
+  virtual void emitGraphEdges(std::ofstream &OutF, std::string &EdgeOp) const = 0;
 
   inline std::string toString() const {
     std::string SBuf;
@@ -68,6 +87,9 @@ public:
   virtual term_t getPLTerm() const;
   virtual void print(llvm::raw_ostream &OS) const;
   virtual ~RplInclusionConstraint();
+  virtual void emitGraphEdges(std::ofstream &OutF, std::string &EdgeOp) const;
+  VarRplSetT *collectRplVars() const;
+  VarEffectSummarySetT *collectEffectSummaryVars() const;
 
   static bool classof(const Constraint *C) {
     return C->getKind() == CK_RplInclusion;
@@ -103,6 +125,10 @@ class EffectInclusionConstraint : public Constraint {
   virtual term_t getPLTerm() const;
   virtual void print(llvm::raw_ostream &OS) const;
 
+  VarRplSetT *collectRplVars() const;
+  VarEffectSummarySetT *collectEffectSummaryVars() const;
+  virtual void emitGraphEdges(std::ofstream &OutF, std::string &EdgeOp) const;
+
   static bool classof(const Constraint *C) {
     return C->getKind() == CK_EffectInclusion;
   }
@@ -125,6 +151,10 @@ class EffectNIConstraint : public Constraint {
   virtual term_t getPLTerm() const;
   virtual void print(llvm::raw_ostream &OS) const;
   virtual ~EffectNIConstraint();
+
+  VarRplSetT *collectRplVars() const;
+  VarEffectSummarySetT *collectEffectSummaryVars() const;
+  virtual void emitGraphEdges(std::ofstream &OutF, std::string &EdgeOp) const;
 
   static bool classof(const Constraint *C) {
     return C->getKind() == CK_EffectNonInterference;

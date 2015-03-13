@@ -12,6 +12,7 @@
 // given region and effect annotations.
 //
 //===----------------------------------------------------------------===//
+#include <fstream>
 
 #include "llvm/Support/Casting.h"
 
@@ -124,6 +125,10 @@ void Rpl::print(llvm::raw_ostream &OS) const {
 
 void Rpl::printSolution(llvm::raw_ostream &OS) const {
   print(OS);
+}
+
+VarRplSetT *Rpl::collectRplVars() const {
+  return SubV.collectRplVars();
 }
 
 Rpl::Rpl(const Rpl &That)
@@ -722,6 +727,17 @@ char *VarRpl::readPLValue() const {
       Rval = PL_get_chars(Value, &Solution, CVT_WRITE|BUF_RING);
       return Solution;
 }
+
+VarRplSetT *VarRpl::collectRplVars() const {
+  VarRplSetT *Result = Rpl::collectRplVars();
+  Result->insert(this);
+  return Result;
+}
+
+void VarRpl::emitGraphNode(std::ofstream &OutF) const {
+  OutF << Name.data() << std::endl;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //// ParameterSet
 

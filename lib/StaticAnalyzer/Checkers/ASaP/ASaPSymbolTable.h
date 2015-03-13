@@ -57,19 +57,12 @@ public:
   ResultTriplet(ResultKind ReKi, long NumA, RecordDecl *D) :
     ResKin(ReKi), NumArgs(NumA), DeclNotVis(D) {}
 };
-#ifndef NUM_OF_CONSTRAINTS
-  #define NUM_OF_CONSTRAINTS 100
-#endif
 class SymbolTable {
   typedef llvm::DenseMap<const Decl*, SymbolTableEntry*>  SymbolTableMapT;
   typedef llvm::DenseMap<const FunctionDecl*,
                           const SpecificNIChecker*> ParallelismMapT;
   typedef OwningPtrSet<std::string, 1024> FreshNamesSetT;
   typedef OwningPtrSet<RplDomain, 1024> DomainSetT;
-
-  typedef llvm::SmallPtrSet<Constraint*, NUM_OF_CONSTRAINTS> ConstraintsSetT;
-  typedef llvm::SmallPtrSet<VarRpl*, NUM_OF_CONSTRAINTS> VarRplSetT;
-  typedef llvm::SmallPtrSet<VarEffectSummary*, NUM_OF_CONSTRAINTS> VarEffectSummarySetT;
 
   /// \brief Symbol Table Map
   SymbolTableMapT SymTable;
@@ -90,10 +83,12 @@ class SymbolTable {
   /// be deallocated when the analysis is over.
   DomainSetT DomainSet;
 
-  /// \brief Set of all effect inclusion constraints generated
+  /// \brief Set of all constraints generated
   ConstraintsSetT ConstraintSet;
 
+  /// \brief Set of all Rpl Variables generated;
   VarRplSetT VarRplSet;
+  /// \brief Set of all Effect Summary Variables Generated
   VarEffectSummarySetT VarEffectSummarySet;
 
   AnnotationScheme *AnnotScheme;
@@ -113,7 +108,9 @@ class SymbolTable {
   unsigned long RVIDNumber;
   unsigned long ESVIDNumber;
   unsigned long RplDomIDNumber;
-  unsigned long ConstraintIDNumber;
+  unsigned long RIConstraintIDNumber;
+  unsigned long ESIConstraintIDNumber;
+  unsigned long ENIConstraintIDNumber;
 
   int PrologDbgLvl;
   // Private Methods
@@ -143,8 +140,16 @@ class SymbolTable {
 
   /// \brief Return the next unused Constraint ID number.
   /// Used to encode Constraints into Prolog.
-  inline unsigned long getNextUniqueConstraintID() {
-    return ConstraintIDNumber++;
+  inline unsigned long getNextUniqueRIConstraintID() {
+    return RIConstraintIDNumber++;
+  }
+
+  inline unsigned long getNextUniqueESIConstraintID() {
+    return ESIConstraintIDNumber++;
+  }
+
+  inline unsigned long getNextUniqueENIConstraintID() {
+    return ENIConstraintIDNumber++;
   }
 
   inline StringRef addFreshName(StringRef SRef) {
@@ -334,9 +339,21 @@ public:
     return addFreshName(ss.str());
   }
 
-  inline StringRef makeFreshConstraintName() {
+  inline StringRef makeFreshRIConstraintName() {
     std::stringstream ss;
-    ss << PL_ConstraintPrefix << "_" << getNextUniqueConstraintID();
+    ss << PL_RIConstraintPrefix << "_" << getNextUniqueRIConstraintID();
+    return addFreshName(ss.str());
+  }
+
+  inline StringRef makeFreshESIConstraintName() {
+    std::stringstream ss;
+    ss << PL_ESIConstraintPrefix << "_" << getNextUniqueESIConstraintID();
+    return addFreshName(ss.str());
+  }
+
+  inline StringRef makeFreshENIConstraintName() {
+    std::stringstream ss;
+    ss << PL_ENIConstraintPrefix << "_" << getNextUniqueENIConstraintID();
     return addFreshName(ss.str());
   }
 
@@ -349,6 +366,7 @@ public:
   void emitConstraints(bool DoFullInference) const;
   void readSolutions() const;
   void solveConstraints(bool DoFullInference) const; // if false -> do Effect inference only
+  void genConstraintGraph(StringRef FileName);
 
   // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
@@ -359,6 +377,7 @@ public:
   VarRpl *createFreshRplVar(const ValueDecl *D);
 
   VarEffectSummary *createFreshEffectSumVar(const FunctionDecl *D);
+  bool removeEffectSumVar(VarEffectSummary *VES);
 
   inline AnnotationSet makeDefaultClassParams(RecordDecl *RecD) {
     return AnnotScheme->makeClassParams(RecD);

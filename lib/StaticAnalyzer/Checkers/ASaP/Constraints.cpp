@@ -11,6 +11,7 @@
 // and emmitted to Prolog for solving.
 //
 //===----------------------------------------------------------------===//
+#include <fstream>
 
 #include "ASaPSymbolTable.h"
 #include "Constraints.h"
@@ -26,6 +27,44 @@ term_t Constraint::getIDPLTerm() const {
   term_t IDTerm = PL_new_term_ref();
   PL_put_atom_chars(IDTerm, ConstraintID.data());
   return IDTerm;
+}
+
+void Constraint::emitGraphNode(std::ofstream &OutF) const {
+  OutF << ConstraintID.data() << "["
+       << "color=" << getNodeColor();
+  if (Kind == CK_EffectNonInterference)
+    OutF << ", style=filled, fillcolor=" << getNodeColor();
+  OutF << "]" << std::endl;
+}
+
+void Constraint::emitGraphEdges(std::ofstream &OutF,
+                                const std::string &EdgeOp,
+                                const std::string &EdgeColor,
+                                const VarRplSetT *VRS) const {
+  for (VarRplSetT::const_iterator I = VRS->begin(), E = VRS->end();
+       I != E; ++I) {
+    const VarRpl *R = *I;
+    assert(R && "Internal Error: unexpected null pointer");
+    OutF << getConstraintID().data() << " " << EdgeOp << " " << R->getID().data()
+         << " [color=" << EdgeColor << "]"
+         << std::endl;
+  }
+}
+
+void Constraint::emitGraphEdges(std::ofstream &OutF,
+                                const std::string &EdgeOp,
+                                const std::string &EdgeColor,
+                                const VarEffectSummarySetT *VRS) const {
+  for (VarEffectSummarySetT::const_iterator
+          I = VRS->begin(),
+          E = VRS->end();
+        I != E; ++I) {
+    const VarEffectSummary *ES = *I;
+    assert(ES && "Internal Error: unexpected null pointer");
+    OutF << getConstraintID().data() << " " << EdgeOp << " " << ES->getID().data()
+         << " [color=" << EdgeColor << "]"
+         << std::endl;
+  }
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -47,6 +86,22 @@ void RplInclusionConstraint::print(llvm::raw_ostream &OS) const {
   OS << "RplInclusionConstraint(" << getConstraintID() << "): "
      << LHS->toString() << " <=(Incl) "
      << RHS->toString();
+}
+
+VarRplSetT *RplInclusionConstraint::collectRplVars() const {
+  VarRplSetT *L = LHS->collectRplVars();
+  VarRplSetT *R = RHS->collectRplVars();
+  return mergeRVSets(L, R);
+}
+
+void RplInclusionConstraint::emitGraphEdges(std::ofstream &OutF,
+                                            std::string &EdgeOp) const {
+  VarRplSetT *VRS = LHS->collectRplVars();
+  Constraint::emitGraphEdges(OutF, EdgeOp, DOT_LHSEdgeColor, VRS);
+  delete VRS;
+  VRS = RHS->collectRplVars();
+  Constraint::emitGraphEdges(OutF, EdgeOp, DOT_RHSEdgeColor, VRS);
+  delete VRS;
 }
 
 RplInclusionConstraint::~RplInclusionConstraint() {
@@ -129,6 +184,34 @@ void EffectInclusionConstraint::makeMinimal() {
     LHS->makeMinimal();
 }
 
+VarRplSetT *EffectInclusionConstraint::collectRplVars() const {
+  VarRplSetT *L = LHS->collectRplVars();
+  VarRplSetT *R = RHS->collectRplVars();
+  return mergeRVSets(L, R);
+}
+
+VarEffectSummarySetT *EffectInclusionConstraint::collectEffectSummaryVars() const {
+  VarEffectSummarySetT *L = LHS->collectEffectSummaryVars();
+  VarEffectSummarySetT *R = RHS->collectEffectSummaryVars();
+  return mergeESVSets(L, R);
+}
+
+void EffectInclusionConstraint::emitGraphEdges(std::ofstream &OutF,
+                                               std::string &EdgeOp) const {
+  VarRplSetT *VRS = LHS->collectRplVars();
+  Constraint::emitGraphEdges(OutF, EdgeOp, DOT_LHSEdgeColor, VRS);
+  delete VRS;
+  VRS = RHS->collectRplVars();
+  Constraint::emitGraphEdges(OutF, EdgeOp, DOT_RHSEdgeColor, VRS);
+  delete VRS;
+  VarEffectSummarySetT *VES = LHS->collectEffectSummaryVars();
+  Constraint::emitGraphEdges(OutF, EdgeOp, DOT_LHSEdgeColor, VES);
+  delete VES;
+  VES = RHS->collectEffectSummaryVars();
+  Constraint::emitGraphEdges(OutF, EdgeOp, DOT_RHSEdgeColor, VES);
+  delete VES;
+}
+
 //////////////////////////////////////////////////////////////////////////
 //  EffectNIConstraint
 
@@ -164,6 +247,34 @@ void EffectNIConstraint::print(llvm::raw_ostream &OS) const {
 EffectNIConstraint::~EffectNIConstraint() {
   delete LHS;
   delete RHS;
+}
+
+VarRplSetT *EffectNIConstraint::collectRplVars() const {
+  VarRplSetT *L = LHS->collectRplVars();
+  VarRplSetT *R = RHS->collectRplVars();
+  return mergeRVSets(L, R);
+}
+
+VarEffectSummarySetT *EffectNIConstraint::collectEffectSummaryVars() const {
+  VarEffectSummarySetT *L = LHS->collectEffectSummaryVars();
+  VarEffectSummarySetT *R = RHS->collectEffectSummaryVars();
+  return mergeESVSets(L, R);
+}
+
+void EffectNIConstraint::emitGraphEdges(std::ofstream &OutF,
+                                        std::string &EdgeOp) const {
+  VarRplSetT *VRS = LHS->collectRplVars();
+  Constraint::emitGraphEdges(OutF, EdgeOp, DOT_LHSEdgeColor, VRS);
+  delete VRS;
+  VRS = RHS->collectRplVars();
+  Constraint::emitGraphEdges(OutF, EdgeOp, DOT_RHSEdgeColor, VRS);
+  delete VRS;
+  VarEffectSummarySetT *VES = LHS->collectEffectSummaryVars();
+  Constraint::emitGraphEdges(OutF, EdgeOp, DOT_LHSEdgeColor, VES);
+  delete VES;
+  VES = RHS->collectEffectSummaryVars();
+  Constraint::emitGraphEdges(OutF, EdgeOp, DOT_RHSEdgeColor, VES);
+  delete VES;
 }
 
 } // end namespace asap

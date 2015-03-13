@@ -12,6 +12,7 @@
 // given region and effect annotations.
 //
 //===----------------------------------------------------------------===//
+#include <fstream>
 
 #include "Effect.h"
 #include "ASaPUtil.h"
@@ -268,6 +269,27 @@ term_t Effect::getPLTerm() const {
   return Result;
 }
 
+VarRplSetT *Effect::collectRplVars() const {
+  VarRplSetT *Result = 0;
+  if (R)
+    Result = R->collectRplVars();
+  if (SubV) {
+    VarRplSetT *SubRVs = SubV->collectRplVars();
+    Result = mergeRVSets(Result, SubRVs);
+  }
+  return Result;
+}
+
+VarEffectSummarySetT *Effect::collectEffectSummaryVars() const {
+  VarEffectSummarySetT *Result = 0;
+  if (isCompound()) {
+    const EffectSummary *ES = SymbolTable::Table->getEffectSummary(FunD);
+    assert(ES && "Internal Error: invoke effect declaration without effect summary");
+    Result = ES->collectEffectSummaryVars();
+  }
+  return Result;
+}
+
 //////////////////////////////////////////////////////////////////////////
 // EffectVector
 
@@ -335,6 +357,23 @@ void EffectVector::addEffects(const ConcreteEffectSummary &ES) {
   }
 }
 
+VarRplSetT *EffectVector::collectRplVars() const {
+  VarRplSetT *Result = new VarRplSetT;
+  for (VectorT::const_iterator I = begin(), E = end(); I != E; ++I) {
+       VarRplSetT *RSet = (*I)->collectRplVars();
+       Result = mergeRVSets(Result, RSet);
+  }
+  return Result;
+}
+
+VarEffectSummarySetT *EffectVector::collectEffectSummaryVars() const {
+  VarEffectSummarySetT *Result = new VarEffectSummarySetT ;
+  for (VectorT::const_iterator I = begin(), E = end(); I != E; ++I) {
+       VarEffectSummarySetT *RSet = (*I)->collectEffectSummaryVars();
+       Result = mergeESVSets(Result, RSet);
+  }
+  return Result;
+}
 //////////////////////////////////////////////////////////////////////////
 // EffectSummary
 
@@ -530,6 +569,24 @@ term_t ConcreteEffectSummary::getPLTerm() const {
   return EffectSumT;
 }
 
+VarRplSetT *ConcreteEffectSummary::collectRplVars() const {
+  VarRplSetT *Result = new VarRplSetT;
+  for(SetT::iterator I = begin(), E = end(); I != E; ++I) {
+    VarRplSetT *RSet = (*I)->collectRplVars();
+    Result = mergeRVSets(Result, RSet);
+  }
+  return Result;
+}
+
+VarEffectSummarySetT *ConcreteEffectSummary::collectEffectSummaryVars() const {
+  VarEffectSummarySetT *Result = new VarEffectSummarySetT ;
+  for(SetT::iterator I = begin(), E = end(); I != E; ++I) {
+       VarEffectSummarySetT *RSet = (*I)->collectEffectSummaryVars();
+       Result = mergeESVSets(Result, RSet);
+  }
+  return Result;
+}
+
 //VarEffectSummary
 void VarEffectSummary::print(raw_ostream &OS) const {
   OS << ID << "(Effect Summary Variable)";
@@ -547,6 +604,20 @@ term_t VarEffectSummary::getPLTerm() const {
   int Res = PL_cons_functor(EffectSumT, EffectSumF, getIDPLTerm());
   assert(Res && "Failed to create 'effect_var' Prolog term");
   return EffectSumT;
+}
+
+void VarEffectSummary::emitGraphNode(std::ofstream &OutF) const {
+  OutF << ID.data() << std::endl;
+}
+
+VarRplSetT *VarEffectSummary::collectRplVars() const {
+  return new VarRplSetT;
+}
+
+VarEffectSummarySetT *VarEffectSummary::collectEffectSummaryVars() const {
+  VarEffectSummarySetT *Result = new VarEffectSummarySetT;
+  Result->insert(this);
+  return Result;
 }
 
 } // end namespace clang

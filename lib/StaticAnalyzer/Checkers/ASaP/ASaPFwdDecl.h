@@ -62,6 +62,7 @@ class AnnotationScheme;
 class ASaPType;
 class ConcreteEffectSummary;
 class ConcreteRpl;
+class Constraint;
 class Effect;
 class EffectInclusionConstraint;
 class EffectVector;

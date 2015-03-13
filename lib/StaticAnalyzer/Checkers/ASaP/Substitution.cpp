@@ -12,7 +12,7 @@
 // parallelism given region and effect annotations.
 //
 //===----------------------------------------------------------------===//
-
+#include "ASaPUtil.h"
 #include "ASaPSymbolTable.h"
 #include "ASaPType.h"
 #include "Effect.h"
@@ -95,6 +95,9 @@ bool Substitution::hasBase(const RplElement &Base) const {
   return *FromEl == Base;
 }
 
+VarRplSetT *Substitution::collectRplVars() const {
+  return ToRpl->collectRplVars();
+}
 //////////////////////////////////////////////////////////////////////////
 void SubstitutionSet::
 buildSubstitutionSet(const ParameterVector *ParV, const RplVector *RplVec) {
@@ -172,6 +175,15 @@ bool SubstitutionSet::hasBase(const RplElement &Base) const {
   return false;
 }
 
+VarRplSetT *SubstitutionSet::collectRplVars() const {
+  VarRplSetT *Result = new VarRplSetT;
+  for(SetT::iterator I = begin(), E = end();
+      I != E; ++I) {
+    VarRplSetT *RHS = (*I)->collectRplVars();
+    Result = mergeRVSets(Result, RHS);
+  }
+  return Result;
+}
 //////////////////////////////////////////////////////////////////////////
 void SubstitutionVector::push_back_vec(const SubstitutionVector *SubV) {
   if (SubV) {
@@ -223,6 +235,16 @@ term_t SubstitutionVector::getPLTerm() const {
       Res = PL_cons_list(Result, Term, Result);
       assert(Res && "Failed to add SubstitutionVector element to Prolog list term");
     }
+  }
+  return Result;
+}
+
+VarRplSetT *SubstitutionVector::collectRplVars() const {
+  VarRplSetT *Result = new VarRplSetT;
+  for(VectorT::const_iterator I = begin(), E = end();
+        I != E; ++I) {
+    VarRplSetT *RHS = (*I)->collectRplVars();
+    Result = mergeRVSets(Result, RHS);
   }
   return Result;
 }

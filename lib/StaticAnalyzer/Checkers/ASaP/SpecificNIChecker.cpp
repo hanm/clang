@@ -259,7 +259,7 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
           Result = false;
         } else if (RK == RK_DUNNO) {
           OS << "DUNNO\n";
-          StringRef Name = SymT->makeFreshConstraintName();
+          StringRef Name = SymT->makeFreshENIConstraintName();
           EffectNIConstraint *NIC = new EffectNIConstraint(Name, **I, **J);
           SymT->addConstraint(NIC);
         } else {
@@ -330,7 +330,7 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
     Result = false;
   } else if (RK == RK_DUNNO) {
     // assert(false && "Found variable effect summary");
-    StringRef Name = SymT->makeFreshConstraintName();
+    StringRef Name = SymT->makeFreshENIConstraintName();
     EffectNIConstraint *NIC = new EffectNIConstraint(Name, *ESptr, *ESptr);
     SymT->addConstraint(NIC);
   }
@@ -383,7 +383,7 @@ bool TBBParallelForIndexNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
     Result = false;
   } else if (RK == RK_DUNNO) {
     //assert(false && "Found variable effect summary");
-    StringRef Name = SymT->makeFreshConstraintName();
+    StringRef Name = SymT->makeFreshENIConstraintName();
     EffectNIConstraint *NIC = new EffectNIConstraint(Name, *ESptr, *ESptr);
     SymT->addConstraint(NIC);
   }

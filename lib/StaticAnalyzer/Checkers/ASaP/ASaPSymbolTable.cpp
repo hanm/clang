@@ -17,6 +17,7 @@
 /// such information includes ASaPType*, ParamVector, RegionNameSet,
 /// and EffectSummary
 #include <SWI-Prolog.h>
+#include <fstream>
 
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
@@ -139,7 +140,9 @@ SymbolTable::SymbolTable()
     : AnnotScheme(0), ParamIDNumber(0),
       RegionIDNumber(0), DeclIDNumber(0),
       RVIDNumber(0), ESVIDNumber(0),
-      RplDomIDNumber(0), ConstraintIDNumber(0), PrologDbgLvl(0) {
+      RplDomIDNumber(0), RIConstraintIDNumber(0),
+      ESIConstraintIDNumber(0), ENIConstraintIDNumber(0),
+      PrologDbgLvl(0) {
   // FIXME: make this static like the other default Regions etc
   ParamRplElement Param("P","p");
   BuiltinDefaultRegionParameterVec = new ParameterVector(Param);
@@ -480,9 +483,9 @@ void SymbolTable::resetEffectSummary(const Decl *D, const EffectSummary *ES) {
   if (!SymTable.lookup(D))
     createSymbolTableEntry(D);
   // invariant: SymTable[D] not null
-  if (SymTable[D]->hasEffectSummary())
+  if (SymTable[D]->hasEffectSummary()) {
     SymTable[D]->deleteEffectSummary();
-
+  }
   EffectSummary* Sum = ES->clone();
   SymTable[D]->setEffectSummary(Sum);
 }
@@ -588,7 +591,7 @@ addParallelFun(const FunctionDecl *D, const SpecificNIChecker *NIC) {
 }
 
 void SymbolTable::addRplInclusionConstraint(const Rpl &LHS, const Rpl &RHS) {
-  StringRef Name = makeFreshConstraintName();
+  StringRef Name = makeFreshRIConstraintName();
   RplInclusionConstraint *RIC = new RplInclusionConstraint(Name, LHS, RHS);
   SymbolTable::Table->addConstraint(RIC);
 }
@@ -611,7 +614,7 @@ updateEffectInclusionConstraint(const FunctionDecl *Def,
   if (EIC) {
     EIC->addEffects(CES);
   } else {
-    EIC = new EffectInclusionConstraint(makeFreshConstraintName(),
+    EIC = new EffectInclusionConstraint(makeFreshESIConstraintName(),
                                         &CES, getEffectSummary(Def),
                                         Def, getBody(Def));
     addConstraint(EIC);
@@ -733,7 +736,7 @@ getFullSubstitutionVector(const ASaPType *Typ) const {
   return std::unique_ptr<SubstitutionVector>(SubV.release());
 }
 
-static void emitInferredEffectSummary(EffectInclusionConstraint *EC,
+static void emitInferredEffectSummary(const EffectInclusionConstraint *EC,
                                      char* Solution){
   const FunctionDecl *Func = EC->getDef();
   const Stmt  *S = EC->getS();
@@ -775,7 +778,7 @@ void SymbolTable::emitFacts() const {
           I = VarRplSet.begin(),
           E = VarRplSet.end();
         I != E; ++I, ++RVCount) {
-    VarRpl *R = *I;
+    const VarRpl *R = *I;
     assert(R && "Internal Error: unexpected null pointer");
     R->assertzProlog();
     const RplDomain *Dom = R->getDomain();
@@ -893,7 +896,7 @@ void SymbolTable::readSolutions() const {
           I = ConstraintSet.begin(),
           E = ConstraintSet.end();
        I != E; ++I) {
-    if (EffectInclusionConstraint *EIC = dyn_cast<EffectInclusionConstraint>(*I)) {
+    if (const EffectInclusionConstraint *EIC = dyn_cast<EffectInclusionConstraint>(*I)) {
       const VarEffectSummary *VES = dyn_cast<VarEffectSummary>(EIC->getRHS());
       if (!VES)
         continue; // for simple effect inference we only care about effect
@@ -974,6 +977,44 @@ void SymbolTable::solveConstraints(bool DoFullInference) const {
   assert(Rval && "Prolog failed to solve constraints");
 
   readSolutions();
+}
+
+void SymbolTable::genConstraintGraph(StringRef FileName) {
+  *OS << "DEBUG:: Gonna open " << FileName.data() << " for writing\n";
+  std::ofstream OutF(FileName);
+  std::string EdgeOp = "--";
+  OutF << "strict graph ConstraintGraph {" << std::endl;
+  *OS << "Gonna emit RplVars to Graph\n";
+  for (VarRplSetT::const_iterator
+          I = VarRplSet.begin(),
+          E = VarRplSet.end();
+        I != E; ++I) {
+    const VarRpl *R = *I;
+    assert(R && "Internal Error: unexpected null pointer");
+    R->emitGraphNode(OutF);
+  }
+  *OS << "Gonna emit ESVars to Graph\n";
+  for (VarEffectSummarySetT::const_iterator
+          I = VarEffectSummarySet.begin(),
+          E = VarEffectSummarySet.end();
+        I != E; ++I) {
+    *OS << "here\n";
+    const VarEffectSummary *EV = *I;
+    assert(EV && "Internal Error: unexpected null pointer");
+    EV->print(*OS);
+    EV->emitGraphNode(OutF);
+  }
+  *OS << "Gonna emit Constraints to Graph\n";
+  for (ConstraintsSetT::iterator
+          I = ConstraintSet.begin(),
+          E = ConstraintSet.end();
+       I != E; ++I) {
+    const Constraint *Cons = *I;
+    assert(Cons && "Internal Error: unexpected null pointer");
+    Cons->emitGraphNode(OutF);
+    Cons->emitGraphEdges(OutF, EdgeOp);
+  }
+  OutF << "}" << std::endl;
 }
 
 AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
@@ -1101,6 +1142,10 @@ VarEffectSummary *SymbolTable::createFreshEffectSumVar(const FunctionDecl *D) {
   return Result;
 }
 
+inline bool SymbolTable::removeEffectSumVar(VarEffectSummary *VES) {
+  return VarEffectSummarySet.erase(VES);
+}
+
 //////////////////////////////////////////////////////////////////////////
 // SymbolTableEntry
 SymbolTableEntry::SymbolTableEntry(StringRef DeclName,
@@ -1188,6 +1233,9 @@ EffectInclusionConstraint *SymbolTableEntry::getEffectInclusionConstraint() cons
 }
 
 void SymbolTableEntry::deleteEffectSummary() {
+  if (VarEffectSummary *VES = dyn_cast<VarEffectSummary>(EffSum)) {
+    SymbolTable::Table->removeEffectSumVar(VES);
+  }
   delete EffSum;
   EffSum = 0;
 }

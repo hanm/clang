@@ -364,5 +364,82 @@ std::string getPLNormalizedName(const NamedDecl &Dec) {
   return "";
 }
 
+VarRplSetT *mergeRVSets(VarRplSetT *&LHS, VarRplSetT *&RHS) {
+  VarRplSetT *Result = 0;
+  if (!LHS) {
+    Result = RHS;
+    RHS = 0;
+    return Result;
+  }
+  if (!RHS) {
+    Result = LHS;
+    LHS = 0;
+    return Result;
+  }
+  // Invariant: LHS && RHS != NULL
+  if (LHS->size() < RHS->size()) {
+    // swap
+    VarRplSetT *Tmp = RHS;
+    RHS = LHS;
+    LHS = Tmp;
+  }
+  // fold RHS into LHS
+  for (VarRplSetT::const_iterator
+          I = RHS->begin(),
+          E = RHS->end();
+        I != E; ++I) {
+    const VarRpl *R = *I;
+    assert(R && "Internal Error: unexpected null pointer");
+    LHS->insert(R);
+  }
+  Result = LHS;
+
+  RHS->clear();
+  delete RHS;
+  RHS = 0;
+  LHS = 0;
+
+  return Result;
+}
+
+VarEffectSummarySetT *mergeESVSets(VarEffectSummarySetT *&LHS, VarEffectSummarySetT *&RHS) {
+  VarEffectSummarySetT *Result = 0;
+  if (!LHS) {
+    Result = RHS;
+    RHS = 0;
+    return Result;
+  }
+  if (!RHS) {
+    Result = LHS;
+    LHS = 0;
+    return Result;
+  }
+  // Invariant: LHS && RHS != NULL
+  if (LHS->size() < RHS->size()) {
+    // swap
+    VarEffectSummarySetT *Tmp = RHS;
+    RHS = LHS;
+    LHS = Tmp;
+  }
+  // fold RHS into LHS
+  for (VarEffectSummarySetT::const_iterator
+          I = RHS->begin(),
+          E = RHS->end();
+        I != E; ++I) {
+    const VarEffectSummary *R = *I;
+    assert(R && "Internal Error: unexpected null pointer");
+    LHS->insert(R);
+  }
+  Result = LHS;
+
+  RHS->clear();
+  delete RHS;
+  RHS = 0;
+  LHS = 0;
+
+  return Result;
+}
+
+
 } // end namespace asap
 } // end namespace clang

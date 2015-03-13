@@ -63,7 +63,7 @@ EffectConstraintVisitor::EffectConstraintVisitor (
   assert(EffSummary);
 
   //create a constraint object
-  EC = new EffectInclusionConstraint(SymT.makeFreshConstraintName(),
+  EC = new EffectInclusionConstraint(SymT.makeFreshESIConstraintName(),
                                      0, EffSummary, CanD, S);
   EffectsTmp = new EffectVector();
   if (VisitCXXInitializer) {

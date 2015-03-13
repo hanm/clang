@@ -47,7 +47,7 @@ public:
   RplDomain(const StringRef ID, const RplDomain &Dom);
   virtual ~RplDomain();
 
-  const StringRef getID() { return ID; }
+  const StringRef getID() const { return ID; }
   void addRegion(const NamedRplElement &R);
   bool isUsed() const { return Used; }
   void markUsed();
@@ -279,13 +279,14 @@ public:
   std::string toString() const;
   virtual void print(llvm::raw_ostream &OS) const;
   virtual void printSolution(llvm::raw_ostream &OS) const;
+  virtual VarRplSetT *collectRplVars() const;
+
   virtual void join(Rpl *That) = 0;
   virtual Trivalent substitute(const Substitution *S) = 0;
   virtual void substitute(const SubstitutionSet *SubS) = 0;
   virtual bool operator == (const RplElement &That) const = 0;
   virtual term_t getPLTerm() const = 0;
   virtual term_t getRplElementsPLTerm() const = 0;
-
   /// Static Constants
   static const char RPL_SPLIT_CHARACTER = ':';
   static const StringRef RPL_LIST_SEPARATOR;
@@ -484,7 +485,8 @@ public:
   }
 
   //inline void setDomain(RplDomain *D) { Domain = D;}
-  inline const RplDomain *getDomain() { return Domain;}
+  const RplDomain *getDomain() const { return Domain;}
+  StringRef getID() const { return Name; }
 
   /// \brief Print the Rpl to an output stream.
   virtual void print(llvm::raw_ostream &OS) const;
@@ -517,6 +519,9 @@ public:
 
   /// \brief Query Prolog to retrieve the infered value for the VarRpl.
   char *readPLValue() const;
+
+  virtual VarRplSetT *collectRplVars() const;
+  void emitGraphNode(std::ofstream &OutF) const;
 
   virtual bool operator == (const RplElement &That) const {
       return false;

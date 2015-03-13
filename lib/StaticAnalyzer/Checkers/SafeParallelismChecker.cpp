@@ -230,6 +230,7 @@ public:
     }
     if (DoEffectInference || DoFullInference) {
       setupProlog();
+      SymbolTable::Table->genConstraintGraph("Constraints.dot");
       SymbolTable::Table->solveConstraints(DoFullInference);
     }
   }

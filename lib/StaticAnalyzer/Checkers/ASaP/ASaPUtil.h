@@ -19,13 +19,22 @@
 #include <SWI-Prolog.h>
 
 #include "clang/AST/Decl.h"
+#include "llvm/ADT/SmallPtrSet.h"
 
 #include "ASaPFwdDecl.h"
 
 namespace clang {
 namespace asap {
 
-  // Static Constant Strings
+#ifndef NUM_OF_CONSTRAINTS
+  #define NUM_OF_CONSTRAINTS 100
+#endif
+typedef llvm::SmallPtrSet<const Constraint*, NUM_OF_CONSTRAINTS> ConstraintsSetT;
+typedef llvm::SmallPtrSet<const VarRpl*, NUM_OF_CONSTRAINTS> VarRplSetT;
+typedef llvm::SmallPtrSet<const VarEffectSummary*, NUM_OF_CONSTRAINTS> VarEffectSummarySetT;
+
+
+// Static Constant Strings
 static const std::string PL_RgnName = "rgn_name";
 static const std::string PL_RgnParam = "rgn_param";
 static const std::string PL_HasEffSum = "has_effect_summary";
@@ -59,7 +68,16 @@ static const std::string PL_ESIConstraint = "esi_constraint";
 /// \brief Effect Non Interference Constraint
 static const std::string PL_ENIConstraint = "eni_constraint";
 
-static const std::string PL_ConstraintPrefix = "constraint";
+static const std::string PL_RIConstraintPrefix = "ri_cons";
+static const std::string PL_ESIConstraintPrefix = "esi_cons";
+static const std::string PL_ENIConstraintPrefix = "eni_cons";
+
+
+static const std::string DOT_RIConstraintColor  = "green";
+static const std::string DOT_ESIConstraintColor = "blue";
+static const std::string DOT_ENIConstraintColor = "red";
+static const std::string DOT_LHSEdgeColor = "blue";
+static const std::string DOT_RHSEdgeColor = "red";
 
 
 extern raw_ostream *OS;
@@ -151,6 +169,9 @@ void tryBuildParamSubstitutions(const FunctionDecl *Def,
 
 Stmt *getBody(const FunctionDecl *D);
 std::string getPLNormalizedName(const NamedDecl &Decl);
+
+VarRplSetT *mergeRVSets(VarRplSetT *&LHS, VarRplSetT *&RHS);
+VarEffectSummarySetT *mergeESVSets(VarEffectSummarySetT *&LHS, VarEffectSummarySetT *&RHS);
 
 } // end namespace asap
 } // end namespace clang

@@ -88,7 +88,8 @@ public:
   std::string toString() const;
 
   term_t getPLTerm() const;
-
+  VarRplSetT *collectRplVars() const;
+  VarEffectSummarySetT *collectEffectSummaryVars() const;
   // Predicates
   /// \brief Returns true iff this is a no_effect.
   inline bool isNoEffect() const {
@@ -163,6 +164,8 @@ public:
 
   void makeMinimal();
   void addEffects(const ConcreteEffectSummary &ES);
+  VarRplSetT *collectRplVars() const;
+  VarEffectSummarySetT *collectEffectSummaryVars() const;
 
 }; // end class EffectVector
 
@@ -230,6 +233,8 @@ public:
   virtual EffectSummary *clone() const = 0;
   virtual ~EffectSummary() {};
   virtual term_t getPLTerm() const = 0;
+  virtual VarRplSetT *collectRplVars() const = 0;
+  virtual VarEffectSummarySetT *collectEffectSummaryVars() const = 0;
 }; // end class EffectSummary
 
 #ifndef EFFECT_SUMMARY_SIZE
@@ -273,6 +278,8 @@ public:
 
   virtual ~ConcreteEffectSummary() {};
   virtual term_t getPLTerm() const;
+  virtual VarRplSetT *collectRplVars() const;
+  virtual VarEffectSummarySetT *collectEffectSummaryVars() const;
   ///
   static bool classof(const EffectSummary *ES) {
     return ES->getSummaryKind() == ESK_Concrete;
@@ -298,6 +305,8 @@ public:
     return new VarEffectSummary(*this);
   }
 
+  StringRef getID() const { return ID; }
+
   virtual void print(raw_ostream &OS) const;
 
   virtual void makeMinimal(EffectCoverageVector &ECV) {
@@ -317,6 +326,9 @@ public:
   virtual ~VarEffectSummary() {};
   virtual term_t getPLTerm() const;
   term_t getIDPLTerm() const;
+  virtual VarRplSetT *collectRplVars() const;
+  virtual VarEffectSummarySetT *collectEffectSummaryVars() const;
+  void emitGraphNode(std::ofstream &OutF) const;
 
   static bool classof(const EffectSummary *ES) {
     return ES->getSummaryKind() == ESK_Var;
