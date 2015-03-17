@@ -229,9 +229,11 @@ public:
       return;
     }
     if (DoEffectInference || DoFullInference) {
+      *OS << "DEBUG:: Invoking Prolog to solve constraints\n";
       setupProlog();
       SymbolTable::Table->genConstraintGraph("Constraints.dot");
       SymbolTable::Table->solveConstraints(DoFullInference);
+      *OS << "DEBUG:: DONE Invoking Prolog to solve constraints\n";
     }
   }
 
