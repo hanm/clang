@@ -721,7 +721,7 @@ char *VarRpl::readPLValue() const {
       PL_put_variable(Value);
 
       int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, HasValueP, ID);
-      assert(Rval && "Querying effect summary failed");
+      assert(Rval && "Querying Rpl Variable failed");
 
       char *Solution;
       Rval = PL_get_chars(Value, &Solution, CVT_WRITE|BUF_RING);
