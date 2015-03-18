@@ -19,7 +19,7 @@ public:
 
 class [[asap::param("P")]] SetYFunctor {
   Point &P; // expected-warning{{Inferred region arguments: class Point &, IN:<empty>, ArgV:[p7_P]}}
-  int v; // expected-warning{{Inferred region arguments: int, IN:[r5_v], ArgV:}}
+  int v; // expected-warning{{Inferred region arguments: int, IN:[p7_P,r5_v], ArgV:}}
 public:
   SetYFunctor(Point &P [[asap::arg("P")]], int v) : P(P), v(v) {} // expected-warning{{Inferred Effect Summary for SetYFunctor: [reads(rpl([rLOCAL],[]))]}}
   SetYFunctor(SetYFunctor &F) = delete; // expected-warning{{Inferred region arguments: class SetYFunctor &, IN:<empty>, ArgV:[r6_F]}}
@@ -48,7 +48,7 @@ class //[[asap::region("Rx,Ry")]]
  public:
   void setX(int _x) { x = _x; } // expected-warning{{Inferred Effect Summary for setX: [reads(rpl([rLOCAL],[])),writes(rpl([p9_Point],[]))]}}
   void setY(int _y) { y = _y; } // expected-warning{{Inferred Effect Summary for setY: [reads(rpl([rLOCAL],[])),writes(rpl([p9_Point,r14_y],[]))]}}
-  void setXY(int _x, int _y) { // expected-warning{{Inferred Effect Summary for setXY: [reads(rpl([r1_v],[])),reads(rpl([r5_v],[])),reads(rpl([rLOCAL],[])),writes(rpl([p9_Point],[])),writes(rpl([p9_Point,r14_y],[]))]}}
+  void setXY(int _x, int _y) { // expected-warning{{Inferred Effect Summary for setXY: [reads(rpl([p9_Point,r5_v],[])),reads(rpl([r1_v],[])),reads(rpl([rLOCAL],[])),writes(rpl([p9_Point],[])),writes(rpl([p9_Point,r14_y],[]))]}} 
     SetXFunctor SXF(*this, _x); // expected-warning{{Inferred region arguments: class SetXFunctor, IN:<empty>, ArgV:[p9_Point]}}
     SetYFunctor SYF(*this, _y); // expected-warning{{Inferred region arguments: class SetYFunctor, IN:<empty>, ArgV:[p9_Point]}}
     tbb::parallel_invoke(SXF, SYF);
@@ -62,16 +62,16 @@ void SetXFunctor::operator() () const { // expected-warning{{Inferred Effect Sum
   P.setX(v);
 }
 
-void SetYFunctor::operator() () const { // expected-warning{{Inferred Effect Summary for operator(): [reads(rpl([r5_v],[])),reads(rpl([rLOCAL],[])),writes(rpl([p7_P,r14_y],[]))]}}
+void SetYFunctor::operator() () const { // expected-warning{{Inferred Effect Summary for operator(): [reads(rpl([p7_P,r5_v],[])),reads(rpl([rLOCAL],[])),writes(rpl([p7_P,r14_y],[]))]}}
   P.setY(v);
 }
 
-void SetXYFunctor::operator() () const { // expected-warning{{Inferred Effect Summary for operator(): [reads(rpl([r10_v2],[])),reads(rpl([r1_v],[])),reads(rpl([r5_v],[])),reads(rpl([r9_v1],[])),reads(rpl([rLOCAL],[])),writes(rpl([p8_P],[])),writes(rpl([p8_P,r14_y],[]))]}}
+void SetXYFunctor::operator() () const { // expected-warning{{Inferred Effect Summary for operator(): [reads(rpl([p8_P,r5_v],[])),reads(rpl([r10_v2],[])),reads(rpl([r1_v],[])),reads(rpl([r9_v1],[])),reads(rpl([rLOCAL],[])),writes(rpl([p8_P],[])),writes(rpl([p8_P,r14_y],[]))]}}
   P.setXY(v1, v2);
 }
 
 void foo //[[asap::region("R1, R2")]] 
-         () { // expected-warning{{Inferred Effect Summary for foo: [reads(rpl([r10_v2],[])),reads(rpl([r1_v],[])),reads(rpl([r5_v],[])),reads(rpl([r9_v1],[])),reads(rpl([rLOCAL],[])),writes(rpl([r19_p1],[])),writes(rpl([r19_p1,r14_y],[])),writes(rpl([r20_p2],[])),writes(rpl([r20_p2,r14_y],[]))]}}
+         () { // expected-warning{{Inferred Effect Summary for foo: [reads(rpl([r10_v2],[])),reads(rpl([r19_p1,r5_v],[])),reads(rpl([r1_v],[])),reads(rpl([r20_p2,r5_v],[])),reads(rpl([r9_v1],[])),reads(rpl([rLOCAL],[])),writes(rpl([r19_p1],[])),writes(rpl([r19_p1,r14_y],[])),writes(rpl([r20_p2],[])),writes(rpl([r20_p2,r14_y],[]))]}}
   Point p1 ; // expected-warning{{Inferred region arguments: class Point, IN:<empty>, ArgV:[r19_p1]}}
   Point p2 ; // expected-warning{{Inferred region arguments: class Point, IN:<empty>, ArgV:[r20_p2]}}
   SetXYFunctor F1(p1, 3, 4); // expected-warning{{Inferred region arguments: class SetXYFunctor, IN:<empty>, ArgV:[r19_p1]}}
