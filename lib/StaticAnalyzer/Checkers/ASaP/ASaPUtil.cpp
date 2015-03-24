@@ -171,10 +171,35 @@ const Decl *getDeclFromContext(const DeclContext *DC) {
 void assertzTermProlog(term_t Fact, StringRef ErrMsg) {
   predicate_t AssertzP = PL_predicate("assertz", 1, "user");
   int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, AssertzP, Fact);
-  assert(Rval && ErrMsg.data());
+  if (!Rval) {
+    *OS << ErrMsg.data();
+    assert(Rval && "assertzTermProlog failed");
+  }
   char *Text;
   Rval = PL_get_chars(Fact, &Text, CVT_WRITE|BUF_RING);
   OS_PL << Text << ".\n";
+}
+
+void setupSimplifyLevel(int SimplifyLvl) {
+    int Res = 0;
+    if (SimplifyLvl > 0) { // enable simple simplifications
+      term_t Lvl1 = PL_new_term_ref();
+      Res = PL_put_atom_chars(Lvl1, PL_SimplifyBasic.c_str());
+      assert(Res && "Failed to create Prolog term for 'simplify_basic'");
+      assertzTermProlog(Lvl1, "Failed to assert 'simplify_basic'");
+    }
+    if (SimplifyLvl > 1) { // enable theorem 1 simplifications
+      term_t Lvl2 = PL_new_term_ref();
+      Res = PL_put_atom_chars(Lvl2, PL_SimplifyDisjointjWrites.c_str());
+      assert(Res && "Failed to create Prolog term for 'simplify_disjoint_writes'");
+      assertzTermProlog(Lvl2, "Failed to assert 'simplify_disjoint_writes'");
+    }
+    if (SimplifyLvl > 2) { // enable theorem 2 simplifications
+      term_t Lvl3 = PL_new_term_ref();
+      Res = PL_put_atom_chars(Lvl3, PL_SimplifyRecursiveWrites.c_str());
+      assert(Res && "Failed to create Prolog term for 'simplify_recursive_writes'");
+      assertzTermProlog(Lvl3, "Failed to assert 'simplify_recursive_writes'");
+    }
 }
 
 term_t buildPLEmptyList() {

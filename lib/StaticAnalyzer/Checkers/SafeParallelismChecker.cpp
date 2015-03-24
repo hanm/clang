@@ -88,6 +88,16 @@ public:
     SymbolTable::Initialize(VB);
     SymbolTable &SymT = *SymbolTable::Table;
 
+    // Chose solver simplification level
+    // 0: no simplifications
+    // 1: only basic simplifications
+    // 2: also apply theorem 1 simplifications (disjoint writes theorem)
+    // 3: also apply theorem 2 simplifications (recursive writes theorem)
+    const StringRef SimplifyLvlOptionName("-asap-simplify-level");
+    StringRef SimplifyLvlStr(GetOrCreateValue(OptionMap, SimplifyLvlOptionName, "3"));
+    int SimplifyLvl = std::stoi(SimplifyLvlStr);
+    *OS << "DEBUG:: " << SimplifyLvlOptionName << " = " << SimplifyLvl << "\n";
+
     // Choose prolog debug level.
     // 0: no debug (default)
     // 1: debug inference
@@ -145,7 +155,7 @@ public:
 
     if (!Error) {
       SymT.setAnnotationScheme(AnnotScheme);
-      runCheckers(TUDecl, DoEffectInference, DoFullInference);
+      runCheckers(TUDecl, DoEffectInference, DoFullInference, SimplifyLvl);
     }
 
 
@@ -155,7 +165,9 @@ public:
   }
 
   void runCheckers(TranslationUnitDecl *TUDecl,
-                   bool DoEffectInference, bool DoFullInference) const {
+                   bool DoEffectInference,
+                   bool DoFullInference,
+                   int SimplifyLvl) const {
     assert(!(DoEffectInference && DoFullInference) &&
            "Either effect or full inference can be performed");
     *OS << "DEBUG:: starting ASaP TBB Parallelism Detection!\n";
@@ -230,14 +242,14 @@ public:
     }
     if (DoEffectInference || DoFullInference) {
       *OS << "DEBUG:: Invoking Prolog to solve constraints\n";
-      setupProlog();
+      setupProlog(SimplifyLvl);
       SymbolTable::Table->genConstraintGraph("Constraints.dot");
       SymbolTable::Table->solveConstraints(DoFullInference);
       *OS << "DEBUG:: DONE Invoking Prolog to solve constraints\n";
     }
   }
 
-  void setupProlog() const {
+  void setupProlog(int SimplifyLvl) const {
     // Make sure asap.pl exists at the expected location.
     FILE *File = fopen("/opt/lib/asap.pl", "r");
     if (!File) {
@@ -249,6 +261,8 @@ public:
     term_t Plfile = PL_new_term_ref();
     PL_put_atom_chars(Plfile, "/opt/lib/asap.pl");
     PL_call_predicate(NULL, PL_Q_NORMAL, Consult, Plfile);
+    // Setup simplify level
+    setupSimplifyLevel(SimplifyLvl);
   }
 
 }; // end class SafeParallelismChecker

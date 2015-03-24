@@ -72,6 +72,9 @@ static const std::string PL_RIConstraintPrefix = "ri_cons";
 static const std::string PL_ESIConstraintPrefix = "esi_cons";
 static const std::string PL_ENIConstraintPrefix = "eni_cons";
 
+static const std::string PL_SimplifyBasic = "simplify_basic";
+static const std::string PL_SimplifyDisjointjWrites = "simplify_disjoint_writes";
+static const std::string PL_SimplifyRecursiveWrites = "simplify_recursive_writes";
 
 static const std::string DOT_RIConstraintColor  = "green";
 static const std::string DOT_ESIConstraintColor = "blue";
@@ -146,6 +149,7 @@ void helperEmitInvalidAssignmentWarning(const CheckerBase *Checker,
 const Decl *getDeclFromContext(const DeclContext *DC);
 
 void assertzTermProlog(term_t Fact, StringRef ErrMsg = "");
+void setupSimplifyLevel(int SimplifyLvl);
 term_t buildPLEmptyList();
 
 void buildSingleParamSubstitution(const FunctionDecl *Def,
