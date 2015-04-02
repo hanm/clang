@@ -11,7 +11,6 @@
 // safety of parallelism given region and effect annotations.
 //
 //===--------------------------------------------------------------------===//
-#include <SWI-Prolog.h>
 #include <stdio.h>
 
 #include "ClangSACheckers.h"
@@ -57,11 +56,11 @@ public:
     // Known swipl bug: http://www.swi-prolog.org/bugzilla/show_bug.cgi?id=41
     // Bug 41 - swi-prolog overrides all assertions by defining __assert_fail
     char Libpl[] = "libpl.dll";
-    char G32[] = "-G32m";
-    char L32[] = "-L32m";
-    char T32[] = "-T32m";
+    char Gopt[] = "-G1024m";
+    char Lopt[] = "-L256m";
+    char Topt[] = "-T512m";
 
-    char* Argv[4] = {Libpl, G32, L32, T32};
+    char* Argv[4] = {Libpl, Gopt, Lopt, Topt};
     int Argc = 4;
     PL_initialise(Argc, Argv);
     //PL_action(PL_ACTION_DEBUG);
@@ -250,17 +249,7 @@ public:
   }
 
   void setupProlog(int SimplifyLvl) const {
-    // Make sure asap.pl exists at the expected location.
-    FILE *File = fopen("/opt/lib/asap.pl", "r");
-    if (!File) {
-      fclose(File);
-      assert(File && "Prolog rules file does not exist");
-    }
-    // Consult the asap.pl file
-    predicate_t Consult = PL_predicate("consult", 1, "user");
-    term_t Plfile = PL_new_term_ref();
-    PL_put_atom_chars(Plfile, "/opt/lib/asap.pl");
-    PL_call_predicate(NULL, PL_Q_NORMAL, Consult, Plfile);
+    consultProlog(PL_RulesFile);
     // Setup simplify level
     setupSimplifyLevel(SimplifyLvl);
   }

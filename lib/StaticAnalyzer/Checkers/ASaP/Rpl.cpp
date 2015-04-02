@@ -713,7 +713,7 @@ void VarRpl::assertzProlog() const {
 }
 
 char *VarRpl::readPLValue() const {
-      predicate_t HasValueP = PL_predicate(PL_HasValuePredicate.c_str(), 2, "user");
+      predicate_t HasValueP = PL_predicate(PL_ReadHasValuePredicate.c_str(), 2, "user");
       term_t ID = PL_new_term_refs(2);
       term_t Value = ID + 1;
 

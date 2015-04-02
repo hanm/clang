@@ -35,9 +35,33 @@ typedef llvm::SmallPtrSet<const VarEffectSummary*, NUM_OF_CONSTRAINTS> VarEffect
 
 
 // Static Constant Strings
-static const std::string PL_RgnName = "rgn_name";
-static const std::string PL_RgnParam = "rgn_param";
-static const std::string PL_HasEffSum = "has_effect_summary";
+static const std::string PL_RulesFile = "/opt/lib/asap.pl";
+static const std::string PL_ConstraintsFile = "constraints.pl";
+static const std::string PL_ConstraintsStatsFile = "constraint-stats.txt";
+
+static const std::string PL_RgnName = "util:rgn_name";
+static const std::string PL_RgnParam = "util:rgn_param";
+static const std::string PL_HasEffSum = "util:has_effect_summary";
+static const std::string PL_HeadVarRpl = "util:head_rpl_var";
+static const std::string PL_RplDomain = "util:rpl_domain";
+/// \brief Rpl Inclusion Constraint
+static const std::string PL_RIConstraint = "util:ri_constraint";
+/// \brief Effect Summary Inclusion Constraint
+static const std::string PL_ESIConstraint = "util:esi_constraint";
+/// \brief Effect Non Interference Constraint
+static const std::string PL_ENIConstraint = "util:eni_constraint";
+static const std::string PL_HasValuePredicate = "util:has_value";
+static const std::string PL_ReadHasValuePredicate = "has_value";
+
+static const int PL_RgnNameArity = 1;
+static const int PL_RgnParamArity = 1;
+static const int PL_HeadVarRplArity = 2;
+static const int PL_HasEffSumArity = 2;
+static const int PL_RplDomainArity = 4;
+static const int PL_RIConstraintArity = 3;
+static const int PL_ESIConstraintArity = 3;
+static const int PL_ENIConstraintArity = 3;
+
 static const std::string PL_UnNamedDecl = "unnamed";
 
 static const std::string PL_NoEffect = "pure";
@@ -51,22 +75,12 @@ static const std::string PL_EffectSummary = "effect_summary";
 static const std::string PL_EffectVar = "effect_var";
 static const std::string PL_ConcreteRpl = "rpl";
 static const std::string PL_VarRpl = "rpl";
-static const std::string PL_HeadVarRpl = "head_rpl_var";
-static const std::string PL_RplDomain = "rpl_domain";
 static const std::string PL_ParamSub = "param_sub";
 static const std::string PL_SubstitutionSet = "subst_set";
 static const std::string PL_NullDomain = "null_dom";
 
 static const std::string PL_InferEffSumPredicate = "infer_es";
 static const std::string PL_SolveAllPredicate = "solve_all";
-static const std::string PL_HasValuePredicate = "has_value";
-
-/// \brief Rpl Inclusion Constraint
-static const std::string PL_RIConstraint = "ri_constraint";
-/// \brief Effect Summary Inclusion Constraint
-static const std::string PL_ESIConstraint = "esi_constraint";
-/// \brief Effect Non Interference Constraint
-static const std::string PL_ENIConstraint = "eni_constraint";
 
 static const std::string PL_RIConstraintPrefix = "ri_cons";
 static const std::string PL_ESIConstraintPrefix = "esi_cons";
@@ -149,6 +163,7 @@ void helperEmitInvalidAssignmentWarning(const CheckerBase *Checker,
 const Decl *getDeclFromContext(const DeclContext *DC);
 
 void assertzTermProlog(term_t Fact, StringRef ErrMsg = "");
+void consultProlog(StringRef FileName);
 void setupSimplifyLevel(int SimplifyLvl);
 term_t buildPLEmptyList();
 

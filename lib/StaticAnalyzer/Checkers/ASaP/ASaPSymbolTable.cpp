@@ -17,6 +17,7 @@
 /// such information includes ASaPType*, ParamVector, RegionNameSet,
 /// and EffectSummary
 #include <SWI-Prolog.h>
+#include <chrono>
 #include <fstream>
 
 #include "clang/AST/ASTContext.h"
@@ -909,7 +910,7 @@ void SymbolTable::readSolutions() const {
           << FunD->getNameAsString() << "' (Prolog Name: "
           << FName << ") ****\n";
 
-      predicate_t InferP = PL_predicate(PL_HasValuePredicate.c_str(), 2, "user");
+      predicate_t InferP = PL_predicate(PL_ReadHasValuePredicate.c_str(), 2, "user");
       term_t H0 = PL_new_term_refs(2);
       term_t EffectSumT = H0 + 1;
 
@@ -969,11 +970,19 @@ void SymbolTable::solveConstraints(bool DoFullInference) const {
     PL_action(PL_ACTION_TRACE);
 
   OS_PL.close();
-
+  consultProlog(PL_ConstraintsFile);
   // Call solve_all
   predicate_t SolveAllP = PL_predicate(PL_SolveAllPredicate.c_str(), 0, "user");
   term_t Arg0 = PL_new_term_refs(0);
+  auto start_t = std::chrono::steady_clock::now();
   int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, SolveAllP, Arg0);
+  auto end_t = std::chrono::steady_clock::now();
+  auto duration = end_t - start_t;
+
+  std::chrono::milliseconds ms =
+    std::chrono::duration_cast<std::chrono::milliseconds>(duration);
+
+  llvm::outs() << "Solving time = " << ms.count() << " ms\n";
   assert(Rval && "Prolog failed to solve constraints");
 
   readSolutions();

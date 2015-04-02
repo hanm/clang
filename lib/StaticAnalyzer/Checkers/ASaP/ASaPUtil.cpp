@@ -12,6 +12,9 @@
 // and effect annotations.
 //
 //===----------------------------------------------------------------===//
+#include <fstream>
+#include <iostream>
+#include <SWI-Prolog.h>
 
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/raw_ostream.h"
@@ -37,13 +40,21 @@ static const StringRef BugCategory = "Safe Parallelism";
 
 raw_fd_ostream &prologLog() {
   std::error_code Err;
-  static llvm::raw_fd_ostream S("constraints.pl", Err, llvm::sys::fs::OpenFlags::F_None);
+  static llvm::raw_fd_ostream S(PL_ConstraintsFile, Err, llvm::sys::fs::OpenFlags::F_None);
+  // Output preamble
+  S << ":- multifile(" << PL_HeadVarRpl    << "/" << PL_HeadVarRplArity << ").\n"
+    << ":- multifile(" << PL_RplDomain     << "/" << PL_RplDomainArity << ").\n"
+    << ":- multifile(" << PL_RgnName       << "/" << PL_RgnNameArity << ").\n"
+    << ":- multifile(" << PL_RgnParam      << "/" << PL_RgnParamArity << ").\n"
+    << ":- multifile(" << PL_HasEffSum     << "/" << PL_HasEffSumArity << ").\n"
+    << ":- multifile(" << PL_RIConstraint  << "/" << PL_RIConstraintArity << ").\n"
+    << ":- multifile(" << PL_ESIConstraint << "/" << PL_ESIConstraintArity << ").\n";
   return S;
 }
 
 raw_fd_ostream &constraintStats() {
   std::error_code Err;
-  static llvm::raw_fd_ostream S("constraint-stats.txt", Err, llvm::sys::fs::OpenFlags::F_None);
+  static llvm::raw_fd_ostream S(PL_ConstraintsStatsFile, Err, llvm::sys::fs::OpenFlags::F_None);
   return S;
 }
 
@@ -168,15 +179,31 @@ const Decl *getDeclFromContext(const DeclContext *DC) {
   return D;
 }
 
+void consultProlog(StringRef FileName) {
+  // Make sure FileName exists at the expected location.
+  std::ifstream File (FileName);
+  if (File.is_open()) {
+    File.close();
+  } else {
+    assert(false && "consultProlog failed: cannot open file for reading");
+  }
+  // Consult the FileName
+  predicate_t Consult = PL_predicate("consult", 1, "user");
+  term_t Plfile = PL_new_term_ref();
+  PL_put_atom_chars(Plfile, FileName.data());
+  PL_call_predicate(NULL, PL_Q_NORMAL, Consult, Plfile);
+}
+
 void assertzTermProlog(term_t Fact, StringRef ErrMsg) {
-  predicate_t AssertzP = PL_predicate("assertz", 1, "user");
+  /*predicate_t AssertzP = PL_predicate("assertz", 1, "user");
   int Rval = PL_call_predicate(NULL, PL_Q_NORMAL, AssertzP, Fact);
   if (!Rval) {
     *OS << ErrMsg.data();
     assert(Rval && "assertzTermProlog failed");
-  }
+  }*/
   char *Text;
-  Rval = PL_get_chars(Fact, &Text, CVT_WRITE|BUF_RING);
+  int Rval = PL_get_chars(Fact, &Text, CVT_WRITE|BUF_RING);
+  assert(Rval && "failed to read Prolog term");
   OS_PL << Text << ".\n";
 }
 
