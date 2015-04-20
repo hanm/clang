@@ -95,7 +95,7 @@ VarRplSetT *RplInclusionConstraint::collectRplVars() const {
 }
 
 void RplInclusionConstraint::emitGraphEdges(std::ofstream &OutF,
-                                            std::string &EdgeOp) const {
+                                            const std::string &EdgeOp) const {
   VarRplSetT *VRS = LHS->collectRplVars();
   Constraint::emitGraphEdges(OutF, EdgeOp, DOT_LHSEdgeColor, VRS);
   delete VRS;
@@ -197,7 +197,7 @@ VarEffectSummarySetT *EffectInclusionConstraint::collectEffectSummaryVars() cons
 }
 
 void EffectInclusionConstraint::emitGraphEdges(std::ofstream &OutF,
-                                               std::string &EdgeOp) const {
+                                               const std::string &EdgeOp) const {
   VarRplSetT *VRS = LHS->collectRplVars();
   Constraint::emitGraphEdges(OutF, EdgeOp, DOT_LHSEdgeColor, VRS);
   delete VRS;
@@ -212,6 +212,19 @@ void EffectInclusionConstraint::emitGraphEdges(std::ofstream &OutF,
   delete VES;
 }
 
+
+void EffectInclusionConstraint::emitCallGraphEdges(std::ofstream &OutF,
+                                                   const std::string &EdgeOp) const {
+  // Iterate through LHS creating an edge for each invokes effect
+  for(EffectVector::const_iterator I = LHS->begin(), E = LHS->end(); I != E; ++I) {
+    const Effect *Ef = *I;
+    if (Ef->isCompound()) {
+      OutF << SymbolTable::Table->getPrologName(Def).data() << " " << EdgeOp
+           << SymbolTable::Table->getPrologName(Ef->getDecl()).data()
+           << std::endl;
+    }
+  }
+}
 //////////////////////////////////////////////////////////////////////////
 //  EffectNIConstraint
 
@@ -262,7 +275,7 @@ VarEffectSummarySetT *EffectNIConstraint::collectEffectSummaryVars() const {
 }
 
 void EffectNIConstraint::emitGraphEdges(std::ofstream &OutF,
-                                        std::string &EdgeOp) const {
+                                        const std::string &EdgeOp) const {
   VarRplSetT *VRS = LHS->collectRplVars();
   Constraint::emitGraphEdges(OutF, EdgeOp, DOT_LHSEdgeColor, VRS);
   delete VRS;

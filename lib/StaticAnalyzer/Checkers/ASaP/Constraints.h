@@ -63,7 +63,7 @@ public:
                       const std::string &EdgeColor,
                       const VarEffectSummarySetT *VRS) const;
 
-  virtual void emitGraphEdges(std::ofstream &OutF, std::string &EdgeOp) const = 0;
+  virtual void emitGraphEdges(std::ofstream &OutF, const std::string &EdgeOp) const = 0;
 
   inline std::string toString() const {
     std::string SBuf;
@@ -87,7 +87,7 @@ public:
   virtual term_t getPLTerm() const;
   virtual void print(llvm::raw_ostream &OS) const;
   virtual ~RplInclusionConstraint();
-  virtual void emitGraphEdges(std::ofstream &OutF, std::string &EdgeOp) const;
+  virtual void emitGraphEdges(std::ofstream &OutF, const std::string &EdgeOp) const;
   VarRplSetT *collectRplVars() const;
   VarEffectSummarySetT *collectEffectSummaryVars() const;
 
@@ -127,7 +127,8 @@ class EffectInclusionConstraint : public Constraint {
 
   VarRplSetT *collectRplVars() const;
   VarEffectSummarySetT *collectEffectSummaryVars() const;
-  virtual void emitGraphEdges(std::ofstream &OutF, std::string &EdgeOp) const;
+  virtual void emitGraphEdges(std::ofstream &OutF, const std::string &EdgeOp) const;
+  void emitCallGraphEdges(std::ofstream &OutF, const std::string &EdgeOp) const;
 
   static bool classof(const Constraint *C) {
     return C->getKind() == CK_EffectInclusion;
@@ -154,7 +155,7 @@ class EffectNIConstraint : public Constraint {
 
   VarRplSetT *collectRplVars() const;
   VarEffectSummarySetT *collectEffectSummaryVars() const;
-  virtual void emitGraphEdges(std::ofstream &OutF, std::string &EdgeOp) const;
+  virtual void emitGraphEdges(std::ofstream &OutF, const std::string &EdgeOp) const;
 
   static bool classof(const Constraint *C) {
     return C->getKind() == CK_EffectNonInterference;

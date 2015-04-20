@@ -243,6 +243,7 @@ public:
       *OS << "DEBUG:: Invoking Prolog to solve constraints\n";
       setupProlog(SimplifyLvl);
       SymbolTable::Table->genConstraintGraph("Constraints.dot");
+      SymbolTable::Table->genCallGraph("CallGraph.dot");
       SymbolTable::Table->solveConstraints(DoFullInference);
       *OS << "DEBUG:: DONE Invoking Prolog to solve constraints\n";
     }

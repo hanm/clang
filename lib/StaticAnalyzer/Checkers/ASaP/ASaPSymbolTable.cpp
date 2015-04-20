@@ -1007,7 +1007,6 @@ void SymbolTable::genConstraintGraph(StringRef FileName) {
           I = VarEffectSummarySet.begin(),
           E = VarEffectSummarySet.end();
         I != E; ++I) {
-    *OS << "here\n";
     const VarEffectSummary *EV = *I;
     assert(EV && "Internal Error: unexpected null pointer");
     EV->print(*OS);
@@ -1022,6 +1021,21 @@ void SymbolTable::genConstraintGraph(StringRef FileName) {
     assert(Cons && "Internal Error: unexpected null pointer");
     Cons->emitGraphNode(OutF);
     Cons->emitGraphEdges(OutF, EdgeOp);
+  }
+  OutF << "}" << std::endl;
+}
+
+void SymbolTable::genCallGraph(StringRef FileName) {
+  std::ofstream OutF(FileName);
+  OutF << "strict digraph ConstraintGraph {" << std::endl;
+    for (ConstraintsSetT::iterator
+          I = ConstraintSet.begin(),
+          E = ConstraintSet.end();
+       I != E; ++I) {
+    const Constraint *Cons = *I;
+    if (const EffectInclusionConstraint *EIC = dyn_cast<EffectInclusionConstraint>(Cons)) {
+      EIC->emitCallGraphEdges(OutF, "->");
+    }
   }
   OutF << "}" << std::endl;
 }

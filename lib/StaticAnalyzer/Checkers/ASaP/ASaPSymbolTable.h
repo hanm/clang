@@ -367,6 +367,7 @@ public:
   void readSolutions() const;
   void solveConstraints(bool DoFullInference) const; // if false -> do Effect inference only
   void genConstraintGraph(StringRef FileName);
+  void genCallGraph(StringRef FileName);
 
   // Default annotations
   AnnotationSet makeDefaultType(ValueDecl *ValD, long ParamCount);
