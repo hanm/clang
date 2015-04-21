@@ -110,7 +110,8 @@ helperMakeParametricVarType(const ValueDecl *D, long ArgNum, QualType QT) {
   }
 
   for (; I < ArgNum; ++I) {
-    StringRef ParamName = SymT.makeFreshParamName(D->getNameAsString());
+    std::string Name = getPLNormalizedName(*D);
+    StringRef ParamName = SymT.makeFreshParamName(Name);
     ParamRplElement Param(ParamName, ParamName);
     Result.ParamVec->push_back(Param); // makes a (persistent) copy of Param
 
@@ -151,7 +152,8 @@ helperMakeParametricType(const DeclaratorDecl *D, long ArgNum, QualType QT) {
     RplV.push_back(ConcreteRpl(*SymbolTable::LOCAL_RplElmt));
   }
   for (; I < ArgNum; ++I) {
-    StringRef ParamName = SymT.makeFreshParamName(D->getNameAsString());
+    std::string Name = getPLNormalizedName(*D);
+    StringRef ParamName = SymT.makeFreshParamName(Name);
     ParamRplElement Param(ParamName, ParamName);
     Result.ParamVec->push_back(Param); // makes a (persistent) copy of Param
     RplV.push_back(ConcreteRpl(*Result.ParamVec->back())); // use the persistent copy
@@ -197,7 +199,8 @@ helperDecideIfGenClassParam(const RecordDecl *D) {
 inline AnnotationSet AnnotationScheme::
 helperMakeClassParams(const RecordDecl *D) {
   AnnotationSet Result;
-  StringRef ParamName = SymT.makeFreshParamName(D->getNameAsString());
+  std::string Name = getPLNormalizedName(*D);
+  StringRef ParamName = SymT.makeFreshParamName(Name);
 
   ParamRplElement Param(ParamName, ParamName);
   Result.ParamVec = new ParameterVector(Param);
