@@ -258,6 +258,8 @@ public:
 
   void addSubstitution(const Substitution &S);
   void addSubstitution(const SubstitutionSet &SubS);
+  void addSubstitutions(const SubstitutionVector &SubV_more);
+
 
   term_t getSubVPLTerm() const;
   bool hasSubs() const { return (SubV.size() > 0); }

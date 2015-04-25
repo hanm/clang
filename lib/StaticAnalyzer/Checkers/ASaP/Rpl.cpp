@@ -100,6 +100,10 @@ inline void Rpl::addSubstitution(const SubstitutionSet &SubS) {
   SubV.push_back(SubS);
 }
 
+inline void Rpl::addSubstitutions(const SubstitutionVector &SubV_more) {
+  SubV.push_back_vec(&SubV_more);
+}
+
 term_t Rpl::getSubVPLTerm() const {
     return SubV.getPLTerm();
 }
@@ -500,7 +504,10 @@ Trivalent ConcreteRpl::substitute(const Substitution *S) {
   Trivalent Result = RK_FALSE; // set to true if substitution is
   if (!S || !S->getFrom() || !S->getTo())
     return Result; // Nothing to do.
-
+  if (getSubstitutionVector().size() > 0) {
+    addSubstitution(*S);
+    return RK_TRUE;
+  }
   const RplElement &FromEl = *S->getFrom();
   const Rpl &ToRpl = *S->getTo();
 
@@ -521,6 +528,9 @@ Trivalent ConcreteRpl::substitute(const Substitution *S) {
       I = RplElements.erase(I);
       I = RplElements.insert(I, ConcToRpl->RplElements.begin(),
                                 ConcToRpl->RplElements.end());
+      if (ConcToRpl->getSubstitutionVector().size() > 0) {
+        addSubstitutions(ConcToRpl->getSubstitutionVector());
+      }
       *OSv2 << "' == '";
       print(*OSv2);
       *OSv2 << "'\n";

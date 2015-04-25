@@ -375,8 +375,9 @@ typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
   OS << "' to param '";
   Param->print(OS, Ctx.getPrintingPolicy());
   OS << "'\n";
-  OS << "SubstitutionSet Size = " << SubS.size() << "\n";
-  OS << "SubSet: " << SubS.toString() << "\n";
+  OS << "\tSubstitutionSet Size = " << SubS.size() << "\n";
+  OS << "\tSubSet: " << SubS.toString() << "\n";
+  OS << "\tSubV: " << SubV.toString() << "\n";
 
   TypeBuilderVisitor TBVR(Def, Arg);
   const ASaPType *LHSType = SymT.getType(Param);
