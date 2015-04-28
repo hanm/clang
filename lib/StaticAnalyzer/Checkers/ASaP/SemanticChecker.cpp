@@ -17,7 +17,6 @@
 #include "clang/AST/Decl.h"
 #include "llvm/ADT/SmallVector.h"
 
-#include "ASaPAnnotationScheme.h"
 #include "ASaPType.h"
 #include "ASaPSymbolTable.h"
 #include "ASaPUtil.h"

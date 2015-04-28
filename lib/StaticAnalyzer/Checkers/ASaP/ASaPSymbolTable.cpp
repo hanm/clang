@@ -350,8 +350,12 @@ RplDomain *SymbolTable::buildDomain(const ValueDecl *D) {
   const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
   const FunctionDecl *CanFD = FD ? FD->getCanonicalDecl() : 0;
   const Decl *EnclosingDecl = 0;
-  if (FD && CanFD != FD && CanFD) {
-    EnclosingDecl = CanFD;
+  if (FD) {
+    if (CanFD != FD && CanFD) {
+      EnclosingDecl = CanFD;
+    } else {
+      EnclosingDecl = FD;
+    }
   } else {
     const DeclContext *DC = D->getDeclContext();
     EnclosingDecl = getDeclFromContext(DC);
