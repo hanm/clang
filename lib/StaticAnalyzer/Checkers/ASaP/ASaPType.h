@@ -140,6 +140,8 @@ public:
   void substitute(const SubstitutionSet *SubV);
   /// \brief Performs substitution on type: this[FromEl <- ToRpl].
   void substitute(const Substitution *S);
+  VarRplSetT *collectRplVars() const;
+
 }; // end class ASaPType
 
 } // End namespace asap.

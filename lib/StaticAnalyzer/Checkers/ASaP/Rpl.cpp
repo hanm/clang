@@ -1000,6 +1000,16 @@ void RplVector::printSolution(raw_ostream &OS) const {
       (*I)->printSolution(OS);
   }
 }
+
+VarRplSetT *RplVector::collectRplVars() const {
+  VarRplSetT *Result = new VarRplSetT();
+  for(VectorT::const_iterator I = begin(), E = end();
+        I != E; ++I) {
+    VarRplSetT *RHS = (*I)->collectRplVars();
+    Result = mergeRVSets(Result, RHS);
+  }
+  return Result;
+}
 ///////////////////////////////////////////////////////////////////////////////
 //// RegionNameSet
 const NamedRplElement *RegionNameSet::lookup (StringRef Name) {

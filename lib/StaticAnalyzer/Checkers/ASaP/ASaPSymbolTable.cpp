@@ -405,10 +405,25 @@ bool SymbolTable::setType(const Decl *D, ASaPType *T) {
   // invariant: SymTable[D] not null
   if (SymTable[D]->hasType())
     return false;
-  else {
+
+  if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+    const FunctionDecl *CanD = FD->getCanonicalDecl();
+    if (FD != CanD && SymTable[CanD]->hasType()) {
+      ASaPType *Copy = new ASaPType(*SymTable[CanD]->getType());
+      SymTable[D]->setType(Copy);
+      //SymTable[D]->setType(T);
+      if (T) {
+        VarRplSetT *Set = T->collectRplVars();
+        retractRplVars(*Set);
+        delete Set;
+      }
+    } else {
+      SymTable[D]->setType(T);
+    }
+  } else {
     SymTable[D]->setType(T);
-    return true;
   }
+  return true;
 }
 
 bool SymbolTable::initParameterVector(const Decl *D) {
@@ -1148,6 +1163,31 @@ void SymbolTable::createSymbolTableEntry(const Decl *D) {
   //*OSv2  << "DEBUG:: createSymbolTableEntry("
   //    << DeclName << ", " << DomName << ", " << ParentDom <<")\n";
   SymTable[D] = new SymbolTableEntry(DeclName, DomName, ParentDom);
+}
+
+bool SymbolTable::retractRplVars(VarRplSetT &Set) {
+  bool Result = true;
+  for (VarRplSetT::const_iterator
+          I = Set.begin(),
+          E = Set.end();
+        I != E; ++I) {
+    StringRef ID = (*I)->getID();
+    bool Found = false;
+    for (VarRplSetT::const_iterator
+          I2 = VarRplSet.begin(),
+          E2 = VarRplSet.end();
+        I2 != E2; ++I2) {
+        StringRef ID2 = (*I2)->getID();
+        if (ID.compare(ID2) == 0) {
+          Found = true;
+          Result &= VarRplSet.erase(*I2);
+          break;
+        }
+    }
+    Result &= Found; // i.e., if (!Found) Result = false;
+  }
+  Set.clear();
+  return Result;
 }
 
 VarRpl *SymbolTable::createFreshRplVar(const ValueDecl *D) {

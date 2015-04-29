@@ -685,6 +685,7 @@ class RplVector : public OwningVector<Rpl, RPL_VECTOR_SIZE> {
   static RplVector *merge(const RplVector *A, const RplVector *B);
   /// \brief Returns the union of two RPL Vectors but destroys its inputs.
   static RplVector *destructiveMerge(RplVector *&A, RplVector *&B);
+  VarRplSetT *collectRplVars() const;
 }; // End class RplVector.
 
 //////////////////////////////////////////////////////////////////////////

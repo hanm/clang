@@ -376,6 +376,7 @@ public:
   void createSymbolTableEntry(const Decl *D);
 
   VarRpl *createFreshRplVar(const ValueDecl *D);
+  bool retractRplVars(VarRplSetT &Set);
 
   VarEffectSummary *createFreshEffectSumVar(const FunctionDecl *D);
   bool removeEffectSumVar(VarEffectSummary *VES);

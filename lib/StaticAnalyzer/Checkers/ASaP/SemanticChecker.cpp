@@ -82,6 +82,10 @@ inline void ASaPSemanticCheckerTraverser::
 addASaPTypeToMap(ValueDecl *ValD, ASaPType *T) {
   ///FIXME: Temporary fix for CLANG AST visitor problem
   if (SymT.hasType(ValD)) {
+    if (FunctionDecl *FunD = dyn_cast<FunctionDecl>(ValD)) {
+      if (FunD->getCanonicalDecl() != FunD)
+        return; // no error
+    }
     OS << "ERROR!! Type already in symbol table while in addASaPTypeToMap:";
     ValD->print(OS, Ctx.getPrintingPolicy());
     OS << "\n";

@@ -494,6 +494,16 @@ void ASaPType::substitute(const Substitution *Sub) {
   if (ArgV)
     ArgV->substitute(Sub);
 }
+VarRplSetT *ASaPType::collectRplVars() const {
+  VarRplSetT *Result = 0;
+  if (InRpl)
+    Result = InRpl->collectRplVars();
+  if (ArgV) {
+    VarRplSetT *More = ArgV->collectRplVars();
+    Result = mergeRVSets(Result, More);
+  }
+  return Result;
+}
 
 } // end namespace clang
 } // end namespace asap
