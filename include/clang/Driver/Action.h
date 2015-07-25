@@ -41,11 +41,14 @@ public:
   enum ActionClass {
     InputClass = 0,
     BindArchClass,
+    CudaDeviceClass,
+    CudaHostClass,
     PreprocessJobClass,
     PrecompileJobClass,
     AnalyzeJobClass,
     MigrateJobClass,
     CompileJobClass,
+    BackendJobClass,
     AssembleJobClass,
     LinkJobClass,
     LipoJobClass,
@@ -70,16 +73,16 @@ private:
   unsigned OwnsInputs : 1;
 
 protected:
-  Action(ActionClass _Kind, types::ID _Type)
-    : Kind(_Kind), Type(_Type), OwnsInputs(true)  {}
-  Action(ActionClass _Kind, std::unique_ptr<Action> Input, types::ID _Type)
-      : Kind(_Kind), Type(_Type), Inputs(1, Input.release()), OwnsInputs(true) {
+  Action(ActionClass Kind, types::ID Type)
+    : Kind(Kind), Type(Type), OwnsInputs(true)  {}
+  Action(ActionClass Kind, std::unique_ptr<Action> Input, types::ID Type)
+      : Kind(Kind), Type(Type), Inputs(1, Input.release()), OwnsInputs(true) {
   }
-  Action(ActionClass _Kind, std::unique_ptr<Action> Input)
-      : Kind(_Kind), Type(Input->getType()), Inputs(1, Input.release()),
+  Action(ActionClass Kind, std::unique_ptr<Action> Input)
+      : Kind(Kind), Type(Input->getType()), Inputs(1, Input.release()),
         OwnsInputs(true) {}
-  Action(ActionClass _Kind, const ActionList &_Inputs, types::ID _Type)
-    : Kind(_Kind), Type(_Type), Inputs(_Inputs), OwnsInputs(true) {}
+  Action(ActionClass Kind, const ActionList &Inputs, types::ID Type)
+    : Kind(Kind), Type(Type), Inputs(Inputs), OwnsInputs(true) {}
 public:
   virtual ~Action();
 
@@ -107,7 +110,7 @@ class InputAction : public Action {
   const llvm::opt::Arg &Input;
 
 public:
-  InputAction(const llvm::opt::Arg &_Input, types::ID _Type);
+  InputAction(const llvm::opt::Arg &Input, types::ID Type);
 
   const llvm::opt::Arg &getInputArg() const { return Input; }
 
@@ -123,13 +126,50 @@ class BindArchAction : public Action {
   const char *ArchName;
 
 public:
-  BindArchAction(std::unique_ptr<Action> Input, const char *_ArchName);
+  BindArchAction(std::unique_ptr<Action> Input, const char *ArchName);
 
   const char *getArchName() const { return ArchName; }
 
   static bool classof(const Action *A) {
     return A->getKind() == BindArchClass;
   }
+};
+
+class CudaDeviceAction : public Action {
+  virtual void anchor();
+  /// GPU architecture to bind -- e.g 'sm_35'.
+  const char *GpuArchName;
+  const char *DeviceTriple;
+  /// True when action results are not consumed by the host action (e.g when
+  /// -fsyntax-only or --cuda-device-only options are used).
+  bool AtTopLevel;
+
+public:
+  CudaDeviceAction(std::unique_ptr<Action> Input, const char *ArchName,
+                   const char *DeviceTriple, bool AtTopLevel);
+
+  const char *getGpuArchName() const { return GpuArchName; }
+  const char *getDeviceTriple() const { return DeviceTriple; }
+  bool isAtTopLevel() const { return AtTopLevel; }
+
+  static bool classof(const Action *A) {
+    return A->getKind() == CudaDeviceClass;
+  }
+};
+
+class CudaHostAction : public Action {
+  virtual void anchor();
+  ActionList DeviceActions;
+
+public:
+  CudaHostAction(std::unique_ptr<Action> Input,
+                 const ActionList &DeviceActions);
+  ~CudaHostAction() override;
+
+  ActionList &getDeviceActions() { return DeviceActions; }
+  const ActionList &getDeviceActions() const { return DeviceActions; }
+
+  static bool classof(const Action *A) { return A->getKind() == CudaHostClass; }
 };
 
 class JobAction : public Action {
@@ -195,6 +235,16 @@ public:
   }
 };
 
+class BackendJobAction : public JobAction {
+  void anchor() override;
+public:
+  BackendJobAction(std::unique_ptr<Action> Input, types::ID OutputType);
+
+  static bool classof(const Action *A) {
+    return A->getKind() == BackendJobClass;
+  }
+};
+
 class AssembleJobAction : public JobAction {
   void anchor() override;
 public:
@@ -240,7 +290,6 @@ class VerifyJobAction : public JobAction {
 public:
   VerifyJobAction(ActionClass Kind, std::unique_ptr<Action> Input,
                   types::ID Type);
-  VerifyJobAction(ActionClass Kind, ActionList &Inputs, types::ID Type);
   static bool classof(const Action *A) {
     return A->getKind() == VerifyDebugInfoJobClass ||
            A->getKind() == VerifyPCHJobClass;

@@ -62,12 +62,14 @@ Sema::CUDAFunctionTarget Sema::IdentifyCUDATarget(const FunctionDecl *D) {
 
 bool Sema::CheckCUDATarget(const FunctionDecl *Caller,
                            const FunctionDecl *Callee) {
-  return CheckCUDATarget(IdentifyCUDATarget(Caller),
-                         IdentifyCUDATarget(Callee));
-}
+  // The CUDADisableTargetCallChecks short-circuits this check: we assume all
+  // cross-target calls are valid.
+  if (getLangOpts().CUDADisableTargetCallChecks)
+    return false;
 
-bool Sema::CheckCUDATarget(CUDAFunctionTarget CallerTarget,
-                           CUDAFunctionTarget CalleeTarget) {
+  CUDAFunctionTarget CallerTarget = IdentifyCUDATarget(Caller),
+                     CalleeTarget = IdentifyCUDATarget(Callee);
+
   // If one of the targets is invalid, the check always fails, no matter what
   // the other target is.
   if (CallerTarget == CFT_InvalidTarget || CalleeTarget == CFT_InvalidTarget)
@@ -90,11 +92,26 @@ bool Sema::CheckCUDATarget(CUDAFunctionTarget CallerTarget,
   // however, in which case the function is compiled for both the host and the
   // device. The __CUDA_ARCH__ macro [...] can be used to differentiate code
   // paths between host and device."
-  bool InDeviceMode = getLangOpts().CUDAIsDevice;
   if (CallerTarget == CFT_HostDevice && CalleeTarget != CFT_HostDevice) {
-    if ((InDeviceMode && CalleeTarget != CFT_Device) ||
-        (!InDeviceMode && CalleeTarget != CFT_Host))
+    // If the caller is implicit then the check always passes.
+    if (Caller->isImplicit()) return false;
+
+    bool InDeviceMode = getLangOpts().CUDAIsDevice;
+    if (!InDeviceMode && CalleeTarget != CFT_Host)
+        return true;
+    if (InDeviceMode && CalleeTarget != CFT_Device) {
+      // Allow host device functions to call host functions if explicitly
+      // requested.
+      if (CalleeTarget == CFT_Host &&
+          getLangOpts().CUDAAllowHostCallsFromHostDevice) {
+        Diag(Caller->getLocation(),
+             diag::warn_host_calls_from_host_device)
+            << Callee->getNameAsString() << Caller->getNameAsString();
+        return false;
+      }
+
       return true;
+    }
   }
 
   return false;

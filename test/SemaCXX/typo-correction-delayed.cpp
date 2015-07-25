@@ -119,3 +119,93 @@ class SomeClass {
 public:
   explicit SomeClass() : Kind(kSum) {}  // expected-error {{use of undeclared identifier 'kSum'; did you mean 'kNum'?}}
 };
+
+// There used to be an issue with typo resolution inside overloads.
+struct AssertionResult { ~AssertionResult(); };
+AssertionResult Overload(const char *a);
+AssertionResult Overload(int a);
+void UseOverload() {
+  // expected-note@+1 {{'result' declared here}}
+  const char *result;
+  // expected-error@+1 {{use of undeclared identifier 'resulta'; did you mean 'result'?}}
+  Overload(resulta);
+}
+
+namespace PR21925 {
+struct X {
+  int get() { return 7; }  // expected-note {{'get' declared here}}
+};
+void test() {
+  X variable;  // expected-note {{'variable' declared here}}
+
+  // expected-error@+2 {{use of undeclared identifier 'variableX'; did you mean 'variable'?}}
+  // expected-error@+1 {{no member named 'getX' in 'PR21925::X'; did you mean 'get'?}}
+  int x = variableX.getX();
+}
+}
+
+namespace PR21905 {
+int (*a) () = (void)Z;  // expected-error-re {{use of undeclared identifier 'Z'{{$}}}}
+}
+
+namespace PR21947 {
+int blue;  // expected-note {{'blue' declared here}}
+__typeof blur y;  // expected-error {{use of undeclared identifier 'blur'; did you mean 'blue'?}}
+}
+
+namespace PR22092 {
+a = b ? : 0;  // expected-error {{C++ requires a type specifier for all declarations}} \
+              // expected-error-re {{use of undeclared identifier 'b'{{$}}}}
+}
+
+extern long clock (void);
+struct Pointer {
+  void set_xpos(int);
+  void set_ypos(int);
+};
+void MovePointer(Pointer &Click, int x, int y) {  // expected-note 2 {{'Click' declared here}}
+  click.set_xpos(x);  // expected-error {{use of undeclared identifier 'click'; did you mean 'Click'?}}
+  click.set_ypos(x);  // expected-error {{use of undeclared identifier 'click'; did you mean 'Click'?}}
+}
+
+namespace PR22250 {
+// expected-error@+4 {{use of undeclared identifier 'size_t'; did you mean 'sizeof'?}}
+// expected-error-re@+3 {{use of undeclared identifier 'y'{{$}}}}
+// expected-error-re@+2 {{use of undeclared identifier 'z'{{$}}}}
+// expected-error@+1 {{expected ';' after top level declarator}}
+int getenv_s(size_t *y, char(&z)) {}
+}
+
+namespace PR22291 {
+template <unsigned I> void f() {
+  unsigned *prio_bits_array;  // expected-note {{'prio_bits_array' declared here}}
+  // expected-error@+1 {{use of undeclared identifier 'prio_op_array'; did you mean 'prio_bits_array'?}}
+  __atomic_store_n(prio_op_array + I, false, __ATOMIC_RELAXED);
+}
+}
+
+namespace PR22297 {
+double pow(double x, double y);
+struct TimeTicks {
+  static void Now();  // expected-note {{'Now' declared here}}
+};
+void f() {
+  TimeTicks::now();  // expected-error {{no member named 'now' in 'PR22297::TimeTicks'; did you mean 'Now'?}}
+}
+}
+
+namespace PR23005 {
+void f() { int a = Unknown::b(c); }  // expected-error {{use of undeclared identifier 'Unknown'}}
+// expected-error@-1 {{use of undeclared identifier 'c'}}
+}
+
+namespace PR23350 {
+int z = 1 ? N : ;  // expected-error {{expected expression}}
+// expected-error-re@-1 {{use of undeclared identifier 'N'{{$}}}}
+}
+
+// PR 23285. This test must be at the end of the file to avoid additional,
+// unwanted diagnostics.
+// expected-error-re@+2 {{use of undeclared identifier 'uintmax_t'{{$}}}}
+// expected-error@+1 {{expected ';' after top level declarator}}
+unsigned int a = 0(uintmax_t

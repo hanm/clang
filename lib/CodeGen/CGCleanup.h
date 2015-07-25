@@ -26,7 +26,10 @@ class AllocaInst;
 }
 
 namespace clang {
+class FunctionDecl;
 namespace CodeGen {
+class CodeGenModule;
+class CodeGenFunction;
 
 /// A protected scope for zero-cost EH handling.
 class EHScope {
@@ -62,6 +65,9 @@ protected:
     /// Whether this cleanup is currently active.
     unsigned IsActive : 1;
 
+    /// Whether this cleanup is a lifetime marker
+    unsigned IsLifetimeMarker : 1;
+
     /// Whether the normal cleanup should test the activation flag.
     unsigned TestFlagInNormalCleanup : 1;
 
@@ -75,7 +81,7 @@ protected:
     /// The number of fixups required by enclosing scopes (not including
     /// this one).  If this is the top cleanup scope, all the fixups
     /// from this index onwards belong to this scope.
-    unsigned FixupDepth : 32 - 17 - NumCommonBits; // currently 13    
+    unsigned FixupDepth : 32 - 18 - NumCommonBits; // currently 13
   };
 
   class FilterBitFields {
@@ -213,7 +219,7 @@ public:
 };
 
 /// A cleanup scope which generates the cleanup blocks lazily.
-class EHCleanupScope : public EHScope {
+class LLVM_ALIGNAS(/*alignof(uint64_t)*/ 8) EHCleanupScope : public EHScope {
   /// The nearest normal cleanup scope enclosing this one.
   EHScopeStack::stable_iterator EnclosingNormal;
 
@@ -272,6 +278,7 @@ public:
     CleanupBits.IsNormalCleanup = isNormal;
     CleanupBits.IsEHCleanup = isEH;
     CleanupBits.IsActive = isActive;
+    CleanupBits.IsLifetimeMarker = false;
     CleanupBits.TestFlagInNormalCleanup = false;
     CleanupBits.TestFlagInEHCleanup = false;
     CleanupBits.CleanupSize = cleanupSize;
@@ -284,18 +291,19 @@ public:
     delete ExtInfo;
   }
   // Objects of EHCleanupScope are not destructed. Use Destroy().
-  ~EHCleanupScope() LLVM_DELETED_FUNCTION;
+  ~EHCleanupScope() = delete;
 
   bool isNormalCleanup() const { return CleanupBits.IsNormalCleanup; }
   llvm::BasicBlock *getNormalBlock() const { return NormalBlock; }
   void setNormalBlock(llvm::BasicBlock *BB) { NormalBlock = BB; }
 
   bool isEHCleanup() const { return CleanupBits.IsEHCleanup; }
-  llvm::BasicBlock *getEHBlock() const { return getCachedEHDispatchBlock(); }
-  void setEHBlock(llvm::BasicBlock *BB) { setCachedEHDispatchBlock(BB); }
 
   bool isActive() const { return CleanupBits.IsActive; }
   void setActive(bool A) { CleanupBits.IsActive = A; }
+
+  bool isLifetimeMarker() const { return CleanupBits.IsLifetimeMarker; }
+  void setLifetimeMarker() { CleanupBits.IsLifetimeMarker = true; }
 
   llvm::AllocaInst *getActiveFlag() const { return ActiveFlag; }
   void setActiveFlag(llvm::AllocaInst *Var) { ActiveFlag = Var; }
@@ -391,6 +399,15 @@ public:
     return (Scope->getKind() == Cleanup);
   }
 };
+// NOTE: there's a bunch of different data classes tacked on after an
+// EHCleanupScope. It is asserted (in EHScopeStack::pushCleanup*) that
+// they don't require greater alignment than ScopeStackAlignment. So,
+// EHCleanupScope ought to have alignment equal to that -- not more
+// (would be misaligned by the stack allocator), and not less (would
+// break the appended classes).
+static_assert(llvm::AlignOf<EHCleanupScope>::Alignment ==
+                  EHScopeStack::ScopeStackAlignment,
+              "EHCleanupScope expected alignment");
 
 /// An exceptions scope which filters exceptions thrown through it.
 /// Only exceptions matching the filter types will be permitted to be
@@ -467,27 +484,27 @@ public:
   EHScope &operator*() const { return *get(); }
 
   iterator &operator++() {
+    size_t Size;
     switch (get()->getKind()) {
     case EHScope::Catch:
-      Ptr += EHCatchScope::getSizeForNumHandlers(
-          static_cast<const EHCatchScope*>(get())->getNumHandlers());
+      Size = EHCatchScope::getSizeForNumHandlers(
+          static_cast<const EHCatchScope *>(get())->getNumHandlers());
       break;
 
     case EHScope::Filter:
-      Ptr += EHFilterScope::getSizeForNumFilters(
-          static_cast<const EHFilterScope*>(get())->getNumFilters());
+      Size = EHFilterScope::getSizeForNumFilters(
+          static_cast<const EHFilterScope *>(get())->getNumFilters());
       break;
 
     case EHScope::Cleanup:
-      Ptr += static_cast<const EHCleanupScope*>(get())
-        ->getAllocatedSize();
+      Size = static_cast<const EHCleanupScope *>(get())->getAllocatedSize();
       break;
 
     case EHScope::Terminate:
-      Ptr += EHTerminateScope::getSize();
+      Size = EHTerminateScope::getSize();
       break;
     }
-
+    Ptr += llvm::RoundUpToAlignment(Size, ScopeStackAlignment);
     return *this;
   }
 
@@ -523,7 +540,7 @@ inline void EHScopeStack::popCatch() {
 
   EHCatchScope &scope = cast<EHCatchScope>(*begin());
   InnermostEHScope = scope.getEnclosingEHScope();
-  StartOfData += EHCatchScope::getSizeForNumHandlers(scope.getNumHandlers());
+  deallocate(EHCatchScope::getSizeForNumHandlers(scope.getNumHandlers()));
 }
 
 inline void EHScopeStack::popTerminate() {
@@ -531,7 +548,7 @@ inline void EHScopeStack::popTerminate() {
 
   EHTerminateScope &scope = cast<EHTerminateScope>(*begin());
   InnermostEHScope = scope.getEnclosingEHScope();
-  StartOfData += EHTerminateScope::getSize();
+  deallocate(EHTerminateScope::getSize());
 }
 
 inline EHScopeStack::iterator EHScopeStack::find(stable_iterator sp) const {
@@ -546,6 +563,32 @@ EHScopeStack::stabilize(iterator ir) const {
   return stable_iterator(EndOfBuffer - ir.Ptr);
 }
 
+/// The exceptions personality for a function.
+struct EHPersonality {
+  const char *PersonalityFn;
+
+  // If this is non-null, this personality requires a non-standard
+  // function for rethrowing an exception after a catchall cleanup.
+  // This function must have prototype void(void*).
+  const char *CatchallRethrowFn;
+
+  static const EHPersonality &get(CodeGenModule &CGM, const FunctionDecl *FD);
+  static const EHPersonality &get(CodeGenFunction &CGF);
+
+  static const EHPersonality GNU_C;
+  static const EHPersonality GNU_C_SJLJ;
+  static const EHPersonality GNU_C_SEH;
+  static const EHPersonality GNU_ObjC;
+  static const EHPersonality GNUstep_ObjC;
+  static const EHPersonality GNU_ObjCXX;
+  static const EHPersonality NeXT_ObjC;
+  static const EHPersonality GNU_CPlusPlus;
+  static const EHPersonality GNU_CPlusPlus_SJLJ;
+  static const EHPersonality GNU_CPlusPlus_SEH;
+  static const EHPersonality MSVC_except_handler;
+  static const EHPersonality MSVC_C_specific_handler;
+  static const EHPersonality MSVC_CxxFrameHandler3;
+};
 }
 }
 

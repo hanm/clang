@@ -57,7 +57,7 @@ long test__readfsdword(unsigned long Offset) {
 
 // CHECK-I386: define i32 @test__readfsdword(i32 %Offset){{.*}}{
 // CHECK-I386:   [[PTR:%[0-9]+]] = inttoptr i32 %Offset to i32 addrspace(257)*
-// CHECK-I386:   [[VALUE:%[0-9]+]] = load volatile i32 addrspace(257)* [[PTR]], align 4
+// CHECK-I386:   [[VALUE:%[0-9]+]] = load volatile i32, i32 addrspace(257)* [[PTR]], align 4
 // CHECK-I386:   ret i32 [[VALUE:%[0-9]+]]
 // CHECK-I386: }
 #endif
@@ -67,7 +67,7 @@ unsigned __int64 test__umulh(unsigned __int64 a, unsigned __int64 b) {
   return __umulh(a, b);
 }
 // CHECK-X64-LABEL: define i64 @test__umulh(i64 %a, i64 %b)
-// CHECK-X64: = mul i128 %
+// CHECK-X64: = mul nuw i128 %
 
 #endif
 
