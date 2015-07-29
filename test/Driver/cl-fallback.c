@@ -1,11 +1,8 @@
-// Don't attempt slash switches on msys bash.
-// REQUIRES: shell-preserves-root
-
 // Note: %s must be preceded by --, otherwise it may be interpreted as a
 // command-line option, e.g. on Mac where %s is commonly under /Users.
 
 // RUN: %clang_cl /fallback /Dfoo=bar /Ubaz /Ifoo /O0 /Ox /GR /GR- /Gy /Gy- \
-// RUN:   /Gw /Gw- /LD /LDd /EHs /EHs- /MD /MDd /MTd /MT /FImyheader.h /Zi \
+// RUN:   /Gw /Gw- /LD /LDd /EHs /EHs- /Zl /MD /MDd /MTd /MT /FImyheader.h /Zi \
 // RUN:   -### -- %s 2>&1 \
 // RUN:   | FileCheck %s
 // CHECK: "-fdiagnostics-format" "msvc-fallback"
@@ -27,6 +24,7 @@
 // CHECK: "/LDd"
 // CHECK: "/EHs"
 // CHECK: "/EHs-"
+// CHECK: "/Zl"
 // CHECK: "/MT"
 // CHECK: "/Tc" "{{.*cl-fallback.c}}"
 // CHECK: "/Fo{{.*cl-fallback.*.obj}}"

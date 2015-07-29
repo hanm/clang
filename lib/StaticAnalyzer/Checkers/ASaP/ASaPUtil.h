@@ -17,10 +17,14 @@
 #define LLVM_CLANG_STATICANALYZER_CHECKERS_ASAP_UTIL_H
 
 #include "clang/AST/Decl.h"
+#include "clang/AST/Expr.h"
 
 #include "ASaPFwdDecl.h"
 
 namespace clang {
+
+typedef CallExpr::arg_iterator ExprIterator;
+
 namespace asap {
 
 #define ASAP_DEBUG

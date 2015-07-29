@@ -15,6 +15,7 @@
 #ifndef LLVM_CLANG_LIB_CODEGEN_CGLOOPINFO_H
 #define LLVM_CLANG_LIB_CODEGEN_CGLOOPINFO_H
 
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/Value.h"
@@ -27,6 +28,7 @@ class MDNode;
 } // end namespace llvm
 
 namespace clang {
+class Attr;
 namespace CodeGen {
 
 /// \brief Attributes that may be specified on loops.
@@ -37,17 +39,17 @@ struct LoopAttributes {
   /// \brief Generate llvm.loop.parallel metadata for loads and stores.
   bool IsParallel;
 
-  /// \brief Values of llvm.loop.vectorize.enable metadata.
-  enum LVEnableState { VecUnspecified, VecEnable, VecDisable };
+  /// \brief State of loop vectorization or unrolling.
+  enum LVEnableState { Unspecified, Enable, Disable };
 
-  /// \brief llvm.loop.vectorize.enable
-  LVEnableState VectorizerEnable;
+  /// \brief Value for llvm.loop.vectorize.enable metadata.
+  LVEnableState VectorizeEnable;
 
-  /// \brief llvm.loop.vectorize.width
-  unsigned VectorizerWidth;
+  /// \brief Value for llvm.loop.vectorize.width metadata.
+  unsigned VectorizeWidth;
 
-  /// \brief llvm.loop.interleave.count
-  unsigned VectorizerUnroll;
+  /// \brief Value for llvm.loop.interleave.count metadata.
+  unsigned InterleaveCount;
 };
 
 /// \brief Information used when generating a structured loop.
@@ -78,15 +80,16 @@ private:
 /// This stack can be used to prepare attributes which are applied when a loop
 /// is emitted.
 class LoopInfoStack {
-  LoopInfoStack(const LoopInfoStack &) LLVM_DELETED_FUNCTION;
-  void operator=(const LoopInfoStack &) LLVM_DELETED_FUNCTION;
+  LoopInfoStack(const LoopInfoStack &) = delete;
+  void operator=(const LoopInfoStack &) = delete;
 
 public:
   LoopInfoStack() {}
 
   /// \brief Begin a new structured loop. The set of staged attributes will be
   /// applied to the loop and then cleared.
-  void push(llvm::BasicBlock *Header);
+  void push(llvm::BasicBlock *Header,
+            llvm::ArrayRef<const Attr *> Attrs = llvm::None);
 
   /// \brief End the current loop.
   void pop();
@@ -106,17 +109,17 @@ public:
   /// \brief Set the next pushed loop as parallel.
   void setParallel(bool Enable = true) { StagedAttrs.IsParallel = Enable; }
 
-  /// \brief Set the next pushed loop 'vectorizer.enable'
-  void setVectorizerEnable(bool Enable = true) {
-    StagedAttrs.VectorizerEnable =
-        Enable ? LoopAttributes::VecEnable : LoopAttributes::VecDisable;
+  /// \brief Set the next pushed loop 'vectorize.enable'
+  void setVectorizeEnable(bool Enable = true) {
+    StagedAttrs.VectorizeEnable =
+        Enable ? LoopAttributes::Enable : LoopAttributes::Disable;
   }
 
-  /// \brief Set the vectorizer width for the next loop pushed.
-  void setVectorizerWidth(unsigned W) { StagedAttrs.VectorizerWidth = W; }
+  /// \brief Set the vectorize width for the next loop pushed.
+  void setVectorizeWidth(unsigned W) { StagedAttrs.VectorizeWidth = W; }
 
-  /// \brief Set the vectorizer unroll for the next loop pushed.
-  void setVectorizerUnroll(unsigned U) { StagedAttrs.VectorizerUnroll = U; }
+  /// \brief Set the interleave count for the next loop pushed.
+  void setInterleaveCount(unsigned C) { StagedAttrs.InterleaveCount = C; }
 
 private:
   /// \brief Returns true if there is LoopInfo on the stack.

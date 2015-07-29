@@ -130,8 +130,9 @@ void helperEmitInvalidAssignmentWarning(const CheckerBase *Checker,
       PathDiagnosticLocation::createBegin(S, BR.getSourceManager(), AC);
 
   ento::BugType *BT = new ento::BugType(Checker, BugName, BugCategory);
-  ento::BugReport *R = new ento::BugReport(*BT, BugStr, VDLoc);
-  BR.emitReport(R);
+  //ento::BugReport *R = new ento::BugReport(*BT, BugStr, VDLoc);
+  std::unique_ptr<ento::BugReport> up_R(new ento::BugReport(*BT, BugStr, VDLoc));
+  BR.emitReport(std::move(up_R));
 }
 
 const Decl *getDeclFromContext(const DeclContext *DC) {

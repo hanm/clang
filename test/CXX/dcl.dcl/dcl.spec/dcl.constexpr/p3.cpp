@@ -27,14 +27,16 @@ struct SS : S {
 
 // The definition of a constexpr function shall satisfy the following
 // constraints:
-struct T : SS, NonLiteral { // expected-note {{base class 'NonLiteral' of non-literal type}}
+struct T : SS, NonLiteral {
   constexpr T();
-  constexpr int f() const; // expected-error {{non-literal type 'T' cannot have constexpr members}}
+  constexpr int f() const;
 
   //  - it shall not be virtual;
   virtual constexpr int ExplicitlyVirtual() const { return 0; } // expected-error {{virtual function cannot be constexpr}}
 
   constexpr int ImplicitlyVirtual() const { return 0; } // expected-error {{virtual function cannot be constexpr}}
+
+  virtual constexpr int OutOfLineVirtual() const; // expected-error {{virtual function cannot be constexpr}}
 
   //  - its return type shall be a literal type;
   constexpr NonLiteral NonLiteralReturn() const { return {}; } // expected-error {{constexpr function's return type 'NonLiteral' is not a literal type}}
@@ -67,6 +69,8 @@ struct T : SS, NonLiteral { // expected-note {{base class 'NonLiteral' of non-li
   // expected-error@-5 {{defaulted definition of copy assignment operator is not constexpr}}
 #endif
 };
+
+constexpr int T::OutOfLineVirtual() const { return 0; }
 #ifdef CXX1Y
 struct T2 {
   int n = 0;
