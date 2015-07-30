@@ -473,9 +473,8 @@ isNonInterfering(const EffectSummary *Sum) const {
     return RK_TRUE;
   if (isa<VarEffectSummary>(Sum))
     return RK_DUNNO;
-  const ConcreteEffectSummary *CES=dyn_cast<ConcreteEffectSummary>(Sum);
+  const ConcreteEffectSummary *CES = dyn_cast<ConcreteEffectSummary>(Sum);
   assert(CES && "Expected Sum would either be Var or Concrete");
-
   Trivalent Result = RK_TRUE;
   SetT::const_iterator I = CES->begin(), E = CES->end();
   for(; I != E; ++I) {

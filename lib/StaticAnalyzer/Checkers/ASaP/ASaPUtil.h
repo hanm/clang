@@ -20,10 +20,14 @@
 
 #include "clang/AST/Decl.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "clang/AST/Expr.h"
 
 #include "ASaPFwdDecl.h"
 
 namespace clang {
+
+typedef CallExpr::arg_iterator ExprIterator;
+
 namespace asap {
 
 #ifndef NUM_OF_CONSTRAINTS

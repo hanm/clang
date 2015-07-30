@@ -70,8 +70,8 @@ void NonInterferenceChecker::VisitCallExpr(CallExpr *Exp) {
     if (FunD) {
       // if it is a template, we want to get its generic form,
       // not the specialized form at the call-site.
-      if(FunD->getTemplatedKind() ==
-         FunctionDecl::TK_FunctionTemplateSpecialization) {
+      if (FunD->getTemplatedKind() ==
+          FunctionDecl::TK_FunctionTemplateSpecialization) {
         FunD = FunD->getPrimaryTemplate()->getTemplatedDecl();
       }
       const SpecificNIChecker *SNIC = SymT.getNIChecker(FunD);

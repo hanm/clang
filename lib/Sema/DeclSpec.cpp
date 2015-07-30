@@ -345,8 +345,9 @@ bool Declarator::isDeclarationOfFunction() const {
 bool Declarator::isStaticMember() {
   assert(getContext() == MemberContext);
   return getDeclSpec().getStorageClassSpec() == DeclSpec::SCS_static ||
-         CXXMethodDecl::isStaticOverloadedOperator(
-             getName().OperatorFunctionId.Operator);
+         (getName().Kind == UnqualifiedId::IK_OperatorFunctionId &&
+          CXXMethodDecl::isStaticOverloadedOperator(
+              getName().OperatorFunctionId.Operator));
 }
 
 bool DeclSpec::hasTagDefinition() const {
@@ -892,18 +893,16 @@ bool DeclSpec::SetConstexprSpec(SourceLocation Loc, const char *&PrevSpec,
   return false;
 }
 
-void DeclSpec::setProtocolQualifiers(Decl * const *Protos,
-                                     unsigned NP,
-                                     SourceLocation *ProtoLocs,
-                                     SourceLocation LAngleLoc) {
-  if (NP == 0) return;
-  Decl **ProtoQuals = new Decl*[NP];
-  memcpy(ProtoQuals, Protos, sizeof(Decl*)*NP);
-  ProtocolQualifiers = ProtoQuals;
-  ProtocolLocs = new SourceLocation[NP];
-  memcpy(ProtocolLocs, ProtoLocs, sizeof(SourceLocation)*NP);
-  NumProtocolQualifiers = NP;
-  ProtocolLAngleLoc = LAngleLoc;
+bool DeclSpec::SetConceptSpec(SourceLocation Loc, const char *&PrevSpec,
+                              unsigned &DiagID) {
+  if (Concept_specified) {
+    DiagID = diag::ext_duplicate_declspec;
+    PrevSpec = "concept";
+    return true;
+  }
+  Concept_specified = true;
+  ConceptLoc = Loc;
+  return false;
 }
 
 void DeclSpec::SaveWrittenBuiltinSpecs() {
@@ -982,10 +981,17 @@ void DeclSpec::Finish(DiagnosticsEngine &D, Preprocessor &PP, const PrintingPoli
                                  getSpecifierName((TST)TypeSpecType, Policy));
       }
 
-      // Only 'short' is valid with vector bool. (PIM 2.1)
-      if ((TypeSpecWidth != TSW_unspecified) && (TypeSpecWidth != TSW_short))
+      // Only 'short' and 'long long' are valid with vector bool. (PIM 2.1)
+      if ((TypeSpecWidth != TSW_unspecified) && (TypeSpecWidth != TSW_short) &&
+          (TypeSpecWidth != TSW_longlong))
         Diag(D, TSWLoc, diag::err_invalid_vector_bool_decl_spec)
           << getSpecifierName((TSW)TypeSpecWidth);
+
+      // vector bool long long requires VSX support.
+      if ((TypeSpecWidth == TSW_longlong) &&
+          (!PP.getTargetInfo().hasFeature("vsx")) &&
+          (!PP.getTargetInfo().hasFeature("power8-vector")))
+        Diag(D, TSTLoc, diag::err_invalid_vector_long_long_decl_spec);
 
       // Elements of vector bool are interpreted as unsigned. (PIM 2.1)
       if ((TypeSpecType == TST_char) || (TypeSpecType == TST_int) ||
@@ -1213,7 +1219,10 @@ void UnqualifiedId::setOperatorFunctionId(SourceLocation OperatorLoc,
 
 bool VirtSpecifiers::SetSpecifier(Specifier VS, SourceLocation Loc,
                                   const char *&PrevSpec) {
+  if (!FirstLocation.isValid())
+    FirstLocation = Loc;
   LastLocation = Loc;
+  LastSpecifier = VS;
   
   if (Specifiers & VS) {
     PrevSpec = getSpecifierName(VS);

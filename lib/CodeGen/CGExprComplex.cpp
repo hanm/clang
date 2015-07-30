@@ -81,8 +81,7 @@ public:
 
   /// EmitStoreOfComplex - Store the specified real/imag parts into the
   /// specified value pointer.
-  void EmitStoreOfComplex(ComplexPairTy Val, LValue LV, bool isInit,
-                          SourceLocation DbgLoc);
+  void EmitStoreOfComplex(ComplexPairTy Val, LValue LV, bool isInit);
 
   /// EmitComplexToComplexCast - Emit a cast from complex value Val to DestType.
   ComplexPairTy EmitComplexToComplexCast(ComplexPairTy Val, QualType SrcType,
@@ -96,6 +95,7 @@ public:
   //===--------------------------------------------------------------------===//
 
   ComplexPairTy Visit(Expr *E) {
+    ApplyDebugLocation DL(CGF, E);
     return StmtVisitor<ComplexExprEmitter, ComplexPairTy>::Visit(E);
   }
 
@@ -317,14 +317,14 @@ ComplexPairTy ComplexExprEmitter::EmitLoadOfLValue(LValue lvalue,
   llvm::Value *Real=nullptr, *Imag=nullptr;
 
   if (!IgnoreReal || isVolatile) {
-    llvm::Value *RealP = Builder.CreateStructGEP(SrcPtr, 0,
+    llvm::Value *RealP = Builder.CreateStructGEP(nullptr, SrcPtr, 0,
                                                  SrcPtr->getName() + ".realp");
     Real = Builder.CreateAlignedLoad(RealP, AlignR, isVolatile,
                                      SrcPtr->getName() + ".real");
   }
 
   if (!IgnoreImag || isVolatile) {
-    llvm::Value *ImagP = Builder.CreateStructGEP(SrcPtr, 1,
+    llvm::Value *ImagP = Builder.CreateStructGEP(nullptr, SrcPtr, 1,
                                                  SrcPtr->getName() + ".imagp");
     Imag = Builder.CreateAlignedLoad(ImagP, AlignI, isVolatile,
                                      SrcPtr->getName() + ".imag");
@@ -335,17 +335,14 @@ ComplexPairTy ComplexExprEmitter::EmitLoadOfLValue(LValue lvalue,
 /// EmitStoreOfComplex - Store the specified real/imag parts into the
 /// specified value pointer.
 void ComplexExprEmitter::EmitStoreOfComplex(ComplexPairTy Val, LValue lvalue,
-                                            bool isInit,
-                                            SourceLocation DbgLoc) {
-  if (auto *DI = CGF.getDebugInfo())
-    DI->EmitLocation(CGF.Builder, DbgLoc);
-
-  if (lvalue.getType()->isAtomicType())
+                                            bool isInit) {
+  if (lvalue.getType()->isAtomicType() ||
+      (!isInit && CGF.LValueIsSuitableForInlineAtomic(lvalue)))
     return CGF.EmitAtomicStore(RValue::getComplex(Val), lvalue, isInit);
 
   llvm::Value *Ptr = lvalue.getAddress();
-  llvm::Value *RealPtr = Builder.CreateStructGEP(Ptr, 0, "real");
-  llvm::Value *ImagPtr = Builder.CreateStructGEP(Ptr, 1, "imag");
+  llvm::Value *RealPtr = Builder.CreateStructGEP(nullptr, Ptr, 0, "real");
+  llvm::Value *ImagPtr = Builder.CreateStructGEP(nullptr, Ptr, 1, "imag");
   unsigned AlignR = lvalue.getAlignment().getQuantity();
   ASTContext &C = CGF.getContext();
   QualType ComplexTy = lvalue.getType();
@@ -380,7 +377,7 @@ VisitImaginaryLiteral(const ImaginaryLiteral *IL) {
 
 
 ComplexPairTy ComplexExprEmitter::VisitCallExpr(const CallExpr *E) {
-  if (E->getCallReturnType()->isReferenceType())
+  if (E->getCallReturnType(CGF.getContext())->isReferenceType())
     return EmitLoadOfLValue(E);
 
   return CGF.EmitCallExpr(E).getComplexVal();
@@ -823,6 +820,8 @@ EmitCompoundAssignLValue(const CompoundAssignOperator *E,
   TestAndClearIgnoreReal();
   TestAndClearIgnoreImag();
   QualType LHSTy = E->getLHS()->getType();
+  if (const AtomicType *AT = LHSTy->getAs<AtomicType>())
+    LHSTy = AT->getValueType();
 
   BinOpInfo OpInfo;
 
@@ -869,7 +868,7 @@ EmitCompoundAssignLValue(const CompoundAssignOperator *E,
   // Truncate the result and store it into the LHS lvalue.
   if (LHSTy->isAnyComplexType()) {
     ComplexPairTy ResVal = EmitComplexToComplexCast(Result, OpInfo.Ty, LHSTy);
-    EmitStoreOfComplex(ResVal, LHS, /*isInit*/ false, E->getLocStart());
+    EmitStoreOfComplex(ResVal, LHS, /*isInit*/ false);
     Val = RValue::getComplex(ResVal);
   } else {
     llvm::Value *ResVal =
@@ -914,7 +913,7 @@ LValue ComplexExprEmitter::EmitBinAssignLValue(const BinaryOperator *E,
   LValue LHS = CGF.EmitLValue(E->getLHS());
 
   // Store the result value into the LHS lvalue.
-  EmitStoreOfComplex(Val, LHS, /*isInit*/ false, E->getLocStart());
+  EmitStoreOfComplex(Val, LHS, /*isInit*/ false);
 
   return LHS;
 }
@@ -950,13 +949,14 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
   // Bind the common expression if necessary.
   CodeGenFunction::OpaqueValueMapping binding(CGF, E);
 
-  RegionCounter Cnt = CGF.getPGORegionCounter(E);
+
   CodeGenFunction::ConditionalEvaluation eval(CGF);
-  CGF.EmitBranchOnBoolExpr(E->getCond(), LHSBlock, RHSBlock, Cnt.getCount());
+  CGF.EmitBranchOnBoolExpr(E->getCond(), LHSBlock, RHSBlock,
+                           CGF.getProfileCount(E));
 
   eval.begin(CGF);
   CGF.EmitBlock(LHSBlock);
-  Cnt.beginRegion(Builder);
+  CGF.incrementProfileCounter(E);
   ComplexPairTy LHS = Visit(E->getTrueExpr());
   LHSBlock = Builder.GetInsertBlock();
   CGF.EmitBranch(ContBlock);
@@ -1038,23 +1038,22 @@ ComplexPairTy CodeGenFunction::EmitComplexExpr(const Expr *E, bool IgnoreReal,
          "Invalid complex expression to emit");
 
   return ComplexExprEmitter(*this, IgnoreReal, IgnoreImag)
-    .Visit(const_cast<Expr*>(E));
+      .Visit(const_cast<Expr *>(E));
 }
 
 void CodeGenFunction::EmitComplexExprIntoLValue(const Expr *E, LValue dest,
-                                                bool isInit,
-                                                SourceLocation DbgLoc) {
+                                                bool isInit) {
   assert(E && getComplexType(E->getType()) &&
          "Invalid complex expression to emit");
   ComplexExprEmitter Emitter(*this);
   ComplexPairTy Val = Emitter.Visit(const_cast<Expr*>(E));
-  Emitter.EmitStoreOfComplex(Val, dest, isInit, DbgLoc);
+  Emitter.EmitStoreOfComplex(Val, dest, isInit);
 }
 
 /// EmitStoreOfComplex - Store a complex number into the specified l-value.
 void CodeGenFunction::EmitStoreOfComplex(ComplexPairTy V, LValue dest,
-                                         bool isInit, SourceLocation DbgLoc) {
-  ComplexExprEmitter(*this).EmitStoreOfComplex(V, dest, isInit, DbgLoc);
+                                         bool isInit) {
+  ComplexExprEmitter(*this).EmitStoreOfComplex(V, dest, isInit);
 }
 
 /// EmitLoadOfComplex - Load a complex number from the specified address.
@@ -1091,8 +1090,8 @@ EmitComplexCompoundAssignmentLValue(const CompoundAssignOperator *E) {
 }
 
 LValue CodeGenFunction::
-EmitScalarCompooundAssignWithComplex(const CompoundAssignOperator *E,
-                                     llvm::Value *&Result) {
+EmitScalarCompoundAssignWithComplex(const CompoundAssignOperator *E,
+                                    llvm::Value *&Result) {
   CompoundFunc Op = getComplexOp(E->getOpcode());
   RValue Val;
   LValue Ret = ComplexExprEmitter(*this).EmitCompoundAssignLValue(E, Op, Val);

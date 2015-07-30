@@ -49,7 +49,6 @@ class CXXRecordDecl;
 class Decl;
 class DeclaratorDecl;
 class Expr;
-class ExprIterator;
 class FunctionDecl;
 class ParmVarDecl;
 class Stmt;

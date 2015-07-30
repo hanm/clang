@@ -180,6 +180,7 @@ getInvokeEffectSummary(const CallExpr *CallExp, Expr *Arg,
                        const CXXMethodDecl *Method, const FunctionDecl *Def) {
   raw_ostream &OS = *SymbolTable::VB.OS;
   const EffectSummary *Sum = SymbolTable::Table->getEffectSummary(Method);
+//<<<<<<< HEAD
   ConcreteEffectSummary *ES = 0;
 
   if (!Sum) {
@@ -215,6 +216,78 @@ getInvokeEffectSummary(const CallExpr *CallExp, Expr *Arg,
   }
 
   return std::unique_ptr<ConcreteEffectSummary>(ES);
+/*=======
+  EffectSummary *ES = 0;
+
+  if (Sum) {
+    OS << "DEBUG::getInvokeEffectSummary: Method = ";
+    Method->print(OS);
+    OS << "\n";
+    OS << "DEBUG::effect summary: ";
+    Sum->print(OS);
+    OS << "\n";
+    OS << "DEBUG:: Arg:";
+    Arg->printPretty(OS, 0, SymbolTable::VB.Ctx->getPrintingPolicy());
+    OS << "\n";
+    Arg->dump(OS, SymbolTable::VB.BR->getSourceManager());
+    OS << "\n";
+
+    ES = Sum->clone();
+    const SubstitutionVector *SubVec =
+        SymbolTable::Table->getInheritanceSubVec(Method->getParent());
+    ES->substitute(SubVec);
+    // perform 'this' substitution
+    const NamedDecl *NamD = 0;
+    // pre-processing
+    if (isa<MaterializeTemporaryExpr>(Arg)) {
+      OS << "DEBUG:: 1.1\n";
+      const MaterializeTemporaryExpr *MEx =
+          dyn_cast<MaterializeTemporaryExpr>(Arg);
+      Arg = MEx->GetTemporaryExpr();
+      assert(Arg);
+      Arg = Arg->IgnoreImplicit();
+    }
+    if (isa<CXXFunctionalCastExpr>(Arg)) {
+      OS << "DEBUG:: 1.2\n";
+      Arg = dyn_cast<CXXFunctionalCastExpr>(Arg)->getSubExpr();
+    }
+
+    OS << "DEBUG:: 2\n";
+    if (isa<DeclRefExpr>(Arg)) {
+      OS << "DEBUG:: 2.1\n";
+      const DeclRefExpr *DeclRef = dyn_cast<DeclRefExpr>(Arg);
+      NamD = DeclRef->getDecl();
+    } else if (isa<CXXConstructExpr>(Arg)) {
+      const CXXConstructExpr *CXXC = dyn_cast<CXXConstructExpr>(Arg);
+      NamD = CXXC->getConstructor()->getParent();
+      assert(NamD && "Internal Error: ValD should have been initialized");
+    } else {
+      OS << "DEBUG:: 2.2\n";
+      emitUnexpectedTypeOfArgumentPassed(Arg, Def);
+      delete ES;
+      return std::unique_ptr<EffectSummary>();
+    }
+    assert(NamD && "Internal Error: ValD should have been initialized");
+    //OS << "DEBUG:: ValD = ";
+    //NamD->print(OS);
+    //OS << "\n";
+    const ASaPType *T = SymbolTable::Table->getType(NamD);
+    OS << "DEBUG:: 1.5\n";
+    if (T) {
+      OS << "In if\n";
+      //OS << "DEBUG: T= " << T->toString() << "\n";
+      std::unique_ptr<SubstitutionVector> SubV = T->getSubstitutionVector();
+      ES->substitute(SubV.get());
+    }
+  } else {
+    OS << "DEBUG:: 1.6\n";
+    // No effect summary recorded for this method, means we don't want/need
+    // to check it. Nothing to do.
+  }
+  OS << "DEBUG:: returning from getInvokeEffectSummary() ES = " << ES << "\n";
+  return std::unique_ptr<EffectSummary>(ES);
+>>>>>>> asp
+*/
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -312,16 +385,20 @@ bool TBBParallelInvokeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) c
 bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def) const {
   SymbolTable *SymT = SymbolTable::Table;
   bool Result = true;
+  raw_ostream &OS = *SymbolTable::VB.OS;
+  OS << "DEBUG:: 1\n";
   // 1. Get the effect summary of the operator method of the 2nd argument
   Expr *Arg = Exp->getArg(TBB_PARFOR_RANGE_BODY_POSITION)->IgnoreImplicit();
-  raw_ostream &OS = *SymbolTable::VB.OS;
   //QualType QTArg = Arg->getType();
   const CXXMethodDecl *Method = getOperatorMethod(Arg, true);
   std::unique_ptr<ConcreteEffectSummary> ES =
     getInvokeEffectSummary(Exp, Arg, Method, Def);
+  if (!ES.get())
+    return true;
+
+  assert(ES.get() && "ES is not nullptr");
   // 2. Detect induction variables
   // TODO InductionVarVector IVV = detectInductionVariablesVector
-
   // 3. Check non-interference
   ConcreteEffectSummary *ESptr = ES.get();
   Trivalent RK = ES->isNonInterfering(ESptr);
@@ -329,11 +406,12 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
     emitInterferingEffects(Exp, *ES, *ES);
     Result = false;
   } else if (RK == RK_DUNNO) {
-    // assert(false && "Found variable effect summary");
     StringRef Name = SymT->makeFreshENIConstraintName();
     EffectNIConstraint *NIC = new EffectNIConstraint(Name, *ESptr, *ESptr);
     SymT->addConstraint(NIC);
   }
+  OS << "DEBUG:: 3\n";
+
   // 4. Check effect coverage
   const EffectSummary *DefES = SymT->getEffectSummary(Def);
   assert(DefES && "Internal Error: missing effect summary");
@@ -351,8 +429,7 @@ bool TBBParallelForRangeNIChecker::check(CallExpr *Exp, const FunctionDecl *Def)
   else if (RK == RK_DUNNO){
     SymT->updateEffectInclusionConstraint(Def->getCanonicalDecl(), *ESptr);
   }
-  // 5. Cleanup
-  //delete(ES);
+  OS << "DEBUG:: 5\n";
   return Result;
 }
 
