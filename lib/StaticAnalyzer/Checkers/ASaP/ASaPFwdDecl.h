@@ -45,6 +45,7 @@ class ASTContext;
 class Attr;
 class CallExpr;
 class CXXConstructorDecl;
+class CXXConstructExpr;
 class CXXRecordDecl;
 class Decl;
 class DeclaratorDecl;

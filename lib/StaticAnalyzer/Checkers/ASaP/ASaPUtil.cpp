@@ -311,6 +311,18 @@ void buildParamSubstitutions(
     buildSingleParamSubstitution(Def, SymT, ParamDecl, ArgExpr, ParamSet, SubS);
     *OSv2 << "DEBUG: SubS = " << SubS.toString() << "\n";
   }
+
+  for(ParameterSet::const_iterator PI = ParamSet.begin(), PE = ParamSet.end();
+      PI != PE; ++PI) {
+    const ParamRplElement *Prm = *PI;
+    if (SubS.hasBase(*Prm))
+      continue;
+    VarRpl *Rho = SymT.createFreshRplVar(Def);
+    Substitution Sub(Prm, Rho);
+    *OSv2 << "DEBUG:: Adding missing invocation substitution: "
+          << Sub.toString() << "\n";
+    SubS.insert(&Sub);
+  }
   *SymbolTable::VB.OS << "DEBUG:: DONE buildParamSubstitutions\n";
 }
 
@@ -327,14 +339,6 @@ void tryBuildParamSubstitutions(
   const ParameterVector *ParamV = SymT.getParameterVector(CalleeDecl);
   if (ParamV && ParamV->size() > 0) {
     ParamV->addToParamSet(ParamSet);
-  }
-  // if isa<CXXMethodDecl>CalleeDecl -> add Class parameters to set
-  if (const CXXMethodDecl *CXXCalleeDecl = dyn_cast<CXXMethodDecl>(CalleeDecl)) {
-    const CXXRecordDecl *Rec = CXXCalleeDecl->getParent();
-    ParamV = SymT.getParameterVector(Rec);
-    if (ParamV && ParamV->size() > 0) {
-      ParamV->addToParamSet(ParamSet);
-    }
   }
   *OSv2 << "DEBUG:: ParamSet = " << ParamSet->toString() << "\n";
   if (ParamSet->size() > 0) {

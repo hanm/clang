@@ -98,6 +98,7 @@ helperMakeParameterVarType(const ValueDecl *D, long ArgNum) {
 
 inline AnnotationSet AnnotationScheme::
 helperMakeParametricVarType(const ValueDecl *D, long ArgNum, QualType QT) {
+  *OSv2 << "DEBUG:: helperMakeParametricVarType\n";
   AnnotationSet Result;
   RplVector RplVec;
   int I = 0;
@@ -114,7 +115,7 @@ helperMakeParametricVarType(const ValueDecl *D, long ArgNum, QualType QT) {
     StringRef ParamName = SymT.makeFreshParamName(Name);
     ParamRplElement Param(ParamName, ParamName);
     Result.ParamVec->push_back(Param); // makes a (persistent) copy of Param
-
+    *OSv2 << "DEBUG:: added parameter= " << ParamName << "\n";
     // 1. Create new RplVarElement
     VarRpl *RplVar = SymT.createFreshRplVar(D);
     *OSv2 << "DEBUG:: RplVar = " << RplVar->toString() << "\n";

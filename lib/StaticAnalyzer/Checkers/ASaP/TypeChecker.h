@@ -71,13 +71,11 @@ private:
   // These typecheck and build functions below should be static but then
   // would not be able to print debug information...
   bool typecheckSingleParamAssignment(ParmVarDecl *Param, Expr *Arg,
-                                      const SubstitutionVector &SubV,
-                                      SubstitutionSet &SubS);
+                                      const SubstitutionVector &SubV);
   void typecheckParamAssignments(FunctionDecl *CalleeDecl,
                                  ExprIterator ArgI,
                                  ExprIterator ArgE,
-                                 const SubstitutionVector &SubV,
-                                 SubstitutionSet &SubS);
+                                 const SubstitutionVector &SubV);
   void typecheckCallExpr(CallExpr *Exp);
   void typecheckCXXConstructExpr(VarDecl *D, CXXConstructExpr *Exp);
 

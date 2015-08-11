@@ -30,6 +30,7 @@
 #include "ASaPUtil.h"
 #include "Effect.h"
 #include "Rpl.h"
+#include "TypeChecker.h"
 #include "SpecificNIChecker.h"
 #include "Substitution.h"
 #include "ASaPUtil.h"
@@ -153,14 +154,19 @@ SymbolTable::SymbolTable()
 SymbolTable::~SymbolTable() {
   delete BuiltinDefaultRegionParameterVec;
 
-  for(SymbolTableMapT::iterator I = SymTable.begin(), E = SymTable.end();
+  for (SymbolTableMapT::iterator I = SymTable.begin(), E = SymTable.end();
       I != E; ++I) {
     // for this key, delete the value
     delete (*I).second;
   }
 
-  for(ParallelismMapT::iterator I = ParTable.begin(), E = ParTable.end();
-      I != E; ++I) {
+  for (ParallelismMapT::iterator I = ParTable.begin(), E = ParTable.end();
+       I != E; ++I) {
+    // for this key, delete the value
+    delete (*I).second;
+  }
+  for (InvocationSubstMapT::iterator I = InvocationSubstMap.begin(), E = InvocationSubstMap.end();
+       I != E; ++I) {
     // for this key, delete the value
     delete (*I).second;
   }
@@ -1070,9 +1076,11 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
   } else if (/*ImplicitParamDecl *ImplParamD = */dyn_cast<ImplicitParamDecl>(ValD)) {
     assert(false && "ImplicitParamDecl case not implemented!");
   } else if (ParmVarDecl *ParamD = dyn_cast<ParmVarDecl>(ValD)) {
+    *OSv2 << "DEBUG:: SymbolTable::makeDefaultType ValD isa ParamDecl\n";
     *OSv2 << "DEBUG::         case ParmVarDecl (ParamCount = " << ParamCount << ")\n";
     AnnotationSet AnSe = AnnotScheme->makeParamType(ParamD, ParamCount);
     if (AnSe.ParamVec) {
+      *OSv2 << "DEBUG:: ParamVec=" << AnSe.ParamVec->toString() << "\n";
       DeclContext *DC = ParamD->getDeclContext();
       //*OSv2 << "DEBUG:: DeclContext:";
       //DC->dumpDeclContext();
@@ -1098,14 +1106,15 @@ AnnotationSet SymbolTable::makeDefaultType(ValueDecl *ValD, long ParamCount) {
     *OSv2 << "DEBUG::         case ParmVarDecl = DONE\n";
     return AnSe;
   } else if (VarDecl *VarD = dyn_cast<VarDecl>(ValD)) {
-      if (VarD->isStaticLocal() || VarD->isStaticDataMember()
-          || VarD->getDeclContext()->isFileContext()) {
-        // Global
-        return AnnotScheme->makeGlobalType(VarD, ParamCount);
-      } else {
-        // Local
-        return AnnotScheme->makeStackType(VarD, ParamCount);
-      }
+    *OSv2 << "DEBUG:: SymbolTable::makeDefaultType ValD isa VarDecl\n";
+    if (VarD->isStaticLocal() || VarD->isStaticDataMember()
+        || VarD->getDeclContext()->isFileContext()) {
+      // Global
+      return AnnotScheme->makeGlobalType(VarD, ParamCount);
+    } else {
+      // Local
+      return AnnotScheme->makeStackType(VarD, ParamCount);
+    }
   } else if (FunctionDecl *FunD = dyn_cast<FunctionDecl>(ValD)) {
     AnnotationSet AnSe = AnnotScheme->makeReturnType(FunD, ParamCount);
     if (AnSe.ParamVec) {
@@ -1213,6 +1222,98 @@ inline bool SymbolTable::removeEffectSumVar(VarEffectSummary *VES) {
   return VarEffectSummarySet.erase(VES);
 }
 
+const SubstitutionVector* SymbolTable::
+computeInvocationSubstitutionVector(CXXConstructExpr *Exp,
+                                    const FunctionDecl *CanD,
+                                    const VarDecl *VarD) {
+  // 1. Check not in map
+  assert(InvocationSubstMap.lookup(Exp) == 0 && "SubstitutionVector already exists");
+  // 2. Compute
+  const ASaPType *T = getType(VarD);
+  std::unique_ptr<SubstitutionVector> SubV = getInheritanceSubstitutionVector(T);
+  std::unique_ptr<SubstitutionVector> TypSubV = getTypeSubstitutionVector(T);
+  assert(TypSubV.get() && "Internal Error: unexpected null pointer");
+  tryBuildParamSubstitutions(CanD, *this, Exp->getConstructor(), Exp->arg_begin(),
+                             Exp->arg_end(), *TypSubV->front());
+  assert(SubV.get() && "Internal Error: unexpected null pointer");
+  SubV->push_back_vec(TypSubV);
+  // 3. Add to Map
+  SubstitutionVector *SV = SubV.release();
+  InvocationSubstMap[Exp] = SV;
+  return SV;
+}
+
+const SubstitutionVector* SymbolTable::
+computeInvocationSubstitutionVector(CallExpr *Exp, const FunctionDecl *CanD) {
+  // 1. Check not in map
+  assert(InvocationSubstMap.lookup(Exp) == 0 && "SubstitutionVector already exists");
+  // 2. Compute
+  std::unique_ptr<SubstitutionVector> SubV;
+  Decl *CalleeDecl = Exp->getCalleeDecl();
+  assert(CalleeDecl && "Internal Error: Expected non-null Callee Declaration");
+
+  FunctionDecl *FunD = dyn_cast<FunctionDecl>(CalleeDecl);
+  VarDecl *VarD = dyn_cast<VarDecl>(CalleeDecl); // Non-null if calling through fn-ptr
+  assert(FunD || VarD);
+  if (FunD) {
+    *OSv2 << "DEBUG:: VisitCallExpr::(FunD!=NULL)\n";
+    // Use the cannonical decl for annotations
+    FunctionDecl *CanFD = FunD->getCanonicalDecl();
+    if (CanFD)
+      FunD = CanFD;
+
+    ASaPType *T = 0;
+    if (isa<CXXMethodDecl>(FunD)) {
+      if (FunD->isOverloadedOperator()) {
+        TypeBuilderVisitor TBV(CanD, Exp->getArg(0));
+        T = TBV.stealType();
+      } else {
+        BaseTypeBuilderVisitor TBV(CanD, Exp->getCallee());
+        T = TBV.stealType();
+      }
+    }
+    SubV = getInheritanceSubstitutionVector(T);
+    std::unique_ptr<SubstitutionVector> TypSubV =
+        getTypeSubstitutionVector(T);
+
+    *OSv2 << "DEBUG:: Type = " << (T ? T->toString() : "null") << "\n";
+    assert(SubV.get() && "Internal Error: unexpected null-pointer");
+    assert(TypSubV.get() && "Internal Error: unexpected null pointer");
+
+    *OSv2 << "DEBUG:: SubV = " << SubV->toString() << "\n";
+    *OSv2 << "DEBUG:: TypSubV = " << TypSubV->toString() << "\n";
+    delete T;
+
+    if (isa<CXXMethodDecl>(FunD) && FunD->isOverloadedOperator()) {
+      tryBuildParamSubstitutions(CanD, *this, FunD, Exp->arg_begin()+1,
+                                 Exp->arg_end(), *TypSubV->front());
+    } else {
+      tryBuildParamSubstitutions(CanD, *this, FunD, Exp->arg_begin(),
+                                 Exp->arg_end(), *TypSubV->front());
+    }
+    SubV->push_back_vec(TypSubV);
+  }
+  // 3. Add to Map
+  SubstitutionVector *SV = SubV.release();
+  InvocationSubstMap[Exp] = SV;
+  return SV;
+}
+
+const SubstitutionVector* SymbolTable::
+getInvocationSubstitutionVector(CXXConstructExpr *E, const FunctionDecl *CanD, const VarDecl *VarD) {
+  const SubstitutionVector* Result = InvocationSubstMap.lookup(E);
+  if (Result == 0)
+    Result = computeInvocationSubstitutionVector(E, CanD, VarD);
+  return Result;
+}
+
+const SubstitutionVector* SymbolTable::
+getInvocationSubstitutionVector(CallExpr *E, const FunctionDecl *D) {
+  const SubstitutionVector* Result = InvocationSubstMap.lookup(E);
+  if (Result == 0)
+    Result = computeInvocationSubstitutionVector(E, D);
+  return Result;
+}
 //////////////////////////////////////////////////////////////////////////
 // SymbolTableEntry
 SymbolTableEntry::SymbolTableEntry(StringRef DeclName,

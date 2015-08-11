@@ -459,16 +459,9 @@ checkCXXConstructExpr(VarDecl *VarD, CXXConstructExpr *Exp) {
   RecordDecl *ClassDecl = dyn_cast<RecordDecl>(ClassDeclContext);
   assert(ClassDecl);
   // Set up Substitution Vector
-  const ASaPType *T = SymT.getType(VarD);
-  std::unique_ptr<SubstitutionVector> SubV = SymT.getInheritanceSubstitutionVector(T);
-  std::unique_ptr<SubstitutionVector> TypSubV = SymT.getTypeSubstitutionVector(T);
-  assert(TypSubV.get() && "Internal Error: unexpected null pointer");
-  tryBuildParamSubstitutions(CanD, SymT, ConstrDecl, Exp->arg_begin(),
-                             Exp->arg_end(), *TypSubV->front());
+  const SubstitutionVector *SubV = SymT.getInvocationSubstitutionVector(Exp, CanD, VarD);
   // 2. Add effects to tmp effects
-  assert(SubV.get() && "Internal Error: unexpected null pointer");
-  SubV->push_back_vec(TypSubV);
-  Effect IE(Effect::EK_InvocEffect, Exp, ConstrDecl, SubV.get());
+  Effect IE(Effect::EK_InvocEffect, Exp, ConstrDecl, SubV);
   OS << "DEBUG:: Adding invocation Effect "<< IE.toString() << "\n";
   OS << "DEBUG:: Callee = ";
   ConstrDecl->print(OS);
@@ -699,46 +692,9 @@ void EffectConstraintVisitor::VisitCallExpr(CallExpr *Exp) {
     assert(FunD || VarD);
     if (FunD) {
       OS << "DEBUG:: VisitCallExpr::(FunD!=NULL)\n";
-
-      // Use the cannonical decl for annotations
-      FunctionDecl *CanFD = FunD->getCanonicalDecl();
-      if (CanFD)
-        FunD = CanFD;
-
-      ASaPType *T = 0;
-      if (isa<CXXMethodDecl>(FunD)) {
-        if (FunD->isOverloadedOperator()) {
-          TypeBuilderVisitor TBV(CanD, Exp->getArg(0));
-          T = TBV.stealType();
-        } else {
-          BaseTypeBuilderVisitor TBV(CanD, Exp->getCallee());
-          T = TBV.stealType();
-        }
-      }
-      std::unique_ptr<SubstitutionVector> SubV =
-          SymT.getInheritanceSubstitutionVector(T);
-      std::unique_ptr<SubstitutionVector> TypSubV =
-          SymT.getTypeSubstitutionVector(T);
-
-      OS << "DEBUG:: Type = " << (T ? T->toString() : "null") << "\n";
-      assert(SubV.get() && "Internal Error: unexpected null-pointer");
-      assert(TypSubV.get() && "Internal Error: unexpected null pointer");
-
-      OS << "DEBUG:: SubV = " << SubV->toString() << "\n";
-      OS << "DEBUG:: TypSubV = " << TypSubV->toString() << "\n";
-      delete T;
-
-      if (isa<CXXMethodDecl>(FunD) && FunD->isOverloadedOperator()) {
-        tryBuildParamSubstitutions(CanD, SymT, FunD, Exp->arg_begin()+1,
-                                   Exp->arg_end(), *TypSubV->front());
-      } else {
-        tryBuildParamSubstitutions(CanD, SymT, FunD, Exp->arg_begin(),
-                                   Exp->arg_end(), *TypSubV->front());
-      }
-      SubV->push_back_vec(TypSubV);
-
+      const SubstitutionVector *SubV = SymT.getInvocationSubstitutionVector(Exp, CanD);
       /// 2. Add effects to tmp effects
-      Effect IE(Effect::EK_InvocEffect, Exp, FunD, SubV.get());
+      Effect IE(Effect::EK_InvocEffect, Exp, FunD, SubV);
       OS << "DEBUG:: Adding invocation Effect "<< IE.toString() <<
         "to " << EC->getDef()->getNameAsString() << "\n";
       EC->addEffect(&IE);

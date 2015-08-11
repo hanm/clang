@@ -56,11 +56,13 @@ public:
   // Constructor
   ResultTriplet(ResultKind ReKi, long NumA, RecordDecl *D) :
     ResKin(ReKi), NumArgs(NumA), DeclNotVis(D) {}
-};
+}; // end class ResultTriplet
+
 class SymbolTable {
   typedef llvm::DenseMap<const Decl*, SymbolTableEntry*>  SymbolTableMapT;
   typedef llvm::DenseMap<const FunctionDecl*,
                           const SpecificNIChecker*> ParallelismMapT;
+  typedef llvm::DenseMap<const Expr*, const SubstitutionVector*> InvocationSubstMapT;
   typedef OwningPtrSet<std::string, 1024> FreshNamesSetT;
   typedef OwningPtrSet<RplDomain, 1024> DomainSetT;
 
@@ -164,6 +166,13 @@ class SymbolTable {
 
   void assertzHasEffectSummary(const NamedDecl &NDec,
                                const EffectSummary &EffSum) const;
+
+  /// \brief Maps CallExpr  & CXXConstructExpr of region-parametric types
+  ///  to a SubstitutionSet.
+  InvocationSubstMapT InvocationSubstMap;
+  const SubstitutionVector* computeInvocationSubstitutionVector(CallExpr *E, const FunctionDecl *CanD);
+  const SubstitutionVector* computeInvocationSubstitutionVector(CXXConstructExpr *E, const FunctionDecl *CanD, const VarDecl *VarD);
+
 public:
   // Static Constants
   static const StarRplElement *STAR_RplElmt;
@@ -232,6 +241,8 @@ public:
     getTypeSubstitutionVector(const ASaPType *Typ) const;
   std::unique_ptr<SubstitutionVector>
     getFullSubstitutionVector(const ASaPType *Typ) const;
+  const SubstitutionVector *getInvocationSubstitutionVector(CallExpr *E, const FunctionDecl *CanD);
+  const SubstitutionVector *getInvocationSubstitutionVector(CXXConstructExpr *E, const FunctionDecl *CanD, const VarDecl *VarD);
   const SubstitutionVector *getInheritanceSubVec(const Decl *D) const;
   const SubstitutionVector *getInheritanceSubVec(QualType QT) const;
   const StringRef getPrologName(const Decl *D) const;
