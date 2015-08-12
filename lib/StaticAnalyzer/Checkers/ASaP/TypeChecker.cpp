@@ -339,10 +339,7 @@ VisitCXXConstructExpr(CXXConstructExpr *Exp) {
   Exp->printPretty(OS, 0, Ctx.getPrintingPolicy());
   OS << "\n";
   const SubstitutionVector *SubV = SymT.getInvocationSubstitutionVector(Exp, CanD, 0); // FIXME?
-  //std::unique_ptr<SubstitutionVector> SubV = SymT.getInheritanceSubstitutionVector(0); // FIXME?
-  //std::unique_ptr<SubstitutionVector> TypSubV = SymT.getTypeSubstitutionVector(0); // FIXME?
   OS << "DEBUG:: InheritanceSubV = " << SubV->toString() << "\n";
-  //OS << "DEBUG:: TypeSubV = " << TypSubV->toString() << "\n";
   typecheckParamAssignments(Exp->getConstructor(),
                             Exp->arg_begin(), Exp->arg_end(),
                             *SubV);
@@ -449,7 +446,6 @@ typecheckCXXConstructExpr(VarDecl *VarD, CXXConstructExpr *Exp) {
   const SubstitutionVector *SubV = SymT.getInvocationSubstitutionVector(Exp, CanD, VarD);
   typecheckParamAssignments(ConstrDecl, Exp->arg_begin(), Exp->arg_end(),
                             *SubV);
-  //SubV->push_back_vec(TypSubV);
   OS << "DEBUG:: DONE with typecheckCXXConstructExpr\n";
 
   // Now set Type to the return type of this call
@@ -502,39 +498,6 @@ typecheckCallExpr(CallExpr *Exp) {
 
     // Build substitution for class region parameter(s)
     const SubstitutionVector *SubV = SymT.getInvocationSubstitutionVector(Exp, CanD);
-    /*
-    ASaPType *T = 0;
-    if (isa<CXXMethodDecl>(FunD)) {
-      if (FunD->isOverloadedOperator()) {
-        TypeBuilderVisitor TBV(CanD, Exp->getArg(0));
-        T = TBV.stealType();
-      } else {
-        BaseTypeBuilderVisitor TBV(CanD, Exp->getCallee());
-        T = TBV.stealType();
-      }
-    }
-    std::unique_ptr<SubstitutionVector> SubV = SymT.getInheritanceSubstitutionVector(T);
-    std::unique_ptr<SubstitutionVector> TypSubV = SymT.getTypeSubstitutionVector(T);
-    assert(SubV.get() && "Internal Error: unexpected null-pointer");
-    assert(TypSubV.get() && "Internal Error: unexpected null pointer");
-
-    unsigned NumArgs = Exp->getNumArgs();
-    unsigned NumParams = FunD->getNumParams();
-    OS << "DEBUG:: NumArgs=" << NumArgs << ", NumParams=" << NumParams << "\n";
-    OS << "DEBUG:: isOverloadedOperator: " << (FunD->isOverloadedOperator() ? "true":"false")
-       << ", isVariadic: " << (FunD->isVariadic() ? "true" : "false") << "\n";
-    OS << "DEBUG:: FunD:";
-    FunD->print(OS, Ctx.getPrintingPolicy());
-    OS << "\n";
-    assert((FunD->isVariadic() || NumParams == NumArgs ||
-          NumParams+((FunD->isOverloadedOperator()) ? 1 : 0) == NumArgs) &&
-          "Unexpected number of arguments to a call expresion");
-
-    OS << "DEBUG:: Type = " << (T ? T->toString() : "null") << "\n";
-    OS << "DEBUG:: InheritanceSubV = " << SubV->toString() << "\n";
-    OS << "DEBUG:: TypeSubV = " << TypSubV->toString() << "\n";
-    //SubstitutionSet SubS;
-    */
     if (FunD->isOverloadedOperator()
         && isa<CXXMethodDecl>(FunD)) {
       // if the overloaded operator is a member function, it's 1st

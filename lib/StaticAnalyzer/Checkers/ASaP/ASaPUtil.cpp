@@ -311,7 +311,7 @@ void buildParamSubstitutions(
     buildSingleParamSubstitution(Def, SymT, ParamDecl, ArgExpr, ParamSet, SubS);
     *OSv2 << "DEBUG: SubS = " << SubS.toString() << "\n";
   }
-
+  // Build substitutions for the Parameters we're missing with RPL Variables on the RHS
   for(ParameterSet::const_iterator PI = ParamSet.begin(), PE = ParamSet.end();
       PI != PE; ++PI) {
     const ParamRplElement *Prm = *PI;

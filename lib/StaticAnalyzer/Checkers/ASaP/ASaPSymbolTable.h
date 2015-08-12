@@ -253,7 +253,7 @@ public:
   }
   // Setters
   /// \brief Returns true iff the type for D was not already set.
-  bool setType(const Decl* D, ASaPType *T);
+  bool setType(const Decl* D, const ASaPType *T);
 
   bool initParameterVector(const Decl *D);
   /// \brief Returns true iff the parameter vector for D was not already set.
@@ -407,7 +407,7 @@ class SymbolTableEntry {
   // Fields
   /// \brief Unique name for declaration used for prolog
   StringRef PrologName;
-  ASaPType *Typ;
+  const ASaPType *Typ;
   ParameterVector *ParamVec;
   RegionNameSet *RegnNameSet;
   EffectSummary *EffSum;
@@ -449,7 +449,7 @@ public:
   inline RplDomain *getRplDomain() const { return RplDom; }
 
   // Setters.
-  inline void setType(ASaPType *T) { Typ = T; }
+  inline void setType(const ASaPType *T) { Typ = T; }
   inline void setParameterVector(ParameterVector *PV) { ParamVec = PV; }
   void addToParameterVector(ParameterVector *&PV);
   inline void setRegionNameSet(RegionNameSet *RNS) { RegnNameSet = RNS; }

@@ -79,7 +79,7 @@ buildPartialEffectSummary(FunctionDecl *D, ConcreteEffectSummary &ES) {
 }
 
 inline void ASaPSemanticCheckerTraverser::
-addASaPTypeToMap(ValueDecl *ValD, ASaPType *T) {
+addASaPTypeToMap(ValueDecl *ValD, const ASaPType *T) {
   ///FIXME: Temporary fix for CLANG AST visitor problem
   if (SymT.hasType(ValD)) {
     if (FunctionDecl *FunD = dyn_cast<FunctionDecl>(ValD)) {
@@ -111,19 +111,6 @@ addASaPTypeToMap(ValueDecl *ValD, ASaPType *T) {
 
 void ASaPSemanticCheckerTraverser::
 addASaPTypeToMap(ValueDecl *ValD, RplVector *RplV, Rpl *InRpl) {
-
-  ///FIXME: Temporary fix for CLANG AST visitor problem
-  /*if (SymT.hasType(ValD)) {
-    OS << "ERROR!!! Type already in symbol table while in addASaPTypeToMap:";
-    ValD->print(OS, Ctx.getPrintingPolicy());
-    OS << "\n";
-    // This is an error
-    OS << "DEBUG:: D(" << ValD << ") has type " << SymT.getType(ValD)->toString() << "\n";
-    OS << "DEBUG:: Trying to add Type " << T->toString() << "\n";
-    delete RplV;
-    delete InRpl;
-    return; // Do Nothing.
-  }*/
 
   //assert(!SymT.hasType(ValD));
   const InheritanceMapT *IMap = SymT.getInheritanceMap(ValD);
@@ -652,6 +639,27 @@ Rpl *ASaPSemanticCheckerTraverser::checkRpl(Decl *D, Attr *Att,
   return R;
 }
 
+void ASaPSemanticCheckerTraverser::propagateParamTypes(FunctionDecl *FunD) {
+  FunctionDecl *CanD = FunD->getCanonicalDecl();
+  if (FunD == CanD)
+    return; // nothing to do
+  // Invariant CanD != FunD
+  OS << "DEBUG:: in propagateParamTypes!\n";
+  unsigned FunDParamCount = FunD->getNumParams();
+  unsigned CanDParamCount = CanD->getNumParams();
+  assert(FunDParamCount == CanDParamCount && "Canonical decl has different number of parameters");
+
+  for (unsigned I = 0; I < FunDParamCount; ++I) {
+    ParmVarDecl *CanParam = CanD->getParamDecl(I);
+    ParmVarDecl *FunParam = FunD->getParamDecl(I);
+    const ASaPType *T = SymT.getType(CanParam);
+    if (T)
+      T = new ASaPType(*T);
+    addASaPTypeToMap(FunParam, T); // make a copy to store in the Symbol Table
+    OS << "DEBUG:: propagated a param\n";
+  }
+}
+
 void ASaPSemanticCheckerTraverser::
 buildEffectSummary(FunctionDecl *D, ConcreteEffectSummary &ES) {
   buildPartialEffectSummary<ReadsEffectAttr>(D, ES);
@@ -914,6 +922,7 @@ bool ASaPSemanticCheckerTraverser::VisitFunctionDecl(FunctionDecl *D) {
   if (Success) {
     ConcreteRpl Local(*SymbolTable::LOCAL_RplElmt);
     checkTypeRegionArgs(D, &Local); // check return type
+    propagateParamTypes(D);
   }
 
   /// B.3 Check Effect RPLs
@@ -1049,7 +1058,7 @@ bool ASaPSemanticCheckerTraverser::VisitVarDecl(VarDecl *D) {
   bool Success = checkRpls<RegionArgAttr>(D);
 
   /// C. Check validity of annotations
-  if (Success) {
+  if (Success && (!isa<ParmVarDecl>(D) || !SymT.hasType(D))) {
     // Get context to select default annotation
     const SpecialRplElement *DefaultEl =
       (D->isStaticLocal() || D->isStaticDataMember()
